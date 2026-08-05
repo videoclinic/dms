@@ -1,0 +1,130 @@
+# CAP-0002 — Draft → approval → versioned PDF release lifecycle
+
+| Field | Value |
+| --- | --- |
+| ID | CAP-0002 |
+| Status | not implemented |
+| Draft formats | Microsoft Office originals (e.g. `.docx`, `.xlsx`, `.pptx`) |
+| Released format | Versioned PDF only (`*_VMAJOR.MINOR.pdf`) |
+| Tests | none |
+
+## Outcomes (contract — not yet true in runtime)
+
+When implemented, the following must hold:
+
+1. Only documents **in the library** (CAP-0006) participate in versioning and
+   release. Uncontrolled files under the edit root are invisible to lifecycle
+   actions until added.
+2. The workspace configuration contains approver profiles with stable IDs,
+   display names, and email addresses, plus non-secret SMTP relay settings. The
+   relay password is resolved from the OS credential store, not `.dms`.
+3. Each library document has explicit `draft`, `in_review`, `approved`,
+   `released`, and `obsolete` lifecycle states. `rejected`, `changes_requested`,
+   `withdrawn` (release), and `cancelled` (review) are workflow outcomes
+   recorded on the event chain; they are not separate long-lived primary states
+   except where CAP-0015 defines `obsolete`.
+4. Submitting a document for review requires a non-empty change summary, a
+   selected configured approver, and a SHA-256 digest of the current draft.
+   After the first release it also requires an operator-selected change class
+   (`cosmetic/minor` or `substantive/major`) with rationale. The class is bound
+   to the review and any change requires a new review.
+   Notification uses the workspace transport (CAP-0010): SMTP acceptance or
+   operator-confirmed `mailto:` send. The document enters `in_review` only after
+   that transport step succeeds.
+5. The selected approver records `approved`, `rejected`, or `changes_requested`
+   in the application with a non-empty decision comment. The app records the
+   configured approver identity, local OS user, decision time, revision digest,
+   and chained event hash in `.dms`. A `changes_requested` decision returns the
+   document to `draft`.
+6. If draft bytes no longer match the requested-review digest, approval is
+   invalidated and the document returns to `draft`; a new change summary and
+   review request are required.
+7. On release, the **application** performs versioning and PDF export (CAP-0007):
+   it produces a new PDF under the publish root at the mirrored relative
+   directory, named `<stem>_V<major>.<minor>.pdf` (examples: `Policy_V1.0.pdf`,
+   `Policy_V1.1.pdf`, `Policy_V2.0.pdf`).
+8. The editable Microsoft Office file remains the working draft under the edit
+   root; release does not replace or delete it. Release records link draft path
+   → versioned PDF path.
+9. Version numbers are monotonic per stable document ID. The first release is
+   `V1.0`. An approved cosmetic change increments minor (`V1.0` → `V1.1`);
+   an approved substantive change increments major and resets minor to zero
+   (`V1.7` → `V2.0`). There is no minor default when classification is
+   uncertain: uncertain changes are substantive/major.
+   A committed release number is never reused, including after withdrawal. A
+   failed attempt before commit does not consume the number and leaves no final
+   PDF. The app refuses to overwrite an existing PDF path.
+10. Released state always points at a PDF produced by the app export path; the
+   app does not accept an arbitrary operator-dropped PDF as a substitute for
+   that export in the normal release flow.
+11. Release is allowed only from a current `approved` revision and stores the
+    approved Office-draft SHA-256 digest, effective confidentiality type,
+    approval-chain head, effective date, and next-review-due (CAP-0015 /
+    CAP-0017) with the immutable release record. Release fails if the document
+    is `obsolete` or `missing`.
+12. Lifecycle, approval, and version history are readable after restart from
+    `.dms`. Git is not required for lifecycle progression.
+13. Each library document carries a stable document ID assigned at library add.
+    The current draft **relative path** under the edit root is the locator, not
+    the sole durable identity. Rename of the draft inside the edit root updates
+    the locator and preserves ID and history (CAP-0013).
+14. A `withdrawn` release moves its `released` history entry out of the
+    active set but preserves the PDF on disk. A `rejected` review request
+    leaves the document in `draft` and records the rejection reason in the
+    canonical event chain.
+15. If the operator renames or moves a controlled Office draft outside the app,
+    the next open of the workspace flags the document as `missing` until the
+    operator reassigns it, removes it, or restores the file. A draft modified
+    while a review is open invalidates the open approval (per outcome 6) without
+    removing the request from history.
+16. The release and approval history of a document is queryable by date range,
+    approver, and confidentiality type, and is exportable as documented in
+    CAP-0012.
+17. After release, further content change uses **Begin revision** (CAP-0015),
+    which returns the document to `draft` without deleting released PDFs.
+    A new review/release cycle is required before the next versioned PDF.
+18. Cancel-review, obsolescence, master data, and current-version supersession
+    follow CAP-0015. Publish-tree listing, orphan handling, and bulk verify
+    follow CAP-0016. Due-date review of an unchanged current release follows
+    CAP-0017.
+
+## Capability-local rules
+
+- Approval is operator-maintained (ADR-0004).
+- The workflow hash chain is tamper-evident only within the trusted filesystem
+  boundary; it is not identity verification or a digital signature.
+- General notes remain governed by CAP-0003; review change summaries and
+  approval decision comments are workflow evidence and cannot be edited or
+  deleted through the notes UI.
+- Each workflow event follows the canonical event body defined in ADR-0013;
+  recomputing and re-hashing is the verification routine exposed to operators
+  (CAP-0012).
+- PDF export and file versioning are application responsibilities using
+  preinstalled Microsoft Office (CAP-0007, ADR-0008).
+- Naming pattern and dual-root placement: ADR-0006, ADR-0007.
+- Cosmetic means spelling, grammar, formatting, pagination, or equivalent
+  presentation-only correction that does not change meaning, obligation,
+  process step, role, control, scope, decision, or data handling. Any such
+  semantic change—or uncertainty about semantic impact—is substantive/major.
+- Claude Desktop may suggest a class and change-summary wording under CAP-0018,
+  but the operator remains responsible for both and approval remains mandatory.
+
+## Links
+
+- Architecture: [`../../architecture.md`](../../architecture.md)
+- ADR-0003, ADR-0004, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010,
+  ADR-0012, ADR-0013, ADR-0015, ADR-0016: [`../../design-decisions.md`](../../design-decisions.md)
+- Export: [`CAP-0007-office-pdf-export.md`](CAP-0007-office-pdf-export.md)
+- Library: [`CAP-0006-library-explorer.md`](CAP-0006-library-explorer.md)
+- Classification: [`CAP-0008-confidentiality-classification.md`](CAP-0008-confidentiality-classification.md)
+- Editor: [`CAP-0009-release-editor.md`](CAP-0009-release-editor.md)
+- Notification: [`CAP-0010-notification-transport.md`](CAP-0010-notification-transport.md)
+- Evidence: [`CAP-0011-approval-evidence.md`](CAP-0011-approval-evidence.md)
+- Audit/export: [`CAP-0012-audit-export.md`](CAP-0012-audit-export.md)
+- Library maintenance: [`CAP-0013-library-maintenance.md`](CAP-0013-library-maintenance.md)
+- Workspace integrity: [`CAP-0014-workspace-integrity.md`](CAP-0014-workspace-integrity.md)
+- Master data / revision cycle: [`CAP-0015-document-master-data.md`](CAP-0015-document-master-data.md)
+- Publish tree: [`CAP-0016-publish-tree-maintenance.md`](CAP-0016-publish-tree-maintenance.md)
+- Periodic review: [`CAP-0017-periodic-document-review.md`](CAP-0017-periodic-document-review.md)
+- Claude Desktop assistance: [`CAP-0018-claude-desktop-change-assistance.md`](CAP-0018-claude-desktop-change-assistance.md)
+- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)

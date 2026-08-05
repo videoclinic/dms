@@ -1,0 +1,48 @@
+# CAP-0001 — Local folder DMS metadata store
+
+| Field | Value |
+| --- | --- |
+| ID | CAP-0001 |
+| Status | not implemented |
+| Primary platform | Windows and macOS (Tauri) |
+| Storage | Hidden `.dms/` under the edit root |
+| Tests | none |
+
+## Outcomes (contract — not yet true in runtime)
+
+When implemented, the following must hold:
+
+1. Operator configures a DMS workspace with two rooted paths:
+   - **edit root** — tree where Microsoft Office drafts are edited
+   - **publish root** — tree where released versioned PDFs are written
+2. Both absolute roots are persisted in `.dms` and restored when the workspace
+   is reopened.
+3. Metadata lives only under `<edit-root>/.dms/` (name change requires ADR/CAP
+   update). No database server.
+4. Library entries store a **stable document ID** plus the current draft path
+   **relative to the edit root** (and matching relative publish path segments).
+   Absolute paths are not the durable identity.
+5. On release, the app reconstructs the document’s relative directory tree
+   under the publish root (creates missing folders) so edit layout and publish
+   layout stay aligned.
+6. Closing and reopening the workspace restores roots, library membership,
+   master data, and process state from `.dms`.
+7. If `.dms` is missing under a chosen edit root, the app initializes it only
+   after an explicit confirm, including choosing or confirming the publish root.
+8. `.dms` stores the workspace confidentiality catalogue, document-type
+   catalogue, approver roster (no secrets), relative folder policies, and
+   master-data fields required by CAP-0008 and CAP-0015, but no SMTP password
+   or other credential.
+
+## Non-goals
+
+- Multi-master sync across machines
+- Transparent encryption of `.dms` (filesystem ACLs remain the operator’s control)
+- Treating edit root and publish root as the same folder by default (they may
+  coincide only if the operator deliberately sets them equal)
+
+## Links
+
+- Architecture: [`../../architecture.md`](../../architecture.md)
+- ADR-0001, ADR-0006, ADR-0009, ADR-0010, ADR-0015: [`../../design-decisions.md`](../../design-decisions.md)
+- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
