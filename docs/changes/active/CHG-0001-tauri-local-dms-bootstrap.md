@@ -4,9 +4,9 @@
 | --- | --- |
 | ID | CHG-0001 |
 | Status | in-progress |
-| External request | Direct operator request: develop a https://tauri.app/ application primarily for Windows for document version control to comply with ISO 27001 requirements. Drafts are original Microsoft Office tools; final approved and released documents are PDFs. No database; operator maintains release and approval process. Document details stored in hidden local directories per folder (e.g. `.dms`). Git-based VCS not mandatory. User can make notes. Released PDFs are checksummed. Refinements: (1) file explorer of controlled library with add/remove; library members are versioned as `*_vMAJOR.MINOR.pdf` on release while Office draft remains editable; (2) persist edit root and publish root; reconstruct mirrored directory tree under publish root on release; (3) PDF export and file versioning are performed by the application using preinstalled Microsoft Office; (4) macOS support is required in addition to Windows. |
-| Affected CAPs | CAP-0001 … CAP-0018 |
-| Decision records | ADR-0001 … ADR-0018 in `docs/design-decisions.md` |
+| External request | Direct operator request: develop a https://tauri.app/ application primarily for Windows for document version control to comply with ISO 27001 requirements. Drafts are original Microsoft Office tools; final approved and released documents are PDFs. No database; operator maintains release and approval process. Document details stored in hidden local directories per folder (e.g. `.dms`). Git-based VCS not mandatory. User can make notes. Released PDFs are checksummed. Refinements: (1) file explorer of controlled library with add/remove; library members are versioned as `*_vMAJOR.MINOR.pdf` on release while Office draft remains editable; (2) persist edit root and publish root; reconstruct mirrored directory tree under publish root on release; (3) PDF export and file versioning are performed by the application using preinstalled Microsoft Office; (4) macOS support is required in addition to Windows; (5) approval notification email contains a URI that opens the installed app to the requested document; (6) responsible editor and approver are assignable at root, folder, subfolder, or individual-document level with inheritance; (7) the person who requested approval receives notification of the recorded approval outcome. |
+| Affected CAPs | CAP-0001 … CAP-0019 |
+| Decision records | ADR-0001 … ADR-0019 in `docs/design-decisions.md` |
 
 ## Scope
 
@@ -16,10 +16,14 @@ macOS** that:
 - Configures edit root + publish root and stores metadata under `<edit-root>/.dms`
 - Shows a library file explorer; add/remove documents under control
 - Runs operator-driven approval and release
-- Sends approver notification email (SMTP or host mail handler) and records
-  revision-bound approval comments and event-chain hashes in `.dms`
+- Sends approver review-request email and requester decision-outcome email
+  (SMTP or host mail handler), and records revision-bound approval comments,
+  notification delivery attempts, and event-chain hashes in `.dms`; each
+  notification links the installed local app to the addressed review request
 - Applies inherited confidentiality types from configured folder policies, with
   per-document overrides and release-time snapshots
+- Routes one responsible editor and one approver from inherited folder policies,
+  with independent document overrides and immutable workflow snapshots
 - Opens the registered Office application for draft editing without embedding
   an editor and keeps a stable document ID across renames inside the edit root
 - Performs advisory locking and atomic `.dms` writes, supports backup and
@@ -52,11 +56,11 @@ macOS** that:
 
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
-| 0 | Product records and architecture bootstrap | done (docs tree; release version policy, approval, notification, confidentiality, maintenance, periodic review, optional Claude handoff, Win+macOS recorded) | CAP/CHG/ADR files exist; indexes list CAP-0001…0018; no CAP claims implemented runtime |
+| 0 | Product records and architecture bootstrap | done (docs tree; release version policy, approval, notification, confidentiality, workflow-role routing, maintenance, periodic review, optional Claude handoff, Win+macOS recorded) | CAP/CHG/ADR files exist; indexes list CAP-0001…0019; no CAP claims implemented runtime |
 | 1 | Tauri 2 app skeleton (Windows + macOS) + DOX for source tree | pending | Dev app launches on Windows and macOS; README run steps for both |
-| 2 | `.dms` store + dual-root open/configure + confidentiality policy | pending | Tests: persist/reload edit+publish roots and schema version; safe older-schema migration/newer-schema read-only; inherit nearest class; init `.dms` only on confirm |
+| 2 | `.dms` store + dual-root open/configure + confidentiality and workflow-role policies | pending | Tests: persist/reload edit+publish roots, stable workspace ID, and schema version; safe older-schema migration/newer-schema read-only; inherit nearest class and each role independently; init `.dms` only on confirm |
 | 3 | Library explorer + add/unregister/reassociate | pending | Tests: add under edit root; reject outside path; unregister preserves history; ambiguous move is never auto-linked; search/filter controlled set |
-| 4 | Lifecycle + approval notification + version assign + tree mirror | pending | Tests: request requires summary, change class, and transport success; cosmetic→minor, substantive/uncertain→major; comments/event hash persist; metadata change invalidates approval; first version V1.0; refuse overwrite |
+| 4 | Lifecycle + approval notification + version assign + tree mirror | pending | Tests: request requires summary, requester, change class, effective approver, and transport success; deep link resolves only an accessible registered workspace to the intended review request; each decision notifies the snapshotted requester, with failure retryable and non-reverting; approver-policy change invalidates an open review; cosmetic→minor, substantive/uncertain→major; comments/event hash persist; metadata change invalidates approval; first version V1.0; refuse overwrite |
 | 5 | Office-driven PDF export on release (Win + macOS adapters) | pending | Tests/integration: export via installed Office (or test double) to versioned path on each OS path; failure rolls back version success |
 | 6 | Notes on documents | pending | Tests: note CRUD persistence across restart |
 | 7 | Release checksum + periodic review + verify | pending | Tests: exported PDF → expected SHA-256; tamper → mismatch; release snapshots draft digest/class/chain; periodic confirm keeps version; changes-required begins revision; full backup manifest covers both roots |
@@ -69,10 +73,12 @@ macOS** that:
 
 - Prefer a minimal frontend unless a UI kit is required for the explorer.
 - `.dms` format: inspectable JSON (or similar); schema beside the store module
-  in phase 2 — must include `edit_root`, `publish_root`, library entries with
-  relative paths and stable IDs, confidentiality catalogue/folder policies,
-  document-type catalogue, master data, per-doc overrides, version counters,
-  release history, approval event chain, notes, checksums.
+  in phase 2 — must include `edit_root`, `publish_root`, stable workspace ID,
+  library entries with
+  relative paths and stable IDs, confidentiality and workflow-person catalogues,
+  relative folder policies, master data, per-doc overrides, version counters,
+  release history, approval event chain, review-request IDs, requester identity,
+  notification delivery attempts, notes, checksums.
 - Version pattern: `<stem>_V<major>.<minor>.pdf`; cosmetic changes increment
   minor and substantive or uncertain changes increment major (ADR-0007).
 - Path mapping: `publish_abs = publish_root / relative_parent / versioned_name`

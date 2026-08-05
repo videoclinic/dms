@@ -111,17 +111,23 @@ Capability-local rules stay in their CAP files.
 
 ## ADR-0009 — SMTP notification opens local-app approval
 
-- **Decision:** The application sends review-request email through a configured
-  SMTP relay after the operator selects an approver. Email contains no document
-  content and opens the request in the desktop app through a local-app deep
-  link. SMTP credentials live in the OS credential store; `.dms` stores only
-  non-secret relay configuration and delivery-attempt metadata.
+- **Decision:** The application sends a review-request email through a configured
+  SMTP relay after the operator submits a review to its effective approver, then
+  sends the recorded decision outcome to the requester's snapshotted email
+  address. Email contains
+  no document content and opens the request in the desktop app through a
+  registered local-app URI. The URI identifies the stable workspace, document,
+  and review request; the receiving app resolves it only against an accessible
+  registered workspace. SMTP credentials live in the OS credential store;
+  `.dms` stores only non-secret relay configuration and delivery-attempt metadata.
 - **Why:** This gives approvers a direct notification without building a server
   or a browser portal.
 - **Consequences:** Each approver needs the application and access to the same
-  workspace. SMTP delivery acceptance is recorded, not recipient reading. A
-  failed send leaves the document out of review and offers retry; it cannot
-  create a silently unnotified review request.
+  workspace. The URI cannot open arbitrary filesystem paths or record a decision
+  by itself. SMTP delivery acceptance is recorded, not recipient reading. A
+  failed review-request send leaves the document out of review and offers retry;
+  a failed decision-outcome notification is retryable but never reverses the
+  recorded decision.
 
 ## ADR-0010 — Workspace confidentiality catalogue with inherited folder policy
 
@@ -172,10 +178,11 @@ Capability-local rules stay in their CAP files.
 
 - **Decision:** Every workflow event stored in `.dms` is the SHA-256 of a
   canonical event body that contains, at minimum: stable document ID, event
-  type, predecessor event hash, ISO-8601 UTC timestamp, configured approver
-  identity (when applicable), local OS user, revision digest (when applicable),
-  confidentiality snapshot and approved change class (when applicable), and
-  the operator comment text.
+  type, predecessor event hash, ISO-8601 UTC timestamp, requester, effective
+  approver, and responsible editor IDs (when applicable), local OS user,
+  revision
+  digest (when applicable), confidentiality snapshot and approved change class
+  (when applicable), and the operator comment text.
 - **Why:** A canonical schema is the only way the chain is verifiable later
   and the only way two installations can compare evidence.
 - **Consequences:** Any reader can recompute and verify each event hash and the
@@ -250,3 +257,19 @@ Capability-local rules stay in their CAP files.
   preview and consent to every external-processing payload; confidentiality
   policy can disable handoff. Direct automation requires a future supported
   provider contract and an ADR update.
+
+## ADR-0019 — Inherited workflow-role routing without application access control
+
+- **Decision:** The workspace keeps a roster of people and assigns one
+  responsible editor and one approver at the edit root or any subfolder. Each
+  role derives independently from the nearest ancestor policy unless an
+  individual document overrides it. The effective approver receives a review
+  request; the effective editor and approver are snapshotted as workflow
+  evidence.
+- **Why:** Operators can route responsibility across a directory tree without
+  repeating the same assignments for every document, while retaining document
+  exceptions.
+- **Consequences:** These assignments route work and provide audit context only.
+  They do not prevent a person from opening or editing a shared Office file;
+  filesystem ACLs remain the access-control boundary. Changing an effective
+  approver invalidates an open review and requires a new request.

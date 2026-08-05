@@ -40,9 +40,10 @@ When implemented, the following must hold:
    `in_review` request with a required comment. The document returns to
    `draft`; the cancellation is recorded in the event chain. Cancel does not
    delete prior events.
-7. The author may **reassign** the selected approver on an open `in_review`
-   request only by cancelling and submitting a new review request (no silent
-   mid-flight approver swap).
+7. An operator may change a document's effective approver only through its
+   applicable folder policy or document override (CAP-0019). Changing the
+   effective approver while a request is open invalidates that request; a new
+   review request is required. There is no silent mid-flight approver swap.
 8. Workspace catalogues for **document type** support add/rename/disable with
    the same reference-protection rule as confidentiality types (CAP-0008 /
    CAP-0013): types referenced by documents or history cannot be hard-deleted.
@@ -79,5 +80,6 @@ When implemented, the following must hold:
 - Maintenance: [`CAP-0013-library-maintenance.md`](CAP-0013-library-maintenance.md)
 - Evidence: [`CAP-0011-approval-evidence.md`](CAP-0011-approval-evidence.md)
 - Periodic review: [`CAP-0017-periodic-document-review.md`](CAP-0017-periodic-document-review.md)
+- Workflow-role routing: [`CAP-0019-inherited-workflow-role-routing.md`](CAP-0019-inherited-workflow-role-routing.md)
 - ADR-0004, ADR-0013, ADR-0015, ADR-0016: [`../../design-decisions.md`](../../design-decisions.md)
 - Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)

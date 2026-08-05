@@ -15,8 +15,9 @@ When implemented, the following must hold:
 1. Operator configures a DMS workspace with two rooted paths:
    - **edit root** — tree where Microsoft Office drafts are edited
    - **publish root** — tree where released versioned PDFs are written
-2. Both absolute roots are persisted in `.dms` and restored when the workspace
-   is reopened.
+2. Both absolute roots and a stable opaque workspace ID are persisted in `.dms`
+   and restored when the workspace is reopened. The ID is assigned when the
+   workspace is initialized and remains unchanged for its lifetime.
 3. Metadata lives only under `<edit-root>/.dms/` (name change requires ADR/CAP
    update). No database server.
 4. Library entries store a **stable document ID** plus the current draft path
@@ -30,9 +31,9 @@ When implemented, the following must hold:
 7. If `.dms` is missing under a chosen edit root, the app initializes it only
    after an explicit confirm, including choosing or confirming the publish root.
 8. `.dms` stores the workspace confidentiality catalogue, document-type
-   catalogue, approver roster (no secrets), relative folder policies, and
-   master-data fields required by CAP-0008 and CAP-0015, but no SMTP password
-   or other credential.
+   catalogue, workflow-person roster (no secrets), relative folder policies,
+   and master-data fields required by CAP-0008, CAP-0015, and CAP-0019, but no
+   SMTP password or other credential.
 
 ## Non-goals
 

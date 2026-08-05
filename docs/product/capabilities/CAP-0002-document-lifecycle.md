@@ -15,27 +15,36 @@ When implemented, the following must hold:
 1. Only documents **in the library** (CAP-0006) participate in versioning and
    release. Uncontrolled files under the edit root are invisible to lifecycle
    actions until added.
-2. The workspace configuration contains approver profiles with stable IDs,
-   display names, and email addresses, plus non-secret SMTP relay settings. The
-   relay password is resolved from the OS credential store, not `.dms`.
+2. The workspace configuration contains a workflow-person roster with stable
+   IDs, display names, and email addresses, plus non-secret SMTP relay settings.
+   The relay password is resolved from the OS credential store, not `.dms`.
 3. Each library document has explicit `draft`, `in_review`, `approved`,
    `released`, and `obsolete` lifecycle states. `rejected`, `changes_requested`,
    `withdrawn` (release), and `cancelled` (review) are workflow outcomes
    recorded on the event chain; they are not separate long-lived primary states
    except where CAP-0015 defines `obsolete`.
-4. Submitting a document for review requires a non-empty change summary, a
-   selected configured approver, and a SHA-256 digest of the current draft.
+4. Submitting a document for review requires a non-empty change summary, the
+   requesting workflow person, the document's effective configured approver,
+   and a SHA-256 digest of the current draft. The requester identity and email
+   are snapshotted on the request. The approver is derived from the nearest
+   workflow-role policy or a document override (CAP-0019), and must use the
+   installed desktop app with access to the same workspace; approval is not
+   available in email or a browser. The notification carries a local-app deep
+   link to this review request (CAP-0010).
    After the first release it also requires an operator-selected change class
    (`cosmetic/minor` or `substantive/major`) with rationale. The class is bound
    to the review and any change requires a new review.
    Notification uses the workspace transport (CAP-0010): SMTP acceptance or
    operator-confirmed `mailto:` send. The document enters `in_review` only after
    that transport step succeeds.
-5. The selected approver records `approved`, `rejected`, or `changes_requested`
-   in the application with a non-empty decision comment. The app records the
-   configured approver identity, local OS user, decision time, revision digest,
-   and chained event hash in `.dms`. A `changes_requested` decision returns the
-   document to `draft`.
+5. The effective approver records `approved`, `rejected`, or
+   `changes_requested` in the application with a non-empty decision comment.
+   The app records the requester and approver identities, local OS user,
+   decision time, revision digest, and chained event hash in `.dms`. It sends a
+   notification of the recorded outcome to the requester's snapshotted email
+   through the workspace transport (CAP-0010). A notification failure records a
+   retryable delivery attempt and never reverses the decision. A
+   `changes_requested` decision returns the document to `draft`.
 6. If draft bytes no longer match the requested-review digest, approval is
    invalidated and the document returns to `draft`; a new change summary and
    review request are required.
@@ -59,9 +68,9 @@ When implemented, the following must hold:
    that export in the normal release flow.
 11. Release is allowed only from a current `approved` revision and stores the
     approved Office-draft SHA-256 digest, effective confidentiality type,
-    approval-chain head, effective date, and next-review-due (CAP-0015 /
-    CAP-0017) with the immutable release record. Release fails if the document
-    is `obsolete` or `missing`.
+    effective editor and approver, approval-chain head, effective date, and
+    next-review-due (CAP-0015 / CAP-0017 / CAP-0019) with the immutable release
+    record. Release fails if the document is `obsolete` or `missing`.
 12. Lifecycle, approval, and version history are readable after restart from
     `.dms`. Git is not required for lifecycle progression.
 13. Each library document carries a stable document ID assigned at library add.
@@ -113,7 +122,7 @@ When implemented, the following must hold:
 
 - Architecture: [`../../architecture.md`](../../architecture.md)
 - ADR-0003, ADR-0004, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010,
-  ADR-0012, ADR-0013, ADR-0015, ADR-0016: [`../../design-decisions.md`](../../design-decisions.md)
+  ADR-0012, ADR-0013, ADR-0015, ADR-0016, ADR-0019: [`../../design-decisions.md`](../../design-decisions.md)
 - Export: [`CAP-0007-office-pdf-export.md`](CAP-0007-office-pdf-export.md)
 - Library: [`CAP-0006-library-explorer.md`](CAP-0006-library-explorer.md)
 - Classification: [`CAP-0008-confidentiality-classification.md`](CAP-0008-confidentiality-classification.md)
@@ -127,4 +136,5 @@ When implemented, the following must hold:
 - Publish tree: [`CAP-0016-publish-tree-maintenance.md`](CAP-0016-publish-tree-maintenance.md)
 - Periodic review: [`CAP-0017-periodic-document-review.md`](CAP-0017-periodic-document-review.md)
 - Claude Desktop assistance: [`CAP-0018-claude-desktop-change-assistance.md`](CAP-0018-claude-desktop-change-assistance.md)
+- Workflow-role routing: [`CAP-0019-inherited-workflow-role-routing.md`](CAP-0019-inherited-workflow-role-routing.md)
 - Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)

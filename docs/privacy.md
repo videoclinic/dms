@@ -7,9 +7,9 @@
 | Draft Office documents | Edit root (operator-controlled) | Content is business documentation; app does not upload it |
 | Released versioned PDFs | Publish root (operator-controlled) | Final published artifacts (`*_VMAJOR.MINOR.pdf`) |
 | DMS metadata, library membership, notes, approval state, checksums | `<edit-root>/.dms/` | Local only; may contain personal names in notes or approver fields |
-| Document master data (title, owner, number, type, review dates) | `<edit-root>/.dms/` | Local control metadata; not document body content |
+| Document master data and workflow-role policies (title, owner, number, type, review dates, assigned editor/approver) | `<edit-root>/.dms/` | Local control metadata; not document body content |
 | Confidentiality policy and effective document label | `<edit-root>/.dms/` | Local classification metadata; a label does not enforce access control |
-| Approval-notification metadata | `<edit-root>/.dms/` | Approver display name/email, send time, and delivery-attempt result; no document content |
+| Approval-notification metadata | `<edit-root>/.dms/` | Requester/approver display name/email, outcome, send time, and delivery-attempt result; no document content |
 | Workspace root paths | Inside `.dms` | Absolute edit/publish paths on the operator machine |
 | SMTP relay password | OS credential store (when implemented) | Never stored in `.dms`; relay settings contain no password |
 | Workspace advisory lock | `<edit-root>/.dms/lock` | Process id, hostname, timestamp; advisory only, never contains document content |
@@ -24,8 +24,8 @@
 - No telemetry that includes document content or paths unless a future ADR
   explicitly enables opt-in diagnostics.
 - Approval email contains only the document display/relative path, requested
-  action, configured confidentiality label, and local-app deep link; it never
-  attaches or uploads draft or released document content.
+  action or decision outcome, configured confidentiality label, and local-app
+  deep link; it never attaches or uploads draft or released document content.
 - The configured confidentiality label is rendered in the notification subject
   but no body field that could embed document content is generated. The same
   rule applies to `mailto:` fallback drafts.
@@ -52,5 +52,6 @@
 - Audit/export: [`product/capabilities/CAP-0012-audit-export.md`](product/capabilities/CAP-0012-audit-export.md)
 - Library maintenance: [`product/capabilities/CAP-0013-library-maintenance.md`](product/capabilities/CAP-0013-library-maintenance.md)
 - Master data: [`product/capabilities/CAP-0015-document-master-data.md`](product/capabilities/CAP-0015-document-master-data.md)
+- Workflow-role routing: [`product/capabilities/CAP-0019-inherited-workflow-role-routing.md`](product/capabilities/CAP-0019-inherited-workflow-role-routing.md)
 - Publish tree: [`product/capabilities/CAP-0016-publish-tree-maintenance.md`](product/capabilities/CAP-0016-publish-tree-maintenance.md)
 - Claude Desktop assistance: [`product/capabilities/CAP-0018-claude-desktop-change-assistance.md`](product/capabilities/CAP-0018-claude-desktop-change-assistance.md)

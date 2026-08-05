@@ -13,10 +13,11 @@ When implemented, the following must hold:
 
 1. Every workflow event follows the canonical event body defined in ADR-0013:
    stable document ID, event type, predecessor event hash, ISO-8601 UTC
-   timestamp, configured approver identity (when applicable), local OS user,
-   revision digest (when applicable), confidentiality snapshot (when
-   applicable), approved change class and rationale (when applicable), and
-   operator comment text. The chain head is the SHA-256 of the canonical body.
+   timestamp, requester, effective editor and approver IDs (when applicable),
+   local OS user, revision digest (when applicable), confidentiality snapshot
+   (when applicable), approved change class and rationale (when applicable),
+   and operator comment text. The chain head is the SHA-256 of the canonical
+   body.
 2. Two comment types are first-class:
    - **Change comment** — entered at review-request time; explains what the
      author changed since the last release.
@@ -28,8 +29,9 @@ When implemented, the following must hold:
    not enforce identity; it records what the OS reports.
 4. The history of a document lists every event in chain order with its event
    hash, predecessor hash, type, timestamp, author comment, decision comment,
-   revision digest, approved change class, and confidentiality snapshot. The
-   list is readable without leaving the desktop app.
+   requester, effective editor and approver, revision digest, approved change
+   class, and confidentiality snapshot. The list is readable without leaving
+   the desktop app.
 5. The application exposes a **Verify workflow** routine that recomputes each
    event hash from its canonical body and confirms the chain. The result is
    `valid`, `tampered at <event-id>`, or `missing`. Verification never
@@ -59,6 +61,7 @@ When implemented, the following must hold:
 ## Links
 
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
+- Workflow-role routing: [`CAP-0019-inherited-workflow-role-routing.md`](CAP-0019-inherited-workflow-role-routing.md)
 - Master data: [`CAP-0015-document-master-data.md`](CAP-0015-document-master-data.md)
 - Privacy: [`../../privacy.md`](../../privacy.md)
 - ADR-0004, ADR-0013: [`../../design-decisions.md`](../../design-decisions.md)
