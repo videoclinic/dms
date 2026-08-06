@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>CAP-0006 — Library directory navigator · DMS Desktop</title>
+<title>CAP-0020 — Document permalinks · DMS Desktop</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -177,7 +177,7 @@ tr:last-child td { border-bottom: 0; }
 </style>
 </head>
 <body>
-<div class="app" data-cap="CAP-0006">
+<div class="app" data-cap="CAP-0020">
   <aside class="sidebar">
     <div class="brand">
       <div class="brand-mark">DMS</div>
@@ -186,7 +186,7 @@ tr:last-child td { border-bottom: 0; }
     </div>
     <nav class="nav"><a class="nav-item active" href="#">📚 <span>Library</span></a><a class="nav-item" href="#">📦 <span>Releases</span></a><a class="nav-item" href="#">📋 <span>Audit & Reports</span></a><a class="nav-item" href="#">🧰 <span>Maintenance</span></a><a class="nav-item" href="#">⚙️ <span>Configuration</span></a></nav>
     <div class="pane-sec">Open panes</div>
-    <div class="pane-tabs"><div class="pane-tab active"><span class="pane-label">Library · HR</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label">Review · Privacy</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label">Notes · Privacy</span><span class="pane-close">×</span></div></div>
+    <div class="pane-tabs"><div class="pane-tab"><span class="pane-label">Library · HR</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label">Review · Privacy</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label">Notes · Privacy</span><span class="pane-close">×</span></div><div class="pane-tab active"><span class="pane-label">Permalink</span><span class="pane-close">×</span></div></div>
     <div class="sidebar-foot">
       ws-9c3b7d1a<br/>
       edit: /dms/edit<br/>
@@ -196,150 +196,43 @@ tr:last-child td { border-bottom: 0; }
   <div class="main">
     <header class="header">
       <button class="ham-btn" title="Open left menu when folded">☰</button>
-      <h1>Library directory navigator</h1>
+      <h1>Document permalinks</h1>
       <div class="grow"></div>
       <span class="ham-note">☰ when menu folded</span>
       <span class="badge ok">Workspace healthy</span>
-      <div class="header-actions"><button class="btn">Add to library</button><button class="btn outline">Rescan</button><button class="btn outline">Filters</button></div>
+      <div class="header-actions"><button class="btn">Copy permalink</button><button class="btn outline">Open from URI</button></div>
     </header>
     <main class="content">
       <div class="cap-head">
-        <span class="badge info">CAP-0006</span>
-        <h2>Library directory navigator</h2>
+        <span class="badge info">CAP-0020</span>
+        <h2>Document permalinks</h2>
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Folder tree + list. Selection pane on the right holds CAP-0015 master data and document actions (no hamburger). Multi-select uses the same pane for batch actions.</p>
+      <p class="subtitle">Stable local-app URI: workspace ID + document ID. Survives rename and version bumps. Never keys off path or VMAJOR.MINOR.</p>
       
-      <div class="grid-explorer-detail">
-        <aside class="card tree">
-          <h3 class="card-title">Folders</h3>
-          <p class="hint" style="margin-top:0">Library path tree</p>
-          <ul class="tree-root">
-            <li>
-              <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📁 policies</span></div>
-              <ul>
-                <li>
-                  <div class="tree-node active"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 HR</span></div>
-                </li>
-                <li>
-                  <div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 IT</span></div>
-                </li>
-              </ul>
-            </li>
-            <li>
-              <div class="tree-node"><span class="tree-twisty">▸</span><span class="tree-label">📁 procedures</span></div>
-            </li>
-            <li>
-              <div class="tree-node"><span class="tree-twisty">▸</span><span class="tree-label">📁 records</span></div>
-            </li>
-          </ul>
-          <p class="hint">Selected: policies / HR</p>
-        </aside>
-        <section class="card list-card">
-          <div class="row gap-2 mb">
-            <span class="badge danger">3 overdue</span>
-            <span class="badge warn">12 due ≤30d</span>
-            <span class="muted grow">Search: title, doc #, filename, path</span>
-          </div>
-          <div class="table-wrap"><table>
-            <thead><tr>
-              <th></th><th>Title</th><th>Doc #</th><th>Type</th><th>State</th><th>Released</th><th>Conf.</th>
-            </tr></thead>
-            <tbody>
-              <tr class="selected">
-                <td><span class="check on">☑</span></td>
-                <td>HR Data Privacy Policy</td>
-                <td>DOC-014</td>
-                <td>policy</td>
-                <td><span class="badge info">in_review</span></td>
-                <td>V1.3 <span class="badge warn">draft newer</span></td>
-                <td>Internal</td>
-              </tr>
-              <tr>
-                <td><span class="check">☐</span></td>
-                <td>Acceptable Use</td>
-                <td>DOC-002</td>
-                <td>policy</td>
-                <td><span class="badge warn">draft</span></td>
-                <td>V2.0</td>
-                <td>Public</td>
-              </tr>
-              <tr>
-                <td><span class="check">☐</span></td>
-                <td>Incident Response</td>
-                <td>DOC-021</td>
-                <td>procedure</td>
-                <td><span class="badge ok">released</span></td>
-                <td>V3.1</td>
-                <td>Restricted</td>
-              </tr>
-              <tr>
-                <td><span class="check">☐</span></td>
-                <td>Visitor Register</td>
-                <td>DOC-007</td>
-                <td>record</td>
-                <td><span class="badge muted">obsolete</span></td>
-                <td>V1.0</td>
-                <td>Internal</td>
-              </tr>
-              <tr>
-                <td><span class="check">☐</span></td>
-                <td>Backup Config</td>
-                <td>DOC-033</td>
-                <td>policy</td>
-                <td><span class="badge ok">released</span></td>
-                <td>V1.4</td>
-                <td>Internal</td>
-              </tr>
-            </tbody>
-          </table></div>
-          <p class="hint">List is selection only. Actions live in the right pane with master data. Multi-select replaces master data there with batch actions.</p>
+      <div class="grid-2">
+        <section class="card">
+          <h3 class="card-title">Canonical URI</h3>
+          <dl class="kv"><div><dt>Document home</dt><dd><code>dms://open?workspace=ws-9c3b7d1a&amp;document=doc-77a12bce</code></dd></div><div><dt>Review target</dt><dd><code>…&amp;target=review&amp;review=r-21</code></dd></div><div><dt>Notes target</dt><dd><code>…&amp;target=notes</code></dd></div><div><dt>Identity keys</dt><dd>workspace ID + document ID only</dd></div><div><dt>Not in URI</dt><dd>file name, relative path, V1.3, PDF stem, absolute paths</dd></div></dl>
+          <div class="callout ok" style="margin-top:0.75rem"><span class="badge ok">stable</span> Same URI after rename Handbook.docx → Privacy-Policy.docx and after release V1.3 → V2.0.</div>
         </section>
-        <aside class="card detail-pane">
-          <div class="row between mb">
-            <h3 class="card-title" style="margin:0">HR Data Privacy Policy</h3>
-            <span class="badge info">in_review</span>
-          </div>
-          <p class="muted mono">DOC-014 · policies/HR/Handbook.docx</p>
-          <h3 class="card-title" style="margin-top:0.85rem">Master data</h3>
-          <dl class="kv"><div><dt>Title</dt><dd>HR Data Privacy Policy</dd></div><div><dt>Document number</dt><dd>DOC-014</dd></div><div><dt>Document type</dt><dd>policy</dd></div><div><dt>Owner</dt><dd>Lukas Roth</dd></div><div><dt>Effective date</dt><dd>2025-08-01</dd></div><div><dt>Next review due</dt><dd>2026-08-01</dd></div><div><dt>Released</dt><dd>V1.3 (current)</dd></div><div><dt>Draft</dt><dd><span class="badge warn">newer than last release</span></dd></div><div><dt>Effective editor</dt><dd>Lukas Roth</dd></div><div><dt>Effective approver</dt><dd>Anna Berg</dd></div><div><dt>Confidentiality</dt><dd>Internal (inherited)</dd></div></dl>
-          <h3 class="card-title" style="margin-top:0.9rem">Actions</h3>
-          <div class="stack-btns">
-            <button class="btn outline">Open draft</button>
-            <button class="btn outline">Edit master data</button>
-            <button class="btn outline">Submit for review</button>
-            <button class="btn outline">Cancel review</button>
-            <button class="btn outline">Notes</button>
-            <button class="btn outline">Workflow chain</button>
-            <button class="btn outline">Verify integrity</button>
-            <button class="btn outline">Periodic review</button>
-            <button class="btn outline">Rename / reassociate</button>
-            <button class="btn outline">Copy permalink</button>
-            <button class="btn outline">Claude handoff</button>
-            <button class="btn danger">Unregister</button>
-          </div>
-          <p class="hint">Copy permalink uses workspace + document IDs only (CAP-0020). Action labels omit the document name.</p>
-        </aside>
+        <section class="card">
+          <h3 class="card-title">Resolve path</h3>
+          <ol class="list">
+            <li>OS hands URI to registered DMS handler</li>
+            <li>Match registered accessible workspace by ID</li>
+            <li>Look up document by stable ID in <code>.dms</code></li>
+            <li>Open library navigator, select document, show selection pane</li>
+            <li>Focus or create open-activity tab (CAP-0005)</li>
+          </ol>
+          <p class="hint">Unknown workspace/document → fail closed message. URI never records approve/reject.</p>
+        </section>
       </div>
-      <section class="card" style="margin-top:0.25rem">
-        <h3 class="card-title">Multi-select (same right pane)</h3>
-        <div class="grid-2">
-          <div>
-            <p class="muted" style="margin:0 0 0.5rem;font-size:0.85rem">When two or more rows are checked, the right pane switches to batch mode:</p>
-            <ul class="list">
-              <li>HR Data Privacy Policy (DOC-014)</li>
-              <li>Acceptable Use (DOC-002)</li>
-            </ul>
-          </div>
-          <div class="stack-btns">
-            <div class="row gap-2 mb"><strong>2 selected</strong><button class="btn outline">Clear</button></div>
-            <button class="btn outline">Verify integrity</button>
-            <button class="btn outline">Send reminder</button>
-            <button class="btn danger">Unregister…</button>
-          </div>
-        </div>
-        <p class="hint">Batch actions only — multi-applicable operations. Single-document actions stay hidden until exactly one row is selected.</p>
+      <section class="card">
+        <h3 class="card-title">Copy from selection</h3>
+        <dl class="kv"><div><dt>Title (display only)</dt><dd>HR Data Privacy Policy</dd></div><div><dt>Current locator</dt><dd>policies/HR/Privacy-Policy.docx</dd></div><div><dt>Latest release</dt><dd>V2.0</dd></div><div><dt>Clipboard</dt><dd>dms://open?workspace=ws-9c3b7d1a&document=doc-77a12bce</dd></div></dl>
+        <p class="hint">Display labels may change; clipboard URI does not include them as keys.</p>
       </section>
     </main>
   </div>

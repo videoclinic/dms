@@ -134,6 +134,13 @@
       "html": "html/CAP-0019-inherited-workflow-role-routing.html",
       "png": "exports/CAP-0019-inherited-workflow-role-routing.png",
       "nav": "config"
+    },
+    {
+      "id": "CAP-0020",
+      "title": "Document permalinks",
+      "html": "html/CAP-0020-document-permalinks.html",
+      "png": "exports/CAP-0020-document-permalinks.png",
+      "nav": "library"
     }
   ]
 }

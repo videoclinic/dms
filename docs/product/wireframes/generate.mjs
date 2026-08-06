@@ -165,22 +165,64 @@ const CAPS = [
     file: "CAP-0005-desktop-shell",
     title: "Desktop shell overview",
     nav: "library",
-    subtitle: "Tauri 2 shell on Windows and macOS. Filesystem and Office automation are mediated.",
+    activity: "shell",
+    subtitle: "Tauri 2 shell on Windows and macOS. Foldable left menu, hamburger when collapsed, open-activity panes/tabs.",
     body: `
       <section class="card">
-        <h3 class="card-title">Runtime layers</h3>
+        <h3 class="card-title">Chrome contract</h3>
         <div class="stack">
-          ${layer("Tauri 2 shell (Rust)", "Windowing, filesystem, checksums, path mapping, Office export orchestration")}
-          ${layer("Frontend (WebView UI)", "Library directory navigator, selection master-data pane, lifecycle, approval, release, audit, policies")}
-          ${layer("Microsoft Office (host)", "PDF export engine on release (Word / Excel / PowerPoint)")}
-          ${layer("Claude Desktop (optional)", "Operator-mediated change-comment handoff — never a lifecycle authority")}
-          ${layer("<edit-root>/.dms/", "Roots, library, roster, policies, notes, history, evidence, checksums, lock")}
+          ${layer("Foldable left menu", "Primary destinations + open-activity tabs. Expanded/collapsed preference persists per OS user (not in .dms).")}
+          ${layer("Hamburger when folded", "Header control re-opens the menu as temporary expand/overlay; pin expanded to keep it open.")}
+          ${layer("Open activity panes/tabs", "Browser-like quicklinks under primary nav. Focus restores the activity; close dismisses only that pane.")}
+          ${layer("Permalink handler", "OS-registered dms:// URI resolves workspace + document IDs (CAP-0020); opens/focuses matching activity tab.")}
         </div>
       </section>
+      <div class="grid-2">
+        <section class="card">
+          <h3 class="card-title">Expanded left menu</h3>
+          <div class="mini-shell">
+            <div class="mini-side">
+              <div class="mini-brand">DMS Desktop <span class="fold-btn" title="Collapse">«</span></div>
+              <div class="mini-nav">
+                <div class="on">📚 Library</div>
+                <div>📦 Releases</div>
+                <div>📋 Audit</div>
+                <div>🧰 Maintenance</div>
+                <div>⚙️ Config</div>
+              </div>
+              <div class="mini-sec">Open panes</div>
+              <div class="mini-tabs">
+                <div class="on">Library · HR <span>×</span></div>
+                <div>Review · Privacy <span>×</span></div>
+                <div>Notes · Privacy <span>×</span></div>
+              </div>
+              <div class="mini-foot">ws-9c3b7d1a</div>
+            </div>
+            <div class="mini-main">Main activity surface</div>
+          </div>
+        </section>
+        <section class="card">
+          <h3 class="card-title">Collapsed + hamburger</h3>
+          <div class="mini-shell collapsed">
+            <div class="mini-rail">
+              <div class="ham">☰</div>
+              <div class="on" title="Library">📚</div>
+              <div title="Releases">📦</div>
+              <div title="Audit">📋</div>
+              <div title="Maintenance">🧰</div>
+              <div title="Config">⚙️</div>
+            </div>
+            <div class="mini-main">
+              <div class="mini-header"><span class="ham">☰</span> Library · HR Data Privacy Policy</div>
+              <p class="muted" style="padding:0.75rem;margin:0;font-size:0.8rem">Hamburger expands the left menu. Icon rail still switches primary destinations. Open-pane list appears when expanded.</p>
+            </div>
+          </div>
+        </section>
+      </div>
       <section class="card">
         <h3 class="card-title">Backend command surface</h3>
         <div class="tags">
-          ${["Configure roots", "Open workspace", "Library add/remove", "Lifecycle transitions", "Release + verify", "Audit export", "Backup/restore", "Claude handoff"]
+          ${["Configure roots", "Open workspace", "Library add/remove", "Lifecycle transitions", "Release + verify", "Copy/resolve permalink", "Audit export", "Backup/restore", "Claude handoff"]
             .map((t) => `<span class="tag">${t}</span>`)
             .join("")}
         </div>
@@ -310,10 +352,11 @@ const CAPS = [
             <button class="btn outline">Verify integrity</button>
             <button class="btn outline">Periodic review</button>
             <button class="btn outline">Rename / reassociate</button>
+            <button class="btn outline">Copy permalink</button>
             <button class="btn outline">Claude handoff</button>
             <button class="btn danger">Unregister</button>
           </div>
-          <p class="hint">Action labels omit the document name — the selection is already shown above.</p>
+          <p class="hint">Copy permalink uses workspace + document IDs only (CAP-0020). Action labels omit the document name.</p>
         </aside>
       </div>
       <section class="card" style="margin-top:0.25rem">
@@ -433,7 +476,7 @@ const CAPS = [
             ["From", "dms@videoclinic.de"],
             ["Recipient (snapshot)", "anna@videoclinic.de"],
           ])}
-          <p class="hint">Deep link: <code>dms://workspace-prod/doc-77a12bce/review-r-21</code> — opens local review if app + workspace available.</p>
+          <p class="hint">Permalink: <code>dms://open?workspace=ws-9c3b7d1a&amp;document=doc-77a12bce&amp;target=review&amp;review=r-21</code> — IDs only; survives rename and version bump.</p>
         </section>
         <section class="card">
           <div class="row gap-2 mb"><h3 class="card-title">mailto: fallback</h3>${badge("available", "warn")}</div>
@@ -441,7 +484,7 @@ const CAPS = [
             ["Default handler", "Microsoft Outlook (Windows)"],
             ["Recipient", "anna@videoclinic.de"],
             ["Subject", "[DMS] Review HR Data Privacy Policy"],
-            ["Body", "Relative path, action, confidentiality, deep link. No document content."],
+            ["Body", "Relative path, action, confidentiality, CAP-0020 permalink. No document content."],
           ])}
           <p class="hint">State does not advance to <code>in_review</code> until operator confirms send. Delivery failure never reverses a decision.</p>
         </section>
@@ -793,6 +836,50 @@ const CAPS = [
         </section>
       </div>`,
   },
+  {
+    id: "CAP-0020",
+    file: "CAP-0020-document-permalinks",
+    title: "Document permalinks",
+    nav: "library",
+    activity: "permalink",
+    subtitle: "Stable local-app URI: workspace ID + document ID. Survives rename and version bumps. Never keys off path or VMAJOR.MINOR.",
+    actions: ["Copy permalink", "Open from URI"],
+    body: `
+      <div class="grid-2">
+        <section class="card">
+          <h3 class="card-title">Canonical URI</h3>
+          ${kv([
+            ["Document home", "<code>dms://open?workspace=ws-9c3b7d1a&amp;document=doc-77a12bce</code>"],
+            ["Review target", "<code>…&amp;target=review&amp;review=r-21</code>"],
+            ["Notes target", "<code>…&amp;target=notes</code>"],
+            ["Identity keys", "workspace ID + document ID only"],
+            ["Not in URI", "file name, relative path, V1.3, PDF stem, absolute paths"],
+          ])}
+          <div class="callout ok" style="margin-top:0.75rem">${badge("stable", "ok")} Same URI after rename Handbook.docx → Privacy-Policy.docx and after release V1.3 → V2.0.</div>
+        </section>
+        <section class="card">
+          <h3 class="card-title">Resolve path</h3>
+          <ol class="list">
+            <li>OS hands URI to registered DMS handler</li>
+            <li>Match registered accessible workspace by ID</li>
+            <li>Look up document by stable ID in <code>.dms</code></li>
+            <li>Open library navigator, select document, show selection pane</li>
+            <li>Focus or create open-activity tab (CAP-0005)</li>
+          </ol>
+          <p class="hint">Unknown workspace/document → fail closed message. URI never records approve/reject.</p>
+        </section>
+      </div>
+      <section class="card">
+        <h3 class="card-title">Copy from selection</h3>
+        ${kv([
+          ["Title (display only)", "HR Data Privacy Policy"],
+          ["Current locator", "policies/HR/Privacy-Policy.docx"],
+          ["Latest release", "V2.0"],
+          ["Clipboard", "dms://open?workspace=ws-9c3b7d1a&document=doc-77a12bce"],
+        ])}
+        <p class="hint">Display labels may change; clipboard URI does not include them as keys.</p>
+      </section>`,
+  },
 ];
 
 function badge(text, kind = "muted") {
@@ -839,6 +926,45 @@ function shell(cap) {
     const active = n.id === cap.nav ? " active" : "";
     return `<a class="nav-item${active}" href="#">${n.icon} <span>${n.label}</span></a>`;
   }).join("");
+  const activityKey = cap.activity || cap.nav || "library";
+  const activities = [
+    { id: "library", label: "Library · HR" },
+    { id: "review", label: "Review · Privacy" },
+    { id: "notes", label: "Notes · Privacy" },
+    { id: "shell", label: "Shell chrome" },
+    { id: "permalink", label: "Permalink" },
+    { id: "releases", label: "Releases" },
+    { id: "audit", label: "Audit" },
+    { id: "maintenance", label: "Maintenance" },
+    { id: "config", label: "Configuration" },
+  ];
+  // Show a stable sample set; mark the one matching this screen active.
+  const openSet = [
+    { id: "library", label: "Library · HR" },
+    { id: "review", label: "Review · Privacy" },
+    { id: "notes", label: "Notes · Privacy" },
+    ...(activityKey !== "library" && activityKey !== "review" && activityKey !== "notes"
+      ? [{ id: activityKey, label: activities.find((a) => a.id === activityKey)?.label || cap.title }]
+      : []),
+  ];
+  const seen = new Set();
+  const openTabs = openSet
+    .filter((t) => {
+      if (seen.has(t.id)) return false;
+      seen.add(t.id);
+      return true;
+    })
+    .map((t) => {
+      const isActive =
+        t.id === activityKey ||
+        (cap.id === "CAP-0006" && t.id === "library") ||
+        (cap.id === "CAP-0002" && t.id === "review") ||
+        (cap.id === "CAP-0003" && t.id === "notes") ||
+        (cap.id === "CAP-0005" && t.id === "shell") ||
+        (cap.id === "CAP-0020" && t.id === "permalink");
+      return `<div class="pane-tab${isActive ? " active" : ""}"><span class="pane-label">${t.label}</span><span class="pane-close">×</span></div>`;
+    })
+    .join("");
   const actions = (cap.actions || [])
     .map((a, i) => {
       const cls = i === 0 ? "btn" : a.toLowerCase().includes("obsolete") || a.toLowerCase().includes("restore") || a.toLowerCase().includes("archive") || a.toLowerCase().includes("withdraw") ? "btn danger" : "btn outline";
@@ -893,15 +1019,26 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .sidebar { width: 16rem; flex-shrink: 0; background: var(--sidebar); border-right: 1px solid var(--sidebar-border); display: flex; flex-direction: column; padding: 0.75rem; gap: 0.5rem; }
 .brand { display: flex; align-items: center; gap: 0.625rem; padding: 0.5rem 0.625rem; font-weight: 600; font-size: 0.9rem; }
 .brand-mark { width: 1.75rem; height: 1.75rem; border-radius: 0.4rem; background: var(--primary); color: var(--primary-foreground); display: grid; place-items: center; font-size: 0.7rem; font-weight: 700; }
-.nav { display: flex; flex-direction: column; gap: 0.15rem; margin-top: 0.75rem; }
+.brand-actions { margin-left: auto; display: flex; gap: 0.25rem; }
+.fold-ctl { appearance: none; border: 1px solid var(--input); background: var(--background); width: 1.5rem; height: 1.5rem; border-radius: calc(var(--radius) - 2px); font: inherit; font-size: 0.75rem; line-height: 1; cursor: default; color: var(--muted-foreground); }
+.nav { display: flex; flex-direction: column; gap: 0.15rem; margin-top: 0.35rem; }
 .nav-item { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0.625rem; border-radius: calc(var(--radius) - 2px); font-size: 0.875rem; color: var(--sidebar-foreground); }
 .nav-item.active { background: var(--sidebar-accent); font-weight: 600; }
+.pane-sec { margin-top: 0.85rem; padding: 0 0.35rem; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted-foreground); }
+.pane-tabs { display: flex; flex-direction: column; gap: 0.2rem; margin-top: 0.35rem; }
+.pane-tab { display: flex; align-items: center; gap: 0.35rem; padding: 0.4rem 0.55rem; border-radius: calc(var(--radius) - 2px); font-size: 0.78rem; border: 1px solid transparent; background: transparent; color: var(--sidebar-foreground); }
+.pane-tab.active { background: color-mix(in oklch, var(--info) 12%, white); border-color: color-mix(in oklch, var(--info) 28%, var(--border)); font-weight: 600; }
+.pane-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.pane-close { color: var(--muted-foreground); font-size: 0.85rem; line-height: 1; padding: 0 0.15rem; }
 .sidebar-foot { margin-top: auto; padding: 0.75rem 0.625rem; font-size: 0.75rem; color: var(--muted-foreground); line-height: 1.5; border-top: 1px solid var(--sidebar-border); }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--background); }
 .header { height: 3.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.75rem; padding: 0 1.25rem; }
 .header h1 { font-size: 0.95rem; font-weight: 600; margin: 0; }
 .header .grow { flex: 1; }
 .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+.ham-btn { appearance: none; border: 1px solid var(--input); background: var(--background); width: 2rem; height: 2rem; border-radius: calc(var(--radius) - 2px); font: inherit; font-size: 1rem; line-height: 1; cursor: default; color: var(--foreground); display: grid; place-items: center; }
+.ham-btn .tip { display: none; }
+.ham-note { font-size: 0.7rem; color: var(--muted-foreground); }
 .content { padding: 1.25rem 1.5rem 2rem; display: flex; flex-direction: column; gap: 1rem; }
 .cap-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; }
 .cap-head h2 { margin: 0; font-size: 1.25rem; font-weight: 700; }
@@ -995,23 +1132,47 @@ tr:last-child td { border-bottom: 0; }
 .doc-title { margin: 0; font-size: 1.1rem; font-weight: 700; }
 .timeline { margin: 0; padding-left: 1.1rem; font-size: 0.85rem; line-height: 1.7; }
 .wire-meta { font-size: 0.7rem; color: var(--muted-foreground); }
+.mini-shell { display: flex; border: 1px solid var(--border); border-radius: calc(var(--radius) - 2px); overflow: hidden; min-height: 12rem; background: var(--background); }
+.mini-shell.collapsed { min-height: 11rem; }
+.mini-side { width: 10.5rem; background: var(--sidebar); border-right: 1px solid var(--sidebar-border); padding: 0.5rem; display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.72rem; }
+.mini-brand { display: flex; align-items: center; justify-content: space-between; font-weight: 600; padding: 0.15rem 0.2rem; }
+.fold-btn { border: 1px solid var(--input); border-radius: 0.25rem; padding: 0 0.3rem; color: var(--muted-foreground); background: var(--background); }
+.mini-nav div, .mini-tabs div { padding: 0.28rem 0.35rem; border-radius: 0.3rem; }
+.mini-nav div.on, .mini-tabs div.on, .mini-rail div.on { background: color-mix(in oklch, var(--info) 12%, white); font-weight: 600; }
+.mini-sec { margin-top: 0.35rem; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted-foreground); }
+.mini-tabs div { display: flex; justify-content: space-between; gap: 0.25rem; border: 1px solid transparent; }
+.mini-tabs div.on { border-color: color-mix(in oklch, var(--info) 28%, var(--border)); }
+.mini-foot { margin-top: auto; color: var(--muted-foreground); font-size: 0.65rem; padding-top: 0.4rem; border-top: 1px solid var(--sidebar-border); }
+.mini-main { flex: 1; background: var(--card); display: flex; flex-direction: column; color: var(--muted-foreground); font-size: 0.8rem; align-items: stretch; justify-content: center; text-align: center; }
+.mini-rail { width: 2.75rem; background: var(--sidebar); border-right: 1px solid var(--sidebar-border); display: flex; flex-direction: column; align-items: center; gap: 0.35rem; padding: 0.45rem 0.25rem; }
+.mini-rail div, .ham { width: 1.75rem; height: 1.75rem; display: grid; place-items: center; border-radius: 0.35rem; font-size: 0.85rem; }
+.ham { border: 1px solid var(--input); background: var(--background); }
+.mini-header { display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border); font-weight: 600; color: var(--foreground); text-align: left; }
 </style>
 </head>
 <body>
 <div class="app" data-cap="${cap.id}">
   <aside class="sidebar">
-    <div class="brand"><div class="brand-mark">DMS</div>DMS Desktop</div>
+    <div class="brand">
+      <div class="brand-mark">DMS</div>
+      <span>DMS Desktop</span>
+      <div class="brand-actions"><button class="fold-ctl" title="Collapse left menu">«</button></div>
+    </div>
     <nav class="nav">${navHtml}</nav>
+    <div class="pane-sec">Open panes</div>
+    <div class="pane-tabs">${openTabs}</div>
     <div class="sidebar-foot">
-      workspace-prod<br/>
+      ws-9c3b7d1a<br/>
       edit: /dms/edit<br/>
       publish: /dms/publish
     </div>
   </aside>
   <div class="main">
     <header class="header">
+      <button class="ham-btn" title="Open left menu when folded">☰</button>
       <h1>${cap.title}</h1>
       <div class="grow"></div>
+      <span class="ham-note">☰ when menu folded</span>
       ${badge("Workspace healthy", "ok")}
       <div class="header-actions">${actions}</div>
     </header>

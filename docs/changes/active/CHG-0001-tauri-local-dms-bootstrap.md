@@ -5,8 +5,8 @@
 | ID | CHG-0001 |
 | Status | in-progress |
 | External request | Direct operator request: develop a https://tauri.app/ application primarily for Windows for document version control to comply with ISO 27001 requirements. Drafts are original Microsoft Office tools; final approved and released documents are PDFs. No database; operator maintains release and approval process. Document details stored in hidden local directories per folder (e.g. `.dms`). Git-based VCS not mandatory. User can make notes. Released PDFs are checksummed. Refinements: (1) file explorer of controlled library with add/remove; library members are versioned as `*_vMAJOR.MINOR.pdf` on release while Office draft remains editable; (2) persist edit root and publish root; reconstruct mirrored directory tree under publish root on release; (3) PDF export and file versioning are performed by the application using preinstalled Microsoft Office; (4) macOS support is required in addition to Windows; (5) approval notification email contains a URI that opens the installed app to the requested document; (6) responsible editor and approver are assignable at root, folder, subfolder, or individual-document level with inheritance; (7) the person who requested approval receives notification of the recorded approval outcome. |
-| Affected CAPs | CAP-0001 … CAP-0019 |
-| Decision records | ADR-0001 … ADR-0019 in `docs/design-decisions.md` |
+| Affected CAPs | CAP-0001 … CAP-0020 |
+| Decision records | ADR-0001 … ADR-0020 in `docs/design-decisions.md` |
 
 ## Scope
 
@@ -14,6 +14,8 @@ Deliver the first vertical slice of a Tauri 2 desktop app for **Windows and
 macOS** that:
 
 - Configures edit root + publish root and stores metadata under `<edit-root>/.dms`
+- Provides a foldable left menu (hamburger when collapsed) and open-activity
+  panes/tabs as quicklinks in the left chrome
 - Shows a library directory navigator (folder tree, metadata list, selection
   pane with CAP-0015 master data and document/batch actions); add/remove
   documents under control
@@ -22,6 +24,10 @@ macOS** that:
   (SMTP or host mail handler), and records revision-bound approval comments,
   notification delivery attempts, and event-chain hashes in `.dms`; each
   notification links the installed local app to the addressed review request
+  via a CAP-0020 permalink
+- Registers stable document permalinks (workspace ID + document ID; optional
+  review/notes target) that survive draft rename and version bumps; selection
+  pane can copy the permalink
 - Applies inherited confidentiality types from configured folder policies, with
   per-document overrides and release-time snapshots
 - Routes one responsible editor and one approver from inherited folder policies,
@@ -58,11 +64,11 @@ macOS** that:
 
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
-| 0 | Product records and architecture bootstrap | done (docs tree; release version policy, approval, notification, confidentiality, workflow-role routing, maintenance, periodic review, optional Claude handoff, Win+macOS recorded) | CAP/CHG/ADR files exist; indexes list CAP-0001…0019; no CAP claims implemented runtime |
-| 1 | Tauri 2 app skeleton (Windows + macOS) + DOX for source tree | pending | Dev app launches on Windows and macOS; README run steps for both |
+| 0 | Product records and architecture bootstrap | done (docs tree; release version policy, approval, notification, confidentiality, workflow-role routing, maintenance, periodic review, optional Claude handoff, foldable shell chrome, activity tabs, stable document permalinks, Win+macOS recorded) | CAP/CHG/ADR files exist; indexes list CAP-0001…0020; no CAP claims implemented runtime |
+| 1 | Tauri 2 app skeleton (Windows + macOS) + DOX for source tree | pending | Dev app launches on Windows and macOS; README run steps for both; foldable left menu + hamburger + open-activity tabs present in shell chrome |
 | 2 | `.dms` store + dual-root open/configure + confidentiality and workflow-role policies | pending | Tests: persist/reload edit+publish roots, stable workspace ID, and schema version; safe older-schema migration/newer-schema read-only; inherit nearest class and each role independently; init `.dms` only on confirm |
-| 3 | Library directory navigator + add/unregister/reassociate + selection pane | pending | Tests: add under edit root; reject outside path; unregister preserves history; ambiguous move is never auto-linked; search/filter controlled set; single selection shows CAP-0015 master data + document actions in the right pane with matching title; multi-select shows only multi-applicable actions in the same pane |
-| 4 | Lifecycle + approval notification + version assign + tree mirror | pending | Tests: request requires summary, requester, change class, effective approver, and transport success; deep link resolves only an accessible registered workspace to the intended review request; each decision notifies the snapshotted requester, with failure retryable and non-reverting; approver-policy change invalidates an open review; cosmetic→minor, substantive/uncertain→major; comments/event hash persist; metadata change invalidates approval; first version V1.0; refuse overwrite |
+| 3 | Library directory navigator + add/unregister/reassociate + selection pane | pending | Tests: add under edit root; reject outside path; unregister preserves history; ambiguous move is never auto-linked; search/filter controlled set; single selection shows CAP-0015 master data + document actions in the right pane with matching title; multi-select shows only multi-applicable actions in the same pane; copy permalink uses workspace+document IDs only; selection opens/focuses an activity tab |
+| 4 | Lifecycle + approval notification + version assign + tree mirror | pending | Tests: request requires summary, requester, change class, effective approver, and transport success; CAP-0020 deep link resolves only an accessible registered workspace to the intended review request and still resolves after rename/version bump; each decision notifies the snapshotted requester, with failure retryable and non-reverting; approver-policy change invalidates an open review; cosmetic→minor, substantive/uncertain→major; comments/event hash persist; metadata change invalidates approval; first version V1.0; refuse overwrite |
 | 5 | Office-driven PDF export on release (Win + macOS adapters) | pending | Tests/integration: export via installed Office (or test double) to versioned path on each OS path; failure rolls back version success |
 | 6 | Notes on documents | pending | Tests: note CRUD persistence across restart |
 | 7 | Release checksum + periodic review + verify | pending | Tests: exported PDF → expected SHA-256; tamper → mismatch; release snapshots draft digest/class/chain; periodic confirm keeps version; changes-required begins revision; full backup manifest covers both roots |

@@ -20,13 +20,14 @@ When implemented, the following must hold:
    workflow event chain; failure leaves the document in `draft` and offers a
    retry. Email contains only the relative path, action, confidentiality
    label, and local-app deep link (privacy rules).
-3. The local-app deep link is a URI registered by the desktop application. It
-   identifies the workspace, stable document ID, and review-request ID without
-   embedding document content or an absolute filesystem path. On a host where
-   the app is installed and the workspace is registered and accessible,
-   activating the URI opens that document's review request and its decision UI.
-   If no eligible local workspace is available, the app reports that condition
-   and does not open an arbitrary path or record a workflow decision.
+3. The local-app deep link is a CAP-0020 permalink URI. It identifies the
+   workspace and stable document ID, plus the review-request target ID, without
+   embedding document content, draft file name, version label, or an absolute
+   filesystem path. On a host where the app is installed and the workspace is
+   registered and accessible, activating the URI opens that document's review
+   request and its decision UI (and focuses the matching activity tab). If no
+   eligible local workspace is available, the app reports that condition and
+   does not open an arbitrary path or record a workflow decision.
 4. When the transport is `mailto`, the desktop app opens the host's default
    mail handler with a pre-filled `mailto:` URI including the same notification
    fields. The lifecycle state does not advance to `in_review` until the
@@ -61,7 +62,8 @@ When implemented, the following must hold:
 - Wireframe (PNG): [`../wireframes/exports/CAP-0010-notification-transport.png`](../wireframes/exports/CAP-0010-notification-transport.png)
 
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
+- Permalinks: [`CAP-0020-document-permalinks.md`](CAP-0020-document-permalinks.md)
 - Workflow-role routing: [`CAP-0019-inherited-workflow-role-routing.md`](CAP-0019-inherited-workflow-role-routing.md)
 - Privacy: [`../../privacy.md`](../../privacy.md)
-- ADR-0009, ADR-0012: [`../../design-decisions.md`](../../design-decisions.md)
+- ADR-0009, ADR-0012, ADR-0020: [`../../design-decisions.md`](../../design-decisions.md)
 - Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)

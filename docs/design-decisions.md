@@ -116,10 +116,11 @@ Capability-local rules stay in their CAP files.
   sends the recorded decision outcome to the requester's snapshotted email
   address. Email contains
   no document content and opens the request in the desktop app through a
-  registered local-app URI. The URI identifies the stable workspace, document,
-  and review request; the receiving app resolves it only against an accessible
-  registered workspace. SMTP credentials live in the OS credential store;
-  `.dms` stores only non-secret relay configuration and delivery-attempt metadata.
+  CAP-0020 permalink (ADR-0020) whose target is the review request. The URI
+  identifies the stable workspace, document, and review request; the receiving
+  app resolves it only against an accessible registered workspace. SMTP
+  credentials live in the OS credential store; `.dms` stores only non-secret
+  relay configuration and delivery-attempt metadata.
 - **Why:** This gives approvers a direct notification without building a server
   or a browser portal.
 - **Consequences:** Each approver needs the application and access to the same
@@ -273,3 +274,19 @@ Capability-local rules stay in their CAP files.
   They do not prevent a person from opening or editing a shared Office file;
   filesystem ACLs remain the access-control boundary. Changing an effective
   approver invalidates an open review and requires a new request.
+
+## ADR-0020 — Document permalinks key only on stable IDs
+
+- **Decision:** Local-app document permalinks and notification deep links use a
+  registered URI scheme whose required identity keys are the **stable workspace
+  ID** and **stable document ID**. Optional target parameters may select a
+  landing surface (document selection, review request, notes). Draft file name,
+  relative path, version label, publish PDF name, and absolute filesystem paths
+  are never identity keys and must not be required to resolve the link.
+- **Why:** Operators rename drafts and release new versions routinely; shared
+  links in mail and notes must keep pointing at the same controlled document
+  without manual rewrite.
+- **Consequences:** Resolution requires the app plus an accessible registered
+  workspace that knows those IDs (CAP-0020). Path/version display is resolved
+  after lookup. Missing workspace or document IDs fail closed with an operator
+  message. Permalink open never records a workflow decision by itself.

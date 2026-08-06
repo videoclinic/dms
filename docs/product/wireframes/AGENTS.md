@@ -35,7 +35,7 @@ contracts using the shadcn-admin 2.2.0 visual base.
 
 - `manifest.json` lists every `html/CAP-*.html` and `exports/CAP-*.png`.
 - Every CAP under `../capabilities/` links its wireframe HTML and PNG.
-- PNG count equals CAP count (19).
+- PNG count equals CAP count (20).
 
 ## Child DOX Index
 

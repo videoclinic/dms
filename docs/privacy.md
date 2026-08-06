@@ -25,7 +25,9 @@
   explicitly enables opt-in diagnostics.
 - Approval email contains only the document display/relative path, requested
   action or decision outcome, configured confidentiality label, and local-app
-  deep link; it never attaches or uploads draft or released document content.
+  CAP-0020 permalink (workspace ID + document ID [+ review target]); it never
+  attaches or uploads draft or released document content. Permalinks never put
+  draft or PDF bytes in the URI.
 - The configured confidentiality label is rendered in the notification subject
   but no body field that could embed document content is generated. The same
   rule applies to `mailto:` fallback drafts.
@@ -49,6 +51,7 @@
 - Architecture: [`architecture.md`](architecture.md)
 - Decisions: [`design-decisions.md`](design-decisions.md)
 - Releases: [`architecture.md`](architecture.md)
+- Permalinks: [`product/capabilities/CAP-0020-document-permalinks.md`](product/capabilities/CAP-0020-document-permalinks.md)
 - Audit/export: [`product/capabilities/CAP-0012-audit-export.md`](product/capabilities/CAP-0012-audit-export.md)
 - Library maintenance: [`product/capabilities/CAP-0013-library-maintenance.md`](product/capabilities/CAP-0013-library-maintenance.md)
 - Master data: [`product/capabilities/CAP-0015-document-master-data.md`](product/capabilities/CAP-0015-document-master-data.md)

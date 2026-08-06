@@ -61,20 +61,32 @@ When implemented, the following must hold:
      (CAP-0017)
    - **Rename / reassociate locator** when applicable (CAP-0013)
    - **Unregister** (this CAP)
+   - **Copy permalink** (CAP-0020) — clipboard receives the stable
+     workspace+document URI; never a path- or version-based link
    - **Claude change assistance** when enabled (CAP-0018)
    Multi-select exposes only multi-applicable actions (for example bulk verify
-   where defined, multi-unregister with per-item precondition checks). Actions
-   refuse closed with a clear reason when preconditions fail.
-9. Documents start versioning only after they are in the library; add is the
-   gate into CAP-0002.
-10. Obsolete documents are hidden by default; an explicit control shows them.
+   where defined, multi-unregister with per-item precondition checks). Copy
+   permalink is single-selection only. Actions refuse closed with a clear
+   reason when preconditions fail.
+9. Opening or focusing a document-scoped surface (selection, review, notes, or
+   equivalent) creates or focuses a CAP-0005 **open-activity tab** labeled from
+   the document title (falling back to document number or a short ID prefix).
+   Closing that tab clears the selection activity without unregistering the
+   document.
+10. Documents start versioning only after they are in the library; add is the
+    gate into CAP-0002.
+11. Obsolete documents are hidden by default; an explicit control shows them.
     Missing documents remain visible with a `missing` marker until resolved
     (CAP-0013).
-11. Explorer filters support lifecycle state, confidentiality type, document
+12. Explorer filters support lifecycle state, confidentiality type, document
     type, owner, and overdue-only.
-12. Explorer search matches title, document number, draft file name, and
+13. Explorer search matches title, document number, draft file name, and
     relative path case-insensitively. Results can be sorted by title, document
     number, lifecycle state, latest release, or next-review-due date.
+14. A CAP-0020 document permalink that resolves successfully lands here: the
+    library navigator selects that document (revealing its folder as needed)
+    and shows the selection pane. Resolution never keys off file name or
+    version label.
 
 ## Non-goals
 
@@ -95,10 +107,12 @@ When implemented, the following must hold:
 - CAP-0002 lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
 - Notes: [`CAP-0003-document-notes.md`](CAP-0003-document-notes.md)
 - Integrity: [`CAP-0004-release-integrity.md`](CAP-0004-release-integrity.md)
+- Desktop shell / activity tabs: [`CAP-0005-desktop-shell.md`](CAP-0005-desktop-shell.md)
 - Open draft: [`CAP-0009-release-editor.md`](CAP-0009-release-editor.md)
 - Evidence: [`CAP-0011-approval-evidence.md`](CAP-0011-approval-evidence.md)
 - Maintenance: [`CAP-0013-library-maintenance.md`](CAP-0013-library-maintenance.md)
 - Master data: [`CAP-0015-document-master-data.md`](CAP-0015-document-master-data.md)
 - Periodic review: [`CAP-0017-periodic-document-review.md`](CAP-0017-periodic-document-review.md)
 - Claude handoff: [`CAP-0018-claude-desktop-change-assistance.md`](CAP-0018-claude-desktop-change-assistance.md)
+- Permalinks: [`CAP-0020-document-permalinks.md`](CAP-0020-document-permalinks.md)
 - Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)

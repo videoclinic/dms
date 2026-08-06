@@ -20,7 +20,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
-| [CHG-0001](active/CHG-0001-tauri-local-dms-bootstrap.md) | Bootstrap Tauri local DMS for ISO 27001 document control | in-progress | CAP-0001 … CAP-0018 |
+| [CHG-0001](active/CHG-0001-tauri-local-dms-bootstrap.md) | Bootstrap Tauri local DMS for ISO 27001 document control | in-progress | CAP-0001 … CAP-0020 |
 
 ## Archive
 

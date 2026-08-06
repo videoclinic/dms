@@ -12,8 +12,8 @@ under an **edit root**; released artifacts are versioned PDFs under a
 
 | Layer | Responsibility |
 | --- | --- |
-| Tauri 2 shell (Rust) | Windowing, filesystem access, checksums, path mapping, Office export orchestration, OS integration |
-| Frontend (web UI in WebView) | Library directory navigator (folder tree, list metadata, selection pane with CAP-0015 master data and single/batch actions), add/remove control, lifecycle, change commentary, approval, release/verify, confidentiality and workflow-role policies, audit export, publish history |
+| Tauri 2 shell (Rust) | Windowing, filesystem access, checksums, path mapping, Office export orchestration, OS integration, registered local-app URI handler (document permalinks) |
+| Frontend (web UI in WebView) | Foldable left menu with hamburger when collapsed; open-activity panes/tabs as quicklinks; library directory navigator (folder tree, list metadata, selection pane with CAP-0015 master data and single/batch actions), add/remove control, lifecycle, change commentary, approval, release/verify, confidentiality and workflow-role policies, audit export, publish history, copy/resolve document permalinks |
 | Microsoft Office (host-installed) | PDF export engine invoked by the app on release (Word/Excel/PowerPoint as applicable) |
 | Claude Desktop (optional host app) | Operator-mediated, consented handoff for advisory change classification and changelog wording; not a callable local model or lifecycle authority |
 | `<edit-root>/.dms/` | Roots config, library registry, workflow-person roster + SMTP settings (no secrets), folder confidentiality and workflow-role policies, notes, approval/release history, evidence hashes, checksums, advisory lock |
@@ -52,8 +52,11 @@ policies/HR/Handbook.docx   →      policies/HR/Handbook_V2.0.pdf   (later subs
 - Approval and release are operator actions; the app records process state and
   enforces naming/path rules.
 - An approver uses the app against the same workspace (for example, through a
-  shared or mapped edit root). An approval email is a notification with a deep
-  link to that local workspace; it is not a web approval portal.
+  shared or mapped edit root). An approval email is a notification with a
+  CAP-0020 permalink deep link (workspace ID + document ID + review target) to
+  that local workspace; it is not a web approval portal. The same permalink
+  scheme opens a document selection without a review target and remains valid
+  across draft renames and version bumps.
 - The application sends notification email through a configured SMTP relay. The
   relay password is held in the OS credential store, never in `.dms`.
 - When SMTP is not configured, the desktop app opens the host's default email
