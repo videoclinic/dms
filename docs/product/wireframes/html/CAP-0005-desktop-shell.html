@@ -174,7 +174,7 @@ tr:last-child td { border-bottom: 0; }
 .wire-meta { font-size: 0.7rem; color: var(--muted-foreground); }
 .mini-shell { display: flex; border: 1px solid var(--border); border-radius: calc(var(--radius) - 2px); overflow: hidden; min-height: 12rem; background: var(--background); }
 .mini-shell.collapsed { min-height: 11rem; }
-.mini-side { width: 10.5rem; background: var(--sidebar); border-right: 1px solid var(--sidebar-border); padding: 0.5rem; display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.72rem; }
+.mini-side { width: 14rem; background: var(--sidebar); border-right: 1px solid var(--sidebar-border); padding: 0.5rem; display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.72rem; }
 .mini-brand { display: flex; align-items: center; justify-content: space-between; font-weight: 600; padding: 0.15rem 0.2rem; }
 .fold-btn { border: 1px solid var(--input); border-radius: 0.25rem; padding: 0 0.3rem; color: var(--muted-foreground); background: var(--background); }
 .mini-nav div, .mini-tabs div { padding: 0.28rem 0.35rem; border-radius: 0.3rem; }
@@ -201,9 +201,9 @@ tr:last-child td { border-bottom: 0; }
     </div>
     <nav class="nav"><a class="nav-item active" href="#">📚 <span>Library</span></a><a class="nav-item" href="#">📦 <span>Releases</span></a><a class="nav-item" href="#">📋 <span>Audit & Reports</span></a><a class="nav-item" href="#">🧰 <span>Maintenance</span></a><a class="nav-item" href="#">⚙️ <span>Configuration</span></a></nav>
     <div class="pane-sec">Saved views</div>
-    <div class="pane-tabs"><div class="pane-tab saved-view"><span class="bookmark-mark">★</span><span class="pane-label">Library · HR</span><span class="pane-remove" title="Remove saved view">−</span></div><div class="pane-tab saved-view"><span class="bookmark-mark">★</span><span class="pane-label">Shell chrome</span><span class="pane-remove" title="Remove saved view">−</span></div></div>
+    <div class="pane-tabs"><div class="pane-tab saved-view"><span class="bookmark-mark">★</span><span class="pane-label" title="Library · policies/HR">Library · policies/HR</span><span class="pane-remove" title="Remove saved view">−</span></div><div class="pane-tab saved-view"><span class="bookmark-mark">★</span><span class="pane-label" title="Shell chrome">Shell chrome</span><span class="pane-remove" title="Remove saved view">−</span></div></div>
     <div class="pane-sec">Open panes</div>
-    <div class="pane-tabs"><div class="pane-tab"><span class="pane-label">Library · HR</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label">Review · Privacy</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label">Notes · Privacy</span><span class="pane-close">×</span></div><div class="pane-tab active"><span class="pane-label">Shell chrome</span><span class="pane-close">×</span></div></div>
+    <div class="pane-tabs"><div class="pane-tab"><span class="pane-label" title="Library · policies/HR">Library · policies/HR</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Audit · HR Data Privacy Policy · DOC-014">Audit · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Review · HR Data Privacy Policy · DOC-014">Review · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Notes · HR Data Privacy Policy · DOC-014">Notes · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab active"><span class="pane-label" title="Shell chrome">Shell chrome</span><span class="pane-close">×</span></div></div>
     <div class="sidebar-foot">
       ws-9c3b7d1a<br/>
       edit: /dms/edit<br/>
@@ -233,7 +233,7 @@ tr:last-child td { border-bottom: 0; }
         <div class="stack">
           <div class="layer"><strong>Foldable left menu</strong><p class="muted">Primary destinations, Saved views, and Open panes. Expanded/collapsed preference persists per OS user (not in .dms).</p></div>
           <div class="layer"><strong>Hamburger when folded</strong><p class="muted">Header control re-opens the menu as temporary expand/overlay; pin expanded to keep it open.</p></div>
-          <div class="layer"><strong>Open activity panes/tabs</strong><p class="muted">Automatic, session-only quicklinks. The selected tab and main header identify the current surface; × closes that activity only.</p></div>
+          <div class="layer"><strong>Open activity panes/tabs</strong><p class="muted">Automatic, session-only quicklinks. Labels state task + target: Audit · HR Data Privacy Policy · DOC-014 for a document or Library · policies/HR for a folder. Opening the same task + document focuses its existing pane; × closes that activity only.</p></div>
           <div class="layer"><strong>Saved views</strong><p class="muted">Use ☆ Bookmark this view in the header. ★ Bookmarked is an explicit, per-user shortcut restored after relaunch; it is not a .dms workflow record.</p></div>
           <div class="layer"><strong>Permalink handler</strong><p class="muted">OS-registered dms:// URI resolves workspace + document IDs (CAP-0020); opens/focuses matching activity tab.</p></div>
         </div>
@@ -253,18 +253,18 @@ tr:last-child td { border-bottom: 0; }
               </div>
               <div class="mini-sec">Saved views</div>
               <div class="mini-tabs">
-                <div>★ Library - HR <span>−</span></div>
+                <div>★ Library · policies/HR <span>−</span></div>
                 <div>★ Shell chrome <span>−</span></div>
               </div>
               <div class="mini-sec">Open panes</div>
               <div class="mini-tabs">
-                <div class="on">Library - HR <span>×</span></div>
-                <div>Review - Privacy <span>×</span></div>
-                <div>Notes - Privacy <span>×</span></div>
+                <div class="on">Library · policies/HR <span>×</span></div>
+                <div>Audit · HR Data Privacy Policy · DOC-014 <span>×</span></div>
+                <div>Review · HR Data Privacy Policy · DOC-014 <span>×</span></div>
               </div>
               <div class="mini-foot">ws-9c3b7d1a<br/>edit: /dms/edit<br/>publish: /dms/publish</div>
             </div>
-            <div class="mini-main"><div class="mini-header">Library - HR <span class="mini-bookmark">☆ Bookmark this view</span></div><p class="muted" style="padding:0.75rem;margin:0;font-size:0.75rem">The selected Open pane and this header identify the current surface.</p></div>
+            <div class="mini-main"><div class="mini-header">Library · policies/HR <span class="mini-bookmark">☆ Bookmark this view</span></div><p class="muted" style="padding:0.75rem;margin:0;font-size:0.75rem">The selected Open pane and this header identify the current surface.</p></div>
           </div>
         </section>
         <section class="card">
@@ -279,7 +279,7 @@ tr:last-child td { border-bottom: 0; }
               <div title="Config">⚙️</div>
             </div>
             <div class="mini-main">
-              <div class="mini-header"><span class="ham">☰</span> Library - HR Data Privacy Policy</div>
+              <div class="mini-header"><span class="ham">☰</span> Audit · HR Data Privacy Policy · DOC-014</div>
               <p class="muted" style="padding:0.75rem;margin:0;font-size:0.8rem">Hamburger expands the left menu. Icon rail still switches primary destinations. Saved views and Open panes appear when expanded; Bookmark this view stays in the header.</p>
             </div>
           </div>

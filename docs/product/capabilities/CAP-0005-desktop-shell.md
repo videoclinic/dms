@@ -40,11 +40,30 @@ When implemented, the following must hold:
 9. While collapsed, primary destinations remain reachable as icon-only rail
    entries and/or via the hamburger menu; labels are not required on the rail.
 10. **Open activities** are automatic, browser-like **panes/tabs** below the
-    primary destinations. Opening or focusing a DMS surface creates or focuses
-    its tab (for example: Library · <folder>, Review · <document>, Notes ·
-    <document>). Each tab is labeled from its focused surface, not from a
-    different document. The same document may have multiple tabs open (one per
-    active surface); tabs are not collapsed into a single document entry.
+    primary destinations. A pane label states its **task** and current target:
+    - a document-scoped pane is `Task · <DMS-managed title> · <document
+      number>` (for example, `Audit · HR Data Privacy Policy · DOC-014`); the
+      optional document-number segment is omitted when no number is set
+    - a folder-scoped pane is `Task · <edit-root-relative folder path>` (for
+      example, `Library · policies/HR`)
+    - a task with no folder or document target uses its task name alone
+    Document pane labels use DMS-managed title and document number, never the
+    source filename, path, version label, or a different document's data.
+    The visible label is not an activity identity: changing a title or number
+    updates the existing pane label in place. A constrained chrome may elide a
+    label visually, but its full canonical label remains available on hover and
+    as the pane's accessible name.
+
+    Opening or focusing a document surface uses the stable key **workspace ID +
+    task + document ID**. If that key is already open, the app focuses the
+    existing pane rather than creating a duplicate. Different tasks may remain
+    open for the same document (for example, Audit, Review, and Notes), because
+    their task keys differ. The Library keeps one session pane; navigating
+    folders updates its path and folder label in place rather than creating a
+    pane per visited folder. Other folder-scoped activities use workspace ID +
+    task + normalized edit-root-relative folder path to reuse an already-open
+    matching pane.
+
     Exactly one open activity is current: its tab has the selected treatment
     and its label matches the main-header activity label. Activating a tab
     brings that surface forward without losing unrelated open tabs. Closing a
@@ -60,7 +79,8 @@ When implemented, the following must hold:
     relaunch for that OS user. A saved-view target contains the stable workspace
     ID, primary destination, and compatible route state; a document target uses
     the stable document ID, never a path, file name, or version label. Activating
-    a saved view opens its target and creates or focuses a fresh open activity.
+    a saved view opens its target and creates or focuses the matching open
+    activity under the reuse rules above.
     An inaccessible workspace or missing document is shown as unavailable and
     remains removable. Saved views are per-user app preferences in the OS
     app-config store, not `.dms` workflow or process evidence.

@@ -175,7 +175,7 @@ const CAPS = [
         <div class="stack">
           ${layer("Foldable left menu", "Primary destinations, Saved views, and Open panes. Expanded/collapsed preference persists per OS user (not in .dms).")}
           ${layer("Hamburger when folded", "Header control re-opens the menu as temporary expand/overlay; pin expanded to keep it open.")}
-          ${layer("Open activity panes/tabs", "Automatic, session-only quicklinks. The selected tab and main header identify the current surface; × closes that activity only.")}
+          ${layer("Open activity panes/tabs", "Automatic, session-only quicklinks. Labels state task + target: Audit · HR Data Privacy Policy · DOC-014 for a document or Library · policies/HR for a folder. Opening the same task + document focuses its existing pane; × closes that activity only.")}
           ${layer("Saved views", "Use ☆ Bookmark this view in the header. ★ Bookmarked is an explicit, per-user shortcut restored after relaunch; it is not a .dms workflow record.")}
           ${layer("Permalink handler", "OS-registered dms:// URI resolves workspace + document IDs (CAP-0020); opens/focuses matching activity tab.")}
         </div>
@@ -195,18 +195,18 @@ const CAPS = [
               </div>
               <div class="mini-sec">Saved views</div>
               <div class="mini-tabs">
-                <div>★ Library - HR <span>−</span></div>
+                <div>★ Library · policies/HR <span>−</span></div>
                 <div>★ Shell chrome <span>−</span></div>
               </div>
               <div class="mini-sec">Open panes</div>
               <div class="mini-tabs">
-                <div class="on">Library - HR <span>×</span></div>
-                <div>Review - Privacy <span>×</span></div>
-                <div>Notes - Privacy <span>×</span></div>
+                <div class="on">Library · policies/HR <span>×</span></div>
+                <div>Audit · HR Data Privacy Policy · DOC-014 <span>×</span></div>
+                <div>Review · HR Data Privacy Policy · DOC-014 <span>×</span></div>
               </div>
               <div class="mini-foot">ws-9c3b7d1a<br/>edit: /dms/edit<br/>publish: /dms/publish</div>
             </div>
-            <div class="mini-main"><div class="mini-header">Library - HR <span class="mini-bookmark">☆ Bookmark this view</span></div><p class="muted" style="padding:0.75rem;margin:0;font-size:0.75rem">The selected Open pane and this header identify the current surface.</p></div>
+            <div class="mini-main"><div class="mini-header">Library · policies/HR <span class="mini-bookmark">☆ Bookmark this view</span></div><p class="muted" style="padding:0.75rem;margin:0;font-size:0.75rem">The selected Open pane and this header identify the current surface.</p></div>
           </div>
         </section>
         <section class="card">
@@ -221,7 +221,7 @@ const CAPS = [
               <div title="Config">⚙️</div>
             </div>
             <div class="mini-main">
-              <div class="mini-header"><span class="ham">☰</span> Library - HR Data Privacy Policy</div>
+              <div class="mini-header"><span class="ham">☰</span> Audit · HR Data Privacy Policy · DOC-014</div>
               <p class="muted" style="padding:0.75rem;margin:0;font-size:0.8rem">Hamburger expands the left menu. Icon rail still switches primary destinations. Saved views and Open panes appear when expanded; Bookmark this view stays in the header.</p>
             </div>
           </div>
@@ -528,6 +528,7 @@ const CAPS = [
     file: "CAP-0011-approval-evidence",
     title: "Workflow chain & evidence",
     nav: "audit",
+    activity: "audit-doc-77a12bce",
     subtitle: "Canonical event body, hash chain, required change + decision comments.",
     actions: ["Verify workflow", "Export chain"],
     body: `
@@ -654,6 +655,7 @@ const CAPS = [
     file: "CAP-0015-document-master-data",
     title: "Document control data",
     nav: "library",
+    activity: "document-home-doc-77a12bce",
     subtitle: "Source file facts come from the filesystem. Document control data is managed by DMS Desktop under .dms, never synchronized from Office properties. All sections are expanded here for review.",
     actions: [],
     body: `
@@ -834,7 +836,7 @@ const CAPS = [
     file: "CAP-0020-document-permalinks",
     title: "Document permalinks",
     nav: "library",
-    activity: "permalink",
+    activity: "document-home-doc-77a12bce",
     subtitle: "Stable local-app URI: workspace ID + document ID. Survives rename and version bumps. Never keys off path or VMAJOR.MINOR.",
     actions: ["Copy permalink", "Open from URI"],
     body: `
@@ -1018,16 +1020,17 @@ function shell(cap) {
     return `<a class="nav-item${active}" href="#">${n.icon} <span>${n.label}</span></a>`;
   }).join("");
   const illustratedActivity = {
-    "CAP-0002": "review",
-    "CAP-0003": "notes",
+    "CAP-0002": "review-doc-77a12bce",
+    "CAP-0003": "notes-doc-77a12bce",
   };
   const activityKey = cap.activity || illustratedActivity[cap.id] || cap.nav || "library";
   const activities = [
-    { id: "library", label: "Library · HR" },
-    { id: "review", label: "Review · Privacy" },
-    { id: "notes", label: "Notes · Privacy" },
+    { id: "library", label: "Library · policies/HR" },
+    { id: "document-home-doc-77a12bce", label: "Document · HR Data Privacy Policy · DOC-014" },
+    { id: "audit-doc-77a12bce", label: "Audit · HR Data Privacy Policy · DOC-014" },
+    { id: "review-doc-77a12bce", label: "Review · HR Data Privacy Policy · DOC-014" },
+    { id: "notes-doc-77a12bce", label: "Notes · HR Data Privacy Policy · DOC-014" },
     { id: "shell", label: "Shell chrome" },
-    { id: "permalink", label: "Permalink" },
     { id: "releases", label: "Releases" },
     { id: "audit", label: "Audit" },
     { id: "maintenance", label: "Maintenance" },
@@ -1040,23 +1043,25 @@ function shell(cap) {
   const isBookmarked = cap.bookmarked === true;
   const bookmarkControl = `<button class="btn outline bookmark-btn${isBookmarked ? " saved" : ""}" title="${isBookmarked ? "Remove bookmark" : "Bookmark this view"}" aria-pressed="${isBookmarked}">${isBookmarked ? "★ Bookmarked" : "☆ Bookmark this view"}</button>`;
   const savedViews = [
-    { label: "Library · HR" },
+    { label: "Library · policies/HR" },
     ...(isBookmarked ? [{ label: activeActivity.label }] : []),
   ];
   const savedViewTabs = savedViews
     .map(
       (view) =>
-        `<div class="pane-tab saved-view"><span class="bookmark-mark">★</span><span class="pane-label">${view.label}</span><span class="pane-remove" title="Remove saved view">−</span></div>`
+        `<div class="pane-tab saved-view"><span class="bookmark-mark">★</span><span class="pane-label" title="${view.label}">${view.label}</span><span class="pane-remove" title="Remove saved view">−</span></div>`
     )
     .join("");
   // Show a stable sample set; mark the one matching this screen active.
+  const matchingActivity = activities.find((a) => a.id === activityKey);
   const openSet = [
-    { id: "library", label: "Library · HR" },
-    { id: "review", label: "Review · Privacy" },
-    { id: "notes", label: "Notes · Privacy" },
-    ...(activityKey !== "library" && activityKey !== "review" && activityKey !== "notes"
-      ? [{ id: activityKey, label: activities.find((a) => a.id === activityKey)?.label || cap.title }]
-      : []),
+    { id: "library", label: "Library · policies/HR" },
+    { id: "audit-doc-77a12bce", label: "Audit · HR Data Privacy Policy · DOC-014" },
+    { id: "review-doc-77a12bce", label: "Review · HR Data Privacy Policy · DOC-014" },
+    { id: "notes-doc-77a12bce", label: "Notes · HR Data Privacy Policy · DOC-014" },
+    ...(matchingActivity
+      ? [{ id: matchingActivity.id, label: matchingActivity.label }]
+      : [{ id: activityKey, label: cap.title }]),
   ];
   const seen = new Set();
   const openTabs = openSet
@@ -1067,7 +1072,7 @@ function shell(cap) {
     })
     .map((t) => {
       const isActive = t.id === activityKey;
-      return `<div class="pane-tab${isActive ? " active" : ""}"><span class="pane-label">${t.label}</span><span class="pane-close">×</span></div>`;
+      return `<div class="pane-tab${isActive ? " active" : ""}"><span class="pane-label" title="${t.label}">${t.label}</span><span class="pane-close">×</span></div>`;
     })
     .join("");
   const actions = (cap.actions || [])
@@ -1253,7 +1258,7 @@ tr:last-child td { border-bottom: 0; }
 .wire-meta { font-size: 0.7rem; color: var(--muted-foreground); }
 .mini-shell { display: flex; border: 1px solid var(--border); border-radius: calc(var(--radius) - 2px); overflow: hidden; min-height: 12rem; background: var(--background); }
 .mini-shell.collapsed { min-height: 11rem; }
-.mini-side { width: 10.5rem; background: var(--sidebar); border-right: 1px solid var(--sidebar-border); padding: 0.5rem; display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.72rem; }
+.mini-side { width: 14rem; background: var(--sidebar); border-right: 1px solid var(--sidebar-border); padding: 0.5rem; display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.72rem; }
 .mini-brand { display: flex; align-items: center; justify-content: space-between; font-weight: 600; padding: 0.15rem 0.2rem; }
 .fold-btn { border: 1px solid var(--input); border-radius: 0.25rem; padding: 0 0.3rem; color: var(--muted-foreground); background: var(--background); }
 .mini-nav div, .mini-tabs div { padding: 0.28rem 0.35rem; border-radius: 0.3rem; }

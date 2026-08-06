@@ -118,15 +118,18 @@ When implemented, the following must hold:
    exposed as batch actions — "Send reminder" is a per-document periodic
    reminder action (CAP-0017) and is also not a batch action. Actions refuse
    closed with a clear reason when preconditions fail.
-9. Entering the Library creates or focuses one CAP-0005 **Library activity tab**.
-   Folder navigation updates that tab's current path and label in place; it does
-   not create one tab per visited folder. Opening or focusing a document-scoped
-   surface (selection, review, notes, or equivalent) creates or focuses the
-   matching activity labeled from the document title (falling back to document
-   number or a short ID prefix). The same document may have multiple tabs open
-   (for example Library - selection, Review - decision, Notes) — each tab names
-   the focused surface. Closing a document-scoped tab clears that surface
-   without unregistering the document.
+9. Entering the Library creates or focuses one CAP-0005 **Library activity tab**
+   labeled `Library · <edit-root-relative folder path>`. Folder navigation
+   updates that tab's current path and label in place; it does not create one
+   tab per visited folder. Opening or focusing a document-scoped surface
+   (selection, audit, review, notes, or equivalent) creates or focuses the
+   matching **task + stable document ID** activity. Its label is `Task ·
+   <DMS-managed title> · <document number>` (omitting the last segment when no
+   number is set); it never uses the source filename or a path as document
+   identity. Repeating navigation to the same task and document focuses the
+   existing tab. The same document may have multiple tabs open only for different
+   tasks. Closing a document-scoped tab clears that surface without unregistering
+   the document.
 10. CAP-0005's `Bookmark this view` control saves the current library folder and
     sort order; when exactly one document is selected it also uses that
     document's stable ID as the target. It does not retain a multi-select batch
