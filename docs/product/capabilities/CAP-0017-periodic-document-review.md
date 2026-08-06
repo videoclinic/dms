@@ -23,12 +23,13 @@ When implemented, the following must hold:
    closed.
 4. A periodic review can start only for a current, non-withdrawn released
    version. The request binds the stable document ID, release record ID,
-   released PDF SHA-256 digest, confidentiality snapshot, and selected
-   configured reviewer.
+   released PDF SHA-256 digest, confidentiality snapshot, and the document's
+   effective approver (CAP-0019). Periodic review reuses the existing
+   approver role; no separate reviewer role exists.
 5. The request uses CAP-0010 notification transport and contains no document
    attachment. At most one periodic review or content-approval request may be
    open for a document at a time.
-6. The reviewer records one result with a required comment:
+6. The approver records one result with a required comment:
    - **confirmed current** keeps the current release and version, records the
      review, and advances the next-review-due date;
    - **changes required** records the review and invokes CAP-0015 **Begin
@@ -51,7 +52,8 @@ When implemented, the following must hold:
 - Background scheduling while the desktop app is closed
 - Calendar-service integration
 - Automatic content approval based only on elapsed time
-- Releasing a new PDF when a reviewer confirms unchanged content
+- Releasing a new PDF when an approver confirms unchanged content
+- A separate periodic-review reviewer role (the effective approver is reused)
 
 ## Links
 - Wireframe (HTML): [`../wireframes/html/CAP-0017-periodic-document-review.html`](../wireframes/html/CAP-0017-periodic-document-review.html)
@@ -60,6 +62,6 @@ When implemented, the following must hold:
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
 - Notification: [`CAP-0010-notification-transport.md`](CAP-0010-notification-transport.md)
 - Evidence: [`CAP-0011-approval-evidence.md`](CAP-0011-approval-evidence.md)
-- Document control data: [`CAP-0015-document-master-data.md`](CAP-0015-document-master-data.md)
+- Document control data: [`CAP-0015-document-control-data.md`](CAP-0015-document-control-data.md)
 - Integrity: [`CAP-0004-release-integrity.md`](CAP-0004-release-integrity.md)
 - Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)

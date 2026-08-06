@@ -652,7 +652,7 @@ const CAPS = [
   },
   {
     id: "CAP-0015",
-    file: "CAP-0015-document-master-data",
+    file: "CAP-0015-document-control-data",
     title: "Document control data",
     nav: "library",
     activity: "document-home-doc-77a12bce",
@@ -736,7 +736,7 @@ const CAPS = [
     file: "CAP-0017-periodic-document-review",
     title: "Periodic review",
     nav: "audit",
-    subtitle: "Default interval, per-document override, outcomes: confirmed / changes / obsolete.",
+    subtitle: "Default interval, per-document exemption, outcomes: confirmed / changes / obsolete. Reuses the document's effective approver.",
     actions: ["Start periodic review", "Send reminder"],
     body: `
       <div class="grid-2">
@@ -750,13 +750,12 @@ const CAPS = [
             ])}
           </section>
           <section class="card">
-            <h3 class="card-title">Document override — HR Policy</h3>
+            <h3 class="card-title">Routing</h3>
             ${kv([
-              ["Interval", "12 months"],
-              ["Reviewer", "Anna Berg"],
-              ["Exemption", "—"],
+              ["Reviewer", "Effective approver (CAP-0019)"],
+              ["Per-document override", "—"],
             ])}
-            <p class="hint">Exemption requires a reason comment in the workflow chain.</p>
+            <p class="hint">Periodic review reuses the document's effective approver. Exemption requires a reason comment in the workflow chain.</p>
           </section>
         </div>
         <section class="card">

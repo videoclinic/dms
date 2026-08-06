@@ -226,7 +226,7 @@ tr:last-child td { border-bottom: 0; }
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Default interval, per-document override, outcomes: confirmed / changes / obsolete.</p>
+      <p class="subtitle">Default interval, per-document exemption, outcomes: confirmed / changes / obsolete. Reuses the document's effective approver.</p>
       
       <div class="grid-2">
         <div class="stack">
@@ -235,9 +235,9 @@ tr:last-child td { border-bottom: 0; }
             <dl class="kv"><div><dt>Default interval</dt><dd>12 months</dd></div><div><dt>Reminder window</dt><dd>30 days before due</dd></div><div><dt>Calendar months</dt><dd>clamped to last valid day</dd></div></dl>
           </section>
           <section class="card">
-            <h3 class="card-title">Document override — HR Policy</h3>
-            <dl class="kv"><div><dt>Interval</dt><dd>12 months</dd></div><div><dt>Reviewer</dt><dd>Anna Berg</dd></div><div><dt>Exemption</dt><dd>—</dd></div></dl>
-            <p class="hint">Exemption requires a reason comment in the workflow chain.</p>
+            <h3 class="card-title">Routing</h3>
+            <dl class="kv"><div><dt>Reviewer</dt><dd>Effective approver (CAP-0019)</dd></div><div><dt>Per-document override</dt><dd>—</dd></div></dl>
+            <p class="hint">Periodic review reuses the document's effective approver. Exemption requires a reason comment in the workflow chain.</p>
           </section>
         </div>
         <section class="card">
