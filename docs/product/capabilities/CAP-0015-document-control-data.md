@@ -114,8 +114,8 @@ When implemented, the following must hold:
   outside the library navigator (detail may still expand full-width for editing)
 
 ## Links
-- Wireframe (HTML): [`../wireframes/html/CAP-0015-document-master-data.html`](../wireframes/html/CAP-0015-document-master-data.html)
-- Wireframe (PNG): [`../wireframes/exports/CAP-0015-document-master-data.png`](../wireframes/exports/CAP-0015-document-master-data.png)
+- Wireframe (HTML): [`../wireframes/html/CAP-0015-document-control-data.html`](../wireframes/html/CAP-0015-document-control-data.html)
+- Wireframe (PNG): [`../wireframes/exports/CAP-0015-document-control-data.png`](../wireframes/exports/CAP-0015-document-control-data.png)
 
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
 - Library: [`CAP-0006-library-explorer.md`](CAP-0006-library-explorer.md)

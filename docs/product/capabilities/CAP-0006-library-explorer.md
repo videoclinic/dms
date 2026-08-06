@@ -182,7 +182,7 @@ When implemented, the following must hold:
 - Open draft: [`CAP-0009-release-editor.md`](CAP-0009-release-editor.md)
 - Evidence: [`CAP-0011-approval-evidence.md`](CAP-0011-approval-evidence.md)
 - Maintenance: [`CAP-0013-library-maintenance.md`](CAP-0013-library-maintenance.md)
-- Document control data: [`CAP-0015-document-master-data.md`](CAP-0015-document-master-data.md)
+- Document control data: [`CAP-0015-document-control-data.md`](CAP-0015-document-control-data.md)
 - Periodic review: [`CAP-0017-periodic-document-review.md`](CAP-0017-periodic-document-review.md)
 - Claude handoff: [`CAP-0018-claude-desktop-change-assistance.md`](CAP-0018-claude-desktop-change-assistance.md)
 - Permalinks: [`CAP-0020-document-permalinks.md`](CAP-0020-document-permalinks.md)

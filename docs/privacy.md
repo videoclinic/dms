@@ -57,7 +57,7 @@
 - Permalinks: [`product/capabilities/CAP-0020-document-permalinks.md`](product/capabilities/CAP-0020-document-permalinks.md)
 - Audit/export: [`product/capabilities/CAP-0012-audit-export.md`](product/capabilities/CAP-0012-audit-export.md)
 - Library maintenance: [`product/capabilities/CAP-0013-library-maintenance.md`](product/capabilities/CAP-0013-library-maintenance.md)
-- Document control data: [`product/capabilities/CAP-0015-document-master-data.md`](product/capabilities/CAP-0015-document-master-data.md)
+- Document control data: [`product/capabilities/CAP-0015-document-control-data.md`](product/capabilities/CAP-0015-document-control-data.md)
 - Workflow-role routing: [`product/capabilities/CAP-0019-inherited-workflow-role-routing.md`](product/capabilities/CAP-0019-inherited-workflow-role-routing.md)
 - Publish tree: [`product/capabilities/CAP-0016-publish-tree-maintenance.md`](product/capabilities/CAP-0016-publish-tree-maintenance.md)
 - Claude Desktop assistance: [`product/capabilities/CAP-0018-claude-desktop-change-assistance.md`](product/capabilities/CAP-0018-claude-desktop-change-assistance.md)

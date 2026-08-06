@@ -66,7 +66,7 @@ When implemented, the following must hold:
 - Library: [`CAP-0006-library-explorer.md`](CAP-0006-library-explorer.md)
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
 - Classification: [`CAP-0008-confidentiality-classification.md`](CAP-0008-confidentiality-classification.md)
-- Document control data: [`CAP-0015-document-master-data.md`](CAP-0015-document-master-data.md)
+- Document control data: [`CAP-0015-document-control-data.md`](CAP-0015-document-control-data.md)
 - Publish tree: [`CAP-0016-publish-tree-maintenance.md`](CAP-0016-publish-tree-maintenance.md)
 - ADR-0001, ADR-0013, ADR-0015: [`../../design-decisions.md`](../../design-decisions.md)
 - Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
