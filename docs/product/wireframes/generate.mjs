@@ -352,43 +352,7 @@ const CAPS = [
           </table></div>
           <p class="hint"><strong>Folders first:</strong> single-click selects; double-click or Enter opens. Document rows select only; actions live in the right pane. Unmanaged files appear only in Add/Rescan.</p>
         </section>
-        <aside class="card detail-pane">
-          <div class="row between mb">
-            <h3 class="card-title" style="margin:0">HR Data Privacy Policy</h3>
-            ${badge("in_review", "info")}
-          </div>
-          <p class="muted mono">DOC-014 · policies/HR/Handbook.docx</p>
-          <h3 class="card-title" style="margin-top:0.85rem">Master data</h3>
-          ${kv([
-            ["Title", "HR Data Privacy Policy"],
-            ["Document number", "DOC-014"],
-            ["Document type", "policy"],
-            ["Owner", "Lukas Roth"],
-            ["Effective date", "2025-08-01"],
-            ["Next review due", "2026-08-01"],
-            ["Released", "V1.3 (current)"],
-            ["Draft", badge("newer than last release", "warn")],
-            ["Effective editor", "Lukas Roth"],
-            ["Effective approver", "Anna Berg"],
-            ["Confidentiality", "Internal (inherited)"],
-          ])}
-          <h3 class="card-title" style="margin-top:0.9rem">Actions</h3>
-          <div class="stack-btns">
-            <button class="btn outline">Open draft</button>
-            <button class="btn outline">Edit master data</button>
-            <button class="btn outline">Submit for review</button>
-            <button class="btn outline">Cancel review</button>
-            <button class="btn outline">Notes</button>
-            <button class="btn outline">Workflow chain</button>
-            <button class="btn outline">Verify integrity</button>
-            <button class="btn outline">Periodic review</button>
-            <button class="btn outline">Rename / reassociate</button>
-            <button class="btn outline">Copy permalink</button>
-            <button class="btn outline">Claude handoff</button>
-            <button class="btn danger">Unregister</button>
-          </div>
-          <p class="hint">Copy permalink uses workspace + document IDs only (CAP-0020). Action labels omit the document name.</p>
-        </aside>
+        ${documentMasterDataSelectionPane()}
       </div>
       <section class="card" style="margin-top:0.25rem">
         <h3 class="card-title">Multi-select (same right pane)</h3>
@@ -668,8 +632,8 @@ const CAPS = [
     file: "CAP-0015-document-master-data",
     title: "Document master data",
     nav: "library",
-    subtitle: "Master data and document actions share the CAP-0006 selection pane. Title matches the selected list row.",
-    actions: ["Save master data", "Begin revision", "Mark obsolete", "Cancel review"],
+    subtitle: "CAP-0015 defines the shared master-data and revision content; CAP-0006 places it in the library selection pane. Title matches the selected list row.",
+    actions: [],
     body: `
       <div class="grid-explorer-detail">
         <aside class="card tree">
@@ -704,8 +668,8 @@ const CAPS = [
                 <td><span class="check on">☑</span></td>
                 <td>HR Data Privacy Policy</td>
                 <td>DOC-014</td>
-                <td>${badge("released", "ok")}</td>
-                <td>V2.0</td>
+                <td>${badge("in_review", "info")}</td>
+                <td>V1.3 ${badge("draft newer", "warn")}</td>
               </tr>
               <tr>
                 <td><span class="check">☐</span></td>
@@ -717,47 +681,7 @@ const CAPS = [
             </tbody>
           </table></div>
         </section>
-        <aside class="card detail-pane">
-          <div class="row between mb">
-            <h3 class="card-title" style="margin:0">HR Data Privacy Policy</h3>
-            ${badge("released", "ok")}
-          </div>
-          <p class="muted mono">DOC-014 · policies/HR/Handbook.docx</p>
-          <h3 class="card-title" style="margin-top:0.85rem">Master data</h3>
-          ${kv([
-            ["Title", "HR Data Privacy Policy"],
-            ["Document number", "DOC-014 (unique in workspace)"],
-            ["Document type", "policy"],
-            ["Owner", "Lukas Roth"],
-            ["Effective date", "2025-08-01"],
-            ["Next review due", "2026-08-01"],
-            ["Effective editor", "Lukas Roth"],
-            ["Effective approver", "Anna Berg"],
-          ])}
-          <h3 class="card-title" style="margin-top:0.9rem">Actions</h3>
-          <div class="stack-btns">
-            <button class="btn">Save master data</button>
-            <button class="btn outline">Begin revision</button>
-            <button class="btn outline">Open draft</button>
-            <button class="btn outline">Notes</button>
-            <button class="btn danger">Mark obsolete</button>
-            <button class="btn danger">Cancel review</button>
-          </div>
-          <section style="margin-top:0.9rem">
-            <h3 class="card-title">Revision cycle</h3>
-            <p class="muted" style="font-size:0.85rem;margin:0">After release the document stays <code>released</code> until <strong>Begin revision</strong> returns it to <code>draft</code>. PDFs and history are preserved.</p>
-            <p class="hint">Master-data changes while a review is open invalidate that review.</p>
-          </section>
-          <section style="margin-top:0.85rem">
-            <h3 class="card-title">Releases</h3>
-            <div class="stack">
-              ${ver("V2.0", "2025-08-01 09:44 UTC", "Substantive / major", "current", "ok")}
-              ${ver("V1.7", "2025-07-12 12:01 UTC", "Cosmetic / minor", "superseded", "muted")}
-              ${ver("V1.6", "2025-06-05 14:30 UTC", "Substantive / major", "superseded", "muted")}
-              ${ver("V1.5", "2025-05-09 10:12 UTC", "Cosmetic / minor", "withdrawn", "warn")}
-            </div>
-          </section>
-        </aside>
+        ${documentMasterDataSelectionPane()}
       </div>`,
   },
   {
@@ -963,6 +887,62 @@ function event(type, ts, who, cmt, hash, pred) {
 }
 function ver(v, date, cls, state, kind) {
   return `<div class="ver"><div class="row gap-2"><strong>${v}</strong>${badge(state, kind)}</div><p class="muted">${date}</p><p>${cls}</p></div>`;
+}
+function documentMasterDataSelectionPane() {
+  // CAP-0015 owns this shared selection-pane content; CAP-0006 owns its placement.
+  return `<aside class="card detail-pane">
+    <div class="row between mb">
+      <h3 class="card-title" style="margin:0">HR Data Privacy Policy</h3>
+      ${badge("in_review", "info")}
+    </div>
+    <p class="muted mono">DOC-014 · policies/HR/Handbook.docx</p>
+    <h3 class="card-title" style="margin-top:0.85rem">Master data</h3>
+    ${kv([
+      ["Title", "HR Data Privacy Policy"],
+      ["Document number", "DOC-014 (unique in workspace)"],
+      ["Document type", "policy"],
+      ["Owner", "Lukas Roth"],
+      ["Effective date", "2025-08-01"],
+      ["Next review due", "2026-08-01"],
+      ["Released", "V1.3 (current)"],
+      ["Draft", badge("newer than last release", "warn")],
+      ["Effective editor", "Lukas Roth"],
+      ["Effective approver", "Anna Berg"],
+      ["Confidentiality", "Internal (inherited)"],
+    ])}
+    <h3 class="card-title" style="margin-top:0.9rem">Actions</h3>
+    <div class="stack-btns">
+      <button class="btn outline">Open draft</button>
+      <button class="btn outline">Open latest released PDF</button>
+      <button class="btn outline">Edit master data</button>
+      <button class="btn outline">Submit for review</button>
+      <button class="btn outline">Begin revision</button>
+      <button class="btn outline">Cancel review</button>
+      <button class="btn danger">Mark obsolete</button>
+      <button class="btn outline">Notes</button>
+      <button class="btn outline">Workflow chain</button>
+      <button class="btn outline">Verify integrity</button>
+      <button class="btn outline">Periodic review</button>
+      <button class="btn outline">Rename / reassociate</button>
+      <button class="btn outline">Copy permalink</button>
+      <button class="btn outline">Claude handoff</button>
+      <button class="btn danger">Unregister</button>
+    </div>
+    <section style="margin-top:0.9rem">
+      <h3 class="card-title">Revision cycle</h3>
+      <p class="muted" style="font-size:0.85rem;margin:0">The current released PDF remains available while this newer draft is in review. After release, <strong>Begin revision</strong> returns the document to <code>draft</code>; PDFs and history remain preserved.</p>
+      <p class="hint">Master-data changes while a review is open invalidate that review. Copy permalink uses workspace + document IDs only.</p>
+    </section>
+    <section style="margin-top:0.85rem">
+      <h3 class="card-title">Releases</h3>
+      <div class="stack">
+        ${ver("V1.3", "2025-08-01 09:44 UTC", "Substantive / major", "current", "ok")}
+        ${ver("V1.2", "2025-07-12 12:01 UTC", "Cosmetic / minor", "superseded", "muted")}
+        ${ver("V1.1", "2025-06-05 14:30 UTC", "Substantive / major", "superseded", "muted")}
+        ${ver("V1.0", "2025-05-09 10:12 UTC", "Cosmetic / minor", "withdrawn", "warn")}
+      </div>
+    </section>
+  </aside>`;
 }
 function person(id, name, email, kind) {
   return `<div class="person"><div class="row gap-2"><strong>${name}</strong><span class="muted">${id}</span>${badge(kind === "ok" ? "active" : "disabled", kind)}</div><p class="muted">${email}</p></div>`;

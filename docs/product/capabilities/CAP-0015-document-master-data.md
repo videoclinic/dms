@@ -65,6 +65,9 @@ When implemented, the following must hold:
     next review due (with **overdue** highlight when past due and not obsolete),
     lifecycle state, and effective editor/approver (CAP-0019). Document actions
     for the single selection sit in the same pane under the master-data block.
+    When a current released version exists, **Open latest released PDF** opens
+    only that release record's recorded PDF; it is unavailable for a
+    never-released document or when the current release file is missing.
 12. Title, document type, and owner are required before review submission.
     Document number, when set, is trimmed and case-insensitively unique across
     active, unregistered, and obsolete records; a historical number is not

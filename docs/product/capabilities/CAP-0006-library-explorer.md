@@ -68,6 +68,8 @@ When implemented, the following must hold:
    redefine those contracts. With one document selected, actions include at
    least:
    - **Open draft** (CAP-0009)
+   - **Open latest released PDF** (CAP-0015) when a current released version
+     exists
    - **Edit master data** (CAP-0015)
    - **Submit for review**, **Begin revision**, **Cancel review**, **Release**
      when the lifecycle allows (CAP-0002 / CAP-0015)

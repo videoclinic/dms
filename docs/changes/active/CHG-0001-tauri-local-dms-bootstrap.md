@@ -20,8 +20,8 @@ macOS** that:
 - Shows a folder-dominant, Windows Explorer-like Library workspace with a
   persistent edit-root-relative tree, Back/Forward/Up + clickable breadcrumbs,
   current-folder child folders and controlled-document metadata, and a right
-  selection pane with CAP-0015 master data and document/batch actions; add/remove
-  documents under control
+  selection pane with CAP-0015 master data, document/batch actions, and an
+  action to open the current released PDF; add/remove documents under control
 - Runs operator-driven approval and release
 - Sends approver review-request email and requester decision-outcome email
   (SMTP or host mail handler), and records revision-bound approval comments,
