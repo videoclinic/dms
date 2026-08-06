@@ -20,7 +20,7 @@ const NAV = [
   { id: "config", label: "Configuration", icon: "⚙️" },
 ];
 
-/** @type {Array<{id:string,file:string,title:string,nav:string,subtitle:string,actions?:string[],body:string}>} */
+/** @type {Array<{id:string,file:string,title:string,nav:string,subtitle:string,actions?:string[],bookmarked?:boolean,body:string}>} */
 const CAPS = [
   {
     id: "CAP-0001",
@@ -167,14 +167,16 @@ const CAPS = [
     title: "Desktop shell overview",
     nav: "library",
     activity: "shell",
-    subtitle: "Tauri 2 shell on Windows and macOS. Foldable left menu, hamburger when collapsed, open-activity panes/tabs.",
+    bookmarked: true,
+    subtitle: "Tauri 2 shell on Windows and macOS. Foldable left menu, session-only open activities, and explicit per-user saved views.",
     body: `
       <section class="card">
         <h3 class="card-title">Chrome contract</h3>
         <div class="stack">
-          ${layer("Foldable left menu", "Primary destinations + open-activity tabs. Expanded/collapsed preference persists per OS user (not in .dms).")}
+          ${layer("Foldable left menu", "Primary destinations, Saved views, and Open panes. Expanded/collapsed preference persists per OS user (not in .dms).")}
           ${layer("Hamburger when folded", "Header control re-opens the menu as temporary expand/overlay; pin expanded to keep it open.")}
-          ${layer("Open activity panes/tabs", "Browser-like quicklinks under primary nav. Focus restores the activity; close dismisses only that pane.")}
+          ${layer("Open activity panes/tabs", "Automatic, session-only quicklinks. The selected tab and main header identify the current surface; × closes that activity only.")}
+          ${layer("Saved views", "Use ☆ Bookmark this view in the header. ★ Bookmarked is an explicit, per-user shortcut restored after relaunch; it is not a .dms workflow record.")}
           ${layer("Permalink handler", "OS-registered dms:// URI resolves workspace + document IDs (CAP-0020); opens/focuses matching activity tab.")}
         </div>
       </section>
@@ -191,6 +193,11 @@ const CAPS = [
                 <div>🧰 Maintenance</div>
                 <div>⚙️ Config</div>
               </div>
+              <div class="mini-sec">Saved views</div>
+              <div class="mini-tabs">
+                <div>★ Library - HR (overdue) <span>−</span></div>
+                <div>★ Shell chrome <span>−</span></div>
+              </div>
               <div class="mini-sec">Open panes</div>
               <div class="mini-tabs">
                 <div class="on">Library - HR <span>×</span></div>
@@ -199,7 +206,7 @@ const CAPS = [
               </div>
               <div class="mini-foot">ws-9c3b7d1a<br/>edit: /dms/edit<br/>publish: /dms/publish</div>
             </div>
-            <div class="mini-main">Main activity surface</div>
+            <div class="mini-main"><div class="mini-header">Library - HR <span class="mini-bookmark">☆ Bookmark this view</span></div><p class="muted" style="padding:0.75rem;margin:0;font-size:0.75rem">The selected Open pane and this header identify the current surface.</p></div>
           </div>
         </section>
         <section class="card">
@@ -215,7 +222,7 @@ const CAPS = [
             </div>
             <div class="mini-main">
               <div class="mini-header"><span class="ham">☰</span> Library - HR Data Privacy Policy</div>
-              <p class="muted" style="padding:0.75rem;margin:0;font-size:0.8rem">Hamburger expands the left menu. Icon rail still switches primary destinations. Open-pane list appears when expanded.</p>
+              <p class="muted" style="padding:0.75rem;margin:0;font-size:0.8rem">Hamburger expands the left menu. Icon rail still switches primary destinations. Saved views and Open panes appear when expanded; Bookmark this view stays in the header.</p>
             </div>
           </div>
         </section>
@@ -930,7 +937,11 @@ function shell(cap) {
     const active = n.id === cap.nav ? " active" : "";
     return `<a class="nav-item${active}" href="#">${n.icon} <span>${n.label}</span></a>`;
   }).join("");
-  const activityKey = cap.activity || cap.nav || "library";
+  const illustratedActivity = {
+    "CAP-0002": "review",
+    "CAP-0003": "notes",
+  };
+  const activityKey = cap.activity || illustratedActivity[cap.id] || cap.nav || "library";
   const activities = [
     { id: "library", label: "Library · HR" },
     { id: "review", label: "Review · Privacy" },
@@ -942,6 +953,22 @@ function shell(cap) {
     { id: "maintenance", label: "Maintenance" },
     { id: "config", label: "Configuration" },
   ];
+  const activeActivity = activities.find((a) => a.id === activityKey) || {
+    id: activityKey,
+    label: cap.title,
+  };
+  const isBookmarked = cap.bookmarked === true;
+  const bookmarkControl = `<button class="btn outline bookmark-btn${isBookmarked ? " saved" : ""}" title="${isBookmarked ? "Remove bookmark" : "Bookmark this view"}" aria-pressed="${isBookmarked}">${isBookmarked ? "★ Bookmarked" : "☆ Bookmark this view"}</button>`;
+  const savedViews = [
+    { label: "Library · HR (overdue)" },
+    ...(isBookmarked ? [{ label: activeActivity.label }] : []),
+  ];
+  const savedViewTabs = savedViews
+    .map(
+      (view) =>
+        `<div class="pane-tab saved-view"><span class="bookmark-mark">★</span><span class="pane-label">${view.label}</span><span class="pane-remove" title="Remove saved view">−</span></div>`
+    )
+    .join("");
   // Show a stable sample set; mark the one matching this screen active.
   const openSet = [
     { id: "library", label: "Library · HR" },
@@ -959,13 +986,7 @@ function shell(cap) {
       return true;
     })
     .map((t) => {
-      const isActive =
-        t.id === activityKey ||
-        (cap.id === "CAP-0006" && t.id === "library") ||
-        (cap.id === "CAP-0002" && t.id === "review") ||
-        (cap.id === "CAP-0003" && t.id === "notes") ||
-        (cap.id === "CAP-0005" && t.id === "shell") ||
-        (cap.id === "CAP-0020" && t.id === "permalink");
+      const isActive = t.id === activityKey;
       return `<div class="pane-tab${isActive ? " active" : ""}"><span class="pane-label">${t.label}</span><span class="pane-close">×</span></div>`;
     })
     .join("");
@@ -1032,14 +1053,19 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .pane-tabs { display: flex; flex-direction: column; gap: 0.2rem; margin-top: 0.35rem; }
 .pane-tab { display: flex; align-items: center; gap: 0.35rem; padding: 0.4rem 0.55rem; border-radius: calc(var(--radius) - 2px); font-size: 0.78rem; border: 1px solid transparent; background: transparent; color: var(--sidebar-foreground); }
 .pane-tab.active { background: color-mix(in oklch, var(--info) 12%, white); border-color: color-mix(in oklch, var(--info) 28%, var(--border)); font-weight: 600; }
+.pane-tab.saved-view { color: var(--muted-foreground); }
+.bookmark-mark { color: var(--warning); font-size: 0.72rem; }
 .pane-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .pane-close { color: var(--muted-foreground); font-size: 0.85rem; line-height: 1; padding: 0 0.15rem; }
+.pane-remove { color: var(--muted-foreground); font-size: 0.95rem; line-height: 1; padding: 0 0.15rem; }
 .sidebar-foot { margin-top: auto; padding: 0.75rem 0.625rem; font-size: 0.75rem; color: var(--muted-foreground); line-height: 1.5; border-top: 1px solid var(--sidebar-border); }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--background); }
 .header { height: 3.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.75rem; padding: 0 1.25rem; }
 .header h1 { font-size: 0.95rem; font-weight: 600; margin: 0; }
 .header .grow { flex: 1; }
 .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+.bookmark-btn { white-space: nowrap; }
+.bookmark-btn.saved { border-color: color-mix(in oklch, var(--warning) 50%, var(--border)); color: oklch(0.45 0.1 85); background: color-mix(in oklch, var(--warning) 14%, white); }
 .ham-btn { appearance: none; border: 1px solid var(--input); background: var(--background); width: 2rem; height: 2rem; border-radius: calc(var(--radius) - 2px); font: inherit; font-size: 1rem; line-height: 1; cursor: default; color: var(--foreground); display: grid; place-items: center; }
 .ham-btn .tip { display: none; }
 .ham-note { font-size: 0.7rem; color: var(--muted-foreground); }
@@ -1146,6 +1172,7 @@ tr:last-child td { border-bottom: 0; }
 .mini-sec { margin-top: 0.35rem; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted-foreground); }
 .mini-tabs div { display: flex; justify-content: space-between; gap: 0.25rem; border: 1px solid transparent; }
 .mini-tabs div.on { border-color: color-mix(in oklch, var(--info) 28%, var(--border)); }
+.mini-bookmark { margin-left: auto; padding: 0.15rem 0.3rem; border: 1px solid var(--input); border-radius: 0.25rem; color: oklch(0.45 0.1 85); font-size: 0.62rem; font-weight: 500; }
 .mini-foot { margin-top: auto; color: var(--muted-foreground); font-size: 0.65rem; padding-top: 0.4rem; border-top: 1px solid var(--sidebar-border); }
 .mini-main { flex: 1; background: var(--card); display: flex; flex-direction: column; color: var(--muted-foreground); font-size: 0.8rem; align-items: stretch; justify-content: center; text-align: center; }
 .mini-rail { width: 2.75rem; background: var(--sidebar); border-right: 1px solid var(--sidebar-border); display: flex; flex-direction: column; align-items: center; gap: 0.35rem; padding: 0.45rem 0.25rem; }
@@ -1163,6 +1190,8 @@ tr:last-child td { border-bottom: 0; }
       <div class="brand-actions"><button class="fold-ctl" title="Collapse left menu">«</button></div>
     </div>
     <nav class="nav">${navHtml}</nav>
+    <div class="pane-sec">Saved views</div>
+    <div class="pane-tabs">${savedViewTabs}</div>
     <div class="pane-sec">Open panes</div>
     <div class="pane-tabs">${openTabs}</div>
     <div class="sidebar-foot">
@@ -1174,11 +1203,11 @@ tr:last-child td { border-bottom: 0; }
   <div class="main">
     <header class="header">
       <button class="ham-btn" title="Open left menu when folded">☰</button>
-      <h1>${cap.title}</h1>
+      <h1>${activeActivity.label}</h1>
       <div class="grow"></div>
       <span class="ham-note">☰ when menu folded</span>
       ${badge("Workspace healthy", "ok")}
-      <div class="header-actions">${actions}</div>
+      <div class="header-actions">${bookmarkControl}${actions}</div>
     </header>
     <main class="content">
       <div class="cap-head">

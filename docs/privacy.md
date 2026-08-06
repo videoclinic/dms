@@ -16,7 +16,7 @@
 | Export/audit reports | `<edit-root>/.dms/exports/` (operator-chosen) | Aggregated lifecycle, approval, periodic-review, and release evidence; produced on demand |
 | Workspace backup archive | Operator-chosen path | Contains `.dms`, controlled Office drafts, and released PDFs; not encrypted by the app |
 | Optional Claude Desktop handoff | Clipboard and Claude Desktop conversation | Operator-previewed plain-text change excerpts and selected metadata; processing may leave the machine for Anthropic |
-| App preferences | OS user config directory (when implemented) | No document content |
+| App preferences | OS user config directory (when implemented) | Sidebar preference and saved-view targets (workspace/document IDs plus route state); no document content or workflow evidence |
 
 ## Processing principles
 

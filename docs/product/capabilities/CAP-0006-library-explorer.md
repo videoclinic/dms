@@ -16,7 +16,8 @@ When implemented, the following must hold:
 2. Navigation is folder-first: a **relative folder tree** (nested expand/collapse
    of library paths under the edit root — not a flat path list) plus a document
    list for the current folder and active filters. Breadcrumbs or equivalent
-   show the current relative path.
+   show the current relative path. Navigating alone does not save this state;
+   the operator must use CAP-0005's explicit bookmark control.
 3. Operator can **add** a Microsoft Office file that lives under the edit root
    into the library. Add fails if the path is outside the edit root or already
    registered.
@@ -78,17 +79,24 @@ When implemented, the following must hold:
    selection, Review - decision, Notes) — each tab names what surface is
    focused, not a different document. Closing that tab clears the selection
    activity without unregistering the document.
-10. Documents start versioning only after they are in the library; add is the
+10. CAP-0005's `Bookmark this view` control saves the current library folder,
+    filters, and sort order; when exactly one document is selected it also uses
+    that document's stable ID as the target. It does not retain a multi-select
+    batch selection or an absolute path. Restoring the saved view applies that
+    state and creates or focuses the corresponding open-activity tab. **Copy
+    permalink** remains a separate single-document action: it never creates or
+    modifies a saved view.
+11. Documents start versioning only after they are in the library; add is the
     gate into CAP-0002.
-11. Obsolete documents are hidden by default; an explicit control shows them.
+12. Obsolete documents are hidden by default; an explicit control shows them.
     Missing documents remain visible with a `missing` marker until resolved
     (CAP-0013).
-12. Explorer filters support lifecycle state, confidentiality type, document
+13. Explorer filters support lifecycle state, confidentiality type, document
     type, owner, and overdue-only.
-13. Explorer search matches title, document number, draft file name, and
+14. Explorer search matches title, document number, draft file name, and
     relative path case-insensitively. Results can be sorted by title, document
     number, lifecycle state, latest release, or next-review-due date.
-14. A CAP-0020 document permalink that resolves successfully lands here: the
+15. A CAP-0020 document permalink that resolves successfully lands here: the
     library navigator selects that document (revealing its folder as needed)
     and shows the selection pane. Resolution never keys off file name or
     version label.
