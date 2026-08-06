@@ -195,7 +195,7 @@ const CAPS = [
               </div>
               <div class="mini-sec">Saved views</div>
               <div class="mini-tabs">
-                <div>★ Library - HR (overdue) <span>−</span></div>
+                <div>★ Library - HR <span>−</span></div>
                 <div>★ Shell chrome <span>−</span></div>
               </div>
               <div class="mini-sec">Open panes</div>
@@ -241,8 +241,8 @@ const CAPS = [
     file: "CAP-0006-library-explorer",
     title: "Folder-first library explorer",
     nav: "library",
-    subtitle: "Persistent folder tree + Explorer-like path controls + current-folder contents. Selection details and actions stay in the right pane.",
-    actions: ["Add documents", "Rescan", "Filters"],
+    subtitle: "Persistent folder tree + Explorer-like path controls + the real current-folder contents. Library membership is a file annotation; selection details stay in the right pane.",
+    actions: [],
     body: `
       <style>
         .app[data-cap="CAP-0006"] .list-card th,
@@ -253,6 +253,7 @@ const CAPS = [
           <button class="icon-btn" title="Back">←</button>
           <button class="icon-btn" title="Forward">→</button>
           <button class="icon-btn" title="Up one folder">↑</button>
+          <button class="icon-btn" title="Refresh current folder (F5)">↻</button>
           <div class="row" style="height:2rem;min-width:0;flex:1;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.75rem;font-size:0.82rem;gap:0.45rem">
             <span class="muted">DMS Workspace</span><span>›</span><span>policies</span><span>›</span><strong>HR</strong>
           </div>
@@ -304,55 +305,93 @@ const CAPS = [
           <div class="row between mb">
             <div>
               <h3 class="card-title" style="margin:0">HR</h3>
-              <span class="muted" style="font-size:0.74rem">2 folders · 3 controlled documents</span>
+              <span class="muted" style="font-size:0.74rem">2 folders · 6 files · 3 in library</span>
             </div>
             <button class="btn outline">Details view</button>
           </div>
           <div class="row gap-2 mb" style="flex-wrap:wrap">
-            ${badge("3 overdue", "danger")}
-            ${badge("12 due ≤30d", "warn")}
-            <span class="muted grow" style="text-align:right">Scope: HR + descendants</span>
+            ${badge("3 in library", "info")}
+            ${badge("2 not in library", "warn")}
+            <span class="muted grow" style="text-align:right">All immediate children · Search: HR + descendants</span>
           </div>
           <div class="table-wrap"><table>
             <thead><tr>
-              <th></th><th>Name</th><th>Details</th><th>State</th><th>Released</th><th>Conf.</th>
+              <th></th><th>Name</th><th>Library</th><th>Details</th><th>State</th><th>Released</th>
             </tr></thead>
             <tbody>
               <tr>
-                <td></td><td><strong>📁 Recruiting</strong></td><td>Folder</td><td>—</td><td>—</td><td>—</td>
+                <td></td><td><strong>📁 Recruiting</strong></td><td>—</td><td>Folder</td><td>—</td><td>—</td>
               </tr>
               <tr>
-                <td></td><td><strong>📁 Templates</strong></td><td>Folder</td><td>—</td><td>—</td><td>—</td>
+                <td></td><td><strong>📁 Templates</strong></td><td>—</td><td>Folder</td><td>—</td><td>—</td>
               </tr>
-              <tr class="selected">
-                <td><span class="check on">☑</span></td>
+              <tr>
+                <td><span class="check">☐</span></td>
                 <td>HR Data Privacy Policy</td>
+                <td>${badge("In library", "ok")}</td>
                 <td>DOC-014 · policy</td>
                 <td>${badge("in_review", "info")}</td>
                 <td>V1.3 ${badge("draft newer", "warn")}</td>
-                <td>Internal</td>
               </tr>
               <tr>
                 <td><span class="check">☐</span></td>
                 <td>Code of Conduct</td>
+                <td>${badge("In library", "ok")}</td>
                 <td>DOC-018 · policy</td>
                 <td>${badge("draft", "warn")}</td>
                 <td>V2.0</td>
-                <td>Internal</td>
               </tr>
               <tr>
                 <td><span class="check">☐</span></td>
                 <td>Leave Policy</td>
+                <td>${badge("In library", "ok")}</td>
                 <td>DOC-025 · policy</td>
                 <td>${badge("released", "ok")}</td>
                 <td>V1.1</td>
-                <td>Restricted</td>
+              </tr>
+              <tr class="selected">
+                <td><span class="check on">☑</span></td>
+                <td>Risk assessment.docx</td>
+                <td>${badge("Not in library", "warn")}</td>
+                <td>Office draft</td>
+                <td>—</td>
+                <td>—</td>
+              </tr>
+              <tr class="selected">
+                <td><span class="check on">☑</span></td>
+                <td>Employee onboarding.docx</td>
+                <td>${badge("Not in library", "warn")}</td>
+                <td>Office draft</td>
+                <td>—</td>
+                <td>—</td>
+              </tr>
+              <tr>
+                <td><span class="check">☐</span></td>
+                <td>HR checklist.pdf</td>
+                <td>${badge("Not a draft", "muted")}</td>
+                <td>PDF file</td>
+                <td>—</td>
+                <td>—</td>
               </tr>
             </tbody>
           </table></div>
-          <p class="hint"><strong>Folders first:</strong> single-click selects; double-click or Enter opens. Document rows select only; actions live in the right pane. Unmanaged files appear only in Add/Rescan.</p>
+          <p class="hint"><strong>Folders first:</strong> single-click selects; double-click or Enter opens. Every regular file is listed. The right pane makes the selected file's library action explicit.</p>
         </section>
-        ${documentMasterDataSelectionPane()}
+        <aside class="card detail-pane">
+          <div class="row between mb">
+            <h3 class="card-title" style="margin:0">2 selected</h3>
+            <button class="btn outline">Clear</button>
+          </div>
+          <details class="selection-section" open>
+            <summary>Files</summary>
+            <div class="selection-section-body"><ul class="list"><li>Risk assessment.docx <span class="muted">· policies/HR</span></li><li>Employee onboarding.docx <span class="muted">· policies/HR</span></li></ul></div>
+          </details>
+          <details class="selection-section" open>
+            <summary>Actions <span>1 available</span></summary>
+            <div class="selection-section-body stack-btns"><button class="btn">Add 2 documents to library</button></div>
+          </details>
+          <p class="hint">Batch add is available because every selected row is an in-root Office draft not already in the library. A mixed or unsupported selection has no incompatible action. Registered documents instead show master data and lifecycle actions here.</p>
+        </aside>
       </div>
       ${batchSelectionPane()}`,
   },
@@ -539,7 +578,7 @@ const CAPS = [
     file: "CAP-0013-library-maintenance",
     title: "Library maintenance",
     nav: "maintenance",
-    subtitle: "Rename/move with preserved ID, missing handling, rescan, roster & catalogues, withdraw.",
+    subtitle: "Rename/move with preserved ID, missing handling, rescan for recovery or batch work, roster & catalogues, withdraw.",
     body: `
       <div class="grid-explorer">
         <aside class="card">
@@ -615,7 +654,7 @@ const CAPS = [
     file: "CAP-0015-document-master-data",
     title: "Document master data",
     nav: "library",
-    subtitle: "CAP-0015 defines the shared master-data and revision content; CAP-0006 places it in the library selection pane. Title matches the selected list row.",
+    subtitle: "CAP-0015 defines the shared master-data and revision content; CAP-0006 places it in the library selection pane. Title matches the selected list row. All sections are expanded here for review.",
     actions: [],
     body: `
       <div class="grid-explorer-detail">
@@ -895,7 +934,7 @@ function documentMasterDataSelectionPane() {
         ["Confidentiality", "Internal (inherited)"],
       ])}</div>
     </details>
-    <details class="selection-section">
+    <details class="selection-section" open>
       <summary>Actions <span>15 available</span></summary>
       <div class="selection-section-body stack-btns">
         <button class="btn outline">Open draft</button>
@@ -915,14 +954,14 @@ function documentMasterDataSelectionPane() {
         <button class="btn danger">Unregister</button>
       </div>
     </details>
-    <details class="selection-section">
+    <details class="selection-section" open>
       <summary>Revision cycle</summary>
       <div class="selection-section-body">
         <p class="muted" style="font-size:0.85rem;margin:0">The current released PDF remains available while this newer draft is in review. After release, <strong>Begin revision</strong> returns the document to <code>draft</code>; PDFs and history remain preserved.</p>
         <p class="hint">Master-data changes while a review is open invalidate that review. Copy permalink uses workspace + document IDs only.</p>
       </div>
     </details>
-    <details class="selection-section">
+    <details class="selection-section" open>
       <summary>Releases <span>4 recorded</span></summary>
       <div class="selection-section-body stack">
         ${ver("V1.3", "2025-08-01 09:44 UTC", "Substantive / major", "current", "ok")}
@@ -936,8 +975,8 @@ function documentMasterDataSelectionPane() {
 function batchSelectionPane() {
   return `<section class="batch-selection-demo">
     <div>
-      <h3 class="card-title">Multi-select state</h3>
-      <p class="muted" style="margin:0">Checking two or more documents replaces the single-document sections in this same right pane.</p>
+      <h3 class="card-title">In-library multi-select state</h3>
+      <p class="muted" style="margin:0">Checking two or more in-library documents replaces the single-document sections in this same right pane.</p>
     </div>
     <aside class="card detail-pane batch-detail-pane">
       <div class="row between mb">
@@ -996,7 +1035,7 @@ function shell(cap) {
   const isBookmarked = cap.bookmarked === true;
   const bookmarkControl = `<button class="btn outline bookmark-btn${isBookmarked ? " saved" : ""}" title="${isBookmarked ? "Remove bookmark" : "Bookmark this view"}" aria-pressed="${isBookmarked}">${isBookmarked ? "★ Bookmarked" : "☆ Bookmark this view"}</button>`;
   const savedViews = [
-    { label: "Library · HR (overdue)" },
+    { label: "Library · HR" },
     ...(isBookmarked ? [{ label: activeActivity.label }] : []),
   ];
   const savedViewTabs = savedViews

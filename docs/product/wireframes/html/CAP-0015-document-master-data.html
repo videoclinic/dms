@@ -201,7 +201,7 @@ tr:last-child td { border-bottom: 0; }
     </div>
     <nav class="nav"><a class="nav-item active" href="#">📚 <span>Library</span></a><a class="nav-item" href="#">📦 <span>Releases</span></a><a class="nav-item" href="#">📋 <span>Audit & Reports</span></a><a class="nav-item" href="#">🧰 <span>Maintenance</span></a><a class="nav-item" href="#">⚙️ <span>Configuration</span></a></nav>
     <div class="pane-sec">Saved views</div>
-    <div class="pane-tabs"><div class="pane-tab saved-view"><span class="bookmark-mark">★</span><span class="pane-label">Library · HR (overdue)</span><span class="pane-remove" title="Remove saved view">−</span></div></div>
+    <div class="pane-tabs"><div class="pane-tab saved-view"><span class="bookmark-mark">★</span><span class="pane-label">Library · HR</span><span class="pane-remove" title="Remove saved view">−</span></div></div>
     <div class="pane-sec">Open panes</div>
     <div class="pane-tabs"><div class="pane-tab active"><span class="pane-label">Library · HR</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label">Review · Privacy</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label">Notes · Privacy</span><span class="pane-close">×</span></div></div>
     <div class="sidebar-foot">
@@ -226,7 +226,7 @@ tr:last-child td { border-bottom: 0; }
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">CAP-0015 defines the shared master-data and revision content; CAP-0006 places it in the library selection pane. Title matches the selected list row.</p>
+      <p class="subtitle">CAP-0015 defines the shared master-data and revision content; CAP-0006 places it in the library selection pane. Title matches the selected list row. All sections are expanded here for review.</p>
       
       <div class="grid-explorer-detail">
         <aside class="card tree">
@@ -284,7 +284,7 @@ tr:last-child td { border-bottom: 0; }
       <summary>Master data</summary>
       <div class="selection-section-body"><dl class="kv"><div><dt>Title</dt><dd>HR Data Privacy Policy</dd></div><div><dt>Document number</dt><dd>DOC-014 (unique in workspace)</dd></div><div><dt>Document type</dt><dd>policy</dd></div><div><dt>Owner</dt><dd>Lukas Roth</dd></div><div><dt>Effective date</dt><dd>2025-08-01</dd></div><div><dt>Next review due</dt><dd>2026-08-01</dd></div><div><dt>Released</dt><dd>V1.3 (current)</dd></div><div><dt>Draft</dt><dd><span class="badge warn">newer than last release</span></dd></div><div><dt>Effective editor</dt><dd>Lukas Roth</dd></div><div><dt>Effective approver</dt><dd>Anna Berg</dd></div><div><dt>Confidentiality</dt><dd>Internal (inherited)</dd></div></dl></div>
     </details>
-    <details class="selection-section">
+    <details class="selection-section" open>
       <summary>Actions <span>15 available</span></summary>
       <div class="selection-section-body stack-btns">
         <button class="btn outline">Open draft</button>
@@ -304,14 +304,14 @@ tr:last-child td { border-bottom: 0; }
         <button class="btn danger">Unregister</button>
       </div>
     </details>
-    <details class="selection-section">
+    <details class="selection-section" open>
       <summary>Revision cycle</summary>
       <div class="selection-section-body">
         <p class="muted" style="font-size:0.85rem;margin:0">The current released PDF remains available while this newer draft is in review. After release, <strong>Begin revision</strong> returns the document to <code>draft</code>; PDFs and history remain preserved.</p>
         <p class="hint">Master-data changes while a review is open invalidate that review. Copy permalink uses workspace + document IDs only.</p>
       </div>
     </details>
-    <details class="selection-section">
+    <details class="selection-section" open>
       <summary>Releases <span>4 recorded</span></summary>
       <div class="selection-section-body stack">
         <div class="ver"><div class="row gap-2"><strong>V1.3</strong><span class="badge ok">current</span></div><p class="muted">2025-08-01 09:44 UTC</p><p>Substantive / major</p></div>

@@ -40,8 +40,8 @@ When implemented, the following must hold:
    still resolves to the same document ID. Display labels may change; the URI
    does not.
 7. Unregistered (history-retained) and obsolete documents remain resolvable by
-   ID when still present in `.dms`; the UI lands on the appropriate filtered or
-   history view rather than failing silently.
+   ID when still present in `.dms`; the UI lands on the appropriate directory,
+   maintenance, or history view rather than failing silently.
 8. From a single-document CAP-0006 selection, the operator can **Copy
    permalink**. The clipboard receives the canonical URI for the default
    document target. Copy does not require network access.

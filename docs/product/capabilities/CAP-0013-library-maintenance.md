@@ -21,10 +21,12 @@ When implemented, the following must hold:
    refuses to perform lifecycle transitions on it until the operator
    reassigns the file, restores it from backup, or removes the document from
    the library.
-3. **Rescan.** A **Rescan library** action walks the edit root, lists candidate
-   Office drafts not yet in the library, and separately lists missing records
-   with any safe reassociation suggestions. The operator confirms add or
-   reassociation; the application never auto-adds or guesses an ambiguous match.
+3. **Rescan.** A maintenance **Rescan library** action walks the edit root and
+   reports missing registered records with any safe reassociation suggestions.
+   The regular CAP-0006 directory listing already shows every unregistered
+   supported Office draft and lets the operator add the selected file. Rescan
+   may offer batch add or reassociation after explicit confirmation; it never
+   auto-adds or guesses an ambiguous match.
 4. **Approver roster maintenance.** The operator can add, edit, and disable
    approver profiles (display name, email, optional role label). A profile
    referenced by an open review or by historical workflow events cannot be

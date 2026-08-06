@@ -40,10 +40,10 @@ When implemented, the following must hold:
    record. A later release supersedes the previous current version for
    explorer display; prior PDFs remain on disk and remain verifiable.
 6. An operator can mark a library document **obsolete**: lifecycle becomes
-   `obsolete`, no further review or release is allowed, released PDFs remain
-   on disk, and the explorer filters obsolete documents behind an explicit
-   show/hide control. Obsolescence records a canonical workflow event with a
-   required reason comment.
+   `obsolete`, no further review or release is allowed, and released PDFs remain
+   on disk. Its draft remains visible at its filesystem location in the
+   CAP-0006 directory listing with an `obsolete` state. Obsolescence records a
+   canonical workflow event with a required reason comment.
 7. An author (any operator with the workspace open) can **cancel** an open
    `in_review` request with a required comment. The document returns to
    `draft`; the cancellation is recorded in the event chain. Cancel does not
