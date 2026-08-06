@@ -37,7 +37,8 @@ When implemented, the following must hold:
    to the review and any change requires a new review.
    Notification uses the workspace transport (CAP-0010): SMTP acceptance or
    operator-confirmed `mailto:` send. The document enters `in_review` only after
-   that transport step succeeds.
+   that transport step succeeds; a failed send leaves the document in `draft`
+   and offers a retryable redelivery.
 5. The effective approver records `approved`, `rejected`, or
    `changed_requested` in the application with a non-empty decision comment.
    The app records the requester and approver identities, local OS user,
@@ -166,7 +167,7 @@ When implemented, the following must hold:
 - Audit/export: [`CAP-0012-audit-export.md`](CAP-0012-audit-export.md)
 - Library maintenance: [`CAP-0013-library-maintenance.md`](CAP-0013-library-maintenance.md)
 - Workspace integrity: [`CAP-0014-workspace-integrity.md`](CAP-0014-workspace-integrity.md)
-- Document control data / revision cycle: [`CAP-0015-document-master-data.md`](CAP-0015-document-master-data.md)
+- Document control data / revision cycle: [`CAP-0015-document-control-data.md`](CAP-0015-document-control-data.md)
 - Publish tree: [`CAP-0016-publish-tree-maintenance.md`](CAP-0016-publish-tree-maintenance.md)
 - Periodic review: [`CAP-0017-periodic-document-review.md`](CAP-0017-periodic-document-review.md)
 - Claude Desktop assistance: [`CAP-0018-claude-desktop-change-assistance.md`](CAP-0018-claude-desktop-change-assistance.md)
