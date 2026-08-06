@@ -30,6 +30,8 @@ When implemented, the following must hold:
 - Checksumming draft Office files as a release gate
 
 ## Links
+- Wireframe (HTML): [`../wireframes/html/CAP-0004-release-integrity.html`](../wireframes/html/CAP-0004-release-integrity.html)
+- Wireframe (PNG): [`../wireframes/exports/CAP-0004-release-integrity.png`](../wireframes/exports/CAP-0004-release-integrity.png)
 
 - ADR-0005, ADR-0007: [`../../design-decisions.md`](../../design-decisions.md)
 - Publish tree: [`CAP-0016-publish-tree-maintenance.md`](CAP-0016-publish-tree-maintenance.md)

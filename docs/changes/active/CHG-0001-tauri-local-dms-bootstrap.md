@@ -14,7 +14,9 @@ Deliver the first vertical slice of a Tauri 2 desktop app for **Windows and
 macOS** that:
 
 - Configures edit root + publish root and stores metadata under `<edit-root>/.dms`
-- Shows a library file explorer; add/remove documents under control
+- Shows a library directory navigator (folder tree, metadata list, selection
+  pane with CAP-0015 master data and document/batch actions); add/remove
+  documents under control
 - Runs operator-driven approval and release
 - Sends approver review-request email and requester decision-outcome email
   (SMTP or host mail handler), and records revision-bound approval comments,
@@ -59,7 +61,7 @@ macOS** that:
 | 0 | Product records and architecture bootstrap | done (docs tree; release version policy, approval, notification, confidentiality, workflow-role routing, maintenance, periodic review, optional Claude handoff, Win+macOS recorded) | CAP/CHG/ADR files exist; indexes list CAP-0001…0019; no CAP claims implemented runtime |
 | 1 | Tauri 2 app skeleton (Windows + macOS) + DOX for source tree | pending | Dev app launches on Windows and macOS; README run steps for both |
 | 2 | `.dms` store + dual-root open/configure + confidentiality and workflow-role policies | pending | Tests: persist/reload edit+publish roots, stable workspace ID, and schema version; safe older-schema migration/newer-schema read-only; inherit nearest class and each role independently; init `.dms` only on confirm |
-| 3 | Library explorer + add/unregister/reassociate | pending | Tests: add under edit root; reject outside path; unregister preserves history; ambiguous move is never auto-linked; search/filter controlled set |
+| 3 | Library directory navigator + add/unregister/reassociate + selection pane | pending | Tests: add under edit root; reject outside path; unregister preserves history; ambiguous move is never auto-linked; search/filter controlled set; single selection shows CAP-0015 master data + document actions in the right pane with matching title; multi-select shows only multi-applicable actions in the same pane |
 | 4 | Lifecycle + approval notification + version assign + tree mirror | pending | Tests: request requires summary, requester, change class, effective approver, and transport success; deep link resolves only an accessible registered workspace to the intended review request; each decision notifies the snapshotted requester, with failure retryable and non-reverting; approver-policy change invalidates an open review; cosmetic→minor, substantive/uncertain→major; comments/event hash persist; metadata change invalidates approval; first version V1.0; refuse overwrite |
 | 5 | Office-driven PDF export on release (Win + macOS adapters) | pending | Tests/integration: export via installed Office (or test double) to versioned path on each OS path; failure rolls back version success |
 | 6 | Notes on documents | pending | Tests: note CRUD persistence across restart |
@@ -71,7 +73,8 @@ macOS** that:
 
 ## Implementation notes
 
-- Prefer a minimal frontend unless a UI kit is required for the explorer.
+- Prefer a minimal frontend unless a UI kit is required for the library
+  directory navigator.
 - `.dms` format: inspectable JSON (or similar); schema beside the store module
   in phase 2 — must include `edit_root`, `publish_root`, stable workspace ID,
   library entries with

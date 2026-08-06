@@ -40,6 +40,8 @@ When implemented, the following must hold:
 - Supporting non-Office draft formats (`.odt`, `.ods`, etc.) in v1
 
 ## Links
+- Wireframe (HTML): [`../wireframes/html/CAP-0009-release-editor.html`](../wireframes/html/CAP-0009-release-editor.html)
+- Wireframe (PNG): [`../wireframes/exports/CAP-0009-release-editor.png`](../wireframes/exports/CAP-0009-release-editor.png)
 
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
 - Architecture: [`../../architecture.md`](../../architecture.md)

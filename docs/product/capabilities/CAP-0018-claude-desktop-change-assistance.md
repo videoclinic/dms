@@ -62,6 +62,8 @@ When implemented, the following must hold:
 - A custom Claude Desktop MCP extension in v1
 
 ## Links
+- Wireframe (HTML): [`../wireframes/html/CAP-0018-claude-desktop-change-assistance.html`](../wireframes/html/CAP-0018-claude-desktop-change-assistance.html)
+- Wireframe (PNG): [`../wireframes/exports/CAP-0018-claude-desktop-change-assistance.png`](../wireframes/exports/CAP-0018-claude-desktop-change-assistance.png)
 
 - Lifecycle and change class: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
 - Privacy: [`../../privacy.md`](../../privacy.md)

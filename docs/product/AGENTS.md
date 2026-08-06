@@ -10,6 +10,7 @@ Own falsifiable capability contracts (`CAP-*.md`) and the product index.
 | --- | --- |
 | `README.md` | CAP index and product-record rules |
 | `capabilities/CAP-*.md` | Per-capability outcomes, status, test links |
+| `wireframes/` | Static CAP wireframes (HTML + PNG), shadcn-admin visual base |
 
 ## Local Contracts
 
@@ -30,4 +31,8 @@ Own falsifiable capability contracts (`CAP-*.md`) and the product index.
 
 ## Child DOX Index
 
-No nested AGENTS.md. Parent: `../AGENTS.md`. Progress sibling: `../changes/AGENTS.md`.
+| Child | Owns | Read when editing… |
+| --- | --- | --- |
+| `wireframes/AGENTS.md` | CAP wireframe HTML/PNG assets and generator | Wireframe screens, exports, or CAP visual references |
+
+Parent: `../AGENTS.md`. Progress sibling: `../changes/AGENTS.md`.

@@ -12,7 +12,7 @@ privacy, and design decisions for this repository.
 | `architecture.md` | Runtime shape, trust boundary, out-of-scope platform choices |
 | `privacy.md` | Data classes and local-processing principles |
 | `design-decisions.md` | Cross-cutting ADRs |
-| `product/` | CAP index and capability contracts |
+| `product/` | CAP index, capability contracts, wireframe references |
 | `changes/` | CHG lifecycle (active/archive) |
 
 ## Local Contracts

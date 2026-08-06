@@ -17,12 +17,13 @@ When implemented, the following must hold:
 2. Filesystem access for edit root, publish root, and library files works
    through Tauri-mediated APIs on both platforms.
 3. Core DMS commands are invokable from the UI via the Tauri backend: configure
-   roots, open workspace, library add/remove, explorer navigation, lifecycle
-   transitions (including begin revision, cancel review, obsolete), review
-   notification and decision, notes, confidentiality and document-type policy,
-   master-data edit, release (version + Office PDF export), verify checksum,
-   publish history, periodic review, audit export, backup/restore, and optional
-   Claude Desktop change-comment handoff.
+   roots, open workspace, library add/remove, directory navigation, selection
+   pane (master data + document/batch actions), lifecycle transitions
+   (including begin revision, cancel review, obsolete), review notification and
+   decision, notes, confidentiality and document-type policy, master-data edit,
+   release (version + Office PDF export), verify checksum, publish history,
+   periodic review, audit export, backup/restore, and optional Claude Desktop
+   change-comment handoff.
 4. The app runs without a database service process.
 5. Platform packaging produces installable artifacts for Windows and macOS
    (exact installer formats chosen at implementation).
@@ -33,6 +34,8 @@ When implemented, the following must hold:
 - Linux as a required supported platform in v1 (may work incidentally via Tauri)
 
 ## Links
+- Wireframe (HTML): [`../wireframes/html/CAP-0005-desktop-shell.html`](../wireframes/html/CAP-0005-desktop-shell.html)
+- Wireframe (PNG): [`../wireframes/exports/CAP-0005-desktop-shell.png`](../wireframes/exports/CAP-0005-desktop-shell.png)
 
 - Architecture: [`../../architecture.md`](../../architecture.md)
 - ADR-0002: [`../../design-decisions.md`](../../design-decisions.md)

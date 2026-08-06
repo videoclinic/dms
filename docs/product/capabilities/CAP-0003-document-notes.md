@@ -27,6 +27,8 @@ When implemented, the following must hold:
 - Rich-text mandatory format (plain text is sufficient for v1)
 
 ## Links
+- Wireframe (HTML): [`../wireframes/html/CAP-0003-document-notes.html`](../wireframes/html/CAP-0003-document-notes.html)
+- Wireframe (PNG): [`../wireframes/exports/CAP-0003-document-notes.png`](../wireframes/exports/CAP-0003-document-notes.png)
 
 - Privacy: [`../../privacy.md`](../../privacy.md)
 - Master data: [`CAP-0015-document-master-data.md`](CAP-0015-document-master-data.md)

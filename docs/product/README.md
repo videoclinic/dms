@@ -22,7 +22,7 @@ linked tests is a coverage gap, not implemented proof.
 | [CAP-0003](capabilities/CAP-0003-document-notes.md) | Document notes | not implemented |
 | [CAP-0004](capabilities/CAP-0004-release-integrity.md) | Released PDF checksum integrity | not implemented |
 | [CAP-0005](capabilities/CAP-0005-desktop-shell.md) | Tauri desktop shell (Windows and macOS) | not implemented |
-| [CAP-0006](capabilities/CAP-0006-library-explorer.md) | Controlled library and file explorer | not implemented |
+| [CAP-0006](capabilities/CAP-0006-library-explorer.md) | Controlled library directory navigator | not implemented |
 | [CAP-0007](capabilities/CAP-0007-office-pdf-export.md) | Application-driven Office → PDF export | not implemented |
 | [CAP-0008](capabilities/CAP-0008-confidentiality-classification.md) | Inherited document confidentiality classification | not implemented |
 | [CAP-0009](capabilities/CAP-0009-release-editor.md) | Release editor (host Office) | not implemented |
@@ -36,6 +36,14 @@ linked tests is a coverage gap, not implemented proof.
 | [CAP-0017](capabilities/CAP-0017-periodic-document-review.md) | Periodic review of current released documents | not implemented |
 | [CAP-0018](capabilities/CAP-0018-claude-desktop-change-assistance.md) | Optional Claude Desktop change-comment assistance | not implemented |
 | [CAP-0019](capabilities/CAP-0019-inherited-workflow-role-routing.md) | Inherited editor and approver routing | not implemented |
+
+## Wireframes
+
+Static operator-surface wireframes (shadcn-admin 2.2.0 visual base):
+[`wireframes/index.html`](wireframes/index.html) ·
+[`wireframes/manifest.json`](wireframes/manifest.json) ·
+PNG exports under [`wireframes/exports/`](wireframes/exports/).
+Each CAP links its HTML + PNG under **Links**.
 
 ## Related
 

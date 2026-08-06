@@ -23,7 +23,8 @@ When implemented, the following must hold:
    assignment. A document may explicitly override either role; clearing that
    override restores inheritance for that role without copying a policy into the
    document record.
-4. The explorer and document detail show the effective editor and approver and
+4. The CAP-0006 library navigator (row metadata and selection pane) shows
+   the effective editor and approver and
    whether each is inherited or explicitly overridden.
 5. A review request uses the document's effective approver. The approval email
    and its local-app deep link address that person and the specific review
@@ -48,6 +49,8 @@ When implemented, the following must hold:
 - Assigning roles to paths outside the edit root
 
 ## Links
+- Wireframe (HTML): [`../wireframes/html/CAP-0019-inherited-workflow-role-routing.html`](../wireframes/html/CAP-0019-inherited-workflow-role-routing.html)
+- Wireframe (PNG): [`../wireframes/exports/CAP-0019-inherited-workflow-role-routing.png`](../wireframes/exports/CAP-0019-inherited-workflow-role-routing.png)
 
 - Local store: [`CAP-0001-local-folder-dms.md`](CAP-0001-local-folder-dms.md)
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)

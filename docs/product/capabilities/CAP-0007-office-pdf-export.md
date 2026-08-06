@@ -41,6 +41,8 @@ When implemented, the following must hold:
 - Requiring identical Office build numbers across Windows and macOS
 
 ## Links
+- Wireframe (HTML): [`../wireframes/html/CAP-0007-office-pdf-export.html`](../wireframes/html/CAP-0007-office-pdf-export.html)
+- Wireframe (PNG): [`../wireframes/exports/CAP-0007-office-pdf-export.png`](../wireframes/exports/CAP-0007-office-pdf-export.png)
 
 - ADR-0008: [`../../design-decisions.md`](../../design-decisions.md)
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)

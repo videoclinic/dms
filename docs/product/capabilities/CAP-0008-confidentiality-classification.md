@@ -40,6 +40,8 @@ When implemented, the following must hold:
 - Applying a policy to arbitrary paths outside the edit root
 
 ## Links
+- Wireframe (HTML): [`../wireframes/html/CAP-0008-confidentiality-classification.html`](../wireframes/html/CAP-0008-confidentiality-classification.html)
+- Wireframe (PNG): [`../wireframes/exports/CAP-0008-confidentiality-classification.png`](../wireframes/exports/CAP-0008-confidentiality-classification.png)
 
 - Storage: [`CAP-0001-local-folder-dms.md`](CAP-0001-local-folder-dms.md)
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)

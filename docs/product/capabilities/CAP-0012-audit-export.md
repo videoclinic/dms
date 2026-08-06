@@ -43,6 +43,8 @@ When implemented, the following must hold:
 - Compressing or encrypting reports
 
 ## Links
+- Wireframe (HTML): [`../wireframes/html/CAP-0012-audit-export.html`](../wireframes/html/CAP-0012-audit-export.html)
+- Wireframe (PNG): [`../wireframes/exports/CAP-0012-audit-export.png`](../wireframes/exports/CAP-0012-audit-export.png)
 
 - Evidence: [`CAP-0011-approval-evidence.md`](CAP-0011-approval-evidence.md)
 - Integrity: [`CAP-0004-release-integrity.md`](CAP-0004-release-integrity.md)

@@ -13,7 +13,7 @@ under an **edit root**; released artifacts are versioned PDFs under a
 | Layer | Responsibility |
 | --- | --- |
 | Tauri 2 shell (Rust) | Windowing, filesystem access, checksums, path mapping, Office export orchestration, OS integration |
-| Frontend (web UI in WebView) | Library explorer, add/remove control, lifecycle, master data, change commentary, approval, release/verify, confidentiality and workflow-role policies, audit export, publish history |
+| Frontend (web UI in WebView) | Library directory navigator (folder tree, list metadata, selection pane with CAP-0015 master data and single/batch actions), add/remove control, lifecycle, change commentary, approval, release/verify, confidentiality and workflow-role policies, audit export, publish history |
 | Microsoft Office (host-installed) | PDF export engine invoked by the app on release (Word/Excel/PowerPoint as applicable) |
 | Claude Desktop (optional host app) | Operator-mediated, consented handoff for advisory change classification and changelog wording; not a callable local model or lifecycle authority |
 | `<edit-root>/.dms/` | Roots config, library registry, workflow-person roster + SMTP settings (no secrets), folder confidentiality and workflow-role policies, notes, approval/release history, evidence hashes, checksums, advisory lock |

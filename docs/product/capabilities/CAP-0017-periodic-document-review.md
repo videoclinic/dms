@@ -54,6 +54,8 @@ When implemented, the following must hold:
 - Releasing a new PDF when a reviewer confirms unchanged content
 
 ## Links
+- Wireframe (HTML): [`../wireframes/html/CAP-0017-periodic-document-review.html`](../wireframes/html/CAP-0017-periodic-document-review.html)
+- Wireframe (PNG): [`../wireframes/exports/CAP-0017-periodic-document-review.png`](../wireframes/exports/CAP-0017-periodic-document-review.png)
 
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
 - Notification: [`CAP-0010-notification-transport.md`](CAP-0010-notification-transport.md)

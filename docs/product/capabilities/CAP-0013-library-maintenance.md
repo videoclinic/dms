@@ -56,6 +56,8 @@ When implemented, the following must hold:
 - Cross-workspace deduplication
 
 ## Links
+- Wireframe (HTML): [`../wireframes/html/CAP-0013-library-maintenance.html`](../wireframes/html/CAP-0013-library-maintenance.html)
+- Wireframe (PNG): [`../wireframes/exports/CAP-0013-library-maintenance.png`](../wireframes/exports/CAP-0013-library-maintenance.png)
 
 - Library: [`CAP-0006-library-explorer.md`](CAP-0006-library-explorer.md)
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)

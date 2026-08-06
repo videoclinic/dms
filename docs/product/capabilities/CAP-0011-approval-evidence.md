@@ -59,6 +59,8 @@ When implemented, the following must hold:
 - Replacing filesystem ACLs or audit logging of the OS
 
 ## Links
+- Wireframe (HTML): [`../wireframes/html/CAP-0011-approval-evidence.html`](../wireframes/html/CAP-0011-approval-evidence.html)
+- Wireframe (PNG): [`../wireframes/exports/CAP-0011-approval-evidence.png`](../wireframes/exports/CAP-0011-approval-evidence.png)
 
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
 - Workflow-role routing: [`CAP-0019-inherited-workflow-role-routing.md`](CAP-0019-inherited-workflow-role-routing.md)

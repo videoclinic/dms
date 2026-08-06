@@ -57,6 +57,8 @@ When implemented, the following must hold:
 - Embedding or attaching document content
 
 ## Links
+- Wireframe (HTML): [`../wireframes/html/CAP-0010-notification-transport.html`](../wireframes/html/CAP-0010-notification-transport.html)
+- Wireframe (PNG): [`../wireframes/exports/CAP-0010-notification-transport.png`](../wireframes/exports/CAP-0010-notification-transport.png)
 
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
 - Workflow-role routing: [`CAP-0019-inherited-workflow-role-routing.md`](CAP-0019-inherited-workflow-role-routing.md)

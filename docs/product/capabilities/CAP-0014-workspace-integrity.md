@@ -52,6 +52,8 @@ When implemented, the following must hold:
 - Multi-writer coordination (a workspace is single-writer per app instance)
 
 ## Links
+- Wireframe (HTML): [`../wireframes/html/CAP-0014-workspace-integrity.html`](../wireframes/html/CAP-0014-workspace-integrity.html)
+- Wireframe (PNG): [`../wireframes/exports/CAP-0014-workspace-integrity.png`](../wireframes/exports/CAP-0014-workspace-integrity.png)
 
 - Storage: [`CAP-0001-local-folder-dms.md`](CAP-0001-local-folder-dms.md)
 - Privacy: [`../../privacy.md`](../../privacy.md)

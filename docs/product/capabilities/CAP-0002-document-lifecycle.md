@@ -119,6 +119,8 @@ When implemented, the following must hold:
   but the operator remains responsible for both and approval remains mandatory.
 
 ## Links
+- Wireframe (HTML): [`../wireframes/html/CAP-0002-document-lifecycle.html`](../wireframes/html/CAP-0002-document-lifecycle.html)
+- Wireframe (PNG): [`../wireframes/exports/CAP-0002-document-lifecycle.png`](../wireframes/exports/CAP-0002-document-lifecycle.png)
 
 - Architecture: [`../../architecture.md`](../../architecture.md)
 - ADR-0003, ADR-0004, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010,

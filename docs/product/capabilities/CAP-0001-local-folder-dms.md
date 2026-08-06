@@ -43,6 +43,8 @@ When implemented, the following must hold:
   coincide only if the operator deliberately sets them equal)
 
 ## Links
+- Wireframe (HTML): [`../wireframes/html/CAP-0001-local-folder-dms.html`](../wireframes/html/CAP-0001-local-folder-dms.html)
+- Wireframe (PNG): [`../wireframes/exports/CAP-0001-local-folder-dms.png`](../wireframes/exports/CAP-0001-local-folder-dms.png)
 
 - Architecture: [`../../architecture.md`](../../architecture.md)
 - ADR-0001, ADR-0006, ADR-0009, ADR-0010, ADR-0015: [`../../design-decisions.md`](../../design-decisions.md)

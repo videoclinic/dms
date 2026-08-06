@@ -45,6 +45,8 @@ When implemented, the following must hold:
 - Publishing to a second remote store
 
 ## Links
+- Wireframe (HTML): [`../wireframes/html/CAP-0016-publish-tree-maintenance.html`](../wireframes/html/CAP-0016-publish-tree-maintenance.html)
+- Wireframe (PNG): [`../wireframes/exports/CAP-0016-publish-tree-maintenance.png`](../wireframes/exports/CAP-0016-publish-tree-maintenance.png)
 
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
 - Integrity: [`CAP-0004-release-integrity.md`](CAP-0004-release-integrity.md)
