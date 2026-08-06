@@ -63,10 +63,13 @@ When implemented, the following must hold:
    defined by the owning CAP. The release event embeds the version label
    (`VMAJOR.MINOR`), the produced PDF digest, and the approved Office-draft
    digest; the document-control-data event embeds before/after values.
-9. Periodic-review events (`periodic_review_requested`,
-   `periodic_review_reminded`, `periodic_review_cancelled`, and
-   `periodic_review_completed`) use the same canonical chain and bind to the
-   reviewed release record and PDF digest (CAP-0017).
+9. Periodic-review events are first-class canonical events of the same shape
+   and bind to the reviewed release record and PDF digest (CAP-0017). Their
+   types are:
+   - `periodic_review_requested`
+   - `periodic_review_reminded`
+   - `periodic_review_cancelled`
+   - `periodic_review_completed`
 
 ## Non-goals
 
@@ -80,7 +83,7 @@ When implemented, the following must hold:
 
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
 - Workflow-role routing: [`CAP-0019-inherited-workflow-role-routing.md`](CAP-0019-inherited-workflow-role-routing.md)
-- Document control data: [`CAP-0015-document-master-data.md`](CAP-0015-document-master-data.md)
+- Document control data: [`CAP-0015-document-control-data.md`](CAP-0015-document-control-data.md)
 - Privacy: [`../../privacy.md`](../../privacy.md)
 - ADR-0004, ADR-0013: [`../../design-decisions.md`](../../design-decisions.md)
 - Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)

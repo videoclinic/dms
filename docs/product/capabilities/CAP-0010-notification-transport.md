@@ -32,7 +32,7 @@ When implemented, the following must hold:
    mail handler with a pre-filled `mailto:` URI including the same notification
    fields. The lifecycle state does not advance to `in_review` until the
    operator explicitly confirms in the app that the message was sent.
-5. After an `approved`, `rejected`, or `changes_requested` decision is recorded,
+5. After an `approved`, `rejected`, or `changed_requested` decision is recorded,
    the app notifies the requester's snapshotted email address. The notification
    contains the relative path, decision outcome, confidentiality label, and a
    local-app deep link to the review detail; it does not include document
