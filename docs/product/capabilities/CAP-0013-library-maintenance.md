@@ -13,9 +13,10 @@ When implemented, the following must hold:
 
 1. **Rename inside the edit root.** Rename/move performed through the app
    updates the relative locator while preserving stable document ID and
-   history. For an external move, rescan may suggest a unique match using
-   available filesystem identity and the last stored draft digest, but requires
-   operator confirmation. It never auto-links an ambiguous or edited candidate.
+   history. It does not change CAP-0015 document control data. For an external
+   move, rescan may suggest a unique match using available filesystem identity
+   and the last stored draft digest, but requires operator confirmation. It
+   never auto-links an ambiguous or edited candidate.
 2. **Move outside the edit root.** If the draft can no longer be resolved
    under the edit root, the application flags the document as `missing` and
    refuses to perform lifecycle transitions on it until the operator
@@ -65,7 +66,7 @@ When implemented, the following must hold:
 - Library: [`CAP-0006-library-explorer.md`](CAP-0006-library-explorer.md)
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
 - Classification: [`CAP-0008-confidentiality-classification.md`](CAP-0008-confidentiality-classification.md)
-- Master data: [`CAP-0015-document-master-data.md`](CAP-0015-document-master-data.md)
+- Document control data: [`CAP-0015-document-master-data.md`](CAP-0015-document-master-data.md)
 - Publish tree: [`CAP-0016-publish-tree-maintenance.md`](CAP-0016-publish-tree-maintenance.md)
 - ADR-0001, ADR-0013, ADR-0015: [`../../design-decisions.md`](../../design-decisions.md)
 - Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)

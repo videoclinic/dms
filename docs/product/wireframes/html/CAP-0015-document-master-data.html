@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>CAP-0015 — Document master data · DMS Desktop</title>
+<title>CAP-0015 — Document control data · DMS Desktop</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -222,11 +222,11 @@ tr:last-child td { border-bottom: 0; }
     <main class="content">
       <div class="cap-head">
         <span class="badge info">CAP-0015</span>
-        <h2>Document master data</h2>
+        <h2>Document control data</h2>
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">CAP-0015 defines the shared master-data and revision content; CAP-0006 places it in the library selection pane. Title matches the selected list row. All sections are expanded here for review.</p>
+      <p class="subtitle">Source file facts come from the filesystem. Document control data is managed by DMS Desktop under .dms, never synchronized from Office properties. All sections are expanded here for review.</p>
       
       <div class="grid-explorer-detail">
         <aside class="card tree">
@@ -255,19 +255,19 @@ tr:last-child td { border-bottom: 0; }
             <span class="muted grow">List truncated — focus is the selection pane</span>
           </div>
           <div class="table-wrap"><table>
-            <thead><tr><th></th><th>Title</th><th>Doc #</th><th>State</th><th>Released</th></tr></thead>
+            <thead><tr><th></th><th>Name</th><th>Document</th><th>State</th><th>Released</th></tr></thead>
             <tbody>
               <tr class="selected">
                 <td><span class="check on">☑</span></td>
-                <td>HR Data Privacy Policy</td>
-                <td>DOC-014</td>
+                <td>Handbook.docx</td>
+                <td>HR Data Privacy Policy · DOC-014</td>
                 <td><span class="badge info">in_review</span></td>
                 <td>V1.3 <span class="badge warn">draft newer</span></td>
               </tr>
               <tr>
                 <td><span class="check">☐</span></td>
-                <td>Acceptable Use</td>
-                <td>DOC-002</td>
+                <td>AUP.docx</td>
+                <td>Acceptable Use · DOC-002</td>
                 <td><span class="badge warn">draft</span></td>
                 <td>V2.0</td>
               </tr>
@@ -279,17 +279,22 @@ tr:last-child td { border-bottom: 0; }
       <h3 class="card-title" style="margin:0">HR Data Privacy Policy</h3>
       <span class="badge info">in_review</span>
     </div>
-    <p class="muted mono">DOC-014 · policies/HR/Handbook.docx</p>
+    <p class="muted">Document number: <span class="mono">DOC-014</span></p>
+    <div style="border:1px solid var(--border);border-radius:calc(var(--radius) - 2px);padding:0.65rem 0.75rem;background:var(--muted)">
+      <div class="label">Source file <span style="font-weight:400">· from filesystem</span></div>
+      <div class="mono" style="margin-top:0.3rem">Handbook.docx</div>
+      <div class="muted" style="font-size:0.75rem;margin-top:0.2rem">Folder: policies/HR</div>
+    </div>
     <details class="selection-section" open>
-      <summary>Master data</summary>
-      <div class="selection-section-body"><dl class="kv"><div><dt>Title</dt><dd>HR Data Privacy Policy</dd></div><div><dt>Document number</dt><dd>DOC-014 (unique in workspace)</dd></div><div><dt>Document type</dt><dd>policy</dd></div><div><dt>Owner</dt><dd>Lukas Roth</dd></div><div><dt>Effective date</dt><dd>2025-08-01</dd></div><div><dt>Next review due</dt><dd>2026-08-01</dd></div><div><dt>Released</dt><dd>V1.3 (current)</dd></div><div><dt>Draft</dt><dd><span class="badge warn">newer than last release</span></dd></div><div><dt>Effective editor</dt><dd>Lukas Roth</dd></div><div><dt>Effective approver</dt><dd>Anna Berg</dd></div><div><dt>Confidentiality</dt><dd>Internal (inherited)</dd></div></dl></div>
+      <summary>Document control data <span>Managed in DMS Desktop</span></summary>
+      <div class="selection-section-body"><dl class="kv"><div><dt>Title</dt><dd>HR Data Privacy Policy</dd></div><div><dt>Document number</dt><dd>DOC-014 (unique in workspace)</dd></div><div><dt>Document type</dt><dd>policy</dd></div><div><dt>Owner</dt><dd>Lukas Roth</dd></div><div><dt>Effective date</dt><dd>2025-08-01</dd></div><div><dt>Next review due</dt><dd>2026-08-01</dd></div><div><dt>Released</dt><dd>V1.3 (current)</dd></div><div><dt>Draft</dt><dd><span class="badge warn">newer than last release</span></dd></div><div><dt>Effective editor</dt><dd>Lukas Roth</dd></div><div><dt>Effective approver</dt><dd>Anna Berg</dd></div><div><dt>Confidentiality</dt><dd>Internal (inherited)</dd></div></dl><p class="hint">Stored in workspace metadata under <code>.dms</code>. Not read from or synchronized with Office document properties. Renaming the source file does not change these values.</p></div>
     </details>
     <details class="selection-section" open>
       <summary>Actions <span>15 available</span></summary>
       <div class="selection-section-body stack-btns">
         <button class="btn outline">Open draft</button>
         <button class="btn outline">Open latest released PDF</button>
-        <button class="btn outline">Edit master data</button>
+        <button class="btn outline">Edit document control data</button>
         <button class="btn outline">Submit for review</button>
         <button class="btn outline">Begin revision</button>
         <button class="btn outline">Cancel review</button>
@@ -308,7 +313,7 @@ tr:last-child td { border-bottom: 0; }
       <summary>Revision cycle</summary>
       <div class="selection-section-body">
         <p class="muted" style="font-size:0.85rem;margin:0">The current released PDF remains available while this newer draft is in review. After release, <strong>Begin revision</strong> returns the document to <code>draft</code>; PDFs and history remain preserved.</p>
-        <p class="hint">Master-data changes while a review is open invalidate that review. Copy permalink uses workspace + document IDs only.</p>
+        <p class="hint">Document-control-data changes while a review is open invalidate that review. Copy permalink uses workspace + document IDs only.</p>
       </div>
     </details>
     <details class="selection-section" open>

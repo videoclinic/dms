@@ -31,5 +31,5 @@ When implemented, the following must hold:
 - Wireframe (PNG): [`../wireframes/exports/CAP-0003-document-notes.png`](../wireframes/exports/CAP-0003-document-notes.png)
 
 - Privacy: [`../../privacy.md`](../../privacy.md)
-- Master data: [`CAP-0015-document-master-data.md`](CAP-0015-document-master-data.md)
+- Document control data: [`CAP-0015-document-master-data.md`](CAP-0015-document-master-data.md)
 - Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)

@@ -102,7 +102,7 @@
     },
     {
       "id": "CAP-0015",
-      "title": "Document master data",
+      "title": "Document control data",
       "html": "html/CAP-0015-document-master-data.html",
       "png": "exports/CAP-0015-document-master-data.png",
       "nav": "library"

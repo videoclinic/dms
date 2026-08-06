@@ -13,10 +13,10 @@ under an **edit root**; released artifacts are versioned PDFs under a
 | Layer | Responsibility |
 | --- | --- |
 | Tauri 2 shell (Rust) | Windowing, filesystem access, checksums, path mapping, Office export orchestration, OS integration, registered local-app URI handler (document permalinks) |
-| Frontend (web UI in WebView) | Foldable left menu with hamburger when collapsed; open-activity panes/tabs as quicklinks; folder-dominant Library workspace with a persistent edit-root-relative tree, Windows Explorer-like Back/Forward/Up and breadcrumb navigation, current-folder child folders + controlled-document metadata, and a selection pane with CAP-0015 master data and single/batch actions; add/remove control, lifecycle, change commentary, approval, release/verify, confidentiality and workflow-role policies, audit export, publish history, copy/resolve document permalinks |
+| Frontend (web UI in WebView) | Foldable left menu with hamburger when collapsed; open-activity panes/tabs as quicklinks; folder-dominant Library workspace with a persistent edit-root-relative tree, Windows Explorer-like Back/Forward/Up and breadcrumb navigation, current-folder child folders + exact source-file names + controlled-document data, and a selection pane that separates filesystem-derived Source file identity from CAP-0015 DMS-managed document control data and single/batch actions; add/remove control, lifecycle, change commentary, approval, release/verify, confidentiality and workflow-role policies, audit export, publish history, copy/resolve document permalinks |
 | Microsoft Office (host-installed) | PDF export engine invoked by the app on release (Word/Excel/PowerPoint as applicable) |
 | Claude Desktop (optional host app) | Operator-mediated, consented handoff for advisory change classification and changelog wording; not a callable local model or lifecycle authority |
-| `<edit-root>/.dms/` | Roots config, library registry, workflow-person roster + SMTP settings (no secrets), folder confidentiality and workflow-role policies, notes, approval/release history, evidence hashes, checksums, advisory lock |
+| `<edit-root>/.dms/` | Roots config, library registry, DMS-managed document control data, workflow-person roster + SMTP settings (no secrets), folder confidentiality and workflow-role policies, notes, approval/release history, evidence hashes, checksums, advisory lock |
 | Edit root tree | Operator-edited Microsoft Office drafts (library members are a subset) |
 | Publish root tree | Versioned released PDFs in a directory tree mirrored from edit-relative paths |
 
@@ -34,6 +34,9 @@ policies/HR/Handbook.docx   →      policies/HR/Handbook_V2.0_restricted.pdf   
 - `.dms` stores absolute edit root + absolute publish root once per workspace.
 - Each library document has a **stable document ID**; the draft **relative path**
   under the edit root is the current locator used for open/export path mapping.
+- Source filename and relative path are filesystem-derived locator facts.
+  Renaming or reassociating the draft updates that locator only; DMS-managed
+  document control data and history remain keyed to the stable document ID.
 - On release, the app: snapshots the effective confidentiality type ID, assigns
   the next version label → ensures the relative parent path exists under the
   publish root → exports PDF via installed Microsoft Office into

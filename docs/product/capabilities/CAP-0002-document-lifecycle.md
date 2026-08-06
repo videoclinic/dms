@@ -97,10 +97,10 @@ When implemented, the following must hold:
 17. After release, further content change uses **Begin revision** (CAP-0015),
     which returns the document to `draft` without deleting released PDFs.
     A new review/release cycle is required before the next versioned PDF.
-18. Cancel-review, obsolescence, master data, and current-version supersession
-    follow CAP-0015. Publish-tree listing, orphan handling, and bulk verify
-    follow CAP-0016. Due-date review of an unchanged current release follows
-    CAP-0017.
+18. Cancel-review, obsolescence, document control data, and current-version
+    supersession follow CAP-0015. Publish-tree listing, orphan handling, and
+    bulk verify follow CAP-0016. Due-date review of an unchanged current release
+    follows CAP-0017.
 19. Before submitting a review request and again immediately before release,
     the application derives the candidate release label from outcome 9 and
     checks the current Office draft for its two canonical visible-content
@@ -166,7 +166,7 @@ When implemented, the following must hold:
 - Audit/export: [`CAP-0012-audit-export.md`](CAP-0012-audit-export.md)
 - Library maintenance: [`CAP-0013-library-maintenance.md`](CAP-0013-library-maintenance.md)
 - Workspace integrity: [`CAP-0014-workspace-integrity.md`](CAP-0014-workspace-integrity.md)
-- Master data / revision cycle: [`CAP-0015-document-master-data.md`](CAP-0015-document-master-data.md)
+- Document control data / revision cycle: [`CAP-0015-document-master-data.md`](CAP-0015-document-master-data.md)
 - Publish tree: [`CAP-0016-publish-tree-maintenance.md`](CAP-0016-publish-tree-maintenance.md)
 - Periodic review: [`CAP-0017-periodic-document-review.md`](CAP-0017-periodic-document-review.md)
 - Claude Desktop assistance: [`CAP-0018-claude-desktop-change-assistance.md`](CAP-0018-claude-desktop-change-assistance.md)

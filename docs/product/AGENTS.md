@@ -18,6 +18,10 @@ Own falsifiable capability contracts (`CAP-*.md`) and the product index.
 - Present-tense outcomes only when implemented; otherwise `Status: not implemented`.
 - Link ADRs/architecture/privacy; do not duplicate them.
 - Update `README.md` index when adding/removing a CAP.
+- Keep filesystem-derived **Source file** name/path, DMS-managed **Document
+  control data**, and Office document properties as explicitly distinct data
+  sources. Do not relabel document control data as "Master data" or imply Office
+  property synchronization without changing the owning CAP contract.
 
 ## Work Guidance
 

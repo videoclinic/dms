@@ -31,7 +31,7 @@ linked tests is a coverage gap, not implemented proof.
 | [CAP-0012](capabilities/CAP-0012-audit-export.md) | Audit and report export | not implemented |
 | [CAP-0013](capabilities/CAP-0013-library-maintenance.md) | Library maintenance beyond add/remove | not implemented |
 | [CAP-0014](capabilities/CAP-0014-workspace-integrity.md) | Workspace integrity (locks, backups, restore) | not implemented |
-| [CAP-0015](capabilities/CAP-0015-document-master-data.md) | Document master data and revision cycle | not implemented |
+| [CAP-0015](capabilities/CAP-0015-document-master-data.md) | Document control data and revision cycle | not implemented |
 | [CAP-0016](capabilities/CAP-0016-publish-tree-maintenance.md) | Publish-tree and release-set maintenance | not implemented |
 | [CAP-0017](capabilities/CAP-0017-periodic-document-review.md) | Periodic review of current released documents | not implemented |
 | [CAP-0018](capabilities/CAP-0018-claude-desktop-change-assistance.md) | Optional Claude Desktop change-comment assistance | not implemented |

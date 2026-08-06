@@ -27,13 +27,13 @@ When implemented, the following must hold:
    under the publish root (creates missing folders) so edit layout and publish
    layout stay aligned.
 6. Closing and reopening the workspace restores roots, library membership,
-   master data, and process state from `.dms`.
+   document control data, and process state from `.dms`.
 7. If `.dms` is missing under a chosen edit root, the app initializes it only
    after an explicit confirm, including choosing or confirming the publish root.
 8. `.dms` stores the workspace confidentiality catalogue, document-type
    catalogue, workflow-person roster (no secrets), relative folder policies,
-   and master-data fields required by CAP-0008, CAP-0015, and CAP-0019, but no
-   SMTP password or other credential.
+   and document-control-data fields required by CAP-0008, CAP-0015, and
+   CAP-0019, but no SMTP password or other credential.
 
 ## Non-goals
 

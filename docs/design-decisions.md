@@ -236,8 +236,9 @@ Capability-local rules stay in their CAP files.
 - **Why:** ISO-style controlled documents need a clear “current released” vs
   “work in progress for next version” distinction and a deliberate start to
   the next cycle.
-- **Consequences:** CAP-0015 owns master data, next-review-due, cancel-review,
-  and obsolete. CAP-0016 owns publish-history navigation and orphan cleanup.
+- **Consequences:** CAP-0015 owns document control data, next-review-due,
+  cancel-review, and obsolete. CAP-0016 owns publish-history navigation and
+  orphan cleanup.
 
 ## ADR-0017 — Versioned `.dms` schema with fail-closed migration
 

@@ -1,4 +1,4 @@
-# CAP-0015 — Document master data and revision cycle
+# CAP-0015 — Document control data and revision cycle
 
 | Field | Value |
 | --- | --- |
@@ -11,7 +11,8 @@
 
 When implemented, the following must hold:
 
-1. Each library document stores master data separate from the Office file:
+1. Each library document stores DMS-managed **document control data** under
+   `<edit-root>/.dms/`, separate from the Office source file:
    - **title** (required operator-editable display name; defaults to draft stem)
    - **document number** (optional control identifier, unique in the workspace)
    - **document type** (from a workspace catalogue, e.g. policy, procedure,
@@ -20,11 +21,20 @@ When implemented, the following must hold:
    - **effective date** of the current released version (set on release;
      empty while never released)
    - **next review due date** (computed and maintained by CAP-0017)
-2. Master data for the **currently selected library document** is shown on the
-   **same CAP-0006 library page** in the selection pane (right column), together
-   with document actions for that selection. The pane header uses the **same
-   title string** as the list row (plus document number and relative path).
-   Editing opens an inline or modal master-data form without requiring a
+   These values are not imported from or synchronized with Office built-in or
+   custom document properties. The draft filename stem supplies the title's
+   one-time default only when the document is added; it is not a continuing
+   metadata source.
+2. Document control data for the **currently selected library document** is
+   shown on the **same CAP-0006 library page** in the selection pane (right
+   column), together with document actions for that selection. The pane keeps
+   two visibly distinct sources:
+   - **Source file** — exact filesystem file name and edit-root-relative
+     folder/path; read-only in this pane and identified as filesystem-derived
+   - **Document control data** — identified as managed by DMS Desktop and stored
+     in workspace metadata under `.dms`
+   The pane header uses the DMS-managed title and document number. Editing opens
+   an inline or modal **Edit document control data** form without requiring a
    separate top-level navigation destination. CAP-0006 owns navigation and
    selection; this CAP owns fields, validation, revision/obsolescence actions,
    and audit events. Action labels do not repeat the document identity.
@@ -55,20 +65,22 @@ When implemented, the following must hold:
 9. Workspace catalogues for **document type** support add/rename/disable with
    the same reference-protection rule as confidentiality types (CAP-0008 /
    CAP-0013): types referenced by documents or history cannot be hard-deleted.
-10. Master-data edits are recorded as `master_data_changed` events with
+10. Document-control-data edits are recorded as
+    `document_control_data_changed` events with
     before/after values. Changing title, document number, document type, owner,
     effective date, or effective confidentiality while content review is open
     or after approval invalidates that request/approval. Review-schedule changes
     do not invalidate content approval but remain auditable.
-11. The CAP-0006 selection pane and any expanded master-data form show master
-    data, current released version (with recent release list when space allows),
+11. The CAP-0006 selection pane and any expanded document-control-data form show
+    document control data, current released version (with a recent release list
+    when space allows),
     next review due (with **overdue** highlight when past due and not obsolete),
     lifecycle state, and effective editor/approver (CAP-0019). For exactly one
-    selected document, the pane groups **Master data**, **Actions**,
+    selected document, the pane groups **Document control data**, **Actions**,
     **Revision cycle**, and **Releases** into independently foldable sections;
     the document identity and lifecycle state remain visible while any section
-    is folded. Document actions sit in the same pane under the master-data
-    block. When a current released version exists, **Open latest released PDF**
+    is folded. Document actions sit in the same pane under the document control
+    data block. When a current released version exists, **Open latest released PDF**
     opens only that release record's recorded PDF; it is unavailable for a
     never-released document or when the current release file is missing.
 12. Title, document type, and owner are required before review submission.
@@ -77,9 +89,13 @@ When implemented, the following must hold:
     silently reused. Date validation rejects a next-review date earlier than
     its effective date.
 13. Draft Office files are working copies, not application-versioned source
-    archives. The application restores draft content only from an operator
-    workspace backup; released PDFs and their evidence remain the durable
-    application-managed version history.
+    archives. Renaming or reassociating a source file updates only its stored
+    locator and the filesystem-derived **Source file** display; it does not
+    change the document's title, number, type, owner, dates, lifecycle state,
+    or history. Office document properties are likewise not authoritative for
+    document control data. The application restores draft content only from an
+    operator workspace backup; released PDFs and their evidence remain the
+    durable application-managed version history.
 14. **Begin revision**, **Mark obsolete**, and **Cancel review** are available
     from the CAP-0006 selection pane (single selection) when preconditions hold;
     disabled states explain why. They are not offered as multi-select batch
@@ -92,8 +108,10 @@ When implemented, the following must hold:
 - Enforcing legal retention deletion of PDFs
 - Cross-document dependency graphs
 - Automatic Office-draft version history or source-document diff/revert
-- A separate primary app section whose only job is master data outside the
-  library navigator (detail may still expand full-width for editing)
+- Importing or synchronizing document control data from Office document
+  properties
+- A separate primary app section whose only job is document control data
+  outside the library navigator (detail may still expand full-width for editing)
 
 ## Links
 - Wireframe (HTML): [`../wireframes/html/CAP-0015-document-master-data.html`](../wireframes/html/CAP-0015-document-master-data.html)

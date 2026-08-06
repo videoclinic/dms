@@ -36,11 +36,14 @@ When implemented, the following must hold:
    - The centre pane lists the current folder's immediate child folders followed
      by its immediate child files. Every regular file is represented, except
      internal `.dms` content and Office lock/temp sidecars defined by CAP-0013.
-     Each file row states whether it is **In library**, **Not in library** (a
-     supported Office draft), or not a supported draft. A registered document
-     additionally shows its controlled-document metadata. Single-click selects
-     a folder or file row; double-click or Enter opens a folder. Selecting a
-     tree node or breadcrumb segment opens that folder directly.
+     A file row's **Name** is always the exact filesystem file name, including
+     its extension. Each file row states whether it is **In library**, **Not in
+     library** (a supported Office draft), or not a supported draft. A
+     registered document additionally shows its DMS-managed document title and
+     control data in a separate **Document** field; that title never replaces
+     the source file name. Single-click selects a folder or file row;
+     double-click or Enter opens a folder. Selecting a tree node or breadcrumb
+     segment opens that folder directly.
    - Back/Forward history is session-only. Navigating alone does not create a
      saved view; the operator must use CAP-0005's explicit bookmark control.
 3. Selecting one or more **Not in library** supported Microsoft Office files
@@ -53,38 +56,39 @@ When implemented, the following must hold:
    selection makes every action target explicit.
 4. Operator can **unregister** a document from the active library only when no
    content or periodic review is open. Unregister preserves its stable ID,
-   master data, notes, workflow/release history, and checksums in read-only
+   document control data, notes, workflow/release history, and checksums in read-only
    history; it never deletes the Office file or a published PDF. Re-registering
    that record associates a confirmed in-root draft path with the same ID.
-5. **In library** document rows surface enough metadata to scan the current
-   folder without leaving the explorer: lifecycle state, latest released version
-   label, title, document number (when set), document type, owner, effective
-   confidentiality, next review due with overdue highlight, and a **draft newer
-   than last release** indicator when known (CAP-0015). Non-library and
-   unsupported file rows show their filesystem name and membership/support state
-   instead. File rows are for selection only — they do not host per-row action
-   menus (no per-row hamburger / overflow menu). Folder rows navigate as defined
-   above.
+5. **In library** document rows keep the exact source file name in **Name** and
+   surface enough DMS-managed data to scan the current folder without leaving
+   the explorer: lifecycle state, latest released version label, document title,
+   document number (when set), document type, owner, effective confidentiality,
+   next review due with overdue highlight, and a **draft newer than last
+   release** indicator when known (CAP-0015). Non-library and unsupported file
+   rows show their filesystem name and membership/support state instead. File
+   rows are for selection only — they do not host per-row action menus (no
+   per-row hamburger / overflow menu). Folder rows navigate as defined above.
 6. **Selecting exactly one document** keeps the operator on the same page and
    shows an **on-page selection pane** (right column) that combines:
-   - the selected document’s **title** (same string as the list row title),
-     document number, and relative draft path
-   - CAP-0015 **master data** and related status (effective editor/approver,
-     current release, draft-newer marker)
+   - the selected document’s DMS-managed **title** and document number
+   - an always-visible **Source file** identity with the exact file name and its
+     edit-root-relative folder/path, derived from the filesystem
+   - CAP-0015 **Document control data** and related status (effective
+     editor/approver, current release, draft-newer marker)
    - **document actions** for that selection
    CAP-0015 owns field rules and revision/obsolescence semantics; CAP-0006 owns
-   navigation, selection, and pane placement. Its **Master data**, **Actions**,
-   **Revision cycle**, and **Releases** sections are independently foldable as
-   defined by CAP-0015; the selection header remains visible. Action labels do
-   **not** repeat the document title or number — the selection header already
-   identifies it.
+   navigation, selection, and pane placement. Its **Document control data**,
+   **Actions**, **Revision cycle**, and **Releases** sections are independently
+   foldable as defined by CAP-0015; the selection header and Source file
+   identity remain visible. Action labels do **not** repeat the document title
+   or number — the selection header already identifies it.
 7. **Multi-select** of two or more file rows uses the **same selection pane**.
    It provides a batch summary (count, short identity list, clear) and
    **multi-applicable actions only**. A homogeneous selection of **Not in
    library** supported Office files exposes **Add _N_ documents to library**.
-   A homogeneous selection of **In library** documents replaces master data
-   with its applicable batch actions. Mixed selections and unsupported files
-   expose no action that cannot apply to every selected row. Single-document
+   A homogeneous selection of **In library** documents replaces document
+   control data with its applicable batch actions. Mixed selections and
+   unsupported files expose no action that cannot apply to every selected row. Single-document
    actions are hidden until the selection returns to exactly one document. There
    is no separate hamburger or list-embedded action strip for batch work.
 8. Selection-pane actions invoke capabilities owned elsewhere; they do not
@@ -93,7 +97,7 @@ When implemented, the following must hold:
    - **Open draft** (CAP-0009)
    - **Open latest released PDF** (CAP-0015) when a current released version
      exists
-   - **Edit master data** (CAP-0015)
+   - **Edit document control data** (CAP-0015)
    - **Submit for review**, **Begin revision**, **Cancel review**, **Release**
      when the lifecycle allows (CAP-0002 / CAP-0015)
    - **Mark obsolete** (CAP-0015)
@@ -101,7 +105,7 @@ When implemented, the following must hold:
    - **Workflow chain / evidence** (CAP-0011)
    - **Verify release integrity** (CAP-0004)
    - **Start periodic review** when due rules allow (CAP-0017)
-   - **Rename / reassociate locator** when applicable (CAP-0013)
+   - **Rename / reassociate source file** when applicable (CAP-0013)
    - **Unregister** (this CAP)
    - **Copy permalink** (CAP-0020) — clipboard receives the stable
      workspace+document URI; never a path- or version-based link
@@ -141,11 +145,11 @@ When implemented, the following must hold:
     Filtered document reporting belongs to CAP-0012 rather than this explorer.
 14. Explorer search starts at the current folder and includes its descendants,
     with an explicit **Entire library** scope. It matches registered-document
-    title and document number plus every file's draft name and relative path
-    case-insensitively. Results retain their relative path and can be sorted by
-    title, document number, lifecycle state, latest release, or next-review-due
-    date. Search is an explicit result state; clearing it restores the complete
-    current-folder listing.
+    title and document number plus every file's exact source file name and
+    relative path case-insensitively. Results retain their relative path and can
+    be sorted by title, document number, lifecycle state, latest release, or
+    next-review-due date. Search is an explicit result state; clearing it
+    restores the complete current-folder listing.
 15. A CAP-0020 document permalink that resolves successfully lands here: the
     library navigator selects that document (revealing its folder as needed)
     and shows the selection pane. Resolution never keys off file name or
@@ -175,7 +179,7 @@ When implemented, the following must hold:
 - Open draft: [`CAP-0009-release-editor.md`](CAP-0009-release-editor.md)
 - Evidence: [`CAP-0011-approval-evidence.md`](CAP-0011-approval-evidence.md)
 - Maintenance: [`CAP-0013-library-maintenance.md`](CAP-0013-library-maintenance.md)
-- Master data: [`CAP-0015-document-master-data.md`](CAP-0015-document-master-data.md)
+- Document control data: [`CAP-0015-document-master-data.md`](CAP-0015-document-master-data.md)
 - Periodic review: [`CAP-0017-periodic-document-review.md`](CAP-0017-periodic-document-review.md)
 - Claude handoff: [`CAP-0018-claude-desktop-change-assistance.md`](CAP-0018-claude-desktop-change-assistance.md)
 - Permalinks: [`CAP-0020-document-permalinks.md`](CAP-0020-document-permalinks.md)

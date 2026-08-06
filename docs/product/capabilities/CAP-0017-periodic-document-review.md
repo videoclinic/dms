@@ -60,6 +60,6 @@ When implemented, the following must hold:
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
 - Notification: [`CAP-0010-notification-transport.md`](CAP-0010-notification-transport.md)
 - Evidence: [`CAP-0011-approval-evidence.md`](CAP-0011-approval-evidence.md)
-- Master data: [`CAP-0015-document-master-data.md`](CAP-0015-document-master-data.md)
+- Document control data: [`CAP-0015-document-master-data.md`](CAP-0015-document-master-data.md)
 - Integrity: [`CAP-0004-release-integrity.md`](CAP-0004-release-integrity.md)
 - Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)

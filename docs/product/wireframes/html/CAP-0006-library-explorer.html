@@ -226,7 +226,7 @@ tr:last-child td { border-bottom: 0; }
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Persistent folder tree + Explorer-like path controls + the real current-folder contents. Library membership is a file annotation; selection details stay in the right pane.</p>
+      <p class="subtitle">Persistent folder tree + Explorer-like path controls + exact source file names. DMS-managed document data stays visibly separate in the list and selection pane.</p>
       
       <style>
         .app[data-cap="CAP-0006"] .list-card th,
@@ -300,7 +300,7 @@ tr:last-child td { border-bottom: 0; }
           </div>
           <div class="table-wrap"><table>
             <thead><tr>
-              <th></th><th>Name</th><th>Library</th><th>Details</th><th>State</th><th>Released</th>
+              <th></th><th>Name</th><th>Library</th><th>Document</th><th>State</th><th>Released</th>
             </tr></thead>
             <tbody>
               <tr>
@@ -311,25 +311,25 @@ tr:last-child td { border-bottom: 0; }
               </tr>
               <tr>
                 <td><span class="check">☐</span></td>
-                <td>HR Data Privacy Policy</td>
+                <td>Handbook.docx</td>
                 <td><span class="badge ok">In library</span></td>
-                <td>DOC-014 · policy</td>
+                <td>HR Data Privacy Policy · DOC-014</td>
                 <td><span class="badge info">in_review</span></td>
-                <td>V1.3 <span class="badge warn">draft newer</span></td>
+                <td>V1.3 <span class="badge warn">newer</span></td>
               </tr>
               <tr>
                 <td><span class="check">☐</span></td>
-                <td>Code of Conduct</td>
+                <td>Code_of_conduct.docx</td>
                 <td><span class="badge ok">In library</span></td>
-                <td>DOC-018 · policy</td>
+                <td>Code of Conduct · DOC-018</td>
                 <td><span class="badge warn">draft</span></td>
                 <td>V2.0</td>
               </tr>
               <tr>
                 <td><span class="check">☐</span></td>
-                <td>Leave Policy</td>
+                <td>Leave_policy.docx</td>
                 <td><span class="badge ok">In library</span></td>
-                <td>DOC-025 · policy</td>
+                <td>Leave Policy · DOC-025</td>
                 <td><span class="badge ok">released</span></td>
                 <td>V1.1</td>
               </tr>
@@ -359,7 +359,7 @@ tr:last-child td { border-bottom: 0; }
               </tr>
             </tbody>
           </table></div>
-          <p class="hint"><strong>Folders first:</strong> single-click selects; double-click or Enter opens. Every regular file is listed. The right pane makes the selected file's library action explicit.</p>
+          <p class="hint"><strong>Name is the source file:</strong> it always shows the exact filesystem name, including the extension. Registered files show the independent DMS title and number under Document.</p>
         </section>
         <aside class="card detail-pane">
           <div class="row between mb">
@@ -374,7 +374,7 @@ tr:last-child td { border-bottom: 0; }
             <summary>Actions <span>1 available</span></summary>
             <div class="selection-section-body stack-btns"><button class="btn">Add 2 documents to library</button></div>
           </details>
-          <p class="hint">Batch add is available because every selected row is an in-root Office draft not already in the library. A mixed or unsupported selection has no incompatible action. Registered documents instead show master data and lifecycle actions here.</p>
+          <p class="hint">Batch add is available because every selected row is an in-root Office draft not already in the library. A mixed or unsupported selection has no incompatible action. Registered documents instead show Source file identity, Document control data, and lifecycle actions here.</p>
         </aside>
       </div>
       <section class="batch-selection-demo">

@@ -40,7 +40,7 @@ const CAPS = [
             ["Publish root", "/dms/publish"],
             ["Storage folder", "<edit-root>/.dms/ (hidden)"],
           ])}
-          <p class="hint">Closing and reopening restores roots, library, master data, and process state from .dms.</p>
+          <p class="hint">Closing and reopening restores roots, library, document control data, and process state from .dms.</p>
         </section>
         <section class="card">
           <h3 class="card-title">Catalogue snapshot in .dms</h3>
@@ -49,7 +49,7 @@ const CAPS = [
             <li>Document-type catalogue</li>
             <li>Workflow-person roster (no secrets)</li>
             <li>Relative folder policies</li>
-            <li>Master-data fields</li>
+            <li>Document control data</li>
             <li>Release records &amp; checksums</li>
           </ul>
           <div class="callout warn">No SMTP password is stored here — relay credentials live in the OS credential store.</div>
@@ -241,7 +241,7 @@ const CAPS = [
     file: "CAP-0006-library-explorer",
     title: "Folder-first library explorer",
     nav: "library",
-    subtitle: "Persistent folder tree + Explorer-like path controls + the real current-folder contents. Library membership is a file annotation; selection details stay in the right pane.",
+    subtitle: "Persistent folder tree + Explorer-like path controls + exact source file names. DMS-managed document data stays visibly separate in the list and selection pane.",
     actions: [],
     body: `
       <style>
@@ -316,7 +316,7 @@ const CAPS = [
           </div>
           <div class="table-wrap"><table>
             <thead><tr>
-              <th></th><th>Name</th><th>Library</th><th>Details</th><th>State</th><th>Released</th>
+              <th></th><th>Name</th><th>Library</th><th>Document</th><th>State</th><th>Released</th>
             </tr></thead>
             <tbody>
               <tr>
@@ -327,25 +327,25 @@ const CAPS = [
               </tr>
               <tr>
                 <td><span class="check">☐</span></td>
-                <td>HR Data Privacy Policy</td>
+                <td>Handbook.docx</td>
                 <td>${badge("In library", "ok")}</td>
-                <td>DOC-014 · policy</td>
+                <td>HR Data Privacy Policy · DOC-014</td>
                 <td>${badge("in_review", "info")}</td>
-                <td>V1.3 ${badge("draft newer", "warn")}</td>
+                <td>V1.3 ${badge("newer", "warn")}</td>
               </tr>
               <tr>
                 <td><span class="check">☐</span></td>
-                <td>Code of Conduct</td>
+                <td>Code_of_conduct.docx</td>
                 <td>${badge("In library", "ok")}</td>
-                <td>DOC-018 · policy</td>
+                <td>Code of Conduct · DOC-018</td>
                 <td>${badge("draft", "warn")}</td>
                 <td>V2.0</td>
               </tr>
               <tr>
                 <td><span class="check">☐</span></td>
-                <td>Leave Policy</td>
+                <td>Leave_policy.docx</td>
                 <td>${badge("In library", "ok")}</td>
-                <td>DOC-025 · policy</td>
+                <td>Leave Policy · DOC-025</td>
                 <td>${badge("released", "ok")}</td>
                 <td>V1.1</td>
               </tr>
@@ -375,7 +375,7 @@ const CAPS = [
               </tr>
             </tbody>
           </table></div>
-          <p class="hint"><strong>Folders first:</strong> single-click selects; double-click or Enter opens. Every regular file is listed. The right pane makes the selected file's library action explicit.</p>
+          <p class="hint"><strong>Name is the source file:</strong> it always shows the exact filesystem name, including the extension. Registered files show the independent DMS title and number under Document.</p>
         </section>
         <aside class="card detail-pane">
           <div class="row between mb">
@@ -390,7 +390,7 @@ const CAPS = [
             <summary>Actions <span>1 available</span></summary>
             <div class="selection-section-body stack-btns"><button class="btn">Add 2 documents to library</button></div>
           </details>
-          <p class="hint">Batch add is available because every selected row is an in-root Office draft not already in the library. A mixed or unsupported selection has no incompatible action. Registered documents instead show master data and lifecycle actions here.</p>
+          <p class="hint">Batch add is available because every selected row is an in-root Office draft not already in the library. A mixed or unsupported selection has no incompatible action. Registered documents instead show Source file identity, Document control data, and lifecycle actions here.</p>
         </aside>
       </div>
       ${batchSelectionPane()}`,
@@ -652,9 +652,9 @@ const CAPS = [
   {
     id: "CAP-0015",
     file: "CAP-0015-document-master-data",
-    title: "Document master data",
+    title: "Document control data",
     nav: "library",
-    subtitle: "CAP-0015 defines the shared master-data and revision content; CAP-0006 places it in the library selection pane. Title matches the selected list row. All sections are expanded here for review.",
+    subtitle: "Source file facts come from the filesystem. Document control data is managed by DMS Desktop under .dms, never synchronized from Office properties. All sections are expanded here for review.",
     actions: [],
     body: `
       <div class="grid-explorer-detail">
@@ -684,19 +684,19 @@ const CAPS = [
             <span class="muted grow">List truncated — focus is the selection pane</span>
           </div>
           <div class="table-wrap"><table>
-            <thead><tr><th></th><th>Title</th><th>Doc #</th><th>State</th><th>Released</th></tr></thead>
+            <thead><tr><th></th><th>Name</th><th>Document</th><th>State</th><th>Released</th></tr></thead>
             <tbody>
               <tr class="selected">
                 <td><span class="check on">☑</span></td>
-                <td>HR Data Privacy Policy</td>
-                <td>DOC-014</td>
+                <td>Handbook.docx</td>
+                <td>HR Data Privacy Policy · DOC-014</td>
                 <td>${badge("in_review", "info")}</td>
                 <td>V1.3 ${badge("draft newer", "warn")}</td>
               </tr>
               <tr>
                 <td><span class="check">☐</span></td>
-                <td>Acceptable Use</td>
-                <td>DOC-002</td>
+                <td>AUP.docx</td>
+                <td>Acceptable Use · DOC-002</td>
                 <td>${badge("draft", "warn")}</td>
                 <td>V2.0</td>
               </tr>
@@ -917,9 +917,14 @@ function documentMasterDataSelectionPane() {
       <h3 class="card-title" style="margin:0">HR Data Privacy Policy</h3>
       ${badge("in_review", "info")}
     </div>
-    <p class="muted mono">DOC-014 · policies/HR/Handbook.docx</p>
+    <p class="muted">Document number: <span class="mono">DOC-014</span></p>
+    <div style="border:1px solid var(--border);border-radius:calc(var(--radius) - 2px);padding:0.65rem 0.75rem;background:var(--muted)">
+      <div class="label">Source file <span style="font-weight:400">· from filesystem</span></div>
+      <div class="mono" style="margin-top:0.3rem">Handbook.docx</div>
+      <div class="muted" style="font-size:0.75rem;margin-top:0.2rem">Folder: policies/HR</div>
+    </div>
     <details class="selection-section" open>
-      <summary>Master data</summary>
+      <summary>Document control data <span>Managed in DMS Desktop</span></summary>
       <div class="selection-section-body">${kv([
         ["Title", "HR Data Privacy Policy"],
         ["Document number", "DOC-014 (unique in workspace)"],
@@ -932,14 +937,14 @@ function documentMasterDataSelectionPane() {
         ["Effective editor", "Lukas Roth"],
         ["Effective approver", "Anna Berg"],
         ["Confidentiality", "Internal (inherited)"],
-      ])}</div>
+      ])}<p class="hint">Stored in workspace metadata under <code>.dms</code>. Not read from or synchronized with Office document properties. Renaming the source file does not change these values.</p></div>
     </details>
     <details class="selection-section" open>
       <summary>Actions <span>15 available</span></summary>
       <div class="selection-section-body stack-btns">
         <button class="btn outline">Open draft</button>
         <button class="btn outline">Open latest released PDF</button>
-        <button class="btn outline">Edit master data</button>
+        <button class="btn outline">Edit document control data</button>
         <button class="btn outline">Submit for review</button>
         <button class="btn outline">Begin revision</button>
         <button class="btn outline">Cancel review</button>
@@ -958,7 +963,7 @@ function documentMasterDataSelectionPane() {
       <summary>Revision cycle</summary>
       <div class="selection-section-body">
         <p class="muted" style="font-size:0.85rem;margin:0">The current released PDF remains available while this newer draft is in review. After release, <strong>Begin revision</strong> returns the document to <code>draft</code>; PDFs and history remain preserved.</p>
-        <p class="hint">Master-data changes while a review is open invalidate that review. Copy permalink uses workspace + document IDs only.</p>
+        <p class="hint">Document-control-data changes while a review is open invalidate that review. Copy permalink uses workspace + document IDs only.</p>
       </div>
     </details>
     <details class="selection-section" open>
