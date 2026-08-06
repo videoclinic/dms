@@ -131,6 +131,7 @@ ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
 | Path / surface | Notes |
 | --- | --- |
 | Root `AGENTS.md` | DOX rail, user preferences, architectural decisions, this index |
+| Root `CLAUDE.md` | Versioned Claude Code entry point; directs team agents to the DOX contract and shared safety/workflow rules |
 | Root `README.md` | Public project overview and current concept state; it summarizes but does not replace CAP, CHG, or architecture records |
 | Application source / package manifests / CI | Not present yet. When added under CHG-0001, create nearest child AGENTS.md and refresh this index |
 
