@@ -63,10 +63,13 @@ When implemented, the following must hold:
 11. The CAP-0006 selection pane and any expanded master-data form show master
     data, current released version (with recent release list when space allows),
     next review due (with **overdue** highlight when past due and not obsolete),
-    lifecycle state, and effective editor/approver (CAP-0019). Document actions
-    for the single selection sit in the same pane under the master-data block.
-    When a current released version exists, **Open latest released PDF** opens
-    only that release record's recorded PDF; it is unavailable for a
+    lifecycle state, and effective editor/approver (CAP-0019). For exactly one
+    selected document, the pane groups **Master data**, **Actions**,
+    **Revision cycle**, and **Releases** into independently foldable sections;
+    the document identity and lifecycle state remain visible while any section
+    is folded. Document actions sit in the same pane under the master-data
+    block. When a current released version exists, **Open latest released PDF**
+    opens only that release record's recorded PDF; it is unavailable for a
     never-released document or when the current release file is missing.
 12. Title, document type, and owner are required before review submission.
     Document number, when set, is trimmed and case-insensitively unique across

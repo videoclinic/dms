@@ -57,8 +57,11 @@ When implemented, the following must hold:
      current release, draft-newer marker)
    - **document actions** for that selection
    CAP-0015 owns field rules and revision/obsolescence semantics; CAP-0006 owns
-   navigation, selection, and pane placement. Action labels do **not** repeat
-   the document title or number — the selection header already identifies it.
+   navigation, selection, and pane placement. Its **Master data**, **Actions**,
+   **Revision cycle**, and **Releases** sections are independently foldable as
+   defined by CAP-0015; the selection header remains visible. Action labels do
+   **not** repeat the document title or number — the selection header already
+   identifies it.
 7. **Multi-select** (two or more rows checked) uses the **same selection pane**.
    Master data is replaced by a batch summary (count, short identity list, clear)
    and **multi-applicable actions only**. Single-document actions are hidden

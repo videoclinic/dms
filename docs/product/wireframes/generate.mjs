@@ -354,24 +354,7 @@ const CAPS = [
         </section>
         ${documentMasterDataSelectionPane()}
       </div>
-      <section class="card" style="margin-top:0.25rem">
-        <h3 class="card-title">Multi-select (same right pane)</h3>
-        <div class="grid-2">
-          <div>
-            <p class="muted" style="margin:0 0 0.5rem;font-size:0.85rem">When two or more rows are checked, the right pane switches to batch mode:</p>
-            <ul class="list">
-              <li>HR Data Privacy Policy (DOC-014)</li>
-              <li>Code of Conduct (DOC-018)</li>
-            </ul>
-          </div>
-          <div class="stack-btns">
-            <div class="row gap-2 mb"><strong>2 selected</strong><button class="btn outline">Clear</button></div>
-            <button class="btn outline">Verify integrity</button>
-            <button class="btn danger">Unregister…</button>
-          </div>
-        </div>
-        <p class="hint">Batch actions only — multi-applicable operations. Single-document actions stay hidden until exactly one row is selected.</p>
-      </section>`,
+      ${batchSelectionPane()}`,
   },
   {
     id: "CAP-0007",
@@ -896,53 +879,90 @@ function documentMasterDataSelectionPane() {
       ${badge("in_review", "info")}
     </div>
     <p class="muted mono">DOC-014 · policies/HR/Handbook.docx</p>
-    <h3 class="card-title" style="margin-top:0.85rem">Master data</h3>
-    ${kv([
-      ["Title", "HR Data Privacy Policy"],
-      ["Document number", "DOC-014 (unique in workspace)"],
-      ["Document type", "policy"],
-      ["Owner", "Lukas Roth"],
-      ["Effective date", "2025-08-01"],
-      ["Next review due", "2026-08-01"],
-      ["Released", "V1.3 (current)"],
-      ["Draft", badge("newer than last release", "warn")],
-      ["Effective editor", "Lukas Roth"],
-      ["Effective approver", "Anna Berg"],
-      ["Confidentiality", "Internal (inherited)"],
-    ])}
-    <h3 class="card-title" style="margin-top:0.9rem">Actions</h3>
-    <div class="stack-btns">
-      <button class="btn outline">Open draft</button>
-      <button class="btn outline">Open latest released PDF</button>
-      <button class="btn outline">Edit master data</button>
-      <button class="btn outline">Submit for review</button>
-      <button class="btn outline">Begin revision</button>
-      <button class="btn outline">Cancel review</button>
-      <button class="btn danger">Mark obsolete</button>
-      <button class="btn outline">Notes</button>
-      <button class="btn outline">Workflow chain</button>
-      <button class="btn outline">Verify integrity</button>
-      <button class="btn outline">Periodic review</button>
-      <button class="btn outline">Rename / reassociate</button>
-      <button class="btn outline">Copy permalink</button>
-      <button class="btn outline">Claude handoff</button>
-      <button class="btn danger">Unregister</button>
-    </div>
-    <section style="margin-top:0.9rem">
-      <h3 class="card-title">Revision cycle</h3>
-      <p class="muted" style="font-size:0.85rem;margin:0">The current released PDF remains available while this newer draft is in review. After release, <strong>Begin revision</strong> returns the document to <code>draft</code>; PDFs and history remain preserved.</p>
-      <p class="hint">Master-data changes while a review is open invalidate that review. Copy permalink uses workspace + document IDs only.</p>
-    </section>
-    <section style="margin-top:0.85rem">
-      <h3 class="card-title">Releases</h3>
-      <div class="stack">
+    <details class="selection-section" open>
+      <summary>Master data</summary>
+      <div class="selection-section-body">${kv([
+        ["Title", "HR Data Privacy Policy"],
+        ["Document number", "DOC-014 (unique in workspace)"],
+        ["Document type", "policy"],
+        ["Owner", "Lukas Roth"],
+        ["Effective date", "2025-08-01"],
+        ["Next review due", "2026-08-01"],
+        ["Released", "V1.3 (current)"],
+        ["Draft", badge("newer than last release", "warn")],
+        ["Effective editor", "Lukas Roth"],
+        ["Effective approver", "Anna Berg"],
+        ["Confidentiality", "Internal (inherited)"],
+      ])}</div>
+    </details>
+    <details class="selection-section">
+      <summary>Actions <span>15 available</span></summary>
+      <div class="selection-section-body stack-btns">
+        <button class="btn outline">Open draft</button>
+        <button class="btn outline">Open latest released PDF</button>
+        <button class="btn outline">Edit master data</button>
+        <button class="btn outline">Submit for review</button>
+        <button class="btn outline">Begin revision</button>
+        <button class="btn outline">Cancel review</button>
+        <button class="btn danger">Mark obsolete</button>
+        <button class="btn outline">Notes</button>
+        <button class="btn outline">Workflow chain</button>
+        <button class="btn outline">Verify integrity</button>
+        <button class="btn outline">Periodic review</button>
+        <button class="btn outline">Rename / reassociate</button>
+        <button class="btn outline">Copy permalink</button>
+        <button class="btn outline">Claude handoff</button>
+        <button class="btn danger">Unregister</button>
+      </div>
+    </details>
+    <details class="selection-section">
+      <summary>Revision cycle</summary>
+      <div class="selection-section-body">
+        <p class="muted" style="font-size:0.85rem;margin:0">The current released PDF remains available while this newer draft is in review. After release, <strong>Begin revision</strong> returns the document to <code>draft</code>; PDFs and history remain preserved.</p>
+        <p class="hint">Master-data changes while a review is open invalidate that review. Copy permalink uses workspace + document IDs only.</p>
+      </div>
+    </details>
+    <details class="selection-section">
+      <summary>Releases <span>4 recorded</span></summary>
+      <div class="selection-section-body stack">
         ${ver("V1.3", "2025-08-01 09:44 UTC", "Substantive / major", "current", "ok")}
         ${ver("V1.2", "2025-07-12 12:01 UTC", "Cosmetic / minor", "superseded", "muted")}
         ${ver("V1.1", "2025-06-05 14:30 UTC", "Substantive / major", "superseded", "muted")}
         ${ver("V1.0", "2025-05-09 10:12 UTC", "Cosmetic / minor", "withdrawn", "warn")}
       </div>
-    </section>
+    </details>
   </aside>`;
+}
+function batchSelectionPane() {
+  return `<section class="batch-selection-demo">
+    <div>
+      <h3 class="card-title">Multi-select state</h3>
+      <p class="muted" style="margin:0">Checking two or more documents replaces the single-document sections in this same right pane.</p>
+    </div>
+    <aside class="card detail-pane batch-detail-pane">
+      <div class="row between mb">
+        <h3 class="card-title" style="margin:0">2 selected</h3>
+        <button class="btn outline">Clear</button>
+      </div>
+      <details class="selection-section" open>
+        <summary>Batch summary</summary>
+        <div class="selection-section-body">
+          <ul class="list">
+            <li>HR Data Privacy Policy (DOC-014)</li>
+            <li>Code of Conduct (DOC-018)</li>
+          </ul>
+        </div>
+      </details>
+      <details class="selection-section" open>
+        <summary>Batch actions <span>2 available</span></summary>
+        <div class="selection-section-body stack-btns">
+          <button class="btn outline">Verify integrity</button>
+          <button class="btn danger">Unregister…</button>
+        </div>
+      </details>
+      <p class="hint">Batch actions only. Single-document actions remain hidden until exactly one document is selected.</p>
+    </aside>
+  </section>`;
 }
 function person(id, name, email, kind) {
   return `<div class="person"><div class="row gap-2"><strong>${name}</strong><span class="muted">${id}</span>${badge(kind === "ok" ? "active" : "disabled", kind)}</div><p class="muted">${email}</p></div>`;
@@ -1098,6 +1118,15 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .detail-pane { position: relative; z-index: 1; min-width: 0; }
 .detail-pane .kv > div { grid-template-columns: 7.5rem 1fr; gap: 0.45rem; font-size: 0.8rem; }
 .detail-pane .doc-title { font-size: 1rem; margin-bottom: 0.15rem; }
+.selection-section { margin-top: 0.8rem; border-top: 1px solid var(--border); padding-top: 0.65rem; }
+.selection-section summary { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; cursor: default; font-size: 0.88rem; font-weight: 600; list-style: none; }
+.selection-section summary::-webkit-details-marker { display: none; }
+.selection-section summary::after { content: "⌄"; color: var(--muted-foreground); font-size: 0.9rem; }
+.selection-section:not([open]) summary::after { content: "›"; }
+.selection-section summary span { margin-left: auto; color: var(--muted-foreground); font-size: 0.7rem; font-weight: 500; }
+.selection-section-body { margin-top: 0.65rem; }
+.batch-selection-demo { display: grid; grid-template-columns: minmax(0, 1fr) 18.5rem; gap: 0.85rem; align-items: start; margin-top: 0.25rem; }
+.batch-detail-pane { min-height: 0; }
 .selection-bar { display: flex; flex-wrap: nowrap; align-items: center; gap: 0.4rem; margin-bottom: 0.75rem; padding: 0.5rem 0.65rem; border: 1px solid color-mix(in oklch, var(--info) 28%, var(--border)); background: color-mix(in oklch, var(--info) 8%, white); border-radius: calc(var(--radius) - 2px); font-size: 0.8rem; overflow-x: auto; }
 .selection-bar .btn { height: 1.75rem; font-size: 0.75rem; padding: 0 0.65rem; flex-shrink: 0; }
 .selection-bar .sel-sep { width: 1px; height: 1.1rem; background: var(--border); margin: 0 0.15rem; flex-shrink: 0; }

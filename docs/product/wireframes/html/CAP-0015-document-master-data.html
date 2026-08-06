@@ -83,6 +83,15 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .detail-pane { position: relative; z-index: 1; min-width: 0; }
 .detail-pane .kv > div { grid-template-columns: 7.5rem 1fr; gap: 0.45rem; font-size: 0.8rem; }
 .detail-pane .doc-title { font-size: 1rem; margin-bottom: 0.15rem; }
+.selection-section { margin-top: 0.8rem; border-top: 1px solid var(--border); padding-top: 0.65rem; }
+.selection-section summary { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; cursor: default; font-size: 0.88rem; font-weight: 600; list-style: none; }
+.selection-section summary::-webkit-details-marker { display: none; }
+.selection-section summary::after { content: "⌄"; color: var(--muted-foreground); font-size: 0.9rem; }
+.selection-section:not([open]) summary::after { content: "›"; }
+.selection-section summary span { margin-left: auto; color: var(--muted-foreground); font-size: 0.7rem; font-weight: 500; }
+.selection-section-body { margin-top: 0.65rem; }
+.batch-selection-demo { display: grid; grid-template-columns: minmax(0, 1fr) 18.5rem; gap: 0.85rem; align-items: start; margin-top: 0.25rem; }
+.batch-detail-pane { min-height: 0; }
 .selection-bar { display: flex; flex-wrap: nowrap; align-items: center; gap: 0.4rem; margin-bottom: 0.75rem; padding: 0.5rem 0.65rem; border: 1px solid color-mix(in oklch, var(--info) 28%, var(--border)); background: color-mix(in oklch, var(--info) 8%, white); border-radius: calc(var(--radius) - 2px); font-size: 0.8rem; overflow-x: auto; }
 .selection-bar .btn { height: 1.75rem; font-size: 0.75rem; padding: 0 0.65rem; flex-shrink: 0; }
 .selection-bar .sel-sep { width: 1px; height: 1.1rem; background: var(--border); margin: 0 0.15rem; flex-shrink: 0; }
@@ -271,40 +280,46 @@ tr:last-child td { border-bottom: 0; }
       <span class="badge info">in_review</span>
     </div>
     <p class="muted mono">DOC-014 · policies/HR/Handbook.docx</p>
-    <h3 class="card-title" style="margin-top:0.85rem">Master data</h3>
-    <dl class="kv"><div><dt>Title</dt><dd>HR Data Privacy Policy</dd></div><div><dt>Document number</dt><dd>DOC-014 (unique in workspace)</dd></div><div><dt>Document type</dt><dd>policy</dd></div><div><dt>Owner</dt><dd>Lukas Roth</dd></div><div><dt>Effective date</dt><dd>2025-08-01</dd></div><div><dt>Next review due</dt><dd>2026-08-01</dd></div><div><dt>Released</dt><dd>V1.3 (current)</dd></div><div><dt>Draft</dt><dd><span class="badge warn">newer than last release</span></dd></div><div><dt>Effective editor</dt><dd>Lukas Roth</dd></div><div><dt>Effective approver</dt><dd>Anna Berg</dd></div><div><dt>Confidentiality</dt><dd>Internal (inherited)</dd></div></dl>
-    <h3 class="card-title" style="margin-top:0.9rem">Actions</h3>
-    <div class="stack-btns">
-      <button class="btn outline">Open draft</button>
-      <button class="btn outline">Open latest released PDF</button>
-      <button class="btn outline">Edit master data</button>
-      <button class="btn outline">Submit for review</button>
-      <button class="btn outline">Begin revision</button>
-      <button class="btn outline">Cancel review</button>
-      <button class="btn danger">Mark obsolete</button>
-      <button class="btn outline">Notes</button>
-      <button class="btn outline">Workflow chain</button>
-      <button class="btn outline">Verify integrity</button>
-      <button class="btn outline">Periodic review</button>
-      <button class="btn outline">Rename / reassociate</button>
-      <button class="btn outline">Copy permalink</button>
-      <button class="btn outline">Claude handoff</button>
-      <button class="btn danger">Unregister</button>
-    </div>
-    <section style="margin-top:0.9rem">
-      <h3 class="card-title">Revision cycle</h3>
-      <p class="muted" style="font-size:0.85rem;margin:0">The current released PDF remains available while this newer draft is in review. After release, <strong>Begin revision</strong> returns the document to <code>draft</code>; PDFs and history remain preserved.</p>
-      <p class="hint">Master-data changes while a review is open invalidate that review. Copy permalink uses workspace + document IDs only.</p>
-    </section>
-    <section style="margin-top:0.85rem">
-      <h3 class="card-title">Releases</h3>
-      <div class="stack">
+    <details class="selection-section" open>
+      <summary>Master data</summary>
+      <div class="selection-section-body"><dl class="kv"><div><dt>Title</dt><dd>HR Data Privacy Policy</dd></div><div><dt>Document number</dt><dd>DOC-014 (unique in workspace)</dd></div><div><dt>Document type</dt><dd>policy</dd></div><div><dt>Owner</dt><dd>Lukas Roth</dd></div><div><dt>Effective date</dt><dd>2025-08-01</dd></div><div><dt>Next review due</dt><dd>2026-08-01</dd></div><div><dt>Released</dt><dd>V1.3 (current)</dd></div><div><dt>Draft</dt><dd><span class="badge warn">newer than last release</span></dd></div><div><dt>Effective editor</dt><dd>Lukas Roth</dd></div><div><dt>Effective approver</dt><dd>Anna Berg</dd></div><div><dt>Confidentiality</dt><dd>Internal (inherited)</dd></div></dl></div>
+    </details>
+    <details class="selection-section">
+      <summary>Actions <span>15 available</span></summary>
+      <div class="selection-section-body stack-btns">
+        <button class="btn outline">Open draft</button>
+        <button class="btn outline">Open latest released PDF</button>
+        <button class="btn outline">Edit master data</button>
+        <button class="btn outline">Submit for review</button>
+        <button class="btn outline">Begin revision</button>
+        <button class="btn outline">Cancel review</button>
+        <button class="btn danger">Mark obsolete</button>
+        <button class="btn outline">Notes</button>
+        <button class="btn outline">Workflow chain</button>
+        <button class="btn outline">Verify integrity</button>
+        <button class="btn outline">Periodic review</button>
+        <button class="btn outline">Rename / reassociate</button>
+        <button class="btn outline">Copy permalink</button>
+        <button class="btn outline">Claude handoff</button>
+        <button class="btn danger">Unregister</button>
+      </div>
+    </details>
+    <details class="selection-section">
+      <summary>Revision cycle</summary>
+      <div class="selection-section-body">
+        <p class="muted" style="font-size:0.85rem;margin:0">The current released PDF remains available while this newer draft is in review. After release, <strong>Begin revision</strong> returns the document to <code>draft</code>; PDFs and history remain preserved.</p>
+        <p class="hint">Master-data changes while a review is open invalidate that review. Copy permalink uses workspace + document IDs only.</p>
+      </div>
+    </details>
+    <details class="selection-section">
+      <summary>Releases <span>4 recorded</span></summary>
+      <div class="selection-section-body stack">
         <div class="ver"><div class="row gap-2"><strong>V1.3</strong><span class="badge ok">current</span></div><p class="muted">2025-08-01 09:44 UTC</p><p>Substantive / major</p></div>
         <div class="ver"><div class="row gap-2"><strong>V1.2</strong><span class="badge muted">superseded</span></div><p class="muted">2025-07-12 12:01 UTC</p><p>Cosmetic / minor</p></div>
         <div class="ver"><div class="row gap-2"><strong>V1.1</strong><span class="badge muted">superseded</span></div><p class="muted">2025-06-05 14:30 UTC</p><p>Substantive / major</p></div>
         <div class="ver"><div class="row gap-2"><strong>V1.0</strong><span class="badge warn">withdrawn</span></div><p class="muted">2025-05-09 10:12 UTC</p><p>Cosmetic / minor</p></div>
       </div>
-    </section>
+    </details>
   </aside>
       </div>
     </main>
