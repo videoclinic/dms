@@ -21,8 +21,8 @@ When implemented, the following must hold:
 2. Two comment types are first-class:
    - **Change comment** — entered at review-request time; explains what the
      author changed since the last release.
-   - **Decision comment** — entered by the approver at `approved`,
-     `rejected`, or `changes_requested` time; explains the rationale.
+   - **Decision comment** — entered by the approver at decision time;
+     explains the rationale.
    Both are required text (no empty comment) and are part of the canonical
    event body, not editable later.
 3. Every workflow event records a single local OS user. The application does
@@ -42,11 +42,22 @@ When implemented, the following must hold:
    enforced at entry. Comments are stored as UTF-8 text; line breaks are
    preserved. A line length limit applies for legibility (default 500
    characters per line, configurable per workspace).
-8. Additional workflow event types required for maintenance are first-class in
-   the same chain: `review_cancelled`, `revision_begun`, `document_obsoleted`,
-   `master_data_changed`, `release_withdrawn`, and `report_generated`. Each
-   uses the canonical body and required comment/reason fields defined by the
-   owning CAP.
+8. The canonical event types are:
+   - `review_requested` — review-notification sent; document is `in_review`
+   - `review_decision_approved` — approver approved the current draft
+   - `review_decision_rejected` — approver rejected; document returns to `draft`
+   - `review_decision_changed_requested` — approver asked for changes; document returns to `draft`
+   - `release` — successful versioned PDF write under the publish root
+   - `release_withdrawn` — release record removed from the active current set; PDF preserved
+   - `review_cancelled` — author (or operator) cancelled an open review
+   - `revision_begun` — released document returned to `draft` for the next cycle
+   - `document_obsoleted` — document moved to terminal `obsolete` state
+   - `master_data_changed` — any editable master-data field changed
+   - `report_generated` — audit or other report exported from the workspace
+   Each event uses the canonical body and required comment/reason fields
+   defined by the owning CAP. The release event embeds the version label
+   (`VMAJOR.MINOR`), the produced PDF digest, and the approved Office-draft
+   digest; the master-data event embeds before/after values.
 9. Periodic-review events (`periodic_review_requested`,
    `periodic_review_reminded`, `periodic_review_cancelled`, and
    `periodic_review_completed`) use the same canonical chain and bind to the

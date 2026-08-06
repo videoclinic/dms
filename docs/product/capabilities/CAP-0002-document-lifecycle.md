@@ -19,18 +19,19 @@ When implemented, the following must hold:
    IDs, display names, and email addresses, plus non-secret SMTP relay settings.
    The relay password is resolved from the OS credential store, not `.dms`.
 3. Each library document has explicit `draft`, `in_review`, `approved`,
-   `released`, and `obsolete` lifecycle states. `rejected`, `changes_requested`,
-   `withdrawn` (release), and `cancelled` (review) are workflow outcomes
-   recorded on the event chain; they are not separate long-lived primary states
-   except where CAP-0015 defines `obsolete`.
+   `released`, and `obsolete` lifecycle states. `rejected`, `changed_requested`
+   (decision), `withdrawn` (release), and `cancelled` (review) are workflow
+   outcomes recorded on the event chain; they are not separate long-lived
+   primary states except where CAP-0015 defines `obsolete`.
 4. Submitting a document for review requires a non-empty change summary, the
    requesting workflow person, the document's effective configured approver,
    and a SHA-256 digest of the current draft. The requester identity and email
    are snapshotted on the request. The approver is derived from the nearest
    workflow-role policy or a document override (CAP-0019), and must use the
    installed desktop app with access to the same workspace; approval is not
-   available in email or a browser. The notification carries a local-app deep
-   link to this review request (CAP-0010).
+   available in email or a browser. The notification carries a CAP-0020
+   permalink (workspace ID + document ID + review-request target) to this
+   review request (CAP-0010).
    After the first release it also requires an operator-selected change class
    (`cosmetic/minor` or `substantive/major`) with rationale. The class is bound
    to the review and any change requires a new review.
@@ -38,13 +39,13 @@ When implemented, the following must hold:
    operator-confirmed `mailto:` send. The document enters `in_review` only after
    that transport step succeeds.
 5. The effective approver records `approved`, `rejected`, or
-   `changes_requested` in the application with a non-empty decision comment.
+   `changed_requested` in the application with a non-empty decision comment.
    The app records the requester and approver identities, local OS user,
    decision time, revision digest, and chained event hash in `.dms`. It sends a
    notification of the recorded outcome to the requester's snapshotted email
    through the workspace transport (CAP-0010). A notification failure records a
    retryable delivery attempt and never reverses the decision. A
-   `changes_requested` decision returns the document to `draft`.
+   `changed_requested` decision returns the document to `draft`.
 6. If draft bytes no longer match the requested-review digest, approval is
    invalidated and the document returns to `draft`; a new change summary and
    review request are required.
@@ -64,8 +65,8 @@ When implemented, the following must hold:
    failed attempt before commit does not consume the number and leaves no final
    PDF. The app refuses to overwrite an existing PDF path.
 10. Released state always points at a PDF produced by the app export path; the
-   app does not accept an arbitrary operator-dropped PDF as a substitute for
-   that export in the normal release flow.
+    app does not accept an arbitrary operator-dropped PDF as a substitute for
+    that export in the normal release flow.
 11. Release is allowed only from a current `approved` revision and stores the
     approved Office-draft SHA-256 digest, effective confidentiality type,
     effective editor and approver, approval-chain head, effective date, and
@@ -80,7 +81,9 @@ When implemented, the following must hold:
 14. A `withdrawn` release moves its `released` history entry out of the
     active set but preserves the PDF on disk. A `rejected` review request
     leaves the document in `draft` and records the rejection reason in the
-    canonical event chain.
+    canonical event chain. The decision event types recorded in the
+    canonical event chain (CAP-0011) are `review_decision_approved`,
+    `review_decision_rejected`, and `review_decision_changed_requested`.
 15. If the operator renames or moves a controlled Office draft outside the app,
     the next open of the workspace flags the document as `missing` until the
     operator reassigns it, removes it, or restores the file. A draft modified

@@ -30,7 +30,8 @@ When implemented, the following must hold:
    document number (when set), document type, owner, effective confidentiality,
    next review due with overdue highlight, and a **draft newer than last
    release** indicator when known (CAP-0015). The list is for navigation and
-   selection only — it does not host per-row action menus.
+   selection only — it does not host per-row action menus (no per-row
+   hamburger / overflow menu).
 6. **Selecting exactly one document** keeps the operator on the same page and
    shows an **on-page selection pane** (right column) that combines:
    - the selected document’s **title** (same string as the list row title),
@@ -57,8 +58,7 @@ When implemented, the following must hold:
    - **Notes** (CAP-0003)
    - **Workflow chain / evidence** (CAP-0011)
    - **Verify release integrity** (CAP-0004)
-   - **Start periodic review** / **Send reminder** when due rules allow
-     (CAP-0017)
+   - **Start periodic review** when due rules allow (CAP-0017)
    - **Rename / reassociate locator** when applicable (CAP-0013)
    - **Unregister** (this CAP)
    - **Copy permalink** (CAP-0020) — clipboard receives the stable
@@ -66,13 +66,18 @@ When implemented, the following must hold:
    - **Claude change assistance** when enabled (CAP-0018)
    Multi-select exposes only multi-applicable actions (for example bulk verify
    where defined, multi-unregister with per-item precondition checks). Copy
-   permalink is single-selection only. Actions refuse closed with a clear
-   reason when preconditions fail.
+   permalink is single-selection only. Per-document actions such as Submit
+   for review, Mark obsolete, Start periodic review, and Copy permalink are
+   not exposed as batch actions — "Send reminder" is a per-document periodic
+   reminder action (CAP-0017) and is also not a batch action. Actions refuse
+   closed with a clear reason when preconditions fail.
 9. Opening or focusing a document-scoped surface (selection, review, notes, or
    equivalent) creates or focuses a CAP-0005 **open-activity tab** labeled from
    the document title (falling back to document number or a short ID prefix).
-   Closing that tab clears the selection activity without unregistering the
-   document.
+   The same document may have multiple tabs open (for example Library -
+   selection, Review - decision, Notes) — each tab names what surface is
+   focused, not a different document. Closing that tab clears the selection
+   activity without unregistering the document.
 10. Documents start versioning only after they are in the library; add is the
     gate into CAP-0002.
 11. Obsolete documents are hidden by default; an explicit control shows them.

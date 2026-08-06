@@ -229,15 +229,16 @@ tr:last-child td { border-bottom: 0; }
       </section>
       <div class="grid-2">
         <section class="card">
-          <h3 class="card-title">Submit for review</h3>
-          <dl class="kv"><div><dt>Change summary</dt><dd>Replaced retention table with 24-month rule.</dd></div><div><dt>Change class</dt><dd>Cosmetic / minor</dd></div><div><dt>Rationale</dt><dd>Punctuation and pagination only; obligations unchanged.</dd></div><div><dt>Draft SHA-256</dt><dd>9f2c…b1e0</dd></div><div><dt>Requester</dt><dd>Lukas Roth <lukas@vc.de></dd></div><div><dt>Approver (derived)</dt><dd>Anna Berg <anna@vc.de></dd></div><div><dt>Transport</dt><dd>SMTP relay (password from OS credential store)</dd></div></dl>
+          <h3 class="card-title">Submit for review (required fields)</h3>
+          <dl class="kv"><div><dt>Change summary *</dt><dd><span class="muted">(required, non-empty)</span></dd></div><div><dt>Change class</dt><dd><span class="muted">(cosmetic/minor or substantive/major; required after first release)</span></dd></div><div><dt>Rationale</dt><dd><span class="muted">(required with change class)</span></dd></div><div><dt>Draft SHA-256</dt><dd><span class="muted">(computed from current draft bytes on submit)</span></dd></div><div><dt>Requester</dt><dd>Lukas Roth <lukas@vc.de> <span class="muted">(snapshotted on submit)</span></dd></div><div><dt>Approver (derived)</dt><dd>Anna Berg <anna@vc.de></dd></div><div><dt>Transport</dt><dd>SMTP relay (password from OS credential store)</dd></div></dl>
+          <p class="hint">Document enters <code>in_review</code> only after the transport step succeeds. Empty or missing required fields fail closed.</p>
         </section>
         <section class="card">
-          <h3 class="card-title">Workflow chain</h3>
+          <h3 class="card-title">Workflow chain (canonical event types)</h3>
           <ul class="timeline">
             <li><strong>review_requested</strong> — Lukas Roth — 2025-08-01 09:14 UTC</li>
-            <li><strong>approved</strong> — Anna Berg — 09:42 UTC</li>
-            <li><strong>release V1.3</strong> — 09:44 UTC</li>
+            <li><strong>review_decision_approved</strong> — Anna Berg — 09:42 UTC</li>
+            <li><strong>release</strong> (V1.3) — 09:44 UTC</li>
             <li><strong>revision_begun</strong> — 2025-08-02 11:02 UTC</li>
           </ul>
           <p class="hint">Chain head 5b3a…ffe2 — verify recomputes from canonical body (CAP-0011).</p>

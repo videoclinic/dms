@@ -226,6 +226,10 @@ tr:last-child td { border-bottom: 0; }
           <li>Target path occupied by non-app file → fail (ADR-0007)</li>
         </ul>
       </section>
+      <section class="card">
+        <h3 class="card-title">Atomic release transaction (CAP-0007 outcome 3)</h3>
+        <p class="muted">A successful release record only exists when: export produced a valid, non-empty PDF, its SHA-256 was computed, and the atomic rename to the versioned path succeeded. Failure at any step removes the temp file when possible and never commits a release record.</p>
+      </section>
     </main>
   </div>
 </div>

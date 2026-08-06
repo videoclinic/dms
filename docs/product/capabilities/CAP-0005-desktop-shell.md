@@ -40,17 +40,16 @@ When implemented, the following must hold:
    entries and/or via the hamburger menu; labels are not required on the rail.
 10. **Open activities** appear in the left menu as browser-like **panes/tabs**
     below the primary destinations. Each tab is a quicklink that restores that
-    activity’s main surface (for example Library at a folder, a document
-    selection, an open review decision, notes, releases list, or a config
-    screen). Tabs show a short label derived from the activity, not a full path
-    dump.
-11. Opening a document-scoped or multi-step activity adds or focuses its tab.
-    Activating a tab brings that activity forward without losing unrelated open
-    tabs. Closing a tab dismisses only that activity; primary destinations stay
-    available. Closing the last document-scoped tab does not exit the app.
-12. The left menu foot still shows the current workspace identity (display name
-    or workspace ID) and root path summary when expanded; collapsed chrome may
-    hide the foot.
+    activity's surface (for example: Library · <folder>, Review · <document>,
+    Notes · <document>) and is labeled from the focused surface, not from a
+    different document. The same document may have multiple tabs open (one
+    per active surface); tabs are not collapsed into a single document entry.
+    Activating a tab brings that surface forward without losing unrelated open
+    tabs. Closing a tab dismisses only that surface; primary destinations
+    stay available. Closing the last document-scoped tab does not exit the app.
+11. The left menu foot shows the current workspace identity (display name or
+    workspace ID) and root path summary when expanded; the foot is hidden
+    when the menu is collapsed to keep the rail narrow.
 
 ## Non-goals
 

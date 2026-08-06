@@ -19,7 +19,9 @@ When implemented, the following must hold:
    (`<publish-root>/<relative-parent>/<stem>_VMAJOR.MINOR.pdf`).
 3. If required Office application is missing, not licensed, or export fails,
    release aborts with a clear error; no partial version record is committed as
-   successful.
+   successful. The release transaction is atomic: a successful record only
+   exists when the export produced a valid, non-empty PDF, its SHA-256 was
+   computed, and the atomic rename to the versioned path succeeded.
 4. Supported draft types for v1 are declared (at least `.docx`; `.xlsx` /
    `.pptx` as implemented). Unsupported types fail closed with a clear message.
 5. The Office draft file is not deleted or replaced by the export.

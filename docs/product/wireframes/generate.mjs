@@ -69,7 +69,7 @@ const CAPS = [
           <div class="row gap-2">
             <h2 class="doc-title">HR Data Privacy Policy</h2>
             ${badge("in_review", "info")}
-            <span class="muted">V1.3 released</span>
+            <span class=\"muted\">V1.3 released</span>
           </div>
         </div>
         ${kv([
@@ -89,23 +89,24 @@ const CAPS = [
       </section>
       <div class="grid-2">
         <section class="card">
-          <h3 class="card-title">Submit for review</h3>
+          <h3 class="card-title">Submit for review (required fields)</h3>
           ${kv([
-            ["Change summary", "Replaced retention table with 24-month rule."],
-            ["Change class", "Cosmetic / minor"],
-            ["Rationale", "Punctuation and pagination only; obligations unchanged."],
-            ["Draft SHA-256", "9f2c…b1e0"],
-            ["Requester", "Lukas Roth <lukas@vc.de>"],
+            ["Change summary *", "<span class=\"muted\">(required, non-empty)</span>"],
+            ["Change class", "<span class=\"muted\">(cosmetic/minor or substantive/major; required after first release)</span>"],
+            ["Rationale", "<span class=\"muted\">(required with change class)</span>"],
+            ["Draft SHA-256", "<span class=\"muted\">(computed from current draft bytes on submit)</span>"],
+            ["Requester", "Lukas Roth <lukas@vc.de> <span class=\"muted\">(snapshotted on submit)</span>"],
             ["Approver (derived)", "Anna Berg <anna@vc.de>"],
             ["Transport", "SMTP relay (password from OS credential store)"],
           ])}
+          <p class="hint">Document enters <code>in_review</code> only after the transport step succeeds. Empty or missing required fields fail closed.</p>
         </section>
         <section class="card">
-          <h3 class="card-title">Workflow chain</h3>
+          <h3 class="card-title">Workflow chain (canonical event types)</h3>
           <ul class="timeline">
             <li><strong>review_requested</strong> — Lukas Roth — 2025-08-01 09:14 UTC</li>
-            <li><strong>approved</strong> — Anna Berg — 09:42 UTC</li>
-            <li><strong>release V1.3</strong> — 09:44 UTC</li>
+            <li><strong>review_decision_approved</strong> — Anna Berg — 09:42 UTC</li>
+            <li><strong>release</strong> (V1.3) — 09:44 UTC</li>
             <li><strong>revision_begun</strong> — 2025-08-02 11:02 UTC</li>
           </ul>
           <p class="hint">Chain head 5b3a…ffe2 — verify recomputes from canonical body (CAP-0011).</p>
@@ -192,11 +193,11 @@ const CAPS = [
               </div>
               <div class="mini-sec">Open panes</div>
               <div class="mini-tabs">
-                <div class="on">Library · HR <span>×</span></div>
-                <div>Review · Privacy <span>×</span></div>
-                <div>Notes · Privacy <span>×</span></div>
+                <div class="on">Library - HR <span>×</span></div>
+                <div>Review - Privacy <span>×</span></div>
+                <div>Notes - Privacy <span>×</span></div>
               </div>
-              <div class="mini-foot">ws-9c3b7d1a</div>
+              <div class="mini-foot">ws-9c3b7d1a<br/>edit: /dms/edit<br/>publish: /dms/publish</div>
             </div>
             <div class="mini-main">Main activity surface</div>
           </div>
@@ -213,7 +214,7 @@ const CAPS = [
               <div title="Config">⚙️</div>
             </div>
             <div class="mini-main">
-              <div class="mini-header"><span class="ham">☰</span> Library · HR Data Privacy Policy</div>
+              <div class="mini-header"><span class="ham">☰</span> Library - HR Data Privacy Policy</div>
               <p class="muted" style="padding:0.75rem;margin:0;font-size:0.8rem">Hamburger expands the left menu. Icon rail still switches primary destinations. Open-pane list appears when expanded.</p>
             </div>
           </div>
@@ -233,7 +234,7 @@ const CAPS = [
     file: "CAP-0006-library-explorer",
     title: "Library directory navigator",
     nav: "library",
-    subtitle: "Folder tree + list. Selection pane on the right holds CAP-0015 master data and document actions (no hamburger). Multi-select uses the same pane for batch actions.",
+    subtitle: "Folder tree + list. Selection pane on the right holds CAP-0015 master data and document actions. Multi-select uses the same pane for batch actions. Per-document actions and per-row overflow menus are not exposed.",
     actions: ["Add to library", "Rescan", "Filters"],
     body: `
       <div class="grid-explorer-detail">
@@ -372,7 +373,6 @@ const CAPS = [
           <div class="stack-btns">
             <div class="row gap-2 mb"><strong>2 selected</strong><button class="btn outline">Clear</button></div>
             <button class="btn outline">Verify integrity</button>
-            <button class="btn outline">Send reminder</button>
             <button class="btn danger">Unregister…</button>
           </div>
         </div>
@@ -402,6 +402,10 @@ const CAPS = [
           <li>Temp empty or missing %PDF header → remove temp, no release record</li>
           <li>Target path occupied by non-app file → fail (ADR-0007)</li>
         </ul>
+      </section>
+      <section class="card">
+        <h3 class="card-title">Atomic release transaction (CAP-0007 outcome 3)</h3>
+        <p class="muted">A successful release record only exists when: export produced a valid, non-empty PDF, its SHA-256 was computed, and the atomic rename to the versioned path succeeded. Failure at any step removes the temp file when possible and never commits a release record.</p>
       </section>`,
   },
   {
