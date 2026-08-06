@@ -101,6 +101,31 @@ When implemented, the following must hold:
     follow CAP-0015. Publish-tree listing, orphan handling, and bulk verify
     follow CAP-0016. Due-date review of an unchanged current release follows
     CAP-0017.
+19. Before submitting a review request and again immediately before release,
+    the application derives the candidate release label from outcome 9 and
+    checks the current Office draft for its two canonical visible-content
+    markers:
+    - `Version: <major>.<minor>` must equal the candidate label without its
+      filename `V` prefix (for example, candidate `V2.0` requires
+      `Version: 2.0`).
+    - `Vertraulichkeitsstufe: <display label>` must equal the effective
+      confidentiality type's current display label (CAP-0008).
+    A marker is absent, malformed, or mismatched when no canonical occurrence
+    is found or when multiple occurrences do not all resolve to the expected
+    value. Caption matching normalizes surrounding whitespace and casing;
+    version and confidentiality values must match exactly after whitespace
+    normalization. The initial DOCX scanner covers body text, tables, text
+    boxes, and every header/footer part, including section-specific footers.
+    No other draft format may enter review or release until its equivalent
+    visible-content coverage is implemented and tested alongside CAP-0007.
+    A failed check blocks the transition by default and reports the expected and
+    detected marker values and locations without retaining other draft content.
+    The operator may explicitly proceed after accepting a false-positive
+    warning, but only with a non-empty reason. That override applies only to
+    the current draft digest, candidate label, effective confidentiality type,
+    and check phase; it is recorded as CAP-0011 evidence, is visible to the
+    approver, and must be accepted again for the release-time check. It never
+    edits the Office draft or turns the failed check into a passing result.
 
 ## Capability-local rules
 
@@ -115,6 +140,8 @@ When implemented, the following must hold:
   (CAP-0012).
 - PDF export and file versioning are application responsibilities using
   preinstalled Microsoft Office (CAP-0007, ADR-0008).
+- Content-conformance overrides are exceptional workflow evidence, not a
+  substitute for correcting the source draft or its configured classification.
 - Naming pattern and dual-root placement: ADR-0006, ADR-0007.
 - Cosmetic means spelling, grammar, formatting, pagination, or equivalent
   presentation-only correction that does not change meaning, obligation,

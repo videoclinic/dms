@@ -53,6 +53,11 @@ When implemented, the following must hold:
    - `revision_begun` — released document returned to `draft` for the next cycle
    - `document_obsoleted` — document moved to terminal `obsolete` state
    - `master_data_changed` — any editable master-data field changed
+   - `content_conformance_overridden` — operator accepted a failed version or
+     confidentiality content check for a review or release candidate; embeds
+     the check phase, candidate version, effective confidentiality ID and
+     display label, marker verdicts/locations, current draft digest, and a
+     non-empty operator reason, but no other draft content
    - `report_generated` — audit or other report exported from the workspace
    Each event uses the canonical body and required comment/reason fields
    defined by the owning CAP. The release event embeds the version label
