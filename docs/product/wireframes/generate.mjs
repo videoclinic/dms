@@ -239,95 +239,118 @@ const CAPS = [
   {
     id: "CAP-0006",
     file: "CAP-0006-library-explorer",
-    title: "Library directory navigator",
+    title: "Folder-first library explorer",
     nav: "library",
-    subtitle: "Folder tree + list. Selection pane on the right holds CAP-0015 master data and document actions. Multi-select uses the same pane for batch actions. Per-document actions and per-row overflow menus are not exposed.",
-    actions: ["Add to library", "Rescan", "Filters"],
+    subtitle: "Persistent folder tree + Explorer-like path controls + current-folder contents. Selection details and actions stay in the right pane.",
+    actions: ["Add documents", "Rescan", "Filters"],
     body: `
-      <div class="grid-explorer-detail">
+      <style>
+        .app[data-cap="CAP-0006"] .list-card th,
+        .app[data-cap="CAP-0006"] .list-card td { padding: 0.55rem 0.45rem; font-size: 0.75rem; }
+      </style>
+      <section class="card" style="padding:0.75rem 0.9rem">
+        <div class="row gap-2">
+          <button class="icon-btn" title="Back">←</button>
+          <button class="icon-btn" title="Forward">→</button>
+          <button class="icon-btn" title="Up one folder">↑</button>
+          <div class="row" style="height:2rem;min-width:0;flex:1;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.75rem;font-size:0.82rem;gap:0.45rem">
+            <span class="muted">DMS Workspace</span><span>›</span><span>policies</span><span>›</span><strong>HR</strong>
+          </div>
+          <div style="height:2rem;width:16rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0.42rem 0.7rem;font-size:0.78rem;color:var(--muted-foreground)">Search HR and subfolders</div>
+        </div>
+        <p class="hint" style="margin-top:0.45rem">Back / Forward / Up and clickable breadcrumbs stay synchronized with the tree and current-folder contents.</p>
+      </section>
+      <div class="grid-explorer-detail" style="grid-template-columns:17.5rem minmax(0,1fr) 18.5rem;align-items:stretch">
         <aside class="card tree">
-          <h3 class="card-title">Folders</h3>
-          <p class="hint" style="margin-top:0">Library path tree</p>
+          <div class="row between mb">
+            <h3 class="card-title" style="margin:0">Folders</h3>
+            <span class="muted" style="font-size:0.72rem">resize ↔</span>
+          </div>
+          <p class="hint" style="margin-top:0">Edit-root folders · <code>.dms</code> hidden</p>
           <ul class="tree-root">
             <li>
-              <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📁 policies</span></div>
+              <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📂 DMS Workspace</span></div>
               <ul>
                 <li>
-                  <div class="tree-node active"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 HR</span></div>
+                  <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📂 policies</span></div>
+                  <ul>
+                    <li>
+                      <div class="tree-node active"><span class="tree-twisty">▾</span><span class="tree-label">📂 HR</span></div>
+                      <ul>
+                        <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 Recruiting</span></div></li>
+                        <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 Templates</span></div></li>
+                      </ul>
+                    </li>
+                    <li>
+                      <div class="tree-node"><span class="tree-twisty">▸</span><span class="tree-label">📁 IT</span></div>
+                    </li>
+                  </ul>
                 </li>
                 <li>
-                  <div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 IT</span></div>
+                  <div class="tree-node"><span class="tree-twisty">▸</span><span class="tree-label">📁 procedures</span></div>
+                </li>
+                <li>
+                  <div class="tree-node"><span class="tree-twisty">▸</span><span class="tree-label">📁 records</span></div>
+                </li>
+                <li>
+                  <div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 Archive (empty)</span></div>
                 </li>
               </ul>
             </li>
-            <li>
-              <div class="tree-node"><span class="tree-twisty">▸</span><span class="tree-label">📁 procedures</span></div>
-            </li>
-            <li>
-              <div class="tree-node"><span class="tree-twisty">▸</span><span class="tree-label">📁 records</span></div>
-            </li>
           </ul>
-          <p class="hint">Selected: policies / HR</p>
+          <p class="hint">The folder pane stays visible by default, including empty folders and folders without registered documents.</p>
         </aside>
         <section class="card list-card">
-          <div class="row gap-2 mb">
+          <div class="row between mb">
+            <div>
+              <h3 class="card-title" style="margin:0">HR</h3>
+              <span class="muted" style="font-size:0.74rem">2 folders · 3 controlled documents</span>
+            </div>
+            <button class="btn outline">Details view</button>
+          </div>
+          <div class="row gap-2 mb" style="flex-wrap:wrap">
             ${badge("3 overdue", "danger")}
             ${badge("12 due ≤30d", "warn")}
-            <span class="muted grow">Search: title, doc #, filename, path</span>
+            <span class="muted grow" style="text-align:right">Scope: HR + descendants</span>
           </div>
           <div class="table-wrap"><table>
             <thead><tr>
-              <th></th><th>Title</th><th>Doc #</th><th>Type</th><th>State</th><th>Released</th><th>Conf.</th>
+              <th></th><th>Name</th><th>Details</th><th>State</th><th>Released</th><th>Conf.</th>
             </tr></thead>
             <tbody>
+              <tr>
+                <td></td><td><strong>📁 Recruiting</strong></td><td>Folder</td><td>—</td><td>—</td><td>—</td>
+              </tr>
+              <tr>
+                <td></td><td><strong>📁 Templates</strong></td><td>Folder</td><td>—</td><td>—</td><td>—</td>
+              </tr>
               <tr class="selected">
                 <td><span class="check on">☑</span></td>
                 <td>HR Data Privacy Policy</td>
-                <td>DOC-014</td>
-                <td>policy</td>
+                <td>DOC-014 · policy</td>
                 <td>${badge("in_review", "info")}</td>
                 <td>V1.3 ${badge("draft newer", "warn")}</td>
                 <td>Internal</td>
               </tr>
               <tr>
                 <td><span class="check">☐</span></td>
-                <td>Acceptable Use</td>
-                <td>DOC-002</td>
-                <td>policy</td>
+                <td>Code of Conduct</td>
+                <td>DOC-018 · policy</td>
                 <td>${badge("draft", "warn")}</td>
                 <td>V2.0</td>
-                <td>Public</td>
+                <td>Internal</td>
               </tr>
               <tr>
                 <td><span class="check">☐</span></td>
-                <td>Incident Response</td>
-                <td>DOC-021</td>
-                <td>procedure</td>
+                <td>Leave Policy</td>
+                <td>DOC-025 · policy</td>
                 <td>${badge("released", "ok")}</td>
-                <td>V3.1</td>
+                <td>V1.1</td>
                 <td>Restricted</td>
-              </tr>
-              <tr>
-                <td><span class="check">☐</span></td>
-                <td>Visitor Register</td>
-                <td>DOC-007</td>
-                <td>record</td>
-                <td>${badge("obsolete", "muted")}</td>
-                <td>V1.0</td>
-                <td>Internal</td>
-              </tr>
-              <tr>
-                <td><span class="check">☐</span></td>
-                <td>Backup Config</td>
-                <td>DOC-033</td>
-                <td>policy</td>
-                <td>${badge("released", "ok")}</td>
-                <td>V1.4</td>
-                <td>Internal</td>
               </tr>
             </tbody>
           </table></div>
-          <p class="hint">List is selection only. Actions live in the right pane with master data. Multi-select replaces master data there with batch actions.</p>
+          <p class="hint"><strong>Folders first:</strong> single-click selects; double-click or Enter opens. Document rows select only; actions live in the right pane. Unmanaged files appear only in Add/Rescan.</p>
         </section>
         <aside class="card detail-pane">
           <div class="row between mb">
@@ -374,7 +397,7 @@ const CAPS = [
             <p class="muted" style="margin:0 0 0.5rem;font-size:0.85rem">When two or more rows are checked, the right pane switches to batch mode:</p>
             <ul class="list">
               <li>HR Data Privacy Policy (DOC-014)</li>
-              <li>Acceptable Use (DOC-002)</li>
+              <li>Code of Conduct (DOC-018)</li>
             </ul>
           </div>
           <div class="stack-btns">

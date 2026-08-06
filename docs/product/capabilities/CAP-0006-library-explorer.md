@@ -1,4 +1,4 @@
-# CAP-0006 — Controlled library directory navigator
+# CAP-0006 — Folder-first controlled library explorer
 
 | Field | Value |
 | --- | --- |
@@ -10,14 +10,30 @@
 
 When implemented, the following must hold:
 
-1. The primary library surface is a **directory navigator** over documents
-   currently under DMS control (the library), not an unmanaged dump of the
-   entire disk and not a standalone multi-page “file manager app.”
-2. Navigation is folder-first: a **relative folder tree** (nested expand/collapse
-   of library paths under the edit root — not a flat path list) plus a document
-   list for the current folder and active filters. Breadcrumbs or equivalent
-   show the current relative path. Navigating alone does not save this state;
-   the operator must use CAP-0005's explicit bookmark control.
+1. The primary library surface is a **folder-dominant workspace** over the
+   accessible directory structure below the edit root and the documents under
+   DMS control. It is not an unmanaged dump of the entire disk and not a
+   standalone multi-page file-manager application.
+2. Folder navigation uses familiar **Windows File Explorer-like conventions**
+   without copying the OS file manager wholesale:
+   - The default Library layout has three full-height panes: a persistent,
+     resizable **folder tree** on the left, current-folder contents in the
+     centre, and the selection/details pane on the right. The folder tree is a
+     primary navigation surface, not a compact filter card beside a
+     document-dominant table.
+   - The tree shows accessible folders below the edit root, including empty
+     folders and folders without registered documents. `<edit-root>/.dms` is
+     never shown. Unmanaged files remain hidden outside Add/Rescan flows.
+   - A current-folder toolbar exposes **Back**, **Forward**, and **Up** controls
+     plus a clickable breadcrumb rooted at the workspace/edit-root display
+     name. Up is unavailable at the root. Tree selection, breadcrumb, current
+     folder heading, and centre contents stay synchronized.
+   - The centre pane lists immediate child folders before controlled documents
+     directly in the current folder. Single-click selects a folder row;
+     double-click or Enter opens it. Selecting a tree node or breadcrumb segment
+     opens that folder directly.
+   - Back/Forward history is session-only. Navigating alone does not create a
+     saved view; the operator must use CAP-0005's explicit bookmark control.
 3. Operator can **add** a Microsoft Office file that lives under the edit root
    into the library. Add fails if the path is outside the edit root or already
    registered.
@@ -26,13 +42,13 @@ When implemented, the following must hold:
    master data, notes, workflow/release history, and checksums in read-only
    history; it never deletes the Office file or a published PDF. Re-registering
    that record associates a confirmed in-root draft path with the same ID.
-5. The list surfaces enough **row metadata** to scan the controlled set without
-   leaving the navigator: lifecycle state, latest released version label, title,
-   document number (when set), document type, owner, effective confidentiality,
-   next review due with overdue highlight, and a **draft newer than last
-   release** indicator when known (CAP-0015). The list is for navigation and
-   selection only — it does not host per-row action menus (no per-row
-   hamburger / overflow menu).
+5. Controlled-document rows surface enough **metadata** to scan the current
+   folder without leaving the explorer: lifecycle state, latest released
+   version label, title, document number (when set), document type, owner,
+   effective confidentiality, next review due with overdue highlight, and a
+   **draft newer than last release** indicator when known (CAP-0015). Document
+   rows are for selection only — they do not host per-row action menus (no
+   per-row hamburger / overflow menu). Folder rows navigate as defined above.
 6. **Selecting exactly one document** keeps the operator on the same page and
    shows an **on-page selection pane** (right column) that combines:
    - the selected document’s **title** (same string as the list row title),
@@ -72,13 +88,15 @@ When implemented, the following must hold:
    not exposed as batch actions — "Send reminder" is a per-document periodic
    reminder action (CAP-0017) and is also not a batch action. Actions refuse
    closed with a clear reason when preconditions fail.
-9. Opening or focusing a document-scoped surface (selection, review, notes, or
-   equivalent) creates or focuses a CAP-0005 **open-activity tab** labeled from
-   the document title (falling back to document number or a short ID prefix).
-   The same document may have multiple tabs open (for example Library -
-   selection, Review - decision, Notes) — each tab names what surface is
-   focused, not a different document. Closing that tab clears the selection
-   activity without unregistering the document.
+9. Entering the Library creates or focuses one CAP-0005 **Library activity tab**.
+   Folder navigation updates that tab's current path and label in place; it does
+   not create one tab per visited folder. Opening or focusing a document-scoped
+   surface (selection, review, notes, or equivalent) creates or focuses the
+   matching activity labeled from the document title (falling back to document
+   number or a short ID prefix). The same document may have multiple tabs open
+   (for example Library - selection, Review - decision, Notes) — each tab names
+   the focused surface. Closing a document-scoped tab clears that surface
+   without unregistering the document.
 10. CAP-0005's `Bookmark this view` control saves the current library folder,
     filters, and sort order; when exactly one document is selected it also uses
     that document's stable ID as the target. It does not retain a multi-select
@@ -92,10 +110,13 @@ When implemented, the following must hold:
     Missing documents remain visible with a `missing` marker until resolved
     (CAP-0013).
 13. Explorer filters support lifecycle state, confidentiality type, document
-    type, owner, and overdue-only.
-14. Explorer search matches title, document number, draft file name, and
-    relative path case-insensitively. Results can be sorted by title, document
-    number, lifecycle state, latest release, or next-review-due date.
+    type, owner, and overdue-only. They filter controlled-document rows within
+    the active folder/search scope and never hide the folder tree.
+14. Explorer search starts at the current folder and includes its descendants,
+    with an explicit **Entire library** scope. It matches title, document number,
+    draft file name, and relative path case-insensitively. Results retain their
+    relative path and can be sorted by title, document number, lifecycle state,
+    latest release, or next-review-due date.
 15. A CAP-0020 document permalink that resolves successfully lands here: the
     library navigator selects that document (revealing its folder as needed)
     and shows the selection pane. Resolution never keys off file name or
@@ -105,6 +126,7 @@ When implemented, the following must hold:
 
 - Full OS file manager replacement (copy/move/rename of arbitrary non-library
   files)
+- Pixel-for-pixel Windows File Explorer imitation or arbitrary path entry
 - Watching the entire edit root and auto-adding every new Office file without
   operator action
 - Per-row hamburger / overflow menus in the list

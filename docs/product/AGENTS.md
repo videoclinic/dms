@@ -23,6 +23,9 @@ Own falsifiable capability contracts (`CAP-*.md`) and the product index.
 
 - Material outcome change → edit CAP + proving tests + active CHG together.
 - Do not churn CAPs for pure refactors with no user-visible change.
+- Keep the Library surface and its wireframe folder-dominant. Follow CAP-0006's
+  familiar Windows Explorer-like navigation model rather than reducing folders
+  to a compact filter beside a document-first table.
 
 ## Verification
 

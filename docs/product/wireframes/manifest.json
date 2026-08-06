@@ -39,7 +39,7 @@
     },
     {
       "id": "CAP-0006",
-      "title": "Library directory navigator",
+      "title": "Folder-first library explorer",
       "html": "html/CAP-0006-library-explorer.html",
       "png": "exports/CAP-0006-library-explorer.png",
       "nav": "library"
