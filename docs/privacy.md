@@ -5,7 +5,7 @@
 | Class | Where it lives | Notes |
 | --- | --- | --- |
 | Draft Office documents | Edit root (operator-controlled) | Content is business documentation; app does not upload it |
-| Released versioned PDFs | Publish root (operator-controlled) | Final published artifacts (`*_VMAJOR.MINOR.pdf`) |
+| Released versioned PDFs | Publish root (operator-controlled) | Final published artifacts (`*_VMAJOR.MINOR_<confidentiality-type-id>.pdf`); the path exposes the classification ID |
 | DMS metadata, library membership, notes, approval state, checksums | `<edit-root>/.dms/` | Local only; may contain personal names in notes or approver fields |
 | Document master data and workflow-role policies (title, owner, number, type, review dates, assigned editor/approver) | `<edit-root>/.dms/` | Local control metadata; not document body content |
 | Confidentiality policy and effective document label | `<edit-root>/.dms/` | Local classification metadata; a label does not enforce access control |
@@ -31,6 +31,9 @@
 - The configured confidentiality label is rendered in the notification subject
   but no body field that could embed document content is generated. The same
   rule applies to `mailto:` fallback drafts.
+- Each released PDF filename includes its effective confidentiality type ID.
+  Anyone who can list the publish tree can therefore see that classification;
+  filesystem access remains the operator's responsibility.
 - Audit/export reports contain approver display names, comments, and revision
   digests; they do not embed draft or released document bytes.
 - Claude Desktop assistance is disabled by default and allowed only for

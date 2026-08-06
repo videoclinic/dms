@@ -29,10 +29,11 @@ When implemented, the following must hold:
    approver profiles (display name, email, optional role label). A profile
    referenced by an open review or by historical workflow events cannot be
    deleted; it can be disabled and superseded.
-5. **Confidentiality catalogue maintenance.** The operator can add, rename,
-   and disable confidentiality types. A type referenced by an inheriting
-   folder policy or by a historical release cannot be deleted; it can be
-   disabled so future documents cannot select it (CAP-0008).
+5. **Confidentiality catalogue maintenance.** The operator can add, rename the
+   display label of, and disable confidentiality types; their stable type IDs
+   never change. A type referenced by an inheriting folder policy or by a
+   historical release cannot be deleted; it can be disabled so future documents
+   cannot select it (CAP-0008).
 6. **Withdraw a release.** The operator can mark an active release as
    `withdrawn`. The PDF remains on disk, the workflow event records the
    withdrawal, and the explorer no longer surfaces the release as the

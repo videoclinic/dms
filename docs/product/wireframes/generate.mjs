@@ -152,10 +152,10 @@ const CAPS = [
         ${table(
           ["Version", "Relative path", "Released", "SHA-256", "Result", "Action"],
           [
-            ["V2.0", "policies/HR/Handbook_V2.0.pdf", "2025-08-02 09:44", "9f2c…b1e0", badge("match", "ok"), "Reveal"],
-            ["V1.7", "policies/HR/Handbook_V1.7.pdf", "2025-07-12 12:01", "73b1…4cd2", badge("match", "ok"), "Reveal"],
-            ["V1.6", "policies/HR/Handbook_V1.6.pdf", "2025-06-05 14:30", "2a91…77ee", badge("mismatch", "danger"), "Reveal"],
-            ["V1.5", "policies/HR/Handbook_V1.5.pdf", "2025-05-09 10:12", "—", badge("missing file", "warn"), "Reveal"],
+            ["V2.0", "policies/HR/Handbook_V2.0_restricted.pdf", "2025-08-02 09:44", "9f2c…b1e0", badge("match", "ok"), "Reveal"],
+            ["V1.7", "policies/HR/Handbook_V1.7_restricted.pdf", "2025-07-12 12:01", "73b1…4cd2", badge("match", "ok"), "Reveal"],
+            ["V1.6", "policies/HR/Handbook_V1.6_restricted.pdf", "2025-06-05 14:30", "2a91…77ee", badge("mismatch", "danger"), "Reveal"],
+            ["V1.5", "policies/HR/Handbook_V1.5_restricted.pdf", "2025-05-09 10:12", "—", badge("missing file", "warn"), "Reveal"],
           ]
         )}
         <p class="hint">Per-version outcomes; verification never rewrites PDF bytes.</p>
@@ -391,7 +391,7 @@ const CAPS = [
     file: "CAP-0007-office-pdf-export",
     title: "Office → PDF export",
     nav: "releases",
-    subtitle: "In-app export via host Office. Temp PDF → validate → SHA-256 → atomic rename.",
+    subtitle: "In-app export via host Office. Classified filename → temp PDF → validate → SHA-256 → atomic rename.",
     body: `
       <section class="card">
         <h3 class="card-title">Export pipeline</h3>
@@ -412,6 +412,10 @@ const CAPS = [
       </section>
       <section class="card">
         <h3 class="card-title">Atomic release transaction (CAP-0007 outcome 3)</h3>
+        ${kv([
+          ["Final filename", "Handbook_V2.0_restricted.pdf"],
+          ["Classification snapshot", "Restricted (type ID: restricted)"],
+        ])}
         <p class="muted">A successful release record only exists when: export produced a valid, non-empty PDF, its SHA-256 was computed, and the atomic rename to the versioned path succeeded. Failure at any step removes the temp file when possible and never commits a release record.</p>
       </section>`,
   },
@@ -420,29 +424,38 @@ const CAPS = [
     file: "CAP-0008-confidentiality-classification",
     title: "Confidentiality policies",
     nav: "config",
-    subtitle: "Folder inheritance; document override beats folder; root is fallback.",
+    subtitle: "Select a folder, save its direct policy, or remove a non-root policy to inherit again.",
     body: `
       <div class="grid-2">
         <section class="card">
           <h3 class="card-title">Workspace catalogue</h3>
-          ${typeCard("Public", "marketing, general communications", "ok")}
-          ${typeCard("Internal", "default for most operations", "info")}
-          ${typeCard("Restricted", "HR, finance, security", "warn")}
-          ${typeCard("Confidential", "legal, board, M&A", "danger")}
+          ${typeCard("Public", "marketing, general communications", "ok", "public")}
+          ${typeCard("Internal", "default for most operations", "info", "internal")}
+          ${typeCard("Restricted", "HR, finance, security", "warn", "restricted")}
+          ${typeCard("Confidential", "legal, board, M&A", "danger", "confidential")}
         </section>
         <section class="card">
-          <h3 class="card-title">Folder policies (edit-root relative)</h3>
+          <h3 class="card-title">Folder policy editor</h3>
+          <div class="type-card mb">
+            ${kv([
+              ["Selected folder", "policies/HR/"],
+              ["Direct policy", "Restricted"],
+              ["After removal", "Internal from edit-root"],
+            ])}
+            <div class="row gap-2" style="margin-top:0.75rem"><button class="btn">Save folder policy</button><button class="btn danger">Remove folder policy</button></div>
+            <p class="hint">Save creates or replaces a policy at this folder only. It does not change ancestor or child policies.</p>
+          </div>
+          <div class="callout warn"><strong>Remove only removes this non-root policy.</strong> The folder remains. Its documents and descendants inherit from the nearest remaining ancestor unless they have a nearer folder policy or document override. The root policy can be changed but not removed.</div>
+          <h3 class="card-title" style="margin-top:1rem">Direct folder policies (edit-root relative)</h3>
           ${table(
-            ["Path", "Type", "Source"],
+            ["Path", "Type", "Status"],
             [
-              ["edit-root", "Internal", "root policy"],
-              ["policies/", "Internal", "inherited"],
-              ["policies/HR/", "Restricted", "folder override"],
-              ["policies/IT/", "Internal", "inherited"],
-              ["records/", "Confidential", "folder override"],
+              ["edit-root", "Internal", "required root policy"],
+              ["policies/HR/", "Restricted", "direct policy"],
+              ["records/", "Confidential", "direct policy"],
             ]
           )}
-          <p class="hint">Snapshots written into review requests and release records. Policy changes do not rewrite history.</p>
+          <p class="hint">All other folders inherit the nearest direct policy. Snapshots written into review requests and release records do not change.</p>
         </section>
       </div>`,
   },
@@ -737,11 +750,11 @@ const CAPS = [
         ${table(
           ["Doc", "Version", "Publish path", "Released", "SHA-256", "State", "Verify"],
           [
-            ["HR Data Privacy Policy", "V2.0", "policies/HR/Handbook_V2.0.pdf", "2025-08-01 09:44", "9f2c…b1e0", badge("current", "ok"), badge("match", "ok")],
-            ["Acceptable Use", "V2.0", "policies/IT/AUP_V2.0.pdf", "2025-07-29 14:12", "3a91…77ee", badge("current", "ok"), badge("match", "ok")],
-            ["Incident Response", "V3.1", "procedures/IRP_V3.1.pdf", "2025-06-30 11:20", "1199…aa01", badge("current", "ok"), badge("match", "ok")],
-            ["Vendor Onboarding", "V1.0", "procedures/Onboarding_V1.0.pdf", "2024-11-04 09:00", "—", badge("orphaned", "warn"), badge("missing file", "danger")],
-            ["Backup Config", "V1.4", "policies/IT/Backup_V1.4.pdf", "2025-05-12 16:45", "5b3a…ffe2", badge("withdrawn", "muted"), badge("match", "ok")],
+            ["HR Data Privacy Policy", "V2.0", "policies/HR/Handbook_V2.0_restricted.pdf", "2025-08-01 09:44", "9f2c…b1e0", badge("current", "ok"), badge("match", "ok")],
+            ["Acceptable Use", "V2.0", "policies/IT/AUP_V2.0_internal.pdf", "2025-07-29 14:12", "3a91…77ee", badge("current", "ok"), badge("match", "ok")],
+            ["Incident Response", "V3.1", "procedures/IRP_V3.1_restricted.pdf", "2025-06-30 11:20", "1199…aa01", badge("current", "ok"), badge("match", "ok")],
+            ["Vendor Onboarding", "V1.0", "procedures/Onboarding_V1.0_internal.pdf", "2024-11-04 09:00", "—", badge("orphaned", "warn"), badge("missing file", "danger")],
+            ["Backup Config", "V1.4", "policies/IT/Backup_V1.4_internal.pdf", "2025-05-12 16:45", "5b3a…ffe2", badge("withdrawn", "muted"), badge("match", "ok")],
           ]
         )}
         <p class="hint">Release records are immutable. Correction = withdraw + Begin revision + new approval + new version.</p>
@@ -915,8 +928,8 @@ function note(head, body) {
 function layer(name, desc) {
   return `<div class="layer"><strong>${name}</strong><p class="muted">${desc}</p></div>`;
 }
-function typeCard(name, desc, kind) {
-  return `<div class="type-card"><div class="row gap-2">${badge(name, kind)}</div><p class="muted">${desc}</p><p class="hint">In-use — cannot be deleted.</p></div>`;
+function typeCard(name, desc, kind, typeId) {
+  return `<div class="type-card"><div class="row gap-2">${badge(name, kind)}</div><p class="muted">${desc}</p><p class="hint">Type ID: <code>${typeId}</code> · stable filename token · In-use — cannot be deleted.</p></div>`;
 }
 function event(type, ts, who, cmt, hash, pred) {
   return `<article class="event">

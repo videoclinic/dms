@@ -16,7 +16,10 @@ When implemented, the following must hold:
    the machine (Windows and macOS), not a manual “export yourself and pick a
    file” step as the primary path.
 2. Export writes only to the computed publish path for the new version
-   (`<publish-root>/<relative-parent>/<stem>_VMAJOR.MINOR.pdf`).
+   (`<publish-root>/<relative-parent>/<stem>_VMAJOR.MINOR_<confidentiality-type-id>.pdf`).
+   The confidentiality type ID is the effective type at release, snapshotted in
+   the release record; later policy or display-label changes never rename the
+   PDF. Example: `Policy_V1.0_restricted.pdf`.
 3. If required Office application is missing, not licensed, or export fails,
    release aborts with a clear error; no partial version record is committed as
    successful. The release transaction is atomic: a successful record only
@@ -49,4 +52,5 @@ When implemented, the following must hold:
 - ADR-0008: [`../../design-decisions.md`](../../design-decisions.md)
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
 - Integrity: [`CAP-0004-release-integrity.md`](CAP-0004-release-integrity.md)
+- Classification: [`CAP-0008-confidentiality-classification.md`](CAP-0008-confidentiality-classification.md)
 - Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)

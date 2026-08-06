@@ -5,7 +5,7 @@
 | ID | CAP-0002 |
 | Status | not implemented |
 | Draft formats | Microsoft Office originals (e.g. `.docx`, `.xlsx`, `.pptx`) |
-| Released format | Versioned PDF only (`*_VMAJOR.MINOR.pdf`) |
+| Released format | Versioned, classified PDF only (`*_VMAJOR.MINOR_<confidentiality-type-id>.pdf`) |
 | Tests | none |
 
 ## Outcomes (contract — not yet true in runtime)
@@ -51,8 +51,10 @@ When implemented, the following must hold:
    review request are required.
 7. On release, the **application** performs versioning and PDF export (CAP-0007):
    it produces a new PDF under the publish root at the mirrored relative
-   directory, named `<stem>_V<major>.<minor>.pdf` (examples: `Policy_V1.0.pdf`,
-   `Policy_V1.1.pdf`, `Policy_V2.0.pdf`).
+   directory, named `<stem>_V<major>.<minor>_<confidentiality-type-id>.pdf`
+   (examples: `Policy_V1.0_restricted.pdf`, `Policy_V1.1_restricted.pdf`,
+   `Policy_V2.0_confidential.pdf`). The filename uses the effective
+   confidentiality type ID snapshotted for that release.
 8. The editable Microsoft Office file remains the working draft under the edit
    root; release does not replace or delete it. Release records link draft path
    → versioned PDF path.

@@ -78,19 +78,25 @@ Capability-local rules stay in their CAP files.
   link until repaired; changing either root is a workspace configuration
   change and must be validated; publish root must be writable.
 
-## ADR-0007 — Versioned release file names
+## ADR-0007 — Versioned, classified release file names
 
-- **Decision:** Released PDFs use the pattern `<stem>_V<major>.<minor>.pdf`
-  (examples: `Handbook_V1.0.pdf`, `Handbook_V1.1.pdf`, `Handbook_V2.0.pdf`).
-  First release is `V1.0`. Cosmetic, non-semantic changes increment minor;
+- **Decision:** Released PDFs use the pattern
+  `<stem>_V<major>.<minor>_<confidentiality-type-id>.pdf` (examples:
+  `Handbook_V1.0_restricted.pdf`, `Handbook_V1.1_restricted.pdf`,
+  `Handbook_V2.0_confidential.pdf`). The filename carries the effective
+  confidentiality type's stable, portable ID snapshotted at release. First
+  release is `V1.0`. Cosmetic, non-semantic changes increment minor;
   substantive or uncertain changes increment major and reset minor to zero.
   Each release creates a new file; existing version paths are never overwritten.
   The approved change class determines the bump.
-- **Why:** Version identity is visible in ordinary file explorers and backups
-  without opening the app; supports ISO controlled-document version labeling.
+- **Why:** Version and confidentiality are visible in ordinary file explorers
+  and backups without opening the app; supports ISO controlled-document
+  version labeling.
 - **Consequences:** Stem is derived from the draft base name (without Office
-  extension); version counter lives in `.dms` per library document; collisions
-  with manually dropped files at the target path fail closed.
+  extension); version counter and effective confidentiality snapshot live in
+  `.dms` per library document; an operator who can list the publish tree can
+  see the classification ID. Collisions with manually dropped files at the
+  target path fail closed.
 
 ## ADR-0008 — PDF export via preinstalled Microsoft Office
 
@@ -133,15 +139,17 @@ Capability-local rules stay in their CAP files.
 ## ADR-0010 — Workspace confidentiality catalogue with inherited folder policy
 
 - **Decision:** A workspace defines a list of stable confidentiality type IDs
-  with display labels. Folder policies use edit-root-relative paths; a document
-  derives its default from the nearest configured ancestor, including the root.
-  A document may retain an explicit override. Release records snapshot the
-  effective type.
+  with display labels. Folder policies use edit-root-relative paths; the edit
+  root always has a direct policy and a non-root folder may add, replace, or
+  remove its own direct policy. A document derives its default from the nearest
+  configured ancestor, including the root, and may retain an explicit override.
+  Release records snapshot the effective type.
 - **Why:** Operators can classify a folder tree once while retaining an
   exception path for individual documents.
-- **Consequences:** Changing a folder policy updates only descendants without a
-  nearer policy or document override. Classification is metadata for handling
-  and audit; filesystem ACLs remain the access-control boundary.
+- **Consequences:** Changing a folder policy, or removing a non-root policy,
+  updates only descendants without a nearer policy or document override; the
+  removed policy is not copied into records. Classification is metadata for
+  handling and audit; filesystem ACLs remain the access-control boundary.
 
 ## ADR-0011 — Host OS default Office application is the draft editor
 

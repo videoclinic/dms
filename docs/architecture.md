@@ -27,16 +27,17 @@ No application database server and no mandatory git repository.
 ```
 edit root                          publish root
 ─────────                          ────────────
-policies/HR/Handbook.docx   →      policies/HR/Handbook_V1.0.pdf
-policies/HR/Handbook.docx   →      policies/HR/Handbook_V2.0.pdf   (later substantive release)
+policies/HR/Handbook.docx   →      policies/HR/Handbook_V1.0_restricted.pdf
+policies/HR/Handbook.docx   →      policies/HR/Handbook_V2.0_restricted.pdf   (later substantive release)
 ```
 
 - `.dms` stores absolute edit root + absolute publish root once per workspace.
 - Each library document has a **stable document ID**; the draft **relative path**
   under the edit root is the current locator used for open/export path mapping.
-- On release, the app: assigns the next version label → ensures the relative
-  parent path exists under the publish root → exports PDF via installed
-  Microsoft Office into `<stem>_VMAJOR.MINOR.pdf` → checksums the result.
+- On release, the app: snapshots the effective confidentiality type ID, assigns
+  the next version label → ensures the relative parent path exists under the
+  publish root → exports PDF via installed Microsoft Office into
+  `<stem>_VMAJOR.MINOR_<confidentiality-type-id>.pdf` → checksums the result.
 - Application-managed version history consists of immutable release PDFs and
   their evidence. Office drafts remain mutable working copies; draft recovery
   comes from workspace backups rather than an embedded source-version store.

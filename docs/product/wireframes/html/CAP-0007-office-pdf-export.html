@@ -217,7 +217,7 @@ tr:last-child td { border-bottom: 0; }
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">In-app export via host Office. Temp PDF → validate → SHA-256 → atomic rename.</p>
+      <p class="subtitle">In-app export via host Office. Classified filename → temp PDF → validate → SHA-256 → atomic rename.</p>
       
       <section class="card">
         <h3 class="card-title">Export pipeline</h3>
@@ -236,6 +236,7 @@ tr:last-child td { border-bottom: 0; }
       </section>
       <section class="card">
         <h3 class="card-title">Atomic release transaction (CAP-0007 outcome 3)</h3>
+        <dl class="kv"><div><dt>Final filename</dt><dd>Handbook_V2.0_restricted.pdf</dd></div><div><dt>Classification snapshot</dt><dd>Restricted (type ID: restricted)</dd></div></dl>
         <p class="muted">A successful release record only exists when: export produced a valid, non-empty PDF, its SHA-256 was computed, and the atomic rename to the versioned path succeeded. Failure at any step removes the temp file when possible and never commits a release record.</p>
       </section>
     </main>

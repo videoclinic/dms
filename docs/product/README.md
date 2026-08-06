@@ -43,7 +43,7 @@ linked tests is a coverage gap, not implemented proof.
 Static operator-surface wireframes (shadcn-admin 2.2.0 visual base):
 [`wireframes/index.html`](wireframes/index.html) ·
 [`wireframes/manifest.json`](wireframes/manifest.json) ·
-PNG exports under [`wireframes/exports/`](wireframes/exports/).
+PNG exports under `wireframes/exports/`.
 Each CAP links its HTML + PNG under **Links**.
 
 ## Related

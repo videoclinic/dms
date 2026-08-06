@@ -29,8 +29,9 @@ macOS** that:
 - Registers stable document permalinks (workspace ID + document ID; optional
   review/notes target) that survive draft rename and version bumps; selection
   pane can copy the permalink
-- Applies inherited confidentiality types from configured folder policies, with
-  per-document overrides and release-time snapshots
+- Applies inherited confidentiality types from direct folder policies: the root
+  policy is required, non-root policies can be assigned, replaced, or removed,
+  with per-document overrides and release-time snapshots
 - Routes one responsible editor and one approver from inherited folder policies,
   with independent document overrides and immutable workflow snapshots
 - Opens the registered Office application for draft editing without embedding
@@ -45,8 +46,9 @@ macOS** that:
   creating a new version when unchanged content is confirmed
 - Optionally hands a previewed local text comparison to installed Claude
   Desktop for advisory major/minor classification and changelog wording
-- On release: app assigns version, mirrors tree under publish root, exports PDF
-  via preinstalled Microsoft Office to `<stem>_VMAJOR.MINOR.pdf`, checksums it
+- On release: app snapshots effective confidentiality type, assigns version,
+  mirrors tree under publish root, exports PDF via preinstalled Microsoft Office
+  to `<stem>_VMAJOR.MINOR_<confidentiality-type-id>.pdf`, checksums it
 - Keeps editable Office drafts in place after release
 - Attaches notes; verifies released PDF checksums
 - Ships core workflows on both Windows and macOS
@@ -67,10 +69,10 @@ macOS** that:
 | --- | --- | --- | --- |
 | 0 | Product records and architecture bootstrap | done (docs tree; release version policy, approval, notification, confidentiality, workflow-role routing, maintenance, periodic review, optional Claude handoff, foldable shell chrome, session activity tabs, saved views, stable document permalinks, Win+macOS recorded) | CAP/CHG/ADR files exist; indexes list CAP-0001…0020; no CAP claims implemented runtime |
 | 1 | Tauri 2 app skeleton (Windows + macOS) + DOX for source tree | pending | Dev app launches on Windows and macOS; README run steps for both; foldable left menu + hamburger + session-only open-activity tabs with visible current state; explicit saved-view bookmark persists in OS user config and restores as a fresh activity |
-| 2 | `.dms` store + dual-root open/configure + confidentiality and workflow-role policies | pending | Tests: persist/reload edit+publish roots, stable workspace ID, and schema version; safe older-schema migration/newer-schema read-only; inherit nearest class and each role independently; init `.dms` only on confirm |
+| 2 | `.dms` store + dual-root open/configure + confidentiality and workflow-role policies | pending | Tests: persist/reload edit+publish roots, stable workspace ID, and schema version; safe older-schema migration/newer-schema read-only; create/replace a direct folder policy, remove a non-root policy, refuse root-policy removal, and recompute nearest inherited class; inherit each workflow role independently; init `.dms` only on confirm |
 | 3 | Library directory navigator + add/unregister/reassociate + selection pane | pending | Tests: add under edit root; reject outside path; unregister preserves history; ambiguous move is never auto-linked; search/filter controlled set; single selection shows CAP-0015 master data + document actions in the right pane with matching title; multi-select shows only multi-applicable actions in the same pane; a saved library view restores folder/filter/sort and a single-document stable ID but never batch selection; copy permalink uses workspace+document IDs only and never changes saved views; selection opens/focuses an activity tab |
 | 4 | Lifecycle + approval notification + version assign + tree mirror | pending | Tests: request requires summary, requester, change class, effective approver, and transport success; CAP-0020 deep link resolves only an accessible registered workspace to the intended review request and still resolves after rename/version bump; each decision notifies the snapshotted requester, with failure retryable and non-reverting; approver-policy change invalidates an open review; cosmetic→minor, substantive/uncertain→major; comments/event hash persist; metadata change invalidates approval; first version V1.0; refuse overwrite |
-| 5 | Office-driven PDF export on release (Win + macOS adapters) | pending | Tests/integration: export via installed Office (or test double) to versioned path on each OS path; failure rolls back version success |
+| 5 | Office-driven PDF export on release (Win + macOS adapters) | pending | Tests/integration: export via installed Office (or test double) to the versioned, classified path on each OS; snapshot the effective type ID into the filename; failure rolls back version success |
 | 6 | Notes on documents | pending | Tests: note CRUD persistence across restart |
 | 7 | Release checksum + periodic review + verify | pending | Tests: exported PDF → expected SHA-256; tamper → mismatch; release snapshots draft digest/class/chain; periodic confirm keeps version; changes-required begins revision; full backup manifest covers both roots |
 | 8 | Optional Claude Desktop handoff | pending | Tests: disabled/missing app never blocks; policy and consent gate payload; accepted suggestion remains editable and cannot mutate lifecycle |
@@ -88,11 +90,13 @@ macOS** that:
   in phase 2 — must include `edit_root`, `publish_root`, stable workspace ID,
   library entries with
   relative paths and stable IDs, confidentiality and workflow-person catalogues,
-  relative folder policies, master data, per-doc overrides, version counters,
+  direct relative folder policies (including the required root policy), master
+  data, per-doc overrides, version counters,
   release history, approval event chain, review-request IDs, requester identity,
   notification delivery attempts, notes, checksums.
-- Version pattern: `<stem>_V<major>.<minor>.pdf`; cosmetic changes increment
-  minor and substantive or uncertain changes increment major (ADR-0007).
+- Version pattern: `<stem>_V<major>.<minor>_<confidentiality-type-id>.pdf`;
+  cosmetic changes increment minor and substantive or uncertain changes
+  increment major (ADR-0007).
 - Path mapping: `publish_abs = publish_root / relative_parent / versioned_name`
   (ADR-0006).
 - Office export: platform adapters (Windows COM / macOS automation) behind one
