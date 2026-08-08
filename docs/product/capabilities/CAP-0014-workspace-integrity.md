@@ -25,7 +25,7 @@ When implemented, the following must hold:
    replacement leaves the previous valid file intact. Temporary artifacts are
    reported and can be removed after the valid generation is confirmed.
 4. **Backup and restore.** A **Backup workspace** action creates a compressed
-   archive containing `.dms`, controlled Office drafts under the edit root,
+   archive containing `.dms`, controlled source drafts under the edit root,
    and every recorded release PDF under the publish root, plus a manifest of
    relative paths, sizes, and SHA-256 digests. Restore verifies the manifest
    before writing and lets the operator choose replacement edit/publish roots;

@@ -27,7 +27,7 @@ When implemented, the following must hold:
 
 - Encryption at rest
 - Digital signatures / certificates (distinct from content checksums)
-- Checksumming draft Office files as a release gate
+- Treating source-draft checksums as released-PDF integrity verification
 
 ## Links
 - Wireframe (HTML): [`../wireframes/html/CAP-0004-release-integrity.html`](../wireframes/html/CAP-0004-release-integrity.html)

@@ -4,7 +4,7 @@
 | --- | --- |
 | ID | CAP-0002 |
 | Status | not implemented |
-| Draft formats | Microsoft Office originals (e.g. `.docx`, `.xlsx`, `.pptx`) |
+| Draft formats | Markdown (`.md`) and Microsoft Office originals (e.g. `.docx`, `.xlsx`, `.pptx`) |
 | Released format | Versioned, classified PDF only (`*_VMAJOR.MINOR_<confidentiality-type-id>.pdf`) |
 | Tests | none |
 
@@ -56,8 +56,8 @@ When implemented, the following must hold:
    (examples: `Policy_V1.0_restricted.pdf`, `Policy_V1.1_restricted.pdf`,
    `Policy_V2.0_confidential.pdf`). The filename uses the effective
    confidentiality type ID snapshotted for that release.
-8. The editable Microsoft Office file remains the working draft under the edit
-   root; release does not replace or delete it. Release records link draft path
+8. The editable source file remains the working draft under the edit root;
+   release does not replace or delete it. Release records link draft path
    → versioned PDF path.
 9. Version numbers are monotonic per stable document ID. The first release is
    `V1.0`. An approved cosmetic change increments minor (`V1.0` → `V1.1`);
@@ -71,7 +71,7 @@ When implemented, the following must hold:
     app does not accept an arbitrary operator-dropped PDF as a substitute for
     that export in the normal release flow.
 11. Release is allowed only from a current `approved` revision and stores the
-    approved Office-draft SHA-256 digest, effective confidentiality type,
+    approved source-draft SHA-256 digest, effective confidentiality type,
     effective editor and approver, approval-chain head, effective date, and
     next-review-due (CAP-0015 / CAP-0017 / CAP-0019) with the immutable release
     record. Release fails if the document is `obsolete` or `missing`.
@@ -87,7 +87,7 @@ When implemented, the following must hold:
     canonical event chain. The decision event types recorded in the
     canonical event chain (CAP-0011) are `review_decision_approved`,
     `review_decision_rejected`, and `review_decision_changed_requested`.
-15. If the operator renames or moves a controlled Office draft outside the app,
+15. If the operator renames or moves a controlled source draft outside the app,
     the next open of the workspace flags the document as `missing` until the
     operator reassigns it, removes it, or restores the file. A draft modified
     while a review is open invalidates the open approval (per outcome 6) without
@@ -104,7 +104,7 @@ When implemented, the following must hold:
     follows CAP-0017.
 19. Before submitting a review request and again immediately before release,
     the application derives the candidate release label from outcome 9 and
-    checks the current Office draft for its two canonical visible-content
+    checks the current source draft for its two canonical visible-content
     markers:
     - `Version: <major>.<minor>` must equal the candidate label without its
       filename `V` prefix (for example, candidate `V2.0` requires
@@ -115,10 +115,12 @@ When implemented, the following must hold:
     is found or when multiple occurrences do not all resolve to the expected
     value. Caption matching normalizes surrounding whitespace and casing;
     version and confidentiality values must match exactly after whitespace
-    normalization. The initial DOCX scanner covers body text, tables, text
-    boxes, and every header/footer part, including section-specific footers.
-    No other draft format may enter review or release until its equivalent
-    visible-content coverage is implemented and tested alongside CAP-0007.
+    normalization. The DOCX scanner covers body text, tables, text boxes, and
+    every header/footer part, including section-specific footers. The Markdown
+    scanner checks rendered body text outside front matter, HTML comments, and
+    fenced or indented code blocks. Other draft formats may not enter review or
+    release until equivalent visible-content coverage is implemented and tested
+    alongside CAP-0007.
     A failed check blocks the transition by default and reports the expected and
     detected marker values and locations without retaining other draft content.
     The operator may explicitly proceed after accepting a false-positive
@@ -126,7 +128,7 @@ When implemented, the following must hold:
     the current draft digest, candidate label, effective confidentiality type,
     and check phase; it is recorded as CAP-0011 evidence, is visible to the
     approver, and must be accepted again for the release-time check. It never
-    edits the Office draft or turns the failed check into a passing result.
+    edits the source draft or turns the failed check into a passing result.
 
 ## Capability-local rules
 
@@ -140,7 +142,7 @@ When implemented, the following must hold:
   recomputing and re-hashing is the verification routine exposed to operators
   (CAP-0012).
 - PDF export and file versioning are application responsibilities using
-  preinstalled Microsoft Office (CAP-0007, ADR-0008).
+  format-specific local exporters (CAP-0007, ADR-0008).
 - Content-conformance overrides are exceptional workflow evidence, not a
   substitute for correcting the source draft or its configured classification.
 - Naming pattern and dual-root placement: ADR-0006, ADR-0007.
@@ -158,7 +160,7 @@ When implemented, the following must hold:
 - Architecture: [`../../architecture.md`](../../architecture.md)
 - ADR-0003, ADR-0004, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010,
   ADR-0012, ADR-0013, ADR-0015, ADR-0016, ADR-0019: [`../../design-decisions.md`](../../design-decisions.md)
-- Export: [`CAP-0007-office-pdf-export.md`](CAP-0007-office-pdf-export.md)
+- Export: [`CAP-0007-draft-pdf-export.md`](CAP-0007-draft-pdf-export.md)
 - Library: [`CAP-0006-library-explorer.md`](CAP-0006-library-explorer.md)
 - Classification: [`CAP-0008-confidentiality-classification.md`](CAP-0008-confidentiality-classification.md)
 - Editor: [`CAP-0009-release-editor.md`](CAP-0009-release-editor.md)

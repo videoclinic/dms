@@ -61,7 +61,7 @@ When implemented, the following must hold:
    - `report_generated` — audit or other report exported from the workspace
    Each event uses the canonical body and required comment/reason fields
    defined by the owning CAP. The release event embeds the version label
-   (`VMAJOR.MINOR`), the produced PDF digest, and the approved Office-draft
+   (`VMAJOR.MINOR`), the produced PDF digest, and the approved source-draft
    digest; the document-control-data event embeds before/after values.
 9. Periodic-review events are first-class canonical events of the same shape
    and bind to the reviewed release record and PDF digest (CAP-0017). Their

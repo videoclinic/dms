@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>CAP-0009 — Open draft in Office · DMS Desktop</title>
+<title>CAP-0009 — Open draft in host editor · DMS Desktop</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -217,26 +217,26 @@ tr:last-child td { border-bottom: 0; }
       <div class="grow"></div>
       <span class="ham-note">☰ when menu folded</span>
       <span class="badge ok">Workspace healthy</span>
-      <div class="header-actions"><button class="btn outline bookmark-btn" title="Bookmark this view" aria-pressed="false">☆ Bookmark this view</button><button class="btn">Open draft in Word</button></div>
+      <div class="header-actions"><button class="btn outline bookmark-btn" title="Bookmark this view" aria-pressed="false">☆ Bookmark this view</button><button class="btn">Open draft</button></div>
     </header>
     <main class="content">
       <div class="cap-head">
         <span class="badge info">CAP-0009</span>
-        <h2>Open draft in Office</h2>
+        <h2>Open draft in host editor</h2>
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Host-registered Office handler. No embed, no auto-save, file handle released immediately.</p>
+      <p class="subtitle">Host-registered Office handler or default text editor. No embed, no auto-save, file handle released immediately.</p>
       
       <section class="card">
         <h3 class="card-title">Registered handlers</h3>
         <div class="table-wrap"><table>
     <thead><tr><th>Format</th><th>Handler</th><th>Version</th><th>Default</th><th>Status</th></tr></thead>
-    <tbody><tr><td>.docx</td><td>Microsoft Word</td><td>16.92 (Microsoft 365)</td><td>Yes</td><td><span class="badge ok">registered</span></td></tr><tr><td>.xlsx</td><td>Microsoft Excel</td><td>16.92 (Microsoft 365)</td><td>Yes</td><td><span class="badge ok">registered</span></td></tr><tr><td>.pptx</td><td>Microsoft PowerPoint</td><td>16.92 (Microsoft 365)</td><td>Yes</td><td><span class="badge ok">registered</span></td></tr></tbody>
+    <tbody><tr><td>.docx</td><td>Microsoft Word</td><td>16.92 (Microsoft 365)</td><td>Yes</td><td><span class="badge ok">registered</span></td></tr><tr><td>.xlsx</td><td>Microsoft Excel</td><td>16.92 (Microsoft 365)</td><td>Yes</td><td><span class="badge ok">registered</span></td></tr><tr><td>.pptx</td><td>Microsoft PowerPoint</td><td>16.92 (Microsoft 365)</td><td>Yes</td><td><span class="badge ok">registered</span></td></tr><tr><td>.md</td><td>Default text editor</td><td>OS registered</td><td>Yes</td><td><span class="badge ok">registered</span></td></tr></tbody>
   </table></div>
       </section>
       <div class="callout warn">
-        <strong>Missing handler:</strong> surfaces a clear message naming the missing handler and install location. No silent fallback to a non-Office binary.
+        <strong>Missing handler:</strong> surfaces a clear message naming the missing handler and install location. No silent fallback to a different editor.
       </div>
     </main>
   </div>

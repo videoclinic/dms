@@ -38,7 +38,7 @@ When implemented, the following must hold:
    approver IDs. Later policy or roster changes do not rewrite historical
    evidence.
 8. Role routing does not grant or revoke filesystem access and does not prevent
-   Office editing. The application records the local OS user for workflow events;
+   source-file editing. The application records the local OS user for workflow events;
    filesystem ACLs remain the access-control boundary.
 
 ## Non-goals

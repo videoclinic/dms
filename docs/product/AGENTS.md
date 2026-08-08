@@ -19,9 +19,10 @@ Own falsifiable capability contracts (`CAP-*.md`) and the product index.
 - Link ADRs/architecture/privacy; do not duplicate them.
 - Update `README.md` index when adding/removing a CAP.
 - Keep filesystem-derived **Source file** name/path, DMS-managed **Document
-  control data**, and Office document properties as explicitly distinct data
-  sources. Do not relabel document control data as "Master data" or imply Office
-  property synchronization without changing the owning CAP contract.
+  control data**, Office document properties, and Markdown front matter as
+  explicitly distinct data sources. Do not relabel document control data as
+  "Master data" or imply source-metadata synchronization without changing the
+  owning CAP contract.
 - CAP-0005 owns open-activity naming and reuse: document panes use task +
   DMS title + optional document number, while their stable identity is workspace
   + task + document ID.

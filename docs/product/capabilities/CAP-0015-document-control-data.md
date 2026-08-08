@@ -12,7 +12,7 @@
 When implemented, the following must hold:
 
 1. Each library document stores DMS-managed **document control data** under
-   `<edit-root>/.dms/`, separate from the Office source file:
+   `<edit-root>/.dms/`, separate from the source file:
    - **title** (required operator-editable display name; defaults to draft stem)
    - **document number** (optional control identifier, unique in the workspace)
    - **document type** (from a workspace catalogue, e.g. policy, procedure,
@@ -22,9 +22,9 @@ When implemented, the following must hold:
      empty while never released)
    - **next review due date** (computed and maintained by CAP-0017)
    These values are not imported from or synchronized with Office built-in or
-   custom document properties. The draft filename stem supplies the title's
-   one-time default only when the document is added; it is not a continuing
-   metadata source.
+   custom document properties, or Markdown front matter. The draft filename stem
+   supplies the title's one-time default only when the document is added; it is
+   not a continuing metadata source.
 2. Document control data for the **currently selected library document** is
    shown on the **same CAP-0006 library page** in the selection pane (right
    column), together with document actions for that selection. The pane keeps
@@ -41,10 +41,10 @@ When implemented, the following must hold:
 3. After a successful release, the document remains `released` for the current
    version. Starting the next change cycle is an explicit **Begin revision**
    action that returns the document to `draft` while retaining the released
-   PDF and history. The Office draft stays the editable working file.
+   PDF and history. The source draft stays the editable working file.
 4. While a newer draft exists after a release (or after Begin revision), the
    explorer surfaces **released version label** and **draft is newer than last
-   release** when current draft bytes differ from the approved Office-draft
+   release** when current draft bytes differ from the approved source-draft
    digest stored on the last successful release record.
 5. The **current released version** is the latest non-withdrawn release
    record. A later release supersedes the previous current version for
@@ -88,13 +88,14 @@ When implemented, the following must hold:
     active, unregistered, and obsolete records; a historical number is not
     silently reused. Date validation rejects a next-review date earlier than
     its effective date.
-13. Draft Office files are working copies, not application-versioned source
+13. Draft source files are working copies, not application-versioned source
     archives. Renaming or reassociating a source file updates only its stored
     locator and the filesystem-derived **Source file** display; it does not
     change the document's title, number, type, owner, dates, lifecycle state,
-    or history. Office document properties are likewise not authoritative for
-    document control data. The application restores draft content only from an
-    operator workspace backup; released PDFs and their evidence remain the
+    or history. Office document properties and Markdown front matter are likewise
+    not authoritative for document control data. The application restores draft
+    content only from an operator workspace backup; released PDFs and their
+    evidence remain the
     durable application-managed version history.
 14. **Begin revision**, **Mark obsolete**, and **Cancel review** are available
     from the CAP-0006 selection pane (single selection) when preconditions hold;
@@ -107,9 +108,8 @@ When implemented, the following must hold:
 - Automatic calendar reminders outside the app
 - Enforcing legal retention deletion of PDFs
 - Cross-document dependency graphs
-- Automatic Office-draft version history or source-document diff/revert
-- Importing or synchronizing document control data from Office document
-  properties
+- Automatic source-draft version history or source-document diff/revert
+- Importing or synchronizing document control data from source-file metadata
 - A separate primary app section whose only job is document control data
   outside the library navigator (detail may still expand full-width for editing)
 

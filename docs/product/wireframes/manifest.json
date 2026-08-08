@@ -46,9 +46,9 @@
     },
     {
       "id": "CAP-0007",
-      "title": "Office → PDF export",
-      "html": "html/CAP-0007-office-pdf-export.html",
-      "png": "exports/CAP-0007-office-pdf-export.png",
+      "title": "Source draft → PDF export",
+      "html": "html/CAP-0007-draft-pdf-export.html",
+      "png": "exports/CAP-0007-draft-pdf-export.png",
       "nav": "releases"
     },
     {
@@ -60,7 +60,7 @@
     },
     {
       "id": "CAP-0009",
-      "title": "Open draft in Office",
+      "title": "Open draft in host editor",
       "html": "html/CAP-0009-release-editor.html",
       "png": "exports/CAP-0009-release-editor.png",
       "nav": "library"

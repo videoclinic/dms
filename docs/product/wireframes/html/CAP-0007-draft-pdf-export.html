@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>CAP-0007 — Office → PDF export · DMS Desktop</title>
+<title>CAP-0007 — Source draft → PDF export · DMS Desktop</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -222,22 +222,23 @@ tr:last-child td { border-bottom: 0; }
     <main class="content">
       <div class="cap-head">
         <span class="badge info">CAP-0007</span>
-        <h2>Office → PDF export</h2>
+        <h2>Source draft → PDF export</h2>
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">In-app export via host Office. Classified filename → temp PDF → validate → SHA-256 → atomic rename.</p>
+      <p class="subtitle">Office exports through host Office; Markdown renders locally through native WebView PDF APIs. Classified filename → temp PDF → validate → SHA-256 → atomic rename.</p>
       
       <section class="card">
         <h3 class="card-title">Export pipeline</h3>
         <div class="pipeline">
-          <div class="step active"><span class="dot"></span>Locate Office handler</div><div class="step active"><span class="dot"></span>Open headless</div><div class="step active"><span class="dot"></span>Export to temp PDF</div><div class="step active"><span class="dot"></span>Validate header</div><div class="step active"><span class="dot"></span>SHA-256 digest</div><div class="step active"><span class="dot"></span>Atomic rename</div>
+          <div class="step active"><span class="dot"></span>Identify source format</div><div class="step active"><span class="dot"></span>Office or local Markdown render</div><div class="step active"><span class="dot"></span>Export to temp PDF</div><div class="step active"><span class="dot"></span>Validate header</div><div class="step active"><span class="dot"></span>SHA-256 digest</div><div class="step active"><span class="dot"></span>Atomic rename</div>
         </div>
       </section>
       <section class="card">
         <h3 class="card-title">Fail-closed conditions</h3>
         <ul class="list danger-list">
-          <li>Office missing or unlicensed → abort, no partial version</li>
+          <li>Office missing or unlicensed for an Office draft → abort, no partial version</li>
+          <li>Markdown render failure → abort, no partial version</li>
           <li>Unsupported draft extension → abort with clear message</li>
           <li>Temp empty or missing %PDF header → remove temp, no release record</li>
           <li>Target path occupied by non-app file → fail (ADR-0007)</li>

@@ -22,7 +22,7 @@ When implemented, the following must hold:
    current classification summary.
    Periodic-review requests/results and approved major/minor change class are
    included for each applicable release cycle.
-3. Reports do not embed draft Office content or released PDF bytes. They
+3. Reports do not embed source-draft content or released PDF bytes. They
    carry identifying metadata and SHA-256 digests so a separate copy of the
    document can be matched against a recorded checksum.
 4. Generating a report is itself a workflow event of type `report_generated`

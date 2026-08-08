@@ -19,10 +19,10 @@ When implemented, the following must hold:
    the document's effective confidentiality type. Missing Claude Desktop shows
    an unavailable explanation and does not offer a cloud/API fallback.
 3. The app first produces a deterministic local plain-text comparison between
-   the current Office draft and the latest released PDF. The release record's
+   the current source draft and the latest released PDF. The release record's
    source-draft and PDF digests identify the compared revision. The app shows
    the operator the exact change excerpts and metadata that would be handed to
-   Claude; binary Office/PDF files, `.dms`,
+   Claude; raw source/PDF files, `.dms`,
    approver data, paths outside the document, and credentials are excluded.
 4. Before every handoff, the app states that Claude Desktop is a local client
    but Claude model processing may send the displayed payload to Anthropic. The

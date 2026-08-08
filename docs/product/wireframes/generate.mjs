@@ -351,9 +351,9 @@ const CAPS = [
               </tr>
               <tr class="selected">
                 <td><span class="check on">☑</span></td>
-                <td>Risk assessment.docx</td>
+                <td>Risk assessment.md</td>
                 <td>${badge("Not in library", "warn")}</td>
-                <td>Office draft</td>
+                <td>Markdown draft</td>
                 <td>—</td>
                 <td>—</td>
               </tr>
@@ -384,28 +384,28 @@ const CAPS = [
           </div>
           <details class="selection-section" open>
             <summary>Files</summary>
-            <div class="selection-section-body"><ul class="list"><li>Risk assessment.docx <span class="muted">· policies/HR</span></li><li>Employee onboarding.docx <span class="muted">· policies/HR</span></li></ul></div>
+            <div class="selection-section-body"><ul class="list"><li>Risk assessment.md <span class="muted">· policies/HR</span></li><li>Employee onboarding.docx <span class="muted">· policies/HR</span></li></ul></div>
           </details>
           <details class="selection-section" open>
             <summary>Actions <span>1 available</span></summary>
             <div class="selection-section-body stack-btns"><button class="btn">Add 2 documents to library</button></div>
           </details>
-          <p class="hint">Batch add is available because every selected row is an in-root Office draft not already in the library. A mixed or unsupported selection has no incompatible action. Registered documents instead show Source file identity, Document control data, and lifecycle actions here.</p>
+          <p class="hint">Batch add is available because every selected row is an in-root supported source draft, including Markdown. A mixed or unsupported selection has no incompatible action. Registered documents instead show Source file identity, Document control data, and lifecycle actions here.</p>
         </aside>
       </div>
       ${batchSelectionPane()}`,
   },
   {
     id: "CAP-0007",
-    file: "CAP-0007-office-pdf-export",
-    title: "Office → PDF export",
+    file: "CAP-0007-draft-pdf-export",
+    title: "Source draft → PDF export",
     nav: "releases",
-    subtitle: "In-app export via host Office. Classified filename → temp PDF → validate → SHA-256 → atomic rename.",
+    subtitle: "Office exports through host Office; Markdown renders locally through native WebView PDF APIs. Classified filename → temp PDF → validate → SHA-256 → atomic rename.",
     body: `
       <section class="card">
         <h3 class="card-title">Export pipeline</h3>
         <div class="pipeline">
-          ${["Locate Office handler", "Open headless", "Export to temp PDF", "Validate header", "SHA-256 digest", "Atomic rename"]
+          ${["Identify source format", "Office or local Markdown render", "Export to temp PDF", "Validate header", "SHA-256 digest", "Atomic rename"]
             .map((s) => `<div class="step active"><span class="dot"></span>${s}</div>`)
             .join("")}
         </div>
@@ -413,7 +413,8 @@ const CAPS = [
       <section class="card">
         <h3 class="card-title">Fail-closed conditions</h3>
         <ul class="list danger-list">
-          <li>Office missing or unlicensed → abort, no partial version</li>
+          <li>Office missing or unlicensed for an Office draft → abort, no partial version</li>
+          <li>Markdown render failure → abort, no partial version</li>
           <li>Unsupported draft extension → abort with clear message</li>
           <li>Temp empty or missing %PDF header → remove temp, no release record</li>
           <li>Target path occupied by non-app file → fail (ADR-0007)</li>
@@ -471,10 +472,10 @@ const CAPS = [
   {
     id: "CAP-0009",
     file: "CAP-0009-release-editor",
-    title: "Open draft in Office",
+    title: "Open draft in host editor",
     nav: "library",
-    subtitle: "Host-registered Office handler. No embed, no auto-save, file handle released immediately.",
-    actions: ["Open draft in Word"],
+    subtitle: "Host-registered Office handler or default text editor. No embed, no auto-save, file handle released immediately.",
+    actions: ["Open draft"],
     body: `
       <section class="card">
         <h3 class="card-title">Registered handlers</h3>
@@ -484,11 +485,12 @@ const CAPS = [
             [".docx", "Microsoft Word", "16.92 (Microsoft 365)", "Yes", badge("registered", "ok")],
             [".xlsx", "Microsoft Excel", "16.92 (Microsoft 365)", "Yes", badge("registered", "ok")],
             [".pptx", "Microsoft PowerPoint", "16.92 (Microsoft 365)", "Yes", badge("registered", "ok")],
+            [".md", "Default text editor", "OS registered", "Yes", badge("registered", "ok")],
           ]
         )}
       </section>
       <div class="callout warn">
-        <strong>Missing handler:</strong> surfaces a clear message naming the missing handler and install location. No silent fallback to a non-Office binary.
+        <strong>Missing handler:</strong> surfaces a clear message naming the missing handler and install location. No silent fallback to a different editor.
       </div>`,
   },
   {

@@ -23,9 +23,9 @@ linked tests is a coverage gap, not implemented proof.
 | [CAP-0004](capabilities/CAP-0004-release-integrity.md) | Released PDF checksum integrity | not implemented |
 | [CAP-0005](capabilities/CAP-0005-desktop-shell.md) | Tauri desktop shell (Windows and macOS) | not implemented |
 | [CAP-0006](capabilities/CAP-0006-library-explorer.md) | Folder-first controlled library explorer | not implemented |
-| [CAP-0007](capabilities/CAP-0007-office-pdf-export.md) | Application-driven Office → PDF export | not implemented |
+| [CAP-0007](capabilities/CAP-0007-draft-pdf-export.md) | Application-driven source draft → PDF export | not implemented |
 | [CAP-0008](capabilities/CAP-0008-confidentiality-classification.md) | Inherited document confidentiality classification | not implemented |
-| [CAP-0009](capabilities/CAP-0009-release-editor.md) | Release editor (host Office) | not implemented |
+| [CAP-0009](capabilities/CAP-0009-release-editor.md) | Release editor (host source editor) | not implemented |
 | [CAP-0010](capabilities/CAP-0010-notification-transport.md) | Notification transport (SMTP or host mail handler) | not implemented |
 | [CAP-0011](capabilities/CAP-0011-approval-evidence.md) | Approval evidence (change and decision comments, chain) | not implemented |
 | [CAP-0012](capabilities/CAP-0012-audit-export.md) | Audit and report export | not implemented |

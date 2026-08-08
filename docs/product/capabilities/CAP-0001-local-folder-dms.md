@@ -13,7 +13,7 @@
 When implemented, the following must hold:
 
 1. Operator configures a DMS workspace with two rooted paths:
-   - **edit root** — tree where Microsoft Office drafts are edited
+   - **edit root** — tree where Office and Markdown source drafts are edited
    - **publish root** — tree where released versioned PDFs are written
 2. Both absolute roots and a stable opaque workspace ID are persisted in `.dms`
    and restored when the workspace is reopened. The ID is assigned when the

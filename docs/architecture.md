@@ -4,20 +4,21 @@
 
 Desktop application for operator-maintained document versioning and approval
 aligned with ISO 27001 control needs for documented information. Required
-runtime targets are **Windows and macOS**. Drafts remain Microsoft Office files
-under an **edit root**; released artifacts are versioned PDFs under a
-**publish root**, with integrity checksums.
+runtime targets are **Windows and macOS**. Drafts remain Microsoft Office or
+Markdown (`.md`) files under an **edit root**; released artifacts are versioned
+PDFs under a **publish root**, with integrity checksums.
 
 ## Runtime shape
 
 | Layer | Responsibility |
 | --- | --- |
-| Tauri 2 shell (Rust) | Windowing, filesystem access, checksums, path mapping, Office export orchestration, OS integration, registered local-app URI handler (document permalinks) |
+| Tauri 2 shell (Rust) | Windowing, filesystem access, checksums, path mapping, format-specific PDF export orchestration, OS integration, registered local-app URI handler (document permalinks) |
 | Frontend (web UI in WebView) | Foldable left menu with hamburger when collapsed; open-activity panes/tabs as quicklinks; folder-dominant Library workspace with a persistent edit-root-relative tree, Windows Explorer-like Back/Forward/Up and breadcrumb navigation, current-folder child folders + exact source-file names + controlled-document data, and a selection pane that separates filesystem-derived Source file identity from CAP-0015 DMS-managed document control data and single/batch actions; add/remove control, lifecycle, change commentary, approval, release/verify, confidentiality and workflow-role policies, audit export, publish history, copy/resolve document permalinks |
-| Microsoft Office (host-installed) | PDF export engine invoked by the app on release (Word/Excel/PowerPoint as applicable) |
+| Microsoft Office (host-installed) | PDF export engine for Office drafts invoked by the app on release (Word/Excel/PowerPoint as applicable) |
+| Native WebView PDF API | Locally renders Markdown source to PDF on release |
 | Claude Desktop (optional host app) | Operator-mediated, consented handoff for advisory change classification and changelog wording; not a callable local model or lifecycle authority |
 | `<edit-root>/.dms/` | Roots config, library registry, DMS-managed document control data, workflow-person roster + SMTP settings (no secrets), folder confidentiality and workflow-role policies, notes, approval/release history, evidence hashes, checksums, advisory lock |
-| Edit root tree | Operator-edited Microsoft Office drafts (library members are a subset) |
+| Edit root tree | Operator-edited Microsoft Office and Markdown source drafts (library members are a subset) |
 | Publish root tree | Versioned released PDFs in a directory tree mirrored from edit-relative paths |
 
 No application database server and no mandatory git repository.
@@ -29,6 +30,7 @@ edit root                          publish root
 ─────────                          ────────────
 policies/HR/Handbook.docx   →      policies/HR/Handbook_V1.0_restricted.pdf
 policies/HR/Handbook.docx   →      policies/HR/Handbook_V2.0_restricted.pdf   (later substantive release)
+procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
 ```
 
 - `.dms` stores absolute edit root + absolute publish root once per workspace.
@@ -39,10 +41,11 @@ policies/HR/Handbook.docx   →      policies/HR/Handbook_V2.0_restricted.pdf   
   document control data and history remain keyed to the stable document ID.
 - On release, the app: snapshots the effective confidentiality type ID, assigns
   the next version label → ensures the relative parent path exists under the
-  publish root → exports PDF via installed Microsoft Office into
+  publish root → exports Office drafts via installed Microsoft Office or
+  Markdown drafts through a native WebView PDF API into
   `<stem>_VMAJOR.MINOR_<confidentiality-type-id>.pdf` → checksums the result.
 - Application-managed version history consists of immutable release PDFs and
-  their evidence. Office drafts remain mutable working copies; draft recovery
+  their evidence. Source drafts remain mutable working copies; draft recovery
   comes from workspace backups rather than an embedded source-version store.
 - This prevents “edited here, published who-knows-where” drift: publish location
   is a pure function of configured roots + relative path + version label.
@@ -67,9 +70,10 @@ policies/HR/Handbook.docx   →      policies/HR/Handbook_V2.0_restricted.pdf   
   handler with a pre-filled `mailto:` URI as a fallback notification path; this
   is an outbound mail draft, not a server-issued message, and the lifecycle
   state does not enter `in_review` until the operator confirms submission.
-- A library document opened from the app launches the registered Office editor
-  for its draft format. The app releases the OS file handle before returning;
-  it does not hold a long-running lock on the draft.
+- A library document opened from the app launches the host-registered editor:
+  Office for Office drafts and the default text editor for Markdown. The app
+  releases the OS file handle before returning; it does not hold a long-running
+  lock on the draft.
 - An advisory lock file in `<edit-root>/.dms/lock` serialises metadata writes
   from this app only. It is not a multi-writer lock and never blocks read-only
   filesystem access from other tools.

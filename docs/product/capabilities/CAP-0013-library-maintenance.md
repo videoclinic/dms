@@ -25,7 +25,7 @@ When implemented, the following must hold:
 3. **Rescan.** A maintenance **Rescan library** action walks the edit root and
    reports missing registered records with any safe reassociation suggestions.
    The regular CAP-0006 directory listing already shows every unregistered
-   supported Office draft and lets the operator add the selected file. Rescan
+   supported source draft and lets the operator add the selected file. Rescan
    may offer batch add or reassociation after explicit confirmation; it never
    auto-adds or guesses an ambiguous match.
 4. **Approver roster maintenance.** The operator can add, edit, and disable
@@ -44,8 +44,8 @@ When implemented, the following must hold:
 7. **Reject a draft in review.** An approver records `rejected` with a
    required decision comment; the document returns to `draft` and the
    rejection is recorded in the canonical event chain.
-8. **Supported draft extensions.** Library add accepts only the declared v1
-   Office extensions (at least `.docx`; `.xlsx` / `.pptx` as implemented).
+8. **Supported draft extensions.** Library add accepts `.md` plus the declared
+   v1 Office extensions (at least `.docx`; `.xlsx` / `.pptx` as implemented).
    Other extensions fail closed with a clear message (CAP-0007).
 9. **Office lock/temp sidecars.** Files matching Office lock/temp patterns
    (e.g. `~$…`) are never offered as library candidates and are ignored by

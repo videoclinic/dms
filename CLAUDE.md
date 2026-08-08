@@ -11,8 +11,8 @@ target file.
   behaviour contracts and change records (`docs/changes/active/CHG-*.md`) as
   implementation-progress authority. For material behaviour work, update the
   affected CAP and active CHG with the implementation and its tests.
-- Keep source-file identity, DMS-managed document-control data, and Office
-  document properties distinct.
+- Keep source-file identity, DMS-managed document-control data, Office document
+  properties, and Markdown front matter distinct.
 - Read relevant files, trace code before changing it, make targeted edits, and
   run the relevant verification before reporting completion.
 - Complete the DOX closeout after meaningful edits: re-check the applicable

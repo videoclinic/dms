@@ -4,17 +4,17 @@
 
 | Class | Where it lives | Notes |
 | --- | --- | --- |
-| Draft Office documents | Edit root (operator-controlled) | Content is business documentation; app does not upload it |
+| Draft source documents (Office and Markdown) | Edit root (operator-controlled) | Content is business documentation; app does not upload it |
 | Released versioned PDFs | Publish root (operator-controlled) | Final published artifacts (`*_VMAJOR.MINOR_<confidentiality-type-id>.pdf`); the path exposes the classification ID |
 | DMS metadata, library membership, notes, approval state, checksums | `<edit-root>/.dms/` | Local only; may contain personal names in notes or approver fields |
-| Document control data and workflow-role policies (title, owner, number, type, review dates, assigned editor/approver) | `<edit-root>/.dms/` | Local control metadata; not Office properties or document body content |
+| Document control data and workflow-role policies (title, owner, number, type, review dates, assigned editor/approver) | `<edit-root>/.dms/` | Local control metadata; not Office properties, Markdown front matter, or document body content |
 | Confidentiality policy and effective document label | `<edit-root>/.dms/` | Local classification metadata; a label does not enforce access control |
 | Approval-notification metadata | `<edit-root>/.dms/` | Requester/approver display name/email, outcome, send time, and delivery-attempt result; no document content |
 | Workspace root paths | Inside `.dms` | Absolute edit/publish paths on the operator machine |
 | SMTP relay password | OS credential store (when implemented) | Never stored in `.dms`; relay settings contain no password |
 | Workspace advisory lock | `<edit-root>/.dms/lock` | Process id, hostname, timestamp; advisory only, never contains document content |
 | Export/audit reports | `<edit-root>/.dms/exports/` (operator-chosen) | Aggregated lifecycle, approval, periodic-review, and release evidence; produced on demand |
-| Workspace backup archive | Operator-chosen path | Contains `.dms`, controlled Office drafts, and released PDFs; not encrypted by the app |
+| Workspace backup archive | Operator-chosen path | Contains `.dms`, controlled source drafts, and released PDFs; not encrypted by the app |
 | Optional Claude Desktop handoff | Clipboard and Claude Desktop conversation | Operator-previewed plain-text change excerpts and selected metadata; processing may leave the machine for Anthropic |
 | App preferences | OS user config directory (when implemented) | Sidebar preference and saved-view targets (workspace/document IDs plus route state); no document content or workflow evidence |
 

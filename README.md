@@ -20,10 +20,10 @@ executable tests will be the proof of implementation when development begins.
 
 ## Intended product
 
-DMS will keep editable Microsoft Office drafts under an operator-managed **edit
-root** and write immutable, versioned PDFs under a separate **publish root**.
-The app will mirror edit-relative directories on release and store workspace
-metadata in `<edit-root>/.dms/`.
+DMS will keep editable Microsoft Office and Markdown (`.md`) source drafts under
+an operator-managed **edit root** and write immutable, versioned PDFs under a
+separate **publish root**. The app will mirror edit-relative directories on
+release and store workspace metadata in `<edit-root>/.dms/`.
 
 Planned control model:
 
@@ -31,9 +31,10 @@ Planned control model:
 - Folder-dominant, Windows Explorer-like controlled-library workspace with
   persistent tree navigation, breadcrumbs, Back/Forward/Up, and a source-file
   identity distinct from DMS-managed document-control data.
-- Application-driven Office-to-PDF release through host-installed Microsoft
-  Office. First release is `V1.0`; cosmetic changes increment the minor version,
-  while substantive or uncertain changes increment the major version.
+- Application-driven PDF release: host-installed Microsoft Office exports Office
+  drafts, while the app renders Markdown locally through native WebView PDF APIs.
+  First release is `V1.0`; cosmetic changes increment the minor version, while
+  substantive or uncertain changes increment the major version.
 - Released PDFs use
   `<stem>_V<major>.<minor>_<confidentiality-type-id>.pdf` and receive SHA-256
   integrity checksums.

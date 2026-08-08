@@ -21,21 +21,22 @@ Capability-local rules stay in their CAP files.
   without shipping a full browser; operators use both Windows and Mac for ISO
   documentation work.
 - **Consequences:** Rust toolchain plus WebView2 (Windows) and WKWebView/macOS
-  prerequisites; CI and release packaging must cover both OS; platform-specific
-  Office automation adapters (ADR-0008) sit behind one export interface.
+  prerequisites; CI and release packaging must cover both OS; format-specific
+  PDF export adapters (ADR-0008) sit behind one export interface.
 
-## ADR-0003 — Drafts are Office originals; releases are PDFs
+## ADR-0003 — Source drafts; releases are PDFs
 
-- **Decision:** Draft/working documents remain Microsoft Office formats
-  (e.g. `.docx`, `.xlsx`, `.pptx`) under the edit root. Only PDF artifacts enter
-  the released state under the publish root. Git-style content VCS is not
-  required.
-- **Why:** Authors keep familiar tools; controlled released form is a stable
-  PDF suitable for distribution and integrity checking.
-- **Consequences:** The Office draft remains after release. PDF bytes are
-  produced by the application via installed Microsoft Office (ADR-0008), then
-  version-named and checksummed. The app versions released PDFs, not each Office
-  save; draft rollback depends on operator workspace backups.
+- **Decision:** Draft/working documents remain Microsoft Office formats (for
+  example `.docx`, `.xlsx`, `.pptx`) or Markdown (`.md`) under the edit root.
+  Only PDF artifacts enter the released state under the publish root. Git-style
+  content VCS is not required.
+- **Why:** Authors retain familiar Office workflows or use portable plain-text
+  Markdown; the controlled released form is a stable PDF suitable for
+  distribution and integrity checking.
+- **Consequences:** The source draft remains after release. The application uses
+  format-specific local PDF export (ADR-0008), then versions and checksums the
+  result. It versions released PDFs, not each source save; draft rollback depends
+  on operator workspace backups.
 
 ## ADR-0004 — Local application approval with revision-bound evidence
 
@@ -98,22 +99,24 @@ Capability-local rules stay in their CAP files.
   see the classification ID. Collisions with manually dropped files at the
   target path fail closed.
 
-## ADR-0008 — PDF export via preinstalled Microsoft Office
+## ADR-0008 — Format-specific local PDF export
 
-- **Decision:** The application drives Office → PDF export using preinstalled
-  Microsoft Office desktop apps on the host OS — **Windows and macOS**.
-  Implementation may use platform-native automation (e.g. COM on Windows,
-  AppleScript/Office automation on macOS) behind one export interface. Release
-  does not rely on the operator manually exporting and selecting a PDF as the
-  primary path.
-- **Why:** Consistent release pipeline, correct versioned target path, and
-  checksum binding to bytes the app just produced; matches operator expectation
-  that the DMS performs export and versioning on both supported desktops.
-- **Consequences:** Licensed desktop Office on the operator machine is a runtime
-  dependency for release on each OS; headless CI may mock or skip live Office
-  export; export quality equals installed Office; automation must handle app
-  already running, file locks, and failure rollback (no successful version
-  record without PDF).
+- **Decision:** The application dispatches PDF export by source format. Office
+  drafts use preinstalled Microsoft Office desktop apps on Windows and macOS;
+  Markdown (`.md`) drafts are rendered locally as CommonMark HTML and printed by
+  the native WebView PDF API. Both paths use one export interface and the same
+  versioned target, validation, checksum, and atomic-commit flow. Release does
+  not rely on the operator manually exporting and selecting a PDF.
+- **Why:** This preserves the established Office release path while letting
+  Markdown release without requiring Office, a bundled browser, or a cloud
+  conversion service.
+- **Consequences:** Licensed desktop Office is a runtime dependency only for
+  Office drafts. Office automation may use platform-native mechanisms (for
+  example COM on Windows and AppleScript/Office automation on macOS); Markdown
+  export requires supported native WebView PDF APIs on each OS. CI may use test
+  doubles, but platform integration must prove both adapters. No successful
+  version record exists unless the selected exporter produces the valid PDF that
+  the app validates, checksums, and atomically commits.
 
 ## ADR-0009 — SMTP notification opens local-app approval
 
@@ -151,20 +154,19 @@ Capability-local rules stay in their CAP files.
   removed policy is not copied into records. Classification is metadata for
   handling and audit; filesystem ACLs remain the access-control boundary.
 
-## ADR-0011 — Host OS default Office application is the draft editor
+## ADR-0011 — Host OS editor opens source drafts
 
 - **Decision:** Opening a library document from the desktop app launches the
-  host-registered Microsoft Office application for that draft format. The app
-  does not embed an editor, render its own preview, or auto-save the draft.
-  After Office exits, the lifecycle state of the document is unchanged; the
-  next review or release re-hashes the draft bytes before recording.
-- **Why:** Authors keep their familiar Office workflow; the desktop app only
-  owns the controlled metadata, never the editable document.
+  host-registered Microsoft Office application for Office formats and the host
+  default text editor for Markdown. The app does not embed an editor, render a
+  custom preview, or auto-save the draft. After the editor exits, lifecycle
+  state is unchanged; the next review or release re-hashes draft bytes.
+- **Why:** Authors retain their chosen source workflow while the desktop app
+  owns only controlled metadata and release handling.
 - **Consequences:** A draft opened while a review is in flight can be modified
   outside the app. Approval is revision-bound (ADR-0004): when the draft hash
   no longer matches the review digest, the app marks the approval invalidated
-  and requires a new request. Office integration never blocks the app on the
-  Office process.
+  and requires a new request. The app never blocks on the opened editor process.
 
 ## ADR-0012 — Configurable notification transport with mailto fallback
 
@@ -280,7 +282,7 @@ Capability-local rules stay in their CAP files.
   repeating the same assignments for every document, while retaining document
   exceptions.
 - **Consequences:** These assignments route work and provide audit context only.
-  They do not prevent a person from opening or editing a shared Office file;
+  They do not prevent a person from opening or editing a shared source file;
   filesystem ACLs remain the access-control boundary. Changing an effective
   approver invalidates an open review and requires a new request.
 

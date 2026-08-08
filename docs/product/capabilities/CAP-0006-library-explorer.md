@@ -38,7 +38,7 @@ When implemented, the following must hold:
      internal `.dms` content and Office lock/temp sidecars defined by CAP-0013.
      A file row's **Name** is always the exact filesystem file name, including
      its extension. Each file row states whether it is **In library**, **Not in
-     library** (a supported Office draft), or not a supported draft. A
+     library** (a supported source draft), or not a supported draft. A
      registered document additionally shows its DMS-managed document title and
      control data in a separate **Document** field; that title never replaces
      the source file name. Single-click selects a folder or file row;
@@ -46,18 +46,18 @@ When implemented, the following must hold:
      segment opens that folder directly.
    - Back/Forward history is session-only. Navigating alone does not create a
      saved view; the operator must use CAP-0005's explicit bookmark control.
-3. Selecting one or more **Not in library** supported Microsoft Office files
+3. Selecting one or more **Not in library** supported source files
    shows their names, relative paths, and membership state in the right selection
    pane. For exactly one file, that pane exposes **Add to library**. For two or
    more selected files, it exposes **Add _N_ documents to library** only when
-   every selected row is a supported in-root Office file that is not already
+   every selected row is a supported in-root source file that is not already
    registered. Add fails for a path outside the edit root or an already
    registered file. There is no header-level `Add documents` picker: the
    selection makes every action target explicit.
 4. Operator can **unregister** a document from the active library only when no
    content or periodic review is open. Unregister preserves its stable ID,
    document control data, notes, workflow/release history, and checksums in read-only
-   history; it never deletes the Office file or a published PDF. Re-registering
+   history; it never deletes the source file or a published PDF. Re-registering
    that record associates a confirmed in-root draft path with the same ID.
 5. **In library** document rows keep the exact source file name in **Name** and
    surface enough DMS-managed data to scan the current folder without leaving
@@ -85,7 +85,7 @@ When implemented, the following must hold:
 7. **Multi-select** of two or more file rows uses the **same selection pane**.
    It provides a batch summary (count, short identity list, clear) and
    **multi-applicable actions only**. A homogeneous selection of **Not in
-   library** supported Office files exposes **Add _N_ documents to library**.
+   A homogeneous selection of **Not in library** supported source files exposes **Add _N_ documents to library**.
    A homogeneous selection of **In library** documents replaces document
    control data with its applicable batch actions. Mixed selections and
    unsupported files expose no action that cannot apply to every selected row. Single-document
@@ -111,7 +111,7 @@ When implemented, the following must hold:
      workspace+document URI; never a path- or version-based link
    - **Claude change assistance** when enabled (CAP-0018)
    Multi-select exposes only multi-applicable actions (including batch add for
-   a homogeneous selection of unregistered supported Office files, plus bulk
+   a homogeneous selection of unregistered supported source files, plus bulk
    verify where defined and multi-unregister with per-item precondition checks).
    Copy permalink is single-selection only. Per-document actions such as Submit
    for review, Mark obsolete, Start periodic review, and Copy permalink are not
@@ -163,7 +163,7 @@ When implemented, the following must hold:
 - Full OS file manager replacement (copy/move/rename of arbitrary non-library
   files)
 - Pixel-for-pixel Windows File Explorer imitation or arbitrary path entry
-- Watching the entire edit root and auto-adding every new Office file without
+- Watching the entire edit root and auto-adding every new supported source file without
   operator action
 - Per-row hamburger / overflow menus in the list
 - Replacing dedicated deep screens for long workflows (approval decision form,

@@ -21,7 +21,7 @@ When implemented, the following must hold:
    pane (Source file identity + document control data + document/batch actions),
    lifecycle transitions (including begin revision, cancel review, obsolete),
    review notification and decision, notes, confidentiality and document-type
-   policy, document-control-data edit, release (version + Office PDF export),
+   policy, document-control-data edit, release (version + format-specific PDF export),
    verify checksum, publish history,
    periodic review, audit export, backup/restore, optional Claude Desktop
    change-comment handoff, and document permalink copy/resolve (CAP-0020).
