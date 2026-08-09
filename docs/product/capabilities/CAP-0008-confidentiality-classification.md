@@ -16,46 +16,52 @@ When implemented, the following must hold:
    hyphens; for example `restricted`) and a display label. Renaming a label
    never changes its ID. Deletion is rejected while a folder policy, document,
    or historical release references the ID.
-2. Under **Configuration**, the folder-policy editor shows an
+2. Under **Configuration**, confidentiality uses the same defaults-first policy
+   layout as CAP-0019: a compact workspace-default summary identifies the edit
+   root's type and enabled-type count, while direct folder policies are the
+   primary workspace. **Manage confidentiality types** opens catalogue
+   administration as a secondary surface; the full type list and its controls do
+   not occupy a permanent Configuration column.
+3. The folder-policy editor shows an
    edit-root-relative folder tree containing the edit root and every accessible
    descendant folder, including empty folders and folders without library
    documents; `<edit-root>/.dms` is excluded. Selecting a tree node is the only
    way to choose the editor target. The editor shows that selected relative path;
    it does not accept an arbitrary typed path and does not reuse Library
    navigation selection.
-3. The editor targets only the selected edit root or existing folder under it.
+4. The editor targets only the selected edit root or existing folder under it.
    The operator chooses one enabled confidentiality type from the workspace
    catalogue. **Save folder policy** creates a direct policy for the selected
    folder or replaces that folder's existing direct policy; it does not create
    policies for ancestors or descendants.
-4. The edit root always has a direct policy and is the required fallback. Its
+5. The edit root always has a direct policy and is the required fallback. Its
    type can be replaced but its policy cannot be removed. **Remove folder
    policy** is available only for a non-root folder and removes that folder's
    direct policy record. It neither deletes or moves the folder nor changes a
    child folder policy or a document-level override.
-5. A folder policy applies to that folder and all descendant folders unless a
+6. A folder policy applies to that folder and all descendant folders unless a
    nearer direct folder policy exists. Removing a non-root policy immediately
    makes the selected folder and every descendant without a nearer policy
    inherit the nearest remaining ancestor policy; it does not copy that type
    into any folder or document record.
-6. For each **library document**, the app resolves the effective type from the
+7. For each **library document**, the app resolves the effective type from the
    document's current edit-root-relative source path and the nearest ancestor
    folder policy; the root policy is the required fallback. A file that is not
    in the library has no DMS confidentiality classification. The explorer's
    library row and single-document selection pane display the effective type,
    its source folder, and whether it is inherited or explicitly overridden.
-7. For exactly one selected library document, the selection pane offers an
+8. For exactly one selected library document, the selection pane offers an
    **Override confidentiality** action. The operator can choose one enabled
    type as a document-level override or clear the existing override. Clearing it
    restores inherited behaviour without copying a policy into the document
    record.
-8. Changing, adding, or removing a folder policy immediately changes the
+9. Changing, adding, or removing a folder policy immediately changes the
    effective type of inheriting descendants only. Explicit document overrides
    and nearer folder policies are unchanged.
-9. A review request and a released version snapshot the effective type ID and
+10. A review request and a released version snapshot the effective type ID and
    display label in their immutable workflow/release evidence. Later policy
    changes or label renames do not rewrite historical records or PDF filenames.
-10. If a document's effective confidentiality type changes while an
+11. If a document's effective confidentiality type changes while an
    approval-required content review is open or after approval but before release,
    the request/approval is invalidated and a new review is required. Historical
    snapshots remain unchanged.

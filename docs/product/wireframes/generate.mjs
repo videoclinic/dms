@@ -460,64 +460,52 @@ const CAPS = [
     file: "CAP-0008-confidentiality-classification",
     title: "Confidentiality policies",
     nav: "config",
-    subtitle: "Select a folder in Configuration's edit-root-relative tree, choose its type, then save a direct policy or remove a non-root policy to inherit again.",
+    subtitle: "Set the root default, then add only the folder exceptions that need a different confidentiality type.",
     body: `
-      <style>
-        .app[data-cap="CAP-0008"] .policy-editor-details > div { grid-template-columns: 1fr; gap: 0.2rem; }
-      </style>
-      <div class="grid-2">
-        <section class="card">
-          <h3 class="card-title">Workspace catalogue</h3>
-          ${typeCard("Public", "marketing, general communications", "ok", "public")}
-          ${typeCard("Internal", "default for most operations", "info", "internal")}
-          ${typeCard("Restricted", "HR, finance, security", "warn", "restricted")}
-          ${typeCard("Confidential", "legal, board, M&A", "danger", "confidential")}
-        </section>
-        <section class="card">
-          <h3 class="card-title">Folder policy editor</h3>
-          <div class="grid-explorer" style="grid-template-columns:12.5rem minmax(0,1fr);gap:0.75rem">
-            <div class="tree" style="border:1px solid var(--border);border-radius:calc(var(--radius) - 2px);padding:0.65rem">
-              <div class="label" style="margin-bottom:0.45rem">Select a folder</div>
-              <ul class="tree-root">
+      ${defaultsFirstStyles()}
+      <section class="config-summary">
+        <div class="summary-copy"><strong>Workspace default ${badge("Internal", "info")}</strong><span>Applied from edit-root unless a nearer folder policy changes it.</span></div>
+        <span class="badge muted">4 enabled types</span>
+        <button class="btn outline">Manage confidentiality types…</button>
+      </section>
+      <div class="defaults-grid">
+        <section class="card tree">
+          <h3 class="card-title">Choose default or exception</h3>
+          <ul class="tree-root">
+            <li>
+              <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📂 edit-root <span class="badge info">Internal</span></span></div>
+              <ul>
                 <li>
-                  <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📂 edit-root</span></div>
+                  <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📂 policies</span></div>
                   <ul>
-                    <li>
-                      <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📂 policies</span></div>
-                      <ul>
-                        <li><div class="tree-node active"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 HR</span></div></li>
-                        <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 IT</span></div></li>
-                      </ul>
-                    </li>
-                    <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 records</span></div></li>
-                    <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 Archive (empty)</span></div></li>
+                    <li><div class="tree-node active"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 HR <span class="badge warn">Restricted</span></span></div></li>
+                    <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 IT</span></div></li>
                   </ul>
                 </li>
+                <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 records <span class="badge danger">Confidential</span></span></div></li>
+                <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 Archive (empty)</span></div></li>
               </ul>
-              <p class="hint" style="margin-top:0.55rem">Choose an existing node. <code>.dms</code> is hidden; Library navigation does not set this selection.</p>
-            </div>
-            <div class="type-card mb">
-            <dl class="kv policy-editor-details">
-              <div><dt>Selected folder</dt><dd>policies/HR/</dd></div>
-              <div><dt>Policy type</dt><dd><select aria-label="Policy type" style="width:100%;height:2rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.5rem;background:var(--background);color:var(--foreground)"><option>Public</option><option>Internal</option><option selected>Restricted</option><option>Confidential</option></select></dd></div>
-              <div><dt>Existing direct policy</dt><dd>Restricted</dd></div>
-              <div><dt>After removal</dt><dd>Internal from edit-root</dd></div>
-            </dl>
-            <div class="row gap-2" style="margin-top:0.75rem"><button class="btn">Save folder policy</button><button class="btn danger">Remove folder policy</button></div>
-            <p class="hint">Save creates or replaces a policy at this folder only. It does not change ancestor or child policies.</p>
-            </div>
+            </li>
+          </ul>
+          <p class="hint">Select edit-root to change the workspace default. <code>.dms</code> is hidden; Library navigation does not set this selection.</p>
+        </section>
+        <section class="card defaults-editor">
+          <div class="row between mb"><h3 class="card-title" style="margin:0">Default for policies/HR/</h3>${badge("direct exception", "warn")}</div>
+          <div class="default-state"><strong>Parent default: Internal from edit-root</strong>Saving below changes this folder and inheriting descendants only; nearer policies and document overrides remain unchanged.</div>
+          <div class="grid-2" style="margin-top:0.75rem">
+            <div><div class="label" style="margin-bottom:0.35rem">Confidentiality type</div><select aria-label="Policy type" style="width:100%;height:2rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.5rem;background:var(--background);color:var(--foreground)"><option>Public</option><option>Internal</option><option selected>Restricted</option><option>Confidential</option></select></div>
+            <div><div class="label" style="margin-bottom:0.35rem">After removal</div><div style="height:2rem;display:flex;align-items:center">Internal from edit-root</div></div>
           </div>
-          <div class="callout warn"><strong>Remove only removes this non-root policy.</strong> The folder remains. Its documents and descendants inherit from the nearest remaining ancestor unless they have a nearer folder policy or document override. The root policy can be changed but not removed.</div>
-          <h3 class="card-title" style="margin-top:1rem">Direct folder policies (edit-root relative)</h3>
+          <div class="row gap-2" style="margin-top:0.75rem"><button class="btn">Save folder exception</button><button class="btn danger">Remove exception</button></div>
+          <h3 class="card-title" style="margin-top:1rem">Folder exceptions</h3>
           ${table(
-            ["Path", "Type", "Status"],
+            ["Path", "Type", "State"],
             [
-              ["edit-root", "Internal", "required root policy"],
-              ["policies/HR/", "Restricted", "direct policy"],
-              ["records/", "Confidential", "direct policy"],
+              ["policies/HR/", "Restricted", "direct"],
+              ["records/", "Confidential", "direct"],
             ]
           )}
-          <p class="hint">All other folders inherit the nearest direct policy. Snapshots written into review requests and release records do not change.</p>
+          <p class="hint">Remove restores the nearest remaining default. The edit-root policy is required and cannot be removed; review and release snapshots do not change.</p>
         </section>
       </div>`,
   },
@@ -867,49 +855,54 @@ const CAPS = [
     file: "CAP-0019-inherited-workflow-role-routing",
     title: "Microsoft Entra workflow roles",
     nav: "config",
-    subtitle: "Select one editor and approver from the Microsoft Entra workspace group; inheritance and document overrides remain independent.",
+    subtitle: "Set editor and approver defaults at the root, then add only the folder exceptions that need different routing.",
     body: `
-      <div class="grid-2">
-        <section class="card">
-          <div class="row between mb"><h3 class="card-title" style="margin:0">Microsoft Entra people source</h3>${badge("connected", "ok")}</div>
-          ${kv([
-            ["Tenant", "videoclinic.de"],
-            ["Group", "VC DMS Workflow Users"],
-            ["Membership", "Direct user members only"],
-            ["Decision identity", "Interactive Entra sign-in; snapshot match required"],
-            ["Last refresh", "Just now"],
-          ])}
-          <div class="row gap-2" style="margin-top:0.75rem"><button class="btn outline">Refresh eligible people</button><button class="btn outline">View identity source</button></div>
-          <p class="hint">Read-only source. Group owners manage membership in Microsoft Entra; DMS Desktop never creates, edits, disables, or deletes users.</p>
+      ${defaultsFirstStyles()}
+      <section class="config-summary">
+        <div class="summary-copy"><strong>People source ${badge("connected", "ok")}</strong><span>VC DMS Workflow Users · 3 eligible direct members · refreshed just now</span></div>
+        <button class="btn outline">Refresh people</button>
+        <button class="btn outline">Manage identity source…</button>
+      </section>
+      <div class="defaults-grid">
+        <section class="card tree">
+          <h3 class="card-title">Choose default or exception</h3>
+          <ul class="tree-root">
+            <li>
+              <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📂 edit-root <span class="badge info">defaults</span></span></div>
+              <ul>
+                <li>
+                  <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📂 policies</span></div>
+                  <ul>
+                    <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 HR</span></div></li>
+                    <li><div class="tree-node active"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 IT <span class="badge warn">exception</span></span></div></li>
+                  </ul>
+                </li>
+                <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 records <span class="badge danger">unresolved</span></span></div></li>
+                <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 Archive (empty)</span></div></li>
+              </ul>
+            </li>
+          </ul>
+          <p class="hint">Select edit-root to change both routing defaults. <code>.dms</code> is hidden; Library navigation does not set this selection.</p>
         </section>
         <section class="card">
-          <h3 class="card-title">Folder role editor</h3>
-          ${kv([
-            ["Selected path", "policies/IT/"],
-            ["Responsible editor", "Lukas Roth <lukas@vc.de>"],
-            ["Approver", "Anna Berg <anna@vc.de>"],
-            ["Inherited after remove", "Lukas Roth / Anna Berg from edit-root"],
-          ])}
-          <div class="row gap-2" style="margin-top:0.75rem;flex-wrap:wrap"><button class="btn outline">Select editor…</button><button class="btn outline">Select approver…</button><button class="btn">Save folder policy</button><button class="btn danger">Remove folder policy</button></div>
-          <p class="hint">Selection refreshes the group first. Save changes only this folder; remove restores the nearest ancestor per role.</p>
-        </section>
-      </div>
-      <section class="card">
-          <h3 class="card-title">Folder policies (effective)</h3>
+          <div class="row between mb"><h3 class="card-title" style="margin:0">Default for policies/IT/</h3>${badge("direct exception", "warn")}</div>
+          <div class="default-state"><strong>Parent defaults: Lukas Roth / Anna Berg from edit-root</strong>Save below changes this folder and inheriting descendants only. Each role remains independent; document overrides remain unchanged.</div>
+          <div class="grid-2" style="margin-top:0.75rem">
+            <div><div class="label" style="margin-bottom:0.35rem">Responsible editor</div><button class="btn outline" style="width:100%;text-align:left">Lukas Roth · Change…</button></div>
+            <div><div class="label" style="margin-bottom:0.35rem">Approver</div><button class="btn outline" style="width:100%;text-align:left">Anna Berg · Change…</button></div>
+          </div>
+          <div class="row gap-2" style="margin-top:0.75rem"><button class="btn">Save folder exception</button><button class="btn danger">Remove exception</button></div>
+          <h3 class="card-title" style="margin-top:1rem">Folder exceptions</h3>
           ${table(
-            ["Path", "Editor", "Approver", "Source / state"],
+            ["Path", "Editor", "Approver", "State"],
             [
-              ["edit-root", "Lukas Roth", "Anna Berg", "root policy"],
-              ["policies/", "Lukas Roth", "Anna Berg", "inherited"],
-              ["policies/HR/", "Lukas Roth", "Anna Berg", "inherited"],
-              ["Handbook.docx", "Lukas Roth (override)", "Anna Berg (override)", "document override"],
-              ["policies/IT/", "Lukas Roth", "Anna Berg", "folder override"],
-              ["records/", "Unresolved", "Anna Berg", "Mira Klein is no longer eligible"],
-              ["procedures/", "Lukas Roth", "Anna Berg", "inherited"],
+              ["policies/IT/", "Lukas Roth", "Anna Berg", "direct"],
+              ["records/", "Unresolved", "Anna Berg", "Mira Klein ineligible"],
             ]
           )}
           <div class="callout warn" style="margin-top:0.75rem">An unresolved role blocks a new review. DMS Desktop never chooses a replacement; an operator reroutes the policy from the current Entra group.</div>
-      </section>`,
+        </section>
+      </div>`,
   },
   {
     id: "CAP-0020",
@@ -960,41 +953,25 @@ const CAPS = [
     file: "CAP-0021-microsoft-entra-workflow-identity",
     title: "Microsoft Entra workflow identity",
     nav: "config",
-    subtitle: "Bind this workspace to one explicit Entra group. The group is a read-only people source; DMS Desktop does not manage users or membership.",
-    body: `<div class="grid-2">
-        <section class="card">
-          <div class="row between mb"><h3 class="card-title" style="margin:0">Current identity source</h3>${badge("connected", "ok")}</div>
-          ${kv([
-            ["Tenant", "videoclinic.de"],
-            ["Group", "VC DMS Workflow Users"],
-            ["Group object ID", "9c14…bf72"],
-            ["Eligible people", "3 direct user members"],
-            ["Last refresh", "2025-08-05 09:16 UTC"],
-          ])}
-          <div class="row gap-2" style="margin-top:0.75rem"><button class="btn outline">Refresh people</button><button class="btn outline">Change identity source…</button></div>
-          <p class="hint">Cached names and email are presentation only. Role assignment, review submission, and decisions refresh membership before authority is applied.</p>
-        </section>
-        <section class="card">
-          <h3 class="card-title">First setup or source replacement</h3>
-          ${kv([
-            ["Tenant ID", "Provided by Microsoft 365 administrator"],
-            ["Group object ID", "Provided by Microsoft 365 administrator"],
-            ["Sign-in", "Interactive Microsoft Entra sign-in"],
-            ["Preview", "Tenant, group, and direct eligible user count"],
-          ])}
-          <div class="row gap-2" style="margin-top:0.75rem"><button class="btn outline">Preview source</button><button class="btn">Apply binding</button></div>
-          <div class="callout warn" style="margin-top:0.75rem">Apply binding changes the workspace source. Every live editor/approver policy becomes unresolved and must be rerouted; historical evidence is unchanged.</div>
-        </section>
-      </div>
+    subtitle: "Keep the bound group visible as a compact, read-only source; open setup or replacement only when the workspace source changes.",
+    body: `${defaultsFirstStyles()}
+      <section class="config-summary">
+        <div class="summary-copy"><strong>Current identity source ${badge("connected", "ok")}</strong><span>videoclinic.de · VC DMS Workflow Users · 9c14…bf72 · 3 eligible people · refreshed 2025-08-05 09:16 UTC</span></div>
+        <button class="btn outline">Refresh people</button>
+        <button class="btn outline">Manage identity source…</button>
+      </section>
       <div class="grid-2">
         <section class="card">
           <h3 class="card-title">Eligible people — read only</h3>
-          <div class="stack">
-            ${person("a714…51bf", "Lukas Roth", "lukas@vc.de", "ok")}
-            ${person("b023…882a", "Anna Berg", "anna@vc.de", "ok")}
-            ${person("c144…0d91", "Mira Klein", "mira@vc.de", "ok")}
-          </div>
-          <p class="hint">Use this list only to select editor/approver routing. Add, remove, disable, and profile changes happen in Microsoft Entra.</p>
+          ${table(
+            ["Person", "Email", "Object ID", "State"],
+            [
+              ["Lukas Roth", "lukas@vc.de", "a714…51bf", badge("active", "ok")],
+              ["Anna Berg", "anna@vc.de", "b023…882a", badge("active", "ok")],
+              ["Mira Klein", "mira@vc.de", "c144…0d91", badge("active", "ok")],
+            ]
+          )}
+          <p class="hint">Use this read-only list only to select editor/approver routing. Add, remove, disable, and profile changes happen in Microsoft Entra.</p>
         </section>
         <section class="card">
           <h3 class="card-title">Authority boundary</h3>
@@ -1005,7 +982,7 @@ const CAPS = [
             ["OneDrive sharing", "Not read as a roster"],
             ["Document content", "Never sent to Microsoft Graph"],
           ])}
-          <p class="hint">The Entra group verifies workflow identity. Filesystem, SharePoint, and OneDrive permissions independently control source-file access.</p>
+          <p class="hint">The Entra group verifies workflow identity. Filesystem, SharePoint, and OneDrive permissions independently control source-file access. Setup and source replacement require explicit management, a preview, interactive sign-in, and confirmation.</p>
         </section>
       </div>`,
   },
@@ -1032,9 +1009,6 @@ function note(head, body) {
 }
 function layer(name, desc) {
   return `<div class="layer"><strong>${name}</strong><p class="muted">${desc}</p></div>`;
-}
-function typeCard(name, desc, kind, typeId) {
-  return `<div class="type-card"><div class="row gap-2">${badge(name, kind)}</div><p class="muted">${desc}</p><p class="hint">Type ID: <code>${typeId}</code> · stable filename token · In-use — cannot be deleted.</p></div>`;
 }
 function event(type, ts, who, cmt, hash, pred) {
   return `<article class="event">
@@ -1145,8 +1119,17 @@ function batchSelectionPane() {
     </aside>
   </section>`;
 }
-function person(id, name, email, kind) {
-  return `<div class="person"><div class="row gap-2"><strong>${name}</strong><span class="muted">${id}</span>${badge(kind === "ok" ? "active" : "disabled", kind)}</div><p class="muted">${email}</p></div>`;
+function defaultsFirstStyles() {
+  return `<style>
+    .config-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; padding: 0.75rem 0.9rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+    .config-summary .summary-copy { min-width: 14rem; flex: 1; }
+    .config-summary .summary-copy strong { display: block; font-size: 0.85rem; }
+    .config-summary .summary-copy span { color: var(--muted-foreground); font-size: 0.78rem; }
+    .defaults-grid { display: grid; grid-template-columns: 13rem minmax(0, 1fr); gap: 1rem; align-items: start; }
+    .defaults-editor { min-width: 0; }
+    .default-state { padding: 0.65rem 0.75rem; border-radius: calc(var(--radius) - 2px); background: var(--muted); font-size: 0.8rem; }
+    .default-state strong { display: block; margin-bottom: 0.2rem; font-size: 0.82rem; }
+  </style>`;
 }
 
 function shell(cap) {

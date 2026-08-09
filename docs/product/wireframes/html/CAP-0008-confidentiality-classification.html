@@ -226,60 +226,58 @@ tr:last-child td { border-bottom: 0; }
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Select a folder in Configuration's edit-root-relative tree, choose its type, then save a direct policy or remove a non-root policy to inherit again.</p>
+      <p class="subtitle">Set the root default, then add only the folder exceptions that need a different confidentiality type.</p>
       
       <style>
-        .app[data-cap="CAP-0008"] .policy-editor-details > div { grid-template-columns: 1fr; gap: 0.2rem; }
-      </style>
-      <div class="grid-2">
-        <section class="card">
-          <h3 class="card-title">Workspace catalogue</h3>
-          <div class="type-card"><div class="row gap-2"><span class="badge ok">Public</span></div><p class="muted">marketing, general communications</p><p class="hint">Type ID: <code>public</code> · stable filename token · In-use — cannot be deleted.</p></div>
-          <div class="type-card"><div class="row gap-2"><span class="badge info">Internal</span></div><p class="muted">default for most operations</p><p class="hint">Type ID: <code>internal</code> · stable filename token · In-use — cannot be deleted.</p></div>
-          <div class="type-card"><div class="row gap-2"><span class="badge warn">Restricted</span></div><p class="muted">HR, finance, security</p><p class="hint">Type ID: <code>restricted</code> · stable filename token · In-use — cannot be deleted.</p></div>
-          <div class="type-card"><div class="row gap-2"><span class="badge danger">Confidential</span></div><p class="muted">legal, board, M&A</p><p class="hint">Type ID: <code>confidential</code> · stable filename token · In-use — cannot be deleted.</p></div>
-        </section>
-        <section class="card">
-          <h3 class="card-title">Folder policy editor</h3>
-          <div class="grid-explorer" style="grid-template-columns:12.5rem minmax(0,1fr);gap:0.75rem">
-            <div class="tree" style="border:1px solid var(--border);border-radius:calc(var(--radius) - 2px);padding:0.65rem">
-              <div class="label" style="margin-bottom:0.45rem">Select a folder</div>
-              <ul class="tree-root">
+    .config-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; padding: 0.75rem 0.9rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+    .config-summary .summary-copy { min-width: 14rem; flex: 1; }
+    .config-summary .summary-copy strong { display: block; font-size: 0.85rem; }
+    .config-summary .summary-copy span { color: var(--muted-foreground); font-size: 0.78rem; }
+    .defaults-grid { display: grid; grid-template-columns: 13rem minmax(0, 1fr); gap: 1rem; align-items: start; }
+    .defaults-editor { min-width: 0; }
+    .default-state { padding: 0.65rem 0.75rem; border-radius: calc(var(--radius) - 2px); background: var(--muted); font-size: 0.8rem; }
+    .default-state strong { display: block; margin-bottom: 0.2rem; font-size: 0.82rem; }
+  </style>
+      <section class="config-summary">
+        <div class="summary-copy"><strong>Workspace default <span class="badge info">Internal</span></strong><span>Applied from edit-root unless a nearer folder policy changes it.</span></div>
+        <span class="badge muted">4 enabled types</span>
+        <button class="btn outline">Manage confidentiality types…</button>
+      </section>
+      <div class="defaults-grid">
+        <section class="card tree">
+          <h3 class="card-title">Choose default or exception</h3>
+          <ul class="tree-root">
+            <li>
+              <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📂 edit-root <span class="badge info">Internal</span></span></div>
+              <ul>
                 <li>
-                  <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📂 edit-root</span></div>
+                  <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📂 policies</span></div>
                   <ul>
-                    <li>
-                      <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📂 policies</span></div>
-                      <ul>
-                        <li><div class="tree-node active"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 HR</span></div></li>
-                        <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 IT</span></div></li>
-                      </ul>
-                    </li>
-                    <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 records</span></div></li>
-                    <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 Archive (empty)</span></div></li>
+                    <li><div class="tree-node active"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 HR <span class="badge warn">Restricted</span></span></div></li>
+                    <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 IT</span></div></li>
                   </ul>
                 </li>
+                <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 records <span class="badge danger">Confidential</span></span></div></li>
+                <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 Archive (empty)</span></div></li>
               </ul>
-              <p class="hint" style="margin-top:0.55rem">Choose an existing node. <code>.dms</code> is hidden; Library navigation does not set this selection.</p>
-            </div>
-            <div class="type-card mb">
-            <dl class="kv policy-editor-details">
-              <div><dt>Selected folder</dt><dd>policies/HR/</dd></div>
-              <div><dt>Policy type</dt><dd><select aria-label="Policy type" style="width:100%;height:2rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.5rem;background:var(--background);color:var(--foreground)"><option>Public</option><option>Internal</option><option selected>Restricted</option><option>Confidential</option></select></dd></div>
-              <div><dt>Existing direct policy</dt><dd>Restricted</dd></div>
-              <div><dt>After removal</dt><dd>Internal from edit-root</dd></div>
-            </dl>
-            <div class="row gap-2" style="margin-top:0.75rem"><button class="btn">Save folder policy</button><button class="btn danger">Remove folder policy</button></div>
-            <p class="hint">Save creates or replaces a policy at this folder only. It does not change ancestor or child policies.</p>
-            </div>
+            </li>
+          </ul>
+          <p class="hint">Select edit-root to change the workspace default. <code>.dms</code> is hidden; Library navigation does not set this selection.</p>
+        </section>
+        <section class="card defaults-editor">
+          <div class="row between mb"><h3 class="card-title" style="margin:0">Default for policies/HR/</h3><span class="badge warn">direct exception</span></div>
+          <div class="default-state"><strong>Parent default: Internal from edit-root</strong>Saving below changes this folder and inheriting descendants only; nearer policies and document overrides remain unchanged.</div>
+          <div class="grid-2" style="margin-top:0.75rem">
+            <div><div class="label" style="margin-bottom:0.35rem">Confidentiality type</div><select aria-label="Policy type" style="width:100%;height:2rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.5rem;background:var(--background);color:var(--foreground)"><option>Public</option><option>Internal</option><option selected>Restricted</option><option>Confidential</option></select></div>
+            <div><div class="label" style="margin-bottom:0.35rem">After removal</div><div style="height:2rem;display:flex;align-items:center">Internal from edit-root</div></div>
           </div>
-          <div class="callout warn"><strong>Remove only removes this non-root policy.</strong> The folder remains. Its documents and descendants inherit from the nearest remaining ancestor unless they have a nearer folder policy or document override. The root policy can be changed but not removed.</div>
-          <h3 class="card-title" style="margin-top:1rem">Direct folder policies (edit-root relative)</h3>
+          <div class="row gap-2" style="margin-top:0.75rem"><button class="btn">Save folder exception</button><button class="btn danger">Remove exception</button></div>
+          <h3 class="card-title" style="margin-top:1rem">Folder exceptions</h3>
           <div class="table-wrap"><table>
-    <thead><tr><th>Path</th><th>Type</th><th>Status</th></tr></thead>
-    <tbody><tr><td>edit-root</td><td>Internal</td><td>required root policy</td></tr><tr><td>policies/HR/</td><td>Restricted</td><td>direct policy</td></tr><tr><td>records/</td><td>Confidential</td><td>direct policy</td></tr></tbody>
+    <thead><tr><th>Path</th><th>Type</th><th>State</th></tr></thead>
+    <tbody><tr><td>policies/HR/</td><td>Restricted</td><td>direct</td></tr><tr><td>records/</td><td>Confidential</td><td>direct</td></tr></tbody>
   </table></div>
-          <p class="hint">All other folders inherit the nearest direct policy. Snapshots written into review requests and release records do not change.</p>
+          <p class="hint">Remove restores the nearest remaining default. The edit-root policy is required and cannot be removed; review and release snapshots do not change.</p>
         </section>
       </div>
     </main>

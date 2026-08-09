@@ -15,6 +15,7 @@
 | Follow-up request | Direct operator request: define the approval-task email’s canonical subject and body; include the requester, DMS-managed title, and target version. |
 | Follow-up request | Direct operator request: only major version changes need approval; after a minor version is published, notify the document's approver about the new minor publication. |
 | Follow-up request | Direct operator request: clarify how an operator selects a folder for confidentiality policy and exactly which documents that policy classifies. Proceed as recommended. |
+| Follow-up request | Direct operator request: CAP-0019 and CAP-0008 look different but have similar goals: definition of defaults. redesign the ui in same way. do not let the configuration of the confidentiality policies and entra id setup so mutch space because these settings are changes less frequent |
 | Affected CAPs | CAP-0001 … CAP-0021 |
 | Decision records | ADR-0001 … ADR-0021 in `docs/design-decisions.md` |
 
@@ -56,12 +57,14 @@ macOS** that:
 - Registers stable document permalinks (workspace ID + document ID; optional
   review/notes target) that survive draft rename and version bumps; selection
   pane can copy the permalink
-- Applies inherited confidentiality types to library documents from direct folder
-  policies: Configuration has its own edit-root-relative folder tree for policy
-  selection; the root policy is required, non-root policies can be assigned,
-  replaced, or removed, and a single selected library document can carry an
-  override; unregistered files have no DMS classification and release-time
-  snapshots remain immutable
+- Applies inherited confidentiality types and workflow roles as matching
+  defaults-first policies: Configuration shows compact root-default and
+  people-source summaries, then an edit-root-relative tree and selected-folder
+  editor for direct exceptions; confidentiality catalogue administration and
+  Entra source setup open only as explicit secondary surfaces. The root policy
+  is required, non-root policies can be assigned, replaced, or removed, and a
+  single selected library document can carry an override; unregistered files have
+  no DMS classification and release-time snapshots remain immutable
 - Before review submission and release, checks the current source draft for
   canonical version and confidentiality markers. A missing, mismatched, or
   ambiguous marker blocks the transition by default; an operator can continue
@@ -114,6 +117,7 @@ macOS** that:
 | 0 | Product records and architecture bootstrap | done (docs tree; Markdown source draft plus format-specific local PDF export; release version policy, approval, notification, confidentiality, workflow-role routing, maintenance, periodic review, optional Claude handoff, foldable shell chrome, task-and-target session activity panes with duplicate reuse, saved views, folder-dominant Explorer-like Library navigation with foldable single-document sections and a same-pane batch state, stable document permalinks, Win+macOS recorded) | CAP/CHG/ADR files exist; indexes list CAP-0001…0020; no CAP claims implemented runtime |
 | 0a | Microsoft Entra workflow identity records and wireframes | done (CAP-0021, CAP-0019, ADR-0019, ADR-0021, architecture, privacy, and static screens updated) | CAP-0021 + ADR-0021 replace the application roster with a group binding; CAP-0019 selects only eligible Entra users; static screens show a read-only source, folder-role selection, and no user CRUD; all CAP/CHG/ADR indexes and links validate; no CAP claims implemented runtime |
 | 0b | Target-version review, major-only approval, and failure-evidence records + wireframes | done (CAP-0002/0011/0012, CAP-0010, ADR-0007/0013, architecture, and affected static screens updated) | CAP-0002/0011/0012 define the required changelog, minor/major/manual candidate selection, no-reservation rule, `V1.0`/major-only approval, direct minor release with effective-approver publication notification, explicit release actions, optional non-approval comment, and newest-first workflow history; CAP-0010 defines the canonical major-review and minor-publication messages; CHG/ADR/architecture align; affected static screens show direct minor release, major review, and retained unsuccessful evidence; generated exports, links, and Markdown checks pass; no CAP claims implemented runtime |
+| 0c | Defaults-first confidentiality and routing wireframes | done (CAP-0008, CAP-0019, CAP-0021, and static screens updated) | CAP-0008 and CAP-0019 use matching compact default summaries, edit-root-relative trees, selected-folder editors, and direct-exception lists; confidentiality catalogue and Entra identity setup are explicit secondary surfaces; generated exports, links, and Markdown checks pass; no CAP claims implemented runtime |
 | 1 | Tauri 2 app skeleton (Windows + macOS) + DOX for source tree | pending | Dev app launches on Windows and macOS; README run steps for both; foldable left menu + hamburger + session-only open-activity tabs show task-and-target labels and focus an existing matching task+document pane; collapsed rail icons open saved-view and open-pane flyouts without expanding the whole menu, with open/remove and focus/close actions respectively; explicit saved-view bookmark persists in OS user config and restores as a fresh activity |
 | 2 | `.dms` store + dual-root open/configure + confidentiality, Entra identity binding, and workflow-role policies | pending | Tests: persist/reload edit+publish roots, stable workspace ID, schema version, and non-secret Entra tenant/group binding; Configuration's edit-root-relative policy tree includes the root, empty accessible folders, and no `.dms`, and permits only its selected existing node as a policy target; create/replace a direct folder policy, remove a non-root policy, refuse root-policy removal, resolve the nearest inherited class for library documents only, and preserve a document override; inherit each workflow role independently; replacing the identity source marks live role policies unresolved without changing historical evidence; init `.dms` only on confirm |
 | 3 | Folder-first Library explorer + add/unregister/reassociate + selection pane | pending | Tests: folder pane is visible by default and includes empty edit-root folders while hiding `.dms`; Back/Forward/Up, breadcrumb, tree, and immediate-child contents stay synchronized; every file row keeps its exact filesystem name while an in-library row shows DMS-managed document data separately; one or more unregistered supported source files (including `.md`) can be selected and added from the right pane, while mixed/unsupported selections expose no incompatible batch action; folder navigation reuses one Library activity and updates its folder label; add under edit root; reject outside path; unregister preserves history; rename/reassociate updates only the source locator and does not change document control data or history; ambiguous move is never auto-linked; current-folder and Entire-library search scopes return matching files with paths and clear back to the complete folder listing; single controlled-document selection shows an always-visible Source file identity plus CAP-0015 Document control data and actions in the right pane; the data is loaded from `.dms`, not Office properties or Markdown front matter; its data, action, revision, and release sections fold independently while retaining document and source-file identity; navigating to an already-open task+document focuses the existing pane, while different tasks for that document may remain open; multi-select of controlled documents shows only multi-applicable actions in the same pane; a saved library view restores folder/sort and a single-document stable ID but never batch selection; copy permalink uses workspace+document IDs only and never changes saved views |
@@ -124,7 +128,7 @@ macOS** that:
 | 8 | Optional Claude Desktop handoff | pending | Tests: disabled/missing app never blocks; policy and consent gate payload; accepted suggestion remains editable and cannot mutate lifecycle |
 | 9 | Packaging smoke + CAP promotion | pending | Windows and macOS smoke covers Office and Markdown PDF export; a Microsoft 365 administrator-configured Entra group smoke covers source preview, direct-member role selection, ineligible-role blocking, and an interactive decision sign-in; CAP statuses updated only with test links; records check if present |
 
-**Current phase:** 0b is complete; phase 1 is pending. Set phase 1 to `in-progress` before implementation and keep only one phase in-progress.
+**Current phase:** 0c is complete; phase 1 is pending. Set phase 1 to `in-progress` before implementation and keep only one phase in-progress.
 
 ## Implementation notes
 
