@@ -14,10 +14,10 @@ When implemented, the following must hold:
 1. Every workflow event follows the canonical event body defined in ADR-0013:
    stable document ID, event type, predecessor event hash, ISO-8601 UTC
    timestamp, requester, effective editor and approver IDs (when applicable),
-   local OS user, revision digest (when applicable), confidentiality snapshot
-   (when applicable), approved change class and rationale (when applicable),
-   and operator comment text. The chain head is the SHA-256 of the canonical
-   body.
+   local OS user, authenticated Microsoft Entra tenant/object IDs for a review
+   decision, revision digest (when applicable), confidentiality snapshot (when
+   applicable), approved change class and rationale (when applicable), and
+   operator comment text. The chain head is the SHA-256 of the canonical body.
 2. Two comment types are first-class:
    - **Change comment** — entered at review-request time; explains what the
      author changed since the last release.
@@ -25,8 +25,10 @@ When implemented, the following must hold:
      explains the rationale.
    Both are required text (no empty comment) and are part of the canonical
    event body, not editable later.
-3. Every workflow event records a single local OS user. The application does
-   not enforce identity; it records what the OS reports.
+3. Every workflow event records a single local OS user. A review-decision event
+   additionally records the interactive Microsoft Entra tenant/object ID and is
+   rejected unless it matches the snapshotted effective approver (CAP-0019 /
+   CAP-0021). Other workflow events do not claim Entra actor verification.
 4. The history of a document lists every event in chain order with its event
    hash, predecessor hash, type, timestamp, author comment, decision comment,
    requester, effective editor and approver, revision digest, approved change
@@ -85,5 +87,6 @@ When implemented, the following must hold:
 - Workflow-role routing: [`CAP-0019-inherited-workflow-role-routing.md`](CAP-0019-inherited-workflow-role-routing.md)
 - Document control data: [`CAP-0015-document-control-data.md`](CAP-0015-document-control-data.md)
 - Privacy: [`../../privacy.md`](../../privacy.md)
-- ADR-0004, ADR-0013: [`../../design-decisions.md`](../../design-decisions.md)
+- Identity source: [`CAP-0021-microsoft-entra-workflow-identity.md`](CAP-0021-microsoft-entra-workflow-identity.md)
+- ADR-0004, ADR-0013, ADR-0021: [`../../design-decisions.md`](../../design-decisions.md)
 - Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)

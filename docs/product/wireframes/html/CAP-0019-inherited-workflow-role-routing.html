@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>CAP-0019 — Workflow roles · DMS Desktop</title>
+<title>CAP-0019 — Microsoft Entra workflow roles · DMS Desktop</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -222,29 +222,34 @@ tr:last-child td { border-bottom: 0; }
     <main class="content">
       <div class="cap-head">
         <span class="badge info">CAP-0019</span>
-        <h2>Workflow roles</h2>
+        <h2>Microsoft Entra workflow roles</h2>
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Editor and approver inherited from nearest configured ancestor; document override beats folder.</p>
+      <p class="subtitle">Select one editor and approver from the Microsoft Entra workspace group; inheritance and document overrides remain independent.</p>
       
       <div class="grid-2">
         <section class="card">
-          <h3 class="card-title">Workflow roster</h3>
-          <div class="stack">
-            <div class="person"><div class="row gap-2"><strong>Lukas Roth</strong><span class="muted">wp-001</span><span class="badge ok">active</span></div><p class="muted">lukas@vc.de</p></div>
-            <div class="person"><div class="row gap-2"><strong>Anna Berg</strong><span class="muted">wp-002</span><span class="badge ok">active</span></div><p class="muted">anna@vc.de</p></div>
-            <div class="person"><div class="row gap-2"><strong>Mira Klein</strong><span class="muted">wp-003</span><span class="badge warn">disabled</span></div><p class="muted">mira@vc.de</p></div>
-          </div>
+          <div class="row between mb"><h3 class="card-title" style="margin:0">Microsoft Entra people source</h3><span class="badge ok">connected</span></div>
+          <dl class="kv"><div><dt>Tenant</dt><dd>videoclinic.de</dd></div><div><dt>Group</dt><dd>VC DMS Workflow Users</dd></div><div><dt>Membership</dt><dd>Direct user members only</dd></div><div><dt>Decision identity</dt><dd>Interactive Entra sign-in; snapshot match required</dd></div><div><dt>Last refresh</dt><dd>Just now</dd></div></dl>
+          <div class="row gap-2" style="margin-top:0.75rem"><button class="btn outline">Refresh eligible people</button><button class="btn outline">View identity source</button></div>
+          <p class="hint">Read-only source. Group owners manage membership in Microsoft Entra; DMS Desktop never creates, edits, disables, or deletes users.</p>
         </section>
         <section class="card">
-          <h3 class="card-title">Folder policies (effective)</h3>
-          <div class="table-wrap"><table>
-    <thead><tr><th>Path</th><th>Editor</th><th>Approver</th><th>Source</th></tr></thead>
-    <tbody><tr><td>edit-root</td><td>Lukas Roth</td><td>Anna Berg</td><td>root policy</td></tr><tr><td>policies/</td><td>Lukas Roth</td><td>Anna Berg</td><td>inherited</td></tr><tr><td>policies/HR/</td><td>Lukas Roth</td><td>Anna Berg</td><td>inherited</td></tr><tr><td>Handbook.docx</td><td>Lukas Roth (override)</td><td>Anna Berg (override)</td><td>document override</td></tr><tr><td>policies/IT/</td><td>Mira Klein</td><td>Anna Berg</td><td>folder override</td></tr><tr><td>procedures/</td><td>Lukas Roth</td><td>Anna Berg</td><td>inherited</td></tr></tbody>
-  </table></div>
+          <h3 class="card-title">Folder role editor</h3>
+          <dl class="kv"><div><dt>Selected path</dt><dd>policies/IT/</dd></div><div><dt>Responsible editor</dt><dd>Lukas Roth <lukas@vc.de></dd></div><div><dt>Approver</dt><dd>Anna Berg <anna@vc.de></dd></div><div><dt>Inherited after remove</dt><dd>Lukas Roth / Anna Berg from edit-root</dd></div></dl>
+          <div class="row gap-2" style="margin-top:0.75rem;flex-wrap:wrap"><button class="btn outline">Select editor…</button><button class="btn outline">Select approver…</button><button class="btn">Save folder policy</button><button class="btn danger">Remove folder policy</button></div>
+          <p class="hint">Selection refreshes the group first. Save changes only this folder; remove restores the nearest ancestor per role.</p>
         </section>
       </div>
+      <section class="card">
+          <h3 class="card-title">Folder policies (effective)</h3>
+          <div class="table-wrap"><table>
+    <thead><tr><th>Path</th><th>Editor</th><th>Approver</th><th>Source / state</th></tr></thead>
+    <tbody><tr><td>edit-root</td><td>Lukas Roth</td><td>Anna Berg</td><td>root policy</td></tr><tr><td>policies/</td><td>Lukas Roth</td><td>Anna Berg</td><td>inherited</td></tr><tr><td>policies/HR/</td><td>Lukas Roth</td><td>Anna Berg</td><td>inherited</td></tr><tr><td>Handbook.docx</td><td>Lukas Roth (override)</td><td>Anna Berg (override)</td><td>document override</td></tr><tr><td>policies/IT/</td><td>Lukas Roth</td><td>Anna Berg</td><td>folder override</td></tr><tr><td>records/</td><td>Unresolved</td><td>Anna Berg</td><td>Mira Klein is no longer eligible</td></tr><tr><td>procedures/</td><td>Lukas Roth</td><td>Anna Berg</td><td>inherited</td></tr></tbody>
+  </table></div>
+          <div class="callout warn" style="margin-top:0.75rem">An unresolved role blocks a new review. DMS Desktop never chooses a replacement; an operator reroutes the policy from the current Entra group.</div>
+      </section>
     </main>
   </div>
 </div>

@@ -10,7 +10,7 @@ application source, packages, build pipeline, or runnable desktop app yet.
 
 | Surface | Current state |
 | --- | --- |
-| Product contract | 20 capability records (`CAP-0001` … `CAP-0020`), all `not implemented` |
+| Product contract | 21 capability records (`CAP-0001` … `CAP-0021`), all `not implemented` |
 | Implementation plan | `CHG-0001` is active; product-record and architecture bootstrap is complete, app skeleton work has not started |
 | Architecture | Tauri 2 design for Windows and macOS with no application database or required Git workflow |
 | Operator UI | Static HTML and PNG wireframes for every capability; design references only |
@@ -40,8 +40,10 @@ Planned control model:
   `<stem>_V<major>.<minor>_<confidentiality-type-id>.pdf` and receive SHA-256
   integrity checksums.
 - Local approval workflow with revision-bound evidence, tamper-evident event
-  hashes, inherited editor/approver routing, and SMTP or `mailto:` notifications
-  that open the local app through stable document permalinks.
+  hashes, inherited editor/approver routing from a Microsoft Entra workspace
+  group, interactive Entra identity verification for decisions, and SMTP or
+  `mailto:` notifications that open the local app through stable document
+  permalinks.
 - Local-only workspace metadata, backups, restore support, confidentiality
   policies, periodic review, audit export, and optional consented Claude Desktop
   assistance for advisory change wording and classification.
@@ -49,10 +51,11 @@ Planned control model:
 ## Deliberate boundaries
 
 The current architecture excludes a cloud database, multi-tenant backend,
-mandatory Git-based version control, SharePoint/Graph synchronization, bundled
-Office, cloud PDF conversion, browser-based approval, directory-backed identity
-proof, and digital signatures. Filesystem permissions remain the access-control
-boundary.
+mandatory Git-based version control, SharePoint/OneDrive document-content
+synchronization, bundled Office, cloud PDF conversion, browser-based approval,
+and digital signatures. Microsoft Graph is limited to Microsoft Entra workflow
+identity resolution and verification; filesystem permissions remain the
+source-file access-control boundary.
 
 ## Repository guide
 

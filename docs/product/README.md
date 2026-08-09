@@ -37,6 +37,7 @@ linked tests is a coverage gap, not implemented proof.
 | [CAP-0018](capabilities/CAP-0018-claude-desktop-change-assistance.md) | Optional Claude Desktop change-comment assistance | not implemented |
 | [CAP-0019](capabilities/CAP-0019-inherited-workflow-role-routing.md) | Inherited editor and approver routing | not implemented |
 | [CAP-0020](capabilities/CAP-0020-document-permalinks.md) | Document permalinks (stable local-app URI) | not implemented |
+| [CAP-0021](capabilities/CAP-0021-microsoft-entra-workflow-identity.md) | Microsoft Entra workflow identity source | not implemented |
 
 ## Wireframes
 

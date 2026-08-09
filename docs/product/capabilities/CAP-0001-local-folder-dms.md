@@ -31,9 +31,10 @@ When implemented, the following must hold:
 7. If `.dms` is missing under a chosen edit root, the app initializes it only
    after an explicit confirm, including choosing or confirming the publish root.
 8. `.dms` stores the workspace confidentiality catalogue, document-type
-   catalogue, workflow-person roster (no secrets), relative folder policies,
-   and document-control-data fields required by CAP-0008, CAP-0015, and
-   CAP-0019, but no SMTP password or other credential.
+   catalogue, Microsoft Entra tenant/group binding, read-only identity display
+   cache, relative folder policies that reference Entra user object IDs, and
+   document-control-data fields required by CAP-0008, CAP-0015, CAP-0019, and
+   CAP-0021. It stores no SMTP password, OAuth token, or other credential.
 
 ## Non-goals
 
@@ -47,5 +48,6 @@ When implemented, the following must hold:
 - Wireframe (PNG): [`../wireframes/exports/CAP-0001-local-folder-dms.png`](../wireframes/exports/CAP-0001-local-folder-dms.png)
 
 - Architecture: [`../../architecture.md`](../../architecture.md)
-- ADR-0001, ADR-0006, ADR-0009, ADR-0010, ADR-0015: [`../../design-decisions.md`](../../design-decisions.md)
+- Workflow identity: [`CAP-0021-microsoft-entra-workflow-identity.md`](CAP-0021-microsoft-entra-workflow-identity.md)
+- ADR-0001, ADR-0006, ADR-0009, ADR-0010, ADR-0015, ADR-0021: [`../../design-decisions.md`](../../design-decisions.md)
 - Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)

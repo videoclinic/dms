@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>CAP-0002 — Document lifecycle · DMS Desktop</title>
+<title>CAP-0021 — Microsoft Entra workflow identity · DMS Desktop</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -192,18 +192,18 @@ tr:last-child td { border-bottom: 0; }
 </style>
 </head>
 <body>
-<div class="app" data-cap="CAP-0002">
+<div class="app" data-cap="CAP-0021">
   <aside class="sidebar">
     <div class="brand">
       <div class="brand-mark">DMS</div>
       <span>DMS Desktop</span>
       <div class="brand-actions"><button class="fold-ctl" title="Collapse left menu">«</button></div>
     </div>
-    <nav class="nav"><a class="nav-item active" href="#">📚 <span>Library</span></a><a class="nav-item" href="#">📦 <span>Releases</span></a><a class="nav-item" href="#">📋 <span>Audit & Reports</span></a><a class="nav-item" href="#">🧰 <span>Maintenance</span></a><a class="nav-item" href="#">⚙️ <span>Configuration</span></a></nav>
+    <nav class="nav"><a class="nav-item" href="#">📚 <span>Library</span></a><a class="nav-item" href="#">📦 <span>Releases</span></a><a class="nav-item" href="#">📋 <span>Audit & Reports</span></a><a class="nav-item" href="#">🧰 <span>Maintenance</span></a><a class="nav-item active" href="#">⚙️ <span>Configuration</span></a></nav>
     <div class="pane-sec">Saved views</div>
     <div class="pane-tabs"><div class="pane-tab saved-view"><span class="bookmark-mark">★</span><span class="pane-label" title="Library · policies/HR">Library · policies/HR</span><span class="pane-remove" title="Remove saved view">−</span></div></div>
     <div class="pane-sec">Open panes</div>
-    <div class="pane-tabs"><div class="pane-tab"><span class="pane-label" title="Library · policies/HR">Library · policies/HR</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Audit · HR Data Privacy Policy · DOC-014">Audit · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab active"><span class="pane-label" title="Review · HR Data Privacy Policy · DOC-014">Review · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Notes · HR Data Privacy Policy · DOC-014">Notes · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div></div>
+    <div class="pane-tabs"><div class="pane-tab"><span class="pane-label" title="Library · policies/HR">Library · policies/HR</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Audit · HR Data Privacy Policy · DOC-014">Audit · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Review · HR Data Privacy Policy · DOC-014">Review · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Notes · HR Data Privacy Policy · DOC-014">Notes · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab active"><span class="pane-label" title="Configuration">Configuration</span><span class="pane-close">×</span></div></div>
     <div class="sidebar-foot">
       ws-9c3b7d1a<br/>
       edit: /dms/edit<br/>
@@ -213,52 +213,48 @@ tr:last-child td { border-bottom: 0; }
   <div class="main">
     <header class="header">
       <button class="ham-btn" title="Open left menu when folded">☰</button>
-      <h1>Review · HR Data Privacy Policy · DOC-014</h1>
+      <h1>Configuration</h1>
       <div class="grow"></div>
       <span class="ham-note">☰ when menu folded</span>
       <span class="badge ok">Workspace healthy</span>
-      <div class="header-actions"><button class="btn outline bookmark-btn" title="Bookmark this view" aria-pressed="false">☆ Bookmark this view</button><button class="btn">Begin revision</button><button class="btn outline">Submit for review</button></div>
+      <div class="header-actions"><button class="btn outline bookmark-btn" title="Bookmark this view" aria-pressed="false">☆ Bookmark this view</button></div>
     </header>
     <main class="content">
       <div class="cap-head">
-        <span class="badge info">CAP-0002</span>
-        <h2>Document lifecycle</h2>
+        <span class="badge info">CAP-0021</span>
+        <h2>Microsoft Entra workflow identity</h2>
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Draft → in_review → approved → released. Change class + approval evidence required.</p>
-      
-      <section class="card">
-        <div class="row between">
-          <div class="row gap-2">
-            <h2 class="doc-title">HR Data Privacy Policy</h2>
-            <span class="badge info">in_review</span>
-            <span class="muted">V1.3 released</span>
-          </div>
-        </div>
-        <dl class="kv"><div><dt>Document ID</dt><dd>doc-77a12bce</dd></div><div><dt>Relative draft path</dt><dd>policies/HR/Handbook.docx</dd></div><div><dt>Effective editor / approver</dt><dd>Lukas Roth / Anna Berg</dd></div><div><dt>Workflow identity</dt><dd>Entra group: VC DMS Workflow Users</dd></div><div><dt>Effective confidentiality</dt><dd>Internal (inherited from /policies/HR)</dd></div></dl>
-      </section>
-      <section class="card">
-        <h3 class="card-title">Lifecycle pipeline</h3>
-        <div class="pipeline">
-          <div class="step active"><span class="dot"></span>draft</div><div class="step active"><span class="dot"></span>in_review</div><div class="step "><span class="dot"></span>approved</div><div class="step "><span class="dot"></span>released</div><div class="step "><span class="dot"></span>obsolete</div>
-        </div>
-      </section>
+      <p class="subtitle">Bind this workspace to one explicit Entra group. The group is a read-only people source; DMS Desktop does not manage users or membership.</p>
       <div class="grid-2">
         <section class="card">
-          <h3 class="card-title">Submit for review (required fields)</h3>
-          <dl class="kv"><div><dt>Change summary *</dt><dd><span class="muted">(required, non-empty)</span></dd></div><div><dt>Change class</dt><dd><span class="muted">(cosmetic/minor or substantive/major; required after first release)</span></dd></div><div><dt>Rationale</dt><dd><span class="muted">(required with change class)</span></dd></div><div><dt>Draft SHA-256</dt><dd><span class="muted">(computed from current draft bytes on submit)</span></dd></div><div><dt>Requester</dt><dd>Lukas Roth <lukas@vc.de> <span class="muted">(snapshotted on submit)</span></dd></div><div><dt>Approver (derived)</dt><dd>Anna Berg <anna@vc.de> · Entra group verified</dd></div><div><dt>Decision authority</dt><dd>Anna signs in with Microsoft Entra before approving</dd></div><div><dt>Transport</dt><dd>SMTP relay (password from OS credential store)</dd></div></dl>
-          <p class="hint">Document enters <code>in_review</code> only after the transport step succeeds. Empty or missing required fields fail closed.</p>
+          <div class="row between mb"><h3 class="card-title" style="margin:0">Current identity source</h3><span class="badge ok">connected</span></div>
+          <dl class="kv"><div><dt>Tenant</dt><dd>videoclinic.de</dd></div><div><dt>Group</dt><dd>VC DMS Workflow Users</dd></div><div><dt>Group object ID</dt><dd>9c14…bf72</dd></div><div><dt>Eligible people</dt><dd>3 direct user members</dd></div><div><dt>Last refresh</dt><dd>2025-08-05 09:16 UTC</dd></div></dl>
+          <div class="row gap-2" style="margin-top:0.75rem"><button class="btn outline">Refresh people</button><button class="btn outline">Change identity source…</button></div>
+          <p class="hint">Cached names and email are presentation only. Role assignment, review submission, and decisions refresh membership before authority is applied.</p>
         </section>
         <section class="card">
-          <h3 class="card-title">Workflow chain (canonical event types)</h3>
-          <ul class="timeline">
-            <li><strong>review_requested</strong> — Lukas Roth — 2025-08-01 09:14 UTC</li>
-            <li><strong>review_decision_approved</strong> — Anna Berg — 09:42 UTC</li>
-            <li><strong>release</strong> (V1.3) — 09:44 UTC</li>
-            <li><strong>revision_begun</strong> — 2025-08-02 11:02 UTC</li>
-          </ul>
-          <p class="hint">Chain head 5b3a…ffe2 — verify recomputes from canonical body (CAP-0011).</p>
+          <h3 class="card-title">First setup or source replacement</h3>
+          <dl class="kv"><div><dt>Tenant ID</dt><dd>Provided by Microsoft 365 administrator</dd></div><div><dt>Group object ID</dt><dd>Provided by Microsoft 365 administrator</dd></div><div><dt>Sign-in</dt><dd>Interactive Microsoft Entra sign-in</dd></div><div><dt>Preview</dt><dd>Tenant, group, and direct eligible user count</dd></div></dl>
+          <div class="row gap-2" style="margin-top:0.75rem"><button class="btn outline">Preview source</button><button class="btn">Apply binding</button></div>
+          <div class="callout warn" style="margin-top:0.75rem">Apply binding changes the workspace source. Every live editor/approver policy becomes unresolved and must be rerouted; historical evidence is unchanged.</div>
+        </section>
+      </div>
+      <div class="grid-2">
+        <section class="card">
+          <h3 class="card-title">Eligible people — read only</h3>
+          <div class="stack">
+            <div class="person"><div class="row gap-2"><strong>Lukas Roth</strong><span class="muted">a714…51bf</span><span class="badge ok">active</span></div><p class="muted">lukas@vc.de</p></div>
+            <div class="person"><div class="row gap-2"><strong>Anna Berg</strong><span class="muted">b023…882a</span><span class="badge ok">active</span></div><p class="muted">anna@vc.de</p></div>
+            <div class="person"><div class="row gap-2"><strong>Mira Klein</strong><span class="muted">c144…0d91</span><span class="badge ok">active</span></div><p class="muted">mira@vc.de</p></div>
+          </div>
+          <p class="hint">Use this list only to select editor/approver routing. Add, remove, disable, and profile changes happen in Microsoft Entra.</p>
+        </section>
+        <section class="card">
+          <h3 class="card-title">Authority boundary</h3>
+          <dl class="kv"><div><dt>Approval decision</dt><dd>Entra tenant/object ID matches review snapshot</dd></div><div><dt>DMS user management</dt><dd>Not available</dd></div><div><dt>SharePoint permissions</dt><dd>Not read as a roster</dd></div><div><dt>OneDrive sharing</dt><dd>Not read as a roster</dd></div><div><dt>Document content</dt><dd>Never sent to Microsoft Graph</dd></div></dl>
+          <p class="hint">The Entra group verifies workflow identity. Filesystem, SharePoint, and OneDrive permissions independently control source-file access.</p>
         </section>
       </div>
     </main>

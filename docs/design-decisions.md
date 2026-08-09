@@ -50,10 +50,11 @@ Capability-local rules stay in their CAP files.
   workflow engine or a database. Binding approval to the reviewed draft avoids
   releasing a document changed after it was approved.
 - **Consequences:** The app records configured approver identity, local OS user,
-  timestamps, required comments, revision digest, and event-chain hash. A hash
-  chain detects uncoordinated metadata changes but is not non-repudiation: a
-  writer able to replace `.dms` can rewrite hashes. External identity proof,
-  digital signatures, and a remote audit store remain out of scope.
+  timestamps, required comments, revision digest, and event-chain hash. A
+  review-decision event also records the authenticated Microsoft Entra tenant
+  and object IDs (ADR-0021). A hash chain detects uncoordinated metadata changes
+  but is not non-repudiation: a writer able to replace `.dms` can rewrite hashes.
+  Digital signatures and a remote audit store remain out of scope.
 
 ## ADR-0005 — SHA-256 checksums on released PDFs
 
@@ -204,9 +205,9 @@ Capability-local rules stay in their CAP files.
   canonical event body that contains, at minimum: stable document ID, event
   type, predecessor event hash, ISO-8601 UTC timestamp, requester, effective
   approver, and responsible editor IDs (when applicable), local OS user,
-  revision
-  digest (when applicable), confidentiality snapshot and approved change class
-  (when applicable), and the operator comment text.
+  authenticated Microsoft Entra tenant/object IDs for a review decision,
+  revision digest (when applicable), confidentiality snapshot and approved
+  change class (when applicable), and the operator comment text.
 - **Why:** A canonical schema is the only way the chain is verifiable later
   and the only way two installations can compare evidence.
 - **Consequences:** Any reader can recompute and verify each event hash and the
@@ -285,19 +286,23 @@ Capability-local rules stay in their CAP files.
 
 ## ADR-0019 — Inherited workflow-role routing without application access control
 
-- **Decision:** The workspace keeps a roster of people and assigns one
-  responsible editor and one approver at the edit root or any subfolder. Each
-  role derives independently from the nearest ancestor policy unless an
-  individual document overrides it. The effective approver receives a review
+- **Decision:** A workspace with the ADR-0021 Entra identity-source binding
+  assigns one responsible editor and one approver at the edit root or any
+  subfolder. Each role derives independently from the nearest ancestor policy
+  unless an individual document overrides it. Policies reference individual
+  immutable Entra user object IDs. The effective approver receives a review
   request; the effective editor and approver are snapshotted as workflow
   evidence.
 - **Why:** Operators can route responsibility across a directory tree without
   repeating the same assignments for every document, while retaining document
   exceptions.
-- **Consequences:** These assignments route work and provide audit context only.
-  They do not prevent a person from opening or editing a shared source file;
-  filesystem ACLs remain the access-control boundary. Changing an effective
-  approver invalidates an open review and requires a new request.
+- **Consequences:** The role picker uses the read-only configured Entra group;
+  it does not maintain users or group membership. These assignments route work
+  and provide audit context only. They do not prevent a person from opening or
+  editing a shared source file; filesystem ACLs remain the access-control
+  boundary. Changing an effective approver invalidates an open review and
+  requires a new request. A no-longer-eligible role identity is unresolved and
+  must be rerouted explicitly.
 
 ## ADR-0020 — Document permalinks key only on stable IDs
 
@@ -314,3 +319,28 @@ Capability-local rules stay in their CAP files.
   workspace that knows those IDs (CAP-0020). Path/version display is resolved
   after lookup. Missing workspace or document IDs fail closed with an operator
   message. Permalink open never records a workflow decision by itself.
+
+## ADR-0021 — Microsoft Entra group supplies workflow people and verifies decisions
+
+- **Decision:** Every workspace that uses workflow routing binds to one Microsoft
+  Entra tenant ID and one group object ID. The group is the read-only source of
+  eligible direct user members; it may be a dedicated Entra security group or an
+  existing Microsoft 365 group whose membership exactly matches the workflow
+  population. Folder and document policies reference individual immutable Entra
+  user object IDs. The desktop app uses interactive delegated sign-in and
+  Microsoft Graph on demand; it has no user CRUD or group-membership management.
+- **Why:** Microsoft 365 administrators already govern joiners, movers, leavers,
+  names, and mail addresses in Entra. Copying that directory into `.dms` would
+  create stale identities and another access-management process.
+- **Consequences:** The app requests only the delegated Graph permissions needed
+  to list the configured group's members and resolve the signed-in account
+  (`GroupMember.Read.All` plus normal OpenID Connect user sign-in); tenant admin
+  consent is required. It does not read SharePoint site permissions, which need
+  `Sites.FullControl.All`, and never treats OneDrive sharing as a roster. The
+  app refreshes membership before role assignment, review submission, and a
+  decision; a cached name/email is display-only. An unresolved policy blocks new
+  workflow work without silently rewriting the policy. A review decision is
+  accepted only when the signed-in tenant/object ID equals the snapshotted
+  approver and remains eligible in the group. Filesystem and SharePoint/OneDrive
+  ACLs remain the source-file access boundary, and the app does not synchronize
+  document content.

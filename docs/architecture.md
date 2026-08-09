@@ -17,7 +17,8 @@ PDFs under a **publish root**, with integrity checksums.
 | Microsoft Office (host-installed) | PDF export engine for Office drafts invoked by the app on release (Word/Excel/PowerPoint as applicable) |
 | Native WebView PDF API | Prints Markdown CommonMark HTML through a shipped print shell (header/footer chrome from release-context export map) to PDF on release |
 | Claude Desktop (optional host app) | Operator-mediated, consented handoff for advisory change classification and changelog wording; not a callable local model or lifecycle authority |
-| `<edit-root>/.dms/` | Roots config, library registry, DMS-managed document control data, workflow-person roster + SMTP settings (no secrets), folder confidentiality and workflow-role policies, notes, approval/release history, evidence hashes, checksums, advisory lock |
+| Microsoft Entra ID + Microsoft Graph | Per-workspace group supplies eligible workflow people; delegated interactive sign-in verifies review decisions; never reads or synchronizes document content |
+| `<edit-root>/.dms/` | Roots config, library registry, DMS-managed document control data, Microsoft Entra tenant/group binding + read-only display cache, SMTP settings (no secrets), folder confidentiality and workflow-role policies, notes, approval/release history, evidence hashes, checksums, advisory lock |
 | Edit root tree | Operator-edited Microsoft Office and Markdown source drafts (library members are a subset) |
 | Publish root tree | Versioned released PDFs in a directory tree mirrored from edit-relative paths |
 
@@ -66,6 +67,19 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
   that local workspace; it is not a web approval portal. The same permalink
   scheme opens a document selection without a review target and remains valid
   across draft renames and version bumps.
+- Workflow roles select individual, direct user members of the workspace's
+  configured Microsoft Entra group. `.dms` records the tenant and group object
+  IDs plus role references to immutable Entra user object IDs; it does not keep
+  an application-managed user roster. A group may be a Microsoft 365 group when
+  its membership is exactly the intended workflow population.
+- The app refreshes Microsoft Graph membership when assigning a role and before
+  workflow authority is applied. Cached display information is presentation
+  data only. A missing, disabled, or no-longer-eligible identity leaves the
+  policy unresolved and blocks new review work until rerouted.
+- Recording an approval decision requires interactive Microsoft Entra sign-in.
+  The signed-in tenant/object ID must match the review's snapshotted effective
+  approver and still be eligible in the bound group. This verifies the decision
+  actor; it does not grant source-file access or turn the app into a web portal.
 - The application sends notification email through a configured SMTP relay. The
   relay password is held in the OS credential store, never in `.dms`.
 - When SMTP is not configured, the desktop app opens the host's default email
@@ -88,8 +102,9 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
 - Mandatory git-based version control
 - Bundling Microsoft Office inside the app binary
 - Cloud/server-side PDF conversion services
-- SharePoint/Graph sync as a required runtime dependency
-- Remote/browser approval, directory-backed identity proof, or digital signing
+- SharePoint/OneDrive document-content synchronization or using their file and
+  site permissions as the workflow-person directory
+- Remote/browser approval or digital signing
 - Confidentiality labels as a replacement for filesystem access control
 - Auto-adding every file under the edit root without operator library action
 - Centralised anti-virus, DLP, or e-signature services

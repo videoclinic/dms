@@ -1,51 +1,60 @@
-# CAP-0019 — Inherited editor and approver routing
+# CAP-0019 — Inherited Microsoft Entra editor and approver routing
 
 | Field | Value |
 | --- | --- |
 | ID | CAP-0019 |
 | Status | not implemented |
-| Storage | `<edit-root>/.dms/` |
+| Identity source | Microsoft Entra workspace group (CAP-0021) |
+| Storage | `<edit-root>/.dms/` routing policies and identity references |
 | Tests | none |
 
 ## Outcomes (contract — not yet true in runtime)
 
 When implemented, the following must hold:
 
-1. The workspace maintains a workflow-person roster. Each person has a stable
-   ID, display label, and email address. Deletion is rejected while a folder
-   policy, document override, or historical workflow event references the ID;
-   the person can instead be disabled for future assignment.
+1. The workspace uses the configured Microsoft Entra group from CAP-0021 as its
+   read-only people source. A routing policy references an immutable Entra user
+   object ID, not an application profile. The application exposes no user CRUD
+   or group-membership management.
 2. The operator assigns one responsible editor and one approver to the edit root
    or any folder by its edit-root-relative path. The root assignments are the
-   required defaults. A folder may change either role without changing the
-   other.
+   required defaults after a valid identity-source binding. A folder may change
+   either role without changing the other. The picker lists only currently
+   eligible direct user members of the bound Entra group.
 3. Each role derives independently from the nearest configured ancestor folder
    assignment. A document may explicitly override either role; clearing that
    override restores inheritance for that role without copying a policy into the
    document record.
-4. The CAP-0006 library navigator (row metadata and selection pane) shows
-   the effective editor and approver and
-   whether each is inherited or explicitly overridden.
-5. A review request uses the document's effective approver. The approval email
-   and its local-app deep link address that person and the specific review
+4. The CAP-0006 library navigator (row metadata and selection pane) shows the
+   effective editor and approver, their Entra display name/email, and whether
+   each is inherited or explicitly overridden. It also exposes an unresolved
+   identity rather than displaying a stale person as active.
+5. A review request uses the document's effective approver only after the app
+   refreshes and resolves that person in the bound Entra group. The approval
+   email and its local-app deep link address that person and the specific review
    request (CAP-0010). The responsible editor is workflow-routing and audit
    metadata; it is not an alternate approver.
 6. Changing a policy changes only inheriting descendants. A change to the
    effective approver while a review is open invalidates that review and requires
    a new request; explicit overrides and nearer folder assignments remain
-   unchanged.
+   unchanged. If Entra membership later makes the selected person ineligible,
+   the policy becomes unresolved; the app never selects a replacement itself.
 7. Review requests and released versions snapshot the effective editor and
-   approver IDs. Later policy or roster changes do not rewrite historical
-   evidence.
-8. Role routing does not grant or revoke filesystem access and does not prevent
-   source-file editing. The application records the local OS user for workflow events;
-   filesystem ACLs remain the access-control boundary.
+   approver Entra tenant/object IDs plus their display name/email at that time.
+   Later policy, group, or profile changes do not rewrite historical evidence.
+8. Recording a review decision requires interactive Entra sign-in. The signed-in
+   tenant/object ID must match the review's snapshotted approver and remain
+   eligible in the bound group. The application records that authenticated actor
+   and the local OS user in the canonical event chain (CAP-0011).
+9. Role routing does not grant or revoke filesystem access and does not prevent
+   source-file editing. Filesystem, SharePoint, and OneDrive ACLs remain the
+   access-control boundary.
 
 ## Non-goals
 
-- Directory-backed authentication or identity proof
 - Application-enforced editing permissions
-- Groups, multiple approvers, or RACI matrices in v1
+- Application-managed workflow users or group membership
+- Group role assignees, multiple approvers, or RACI matrices in v1
 - Assigning roles to paths outside the edit root
 
 ## Links
@@ -56,6 +65,7 @@ When implemented, the following must hold:
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
 - Notification: [`CAP-0010-notification-transport.md`](CAP-0010-notification-transport.md)
 - Evidence: [`CAP-0011-approval-evidence.md`](CAP-0011-approval-evidence.md)
+- Workflow identity: [`CAP-0021-microsoft-entra-workflow-identity.md`](CAP-0021-microsoft-entra-workflow-identity.md)
 - Privacy: [`../../privacy.md`](../../privacy.md)
-- ADR-0019: [`../../design-decisions.md`](../../design-decisions.md)
+- ADR-0019, ADR-0021: [`../../design-decisions.md`](../../design-decisions.md)
 - Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)

@@ -8,8 +8,9 @@
 | Follow-up request | Direct operator request: extend the supported file format with markdown files including PDF export |
 | Follow-up request | Direct operator request: CAP-0016 should enable to open the files. the view should also allow to select how many changes are seen in the bale before pagination beginns. also a search for "Doc" should be possible (as filter). The "Doc" title should be adjusted to the corresponding masterdata file name "Title" (if this is the sense); also in other wireframes the naming of the column missmatch the masterdata naming convention; check and fix this too |
 | Follow-up request | Direct operator request: For the CAP-0005 hamburger/collapsed view add also the "Saved views" and "Open Panes" as icons but then with a folding context menu so the user do not have to expand the whole left pane |
-| Affected CAPs | CAP-0001 … CAP-0020 |
-| Decision records | ADR-0001 … ADR-0020 in `docs/design-decisions.md` |
+| Follow-up request | Direct operator request: the "Effective approver" and "Effective editor" users are defined how this users are managed; the capability to maintain these users is missing; a synchronisation with Entra ID and/or SharePoint/OneDrive members; make a suggestion how to manage the users without creating a new user management in a Microsoft 365 setup. Proceed as recommended. |
+| Affected CAPs | CAP-0001 … CAP-0021 |
+| Decision records | ADR-0001 … ADR-0021 in `docs/design-decisions.md` |
 
 ## Scope
 
@@ -47,7 +48,9 @@ macOS** that:
   ambiguous marker blocks the transition by default; an operator can continue
   after recording a reasoned false-positive override in the workflow evidence
 - Routes one responsible editor and one approver from inherited folder policies,
-  with independent document overrides and immutable workflow snapshots
+  with independent document overrides and immutable workflow snapshots; binds
+  the workspace to a Microsoft Entra group as the read-only source of eligible
+  people and verifies the approver through interactive Entra sign-in
 - Opens the registered Office application for Office drafts or the host default
   text editor for Markdown without embedding an editor and keeps a stable
   document ID across renames inside the edit root
@@ -75,7 +78,8 @@ macOS** that:
 
 ## Non-scope
 
-- SharePoint/Graph synchronization
+- SharePoint/OneDrive document-content synchronization or using file permissions
+  as a workflow-person directory
 - Bundled Office runtime or cloud conversion services
 - Multi-user server backend
 - Git-based version control
@@ -88,17 +92,18 @@ macOS** that:
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
 | 0 | Product records and architecture bootstrap | done (docs tree; Markdown source draft plus format-specific local PDF export; release version policy, approval, notification, confidentiality, workflow-role routing, maintenance, periodic review, optional Claude handoff, foldable shell chrome, task-and-target session activity panes with duplicate reuse, saved views, folder-dominant Explorer-like Library navigation with foldable single-document sections and a same-pane batch state, stable document permalinks, Win+macOS recorded) | CAP/CHG/ADR files exist; indexes list CAP-0001…0020; no CAP claims implemented runtime |
+| 0a | Microsoft Entra workflow identity records and wireframes | done (CAP-0021, CAP-0019, ADR-0019, ADR-0021, architecture, privacy, and static screens updated) | CAP-0021 + ADR-0021 replace the application roster with a group binding; CAP-0019 selects only eligible Entra users; static screens show a read-only source, folder-role selection, and no user CRUD; all CAP/CHG/ADR indexes and links validate; no CAP claims implemented runtime |
 | 1 | Tauri 2 app skeleton (Windows + macOS) + DOX for source tree | pending | Dev app launches on Windows and macOS; README run steps for both; foldable left menu + hamburger + session-only open-activity tabs show task-and-target labels and focus an existing matching task+document pane; collapsed rail icons open saved-view and open-pane flyouts without expanding the whole menu, with open/remove and focus/close actions respectively; explicit saved-view bookmark persists in OS user config and restores as a fresh activity |
-| 2 | `.dms` store + dual-root open/configure + confidentiality and workflow-role policies | pending | Tests: persist/reload edit+publish roots, stable workspace ID, and schema version; safe older-schema migration/newer-schema read-only; create/replace a direct folder policy, remove a non-root policy, refuse root-policy removal, and recompute nearest inherited class; inherit each workflow role independently; init `.dms` only on confirm |
+| 2 | `.dms` store + dual-root open/configure + confidentiality, Entra identity binding, and workflow-role policies | pending | Tests: persist/reload edit+publish roots, stable workspace ID, schema version, and non-secret Entra tenant/group binding; safe older-schema migration/newer-schema read-only; create/replace a direct folder policy, remove a non-root policy, refuse root-policy removal, and recompute nearest inherited class; inherit each workflow role independently; replacing the identity source marks live role policies unresolved without changing historical evidence; init `.dms` only on confirm |
 | 3 | Folder-first Library explorer + add/unregister/reassociate + selection pane | pending | Tests: folder pane is visible by default and includes empty edit-root folders while hiding `.dms`; Back/Forward/Up, breadcrumb, tree, and immediate-child contents stay synchronized; every file row keeps its exact filesystem name while an in-library row shows DMS-managed document data separately; one or more unregistered supported source files (including `.md`) can be selected and added from the right pane, while mixed/unsupported selections expose no incompatible batch action; folder navigation reuses one Library activity and updates its folder label; add under edit root; reject outside path; unregister preserves history; rename/reassociate updates only the source locator and does not change document control data or history; ambiguous move is never auto-linked; current-folder and Entire-library search scopes return matching files with paths and clear back to the complete folder listing; single controlled-document selection shows an always-visible Source file identity plus CAP-0015 Document control data and actions in the right pane; the data is loaded from `.dms`, not Office properties or Markdown front matter; its data, action, revision, and release sections fold independently while retaining document and source-file identity; navigating to an already-open task+document focuses the existing pane, while different tasks for that document may remain open; multi-select of controlled documents shows only multi-applicable actions in the same pane; a saved library view restores folder/sort and a single-document stable ID but never batch selection; copy permalink uses workspace+document IDs only and never changes saved views |
-| 4 | Lifecycle + approval notification + version assign + tree mirror | pending | Tests: request requires summary, requester, change class, effective approver, and transport success; CAP-0020 deep link resolves only an accessible registered workspace to the intended review request and still resolves after rename/version bump; each decision notifies the snapshotted requester, with failure retryable and non-reverting; approver-policy change invalidates an open review; cosmetic→minor, substantive/uncertain→major; DOCX body/header/footer and Markdown rendered-body version and confidentiality markers must equal the candidate release and effective type before review and again before release; missing, mismatched, and conflicting markers block by default; an explicit, reasoned false-positive override is revision-bound, visible to the approver, and recorded in the event chain; comments/event hash persist; metadata change invalidates approval; first version V1.0; refuse overwrite |
+| 4 | Lifecycle + Entra-verified approval + notification + version assign + tree mirror | pending | Tests with a Graph client fake: request requires summary, requester, change class, current eligible effective approver, and transport success; a failed group refresh or unresolved identity blocks request; decision requires the snapshotted Entra tenant/object ID and current eligibility; CAP-0020 deep link resolves only an accessible registered workspace to the intended review request and still resolves after rename/version bump; each decision notifies the snapshotted requester, with failure retryable and non-reverting; approver-policy change invalidates an open review; cosmetic→minor, substantive/uncertain→major; DOCX body/header/footer and Markdown rendered-body version and confidentiality markers must equal the candidate release and effective type before review and again before release; missing, mismatched, and conflicting markers block by default; an explicit, reasoned false-positive override is revision-bound, visible to the approver, and recorded in the event chain; comments/event hash persist; metadata change invalidates approval; first version V1.0; refuse overwrite |
 | 5 | Format-specific local PDF export on release (Win + macOS adapters) | pending | Tests/integration: export Office drafts through installed Office (or a test double), replacing `{CONFIDENTIALITY}`/`{VERSION}` on a temp copy from the release chrome map; export Markdown through CommonMark + shipped print shell (logo, `Vertraulichkeitsstufe:` / `Version:` footers from the same map, front matter stripped) + native WebView PDF API to the versioned, classified path on each OS; PDF chrome values match the release snapshot; failure rolls back version success; WebView2 and WKWebView smoke cover multi-page footer chrome |
 | 6 | Notes on documents | pending | Tests: note CRUD persistence across restart; list is newest-first; New note compose field is above the latest note and remains there after save |
 | 7 | Release checksum + periodic review + verify | pending | Tests: exported PDF → expected SHA-256; tamper → mismatch; release snapshots draft digest/class/chain; a case-insensitive Title filter scopes publish-tree releases; selected rows-per-page controls pagination of the filtered result; each non-missing release opens only its recorded PDF while missing files have no open action; periodic confirm keeps version; changes-required begins revision; full backup manifest covers both roots |
 | 8 | Optional Claude Desktop handoff | pending | Tests: disabled/missing app never blocks; policy and consent gate payload; accepted suggestion remains editable and cannot mutate lifecycle |
-| 9 | Packaging smoke + CAP promotion | pending | Windows and macOS smoke covers Office and Markdown PDF export; CAP statuses updated only with test links; records check if present |
+| 9 | Packaging smoke + CAP promotion | pending | Windows and macOS smoke covers Office and Markdown PDF export; a Microsoft 365 administrator-configured Entra group smoke covers source preview, direct-member role selection, ineligible-role blocking, and an interactive decision sign-in; CAP statuses updated only with test links; records check if present |
 
-**Current phase:** 0 complete. Set phase 1 to `in-progress` when skeleton work starts; keep only one phase in-progress.
+**Current phase:** 0a complete; phase 1 is pending. Set phase 1 to `in-progress` before implementation and keep only one phase in-progress.
 
 ## Implementation notes
 
@@ -113,7 +118,8 @@ macOS** that:
 - `.dms` format: inspectable JSON (or similar); schema beside the store module
   in phase 2 — must include `edit_root`, `publish_root`, stable workspace ID,
   library entries with
-  relative paths and stable IDs, confidentiality and workflow-person catalogues,
+  relative paths and stable IDs, confidentiality and document-type catalogues,
+  Microsoft Entra tenant/group binding plus a read-only display cache,
   direct relative folder policies (including the required root policy),
   document control data, per-doc overrides, version counters,
   release history, approval event chain, review-request IDs, requester identity,

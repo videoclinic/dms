@@ -41,7 +41,7 @@ When implemented, the following must hold:
    recorded decision.
 6. A workspace may switch transport at any time. Switching from `mailto` to
    `smtp` requires a relay configuration; switching from `smtp` to `mailto`
-   clears the relay settings but keeps the approver roster.
+   clears the relay settings but keeps Microsoft Entra workflow-role bindings.
 7. The workflow history records each review-request and decision-outcome
    notification with its recipient, transport, delivery status, SMTP response
    code (or `mailto`-sent confirmation), and timestamp. An operator-visible

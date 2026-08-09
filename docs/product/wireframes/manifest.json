@@ -130,7 +130,7 @@
     },
     {
       "id": "CAP-0019",
-      "title": "Workflow roles",
+      "title": "Microsoft Entra workflow roles",
       "html": "html/CAP-0019-inherited-workflow-role-routing.html",
       "png": "exports/CAP-0019-inherited-workflow-role-routing.png",
       "nav": "config"
@@ -141,6 +141,13 @@
       "html": "html/CAP-0020-document-permalinks.html",
       "png": "exports/CAP-0020-document-permalinks.png",
       "nav": "library"
+    },
+    {
+      "id": "CAP-0021",
+      "title": "Microsoft Entra workflow identity",
+      "html": "html/CAP-0021-microsoft-entra-workflow-identity.html",
+      "png": "exports/CAP-0021-microsoft-entra-workflow-identity.png",
+      "nav": "config"
     }
   ]
 }

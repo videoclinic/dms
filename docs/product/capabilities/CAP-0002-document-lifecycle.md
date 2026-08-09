@@ -15,9 +15,11 @@ When implemented, the following must hold:
 1. Only documents **in the library** (CAP-0006) participate in versioning and
    release. Uncontrolled files under the edit root are invisible to lifecycle
    actions until added.
-2. The workspace configuration contains a workflow-person roster with stable
-   IDs, display names, and email addresses, plus non-secret SMTP relay settings.
-   The relay password is resolved from the OS credential store, not `.dms`.
+2. The workspace configuration binds workflow routing to a Microsoft Entra tenant
+   and group, plus non-secret SMTP relay settings. The group supplies eligible
+   people on demand; it is not copied into an application user roster. The relay
+   password and Microsoft Entra delegated-token cache are resolved from the OS
+   credential store, not `.dms`.
 3. Each library document has explicit `draft`, `in_review`, `approved`,
    `released`, and `obsolete` lifecycle states. `rejected`, `changed_requested`
    (decision), `withdrawn` (release), and `cancelled` (review) are workflow
@@ -27,9 +29,10 @@ When implemented, the following must hold:
    requesting workflow person, the document's effective configured approver,
    and a SHA-256 digest of the current draft. The requester identity and email
    are snapshotted on the request. The approver is derived from the nearest
-   workflow-role policy or a document override (CAP-0019), and must use the
-   installed desktop app with access to the same workspace; approval is not
-   available in email or a browser. The notification carries a CAP-0020
+   workflow-role policy or a document override (CAP-0019), resolves as an
+   eligible member of the configured Microsoft Entra group (CAP-0021), and must
+   use the installed desktop app with access to the same workspace; approval is
+   not available in email or a browser. The notification carries a CAP-0020
    permalink (workspace ID + document ID + review-request target) to this
    review request (CAP-0010).
    After the first release it also requires an operator-selected change class
@@ -41,12 +44,15 @@ When implemented, the following must hold:
    and offers a retryable redelivery.
 5. The effective approver records `approved`, `rejected`, or
    `changed_requested` in the application with a non-empty decision comment.
-   The app records the requester and approver identities, local OS user,
-   decision time, revision digest, and chained event hash in `.dms`. It sends a
-   notification of the recorded outcome to the requester's snapshotted email
-   through the workspace transport (CAP-0010). A notification failure records a
-   retryable delivery attempt and never reverses the decision. A
-   `changed_requested` decision returns the document to `draft`.
+   The app requires interactive Microsoft Entra sign-in and accepts the decision
+   only when the signed-in tenant/object ID equals the request's snapshotted
+   approver and the person remains eligible in the configured group. It records
+   requester, approver, Entra actor, local OS user, decision time, revision
+   digest, and chained event hash in `.dms`. It sends a notification of the
+   recorded outcome to the requester's snapshotted email through the workspace
+   transport (CAP-0010). A notification failure records a retryable delivery
+   attempt and never reverses the decision. A `changed_requested` decision
+   returns the document to `draft`.
 6. If draft bytes no longer match the requested-review digest, approval is
    invalidated and the document returns to `draft`; a new change summary and
    review request are required.
@@ -163,7 +169,7 @@ When implemented, the following must hold:
 
 - Architecture: [`../../architecture.md`](../../architecture.md)
 - ADR-0003, ADR-0004, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010,
-  ADR-0012, ADR-0013, ADR-0015, ADR-0016, ADR-0019: [`../../design-decisions.md`](../../design-decisions.md)
+  ADR-0012, ADR-0013, ADR-0015, ADR-0016, ADR-0019, ADR-0021: [`../../design-decisions.md`](../../design-decisions.md)
 - Export: [`CAP-0007-draft-pdf-export.md`](CAP-0007-draft-pdf-export.md)
 - Library: [`CAP-0006-library-explorer.md`](CAP-0006-library-explorer.md)
 - Classification: [`CAP-0008-confidentiality-classification.md`](CAP-0008-confidentiality-classification.md)
@@ -178,4 +184,5 @@ When implemented, the following must hold:
 - Periodic review: [`CAP-0017-periodic-document-review.md`](CAP-0017-periodic-document-review.md)
 - Claude Desktop assistance: [`CAP-0018-claude-desktop-change-assistance.md`](CAP-0018-claude-desktop-change-assistance.md)
 - Workflow-role routing: [`CAP-0019-inherited-workflow-role-routing.md`](CAP-0019-inherited-workflow-role-routing.md)
+- Workflow identity: [`CAP-0021-microsoft-entra-workflow-identity.md`](CAP-0021-microsoft-entra-workflow-identity.md)
 - Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)

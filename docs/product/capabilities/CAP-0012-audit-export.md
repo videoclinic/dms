@@ -27,7 +27,8 @@ When implemented, the following must hold:
    document can be matched against a recorded checksum.
 4. Generating a report is itself a workflow event of type `report_generated`
    recorded with the same canonical event body, including the report path,
-   filter parameters, and the local OS user.
+   filter parameters, the local OS user, and an Entra actor only when that event
+   was subject to interactive Entra verification.
 5. The **Verify workflow** routine from CAP-0011 is runnable as part of the
    export and produces a `valid` / `tampered` / `missing` verdict alongside
    the report contents.

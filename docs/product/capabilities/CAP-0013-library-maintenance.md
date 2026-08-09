@@ -28,10 +28,10 @@ When implemented, the following must hold:
    supported source draft and lets the operator add the selected file. Rescan
    may offer batch add or reassociation after explicit confirmation; it never
    auto-adds or guesses an ambiguous match.
-4. **Approver roster maintenance.** The operator can add, edit, and disable
-   approver profiles (display name, email, optional role label). A profile
-   referenced by an open review or by historical workflow events cannot be
-   deleted; it can be disabled and superseded.
+4. **No application user roster.** The application does not add, edit, disable,
+   or delete workflow users. Microsoft Entra group owners maintain eligible
+   people; the app only routes a folder or document role to a read-only eligible
+   person from that group (CAP-0019 / CAP-0021).
 5. **Confidentiality catalogue maintenance.** The operator can add, rename the
    display label of, and disable confidentiality types; their stable type IDs
    never change. A type referenced by an inheriting folder policy or by a

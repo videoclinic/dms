@@ -47,7 +47,8 @@ const CAPS = [
           <ul class="list">
             <li>Confidentiality catalogue</li>
             <li>Document-type catalogue</li>
-            <li>Workflow-person roster (no secrets)</li>
+            <li>Microsoft Entra tenant/group binding</li>
+            <li>Read-only Entra display cache (no user roster)</li>
             <li>Relative folder policies</li>
             <li>Document control data</li>
             <li>Release records &amp; checksums</li>
@@ -76,6 +77,7 @@ const CAPS = [
           ["Document ID", "doc-77a12bce"],
           ["Relative draft path", "policies/HR/Handbook.docx"],
           ["Effective editor / approver", "Lukas Roth / Anna Berg"],
+          ["Workflow identity", "Entra group: VC DMS Workflow Users"],
           ["Effective confidentiality", "Internal (inherited from /policies/HR)"],
         ])}
       </section>
@@ -96,7 +98,8 @@ const CAPS = [
             ["Rationale", "<span class=\"muted\">(required with change class)</span>"],
             ["Draft SHA-256", "<span class=\"muted\">(computed from current draft bytes on submit)</span>"],
             ["Requester", "Lukas Roth <lukas@vc.de> <span class=\"muted\">(snapshotted on submit)</span>"],
-            ["Approver (derived)", "Anna Berg <anna@vc.de>"],
+            ["Approver (derived)", "Anna Berg <anna@vc.de> · Entra group verified"],
+            ["Decision authority", "Anna signs in with Microsoft Entra before approving"],
             ["Transport", "SMTP relay (password from OS credential store)"],
           ])}
           <p class="hint">Document enters <code>in_review</code> only after the transport step succeeds. Empty or missing required fields fail closed.</p>
@@ -602,7 +605,7 @@ const CAPS = [
     file: "CAP-0013-library-maintenance",
     title: "Library maintenance",
     nav: "maintenance",
-    subtitle: "Rename/move with preserved ID, missing handling, rescan for recovery or batch work, roster & catalogues, withdraw.",
+    subtitle: "Rename/move with preserved ID, missing handling, rescan for recovery or batch work, catalogues, withdraw. Microsoft Entra owns workflow people.",
     body: `
       <div class="grid-explorer">
         <aside class="card">
@@ -611,7 +614,7 @@ const CAPS = [
             <button class="btn">Rename / move draft (in-root)</button>
             <button class="btn outline">Mark missing</button>
             <button class="btn outline">Rescan library</button>
-            <button class="btn outline">Approver roster</button>
+            <button class="btn outline">Workflow identity source</button>
             <button class="btn outline">Confidentiality catalogue</button>
             <button class="btn outline">Document-type catalogue</button>
             <button class="btn danger">Withdraw release</button>
@@ -832,34 +835,51 @@ const CAPS = [
   {
     id: "CAP-0019",
     file: "CAP-0019-inherited-workflow-role-routing",
-    title: "Workflow roles",
+    title: "Microsoft Entra workflow roles",
     nav: "config",
-    subtitle: "Editor and approver inherited from nearest configured ancestor; document override beats folder.",
+    subtitle: "Select one editor and approver from the Microsoft Entra workspace group; inheritance and document overrides remain independent.",
     body: `
       <div class="grid-2">
         <section class="card">
-          <h3 class="card-title">Workflow roster</h3>
-          <div class="stack">
-            ${person("wp-001", "Lukas Roth", "lukas@vc.de", "ok")}
-            ${person("wp-002", "Anna Berg", "anna@vc.de", "ok")}
-            ${person("wp-003", "Mira Klein", "mira@vc.de", "warn")}
-          </div>
+          <div class="row between mb"><h3 class="card-title" style="margin:0">Microsoft Entra people source</h3>${badge("connected", "ok")}</div>
+          ${kv([
+            ["Tenant", "videoclinic.de"],
+            ["Group", "VC DMS Workflow Users"],
+            ["Membership", "Direct user members only"],
+            ["Decision identity", "Interactive Entra sign-in; snapshot match required"],
+            ["Last refresh", "Just now"],
+          ])}
+          <div class="row gap-2" style="margin-top:0.75rem"><button class="btn outline">Refresh eligible people</button><button class="btn outline">View identity source</button></div>
+          <p class="hint">Read-only source. Group owners manage membership in Microsoft Entra; DMS Desktop never creates, edits, disables, or deletes users.</p>
         </section>
         <section class="card">
+          <h3 class="card-title">Folder role editor</h3>
+          ${kv([
+            ["Selected path", "policies/IT/"],
+            ["Responsible editor", "Lukas Roth <lukas@vc.de>"],
+            ["Approver", "Anna Berg <anna@vc.de>"],
+            ["Inherited after remove", "Lukas Roth / Anna Berg from edit-root"],
+          ])}
+          <div class="row gap-2" style="margin-top:0.75rem;flex-wrap:wrap"><button class="btn outline">Select editor…</button><button class="btn outline">Select approver…</button><button class="btn">Save folder policy</button><button class="btn danger">Remove folder policy</button></div>
+          <p class="hint">Selection refreshes the group first. Save changes only this folder; remove restores the nearest ancestor per role.</p>
+        </section>
+      </div>
+      <section class="card">
           <h3 class="card-title">Folder policies (effective)</h3>
           ${table(
-            ["Path", "Editor", "Approver", "Source"],
+            ["Path", "Editor", "Approver", "Source / state"],
             [
               ["edit-root", "Lukas Roth", "Anna Berg", "root policy"],
               ["policies/", "Lukas Roth", "Anna Berg", "inherited"],
               ["policies/HR/", "Lukas Roth", "Anna Berg", "inherited"],
               ["Handbook.docx", "Lukas Roth (override)", "Anna Berg (override)", "document override"],
-              ["policies/IT/", "Mira Klein", "Anna Berg", "folder override"],
+              ["policies/IT/", "Lukas Roth", "Anna Berg", "folder override"],
+              ["records/", "Unresolved", "Anna Berg", "Mira Klein is no longer eligible"],
               ["procedures/", "Lukas Roth", "Anna Berg", "inherited"],
             ]
           )}
-        </section>
-      </div>`,
+          <div class="callout warn" style="margin-top:0.75rem">An unresolved role blocks a new review. DMS Desktop never chooses a replacement; an operator reroutes the policy from the current Entra group.</div>
+      </section>`,
   },
   {
     id: "CAP-0020",
@@ -904,6 +924,60 @@ const CAPS = [
         ])}
         <p class="hint">Display labels may change; clipboard URI does not include them as keys.</p>
       </section>`,
+  },
+  {
+    id: "CAP-0021",
+    file: "CAP-0021-microsoft-entra-workflow-identity",
+    title: "Microsoft Entra workflow identity",
+    nav: "config",
+    subtitle: "Bind this workspace to one explicit Entra group. The group is a read-only people source; DMS Desktop does not manage users or membership.",
+    body: `<div class="grid-2">
+        <section class="card">
+          <div class="row between mb"><h3 class="card-title" style="margin:0">Current identity source</h3>${badge("connected", "ok")}</div>
+          ${kv([
+            ["Tenant", "videoclinic.de"],
+            ["Group", "VC DMS Workflow Users"],
+            ["Group object ID", "9c14…bf72"],
+            ["Eligible people", "3 direct user members"],
+            ["Last refresh", "2025-08-05 09:16 UTC"],
+          ])}
+          <div class="row gap-2" style="margin-top:0.75rem"><button class="btn outline">Refresh people</button><button class="btn outline">Change identity source…</button></div>
+          <p class="hint">Cached names and email are presentation only. Role assignment, review submission, and decisions refresh membership before authority is applied.</p>
+        </section>
+        <section class="card">
+          <h3 class="card-title">First setup or source replacement</h3>
+          ${kv([
+            ["Tenant ID", "Provided by Microsoft 365 administrator"],
+            ["Group object ID", "Provided by Microsoft 365 administrator"],
+            ["Sign-in", "Interactive Microsoft Entra sign-in"],
+            ["Preview", "Tenant, group, and direct eligible user count"],
+          ])}
+          <div class="row gap-2" style="margin-top:0.75rem"><button class="btn outline">Preview source</button><button class="btn">Apply binding</button></div>
+          <div class="callout warn" style="margin-top:0.75rem">Apply binding changes the workspace source. Every live editor/approver policy becomes unresolved and must be rerouted; historical evidence is unchanged.</div>
+        </section>
+      </div>
+      <div class="grid-2">
+        <section class="card">
+          <h3 class="card-title">Eligible people — read only</h3>
+          <div class="stack">
+            ${person("a714…51bf", "Lukas Roth", "lukas@vc.de", "ok")}
+            ${person("b023…882a", "Anna Berg", "anna@vc.de", "ok")}
+            ${person("c144…0d91", "Mira Klein", "mira@vc.de", "ok")}
+          </div>
+          <p class="hint">Use this list only to select editor/approver routing. Add, remove, disable, and profile changes happen in Microsoft Entra.</p>
+        </section>
+        <section class="card">
+          <h3 class="card-title">Authority boundary</h3>
+          ${kv([
+            ["Approval decision", "Entra tenant/object ID matches review snapshot"],
+            ["DMS user management", "Not available"],
+            ["SharePoint permissions", "Not read as a roster"],
+            ["OneDrive sharing", "Not read as a roster"],
+            ["Document content", "Never sent to Microsoft Graph"],
+          ])}
+          <p class="hint">The Entra group verifies workflow identity. Filesystem, SharePoint, and OneDrive permissions independently control source-file access.</p>
+        </section>
+      </div>`,
   },
 ];
 
