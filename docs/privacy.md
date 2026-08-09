@@ -28,14 +28,20 @@
   paths, `.dms` metadata, or approval comments to Microsoft Graph.
 - No telemetry that includes document content or paths unless a future ADR
   explicitly enables opt-in diagnostics.
-- Approval email contains only the document display/relative path, requested
-  action or decision outcome, configured confidentiality label, and local-app
-  CAP-0020 permalink (workspace ID + document ID [+ review target]); it never
-  attaches or uploads draft or released document content. Permalinks never put
-  draft or PDF bytes in the URI.
-- The configured confidentiality label is rendered in the notification subject
-  but no body field that could embed document content is generated. The same
-  rule applies to `mailto:` fallback drafts.
+- A review-request email contains only the DMS-managed document title,
+  filesystem-derived edit-root-relative source path, requested action,
+  requester display name, candidate target version, configured confidentiality
+  label, and CAP-0020 review permalink (workspace ID + document ID + review
+  target). It never attaches or uploads draft or released document content.
+  Permalinks never put draft or PDF bytes in the URI.
+- A decision-outcome email contains only the document display/relative path,
+  decision outcome, configured confidentiality label, and local-app CAP-0020
+  permalink to the review detail; it does not include document content or the
+  decision comment.
+- The configured confidentiality label, DMS-managed title, and candidate target
+  version are rendered in the review-request subject. No generated body field
+  may embed document content. The same rule and template apply to `mailto:`
+  fallback drafts.
 - Each released PDF filename includes its effective confidentiality type ID.
   Anyone who can list the publish tree can therefore see that classification;
   filesystem access remains the operator's responsibility.

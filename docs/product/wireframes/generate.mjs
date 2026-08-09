@@ -537,15 +537,15 @@ const CAPS = [
             ["From", "dms@videoclinic.de"],
             ["Recipient (snapshot)", "anna@videoclinic.de"],
           ])}
-          <p class="hint">Permalink: <code>dms://open?workspace=ws-9c3b7d1a&amp;document=doc-77a12bce&amp;target=review&amp;review=r-21</code> — IDs only; survives rename and version bump.</p>
+          <p class="hint">Review task permalink: <code>dms://open?workspace=ws-9c3b7d1a&amp;document=doc-77a12bce&amp;target=review&amp;review=r-21</code> — IDs only; survives rename and version bump.</p>
         </section>
         <section class="card">
           <div class="row gap-2 mb"><h3 class="card-title">mailto: fallback</h3>${badge("available", "warn")}</div>
           ${kv([
             ["Default handler", "Microsoft Outlook (Windows)"],
             ["Recipient", "anna@videoclinic.de"],
-            ["Subject", "[DMS] Review HR Data Privacy Policy"],
-            ["Body", "Relative path, action, confidentiality, CAP-0020 permalink. No document content."],
+            ["Subject", "[Internal] DMS review requested — HR Data Privacy Policy — V1.4"],
+            ["Body", "A review decision is requested.<br/><br/>Action: Review and decide<br/>Title: HR Data Privacy Policy<br/>Document: policies/HR/Privacy-Policy.docx<br/>Requested by: Lara Becker<br/>Target version: V1.4<br/>Confidentiality: Internal<br/><br/>Open review task:<br/><code>dms://open?workspace=ws-9c3b7d1a&amp;document=doc-77a12bce&amp;target=review&amp;review=r-21</code>"],
           ])}
           <p class="hint">State does not advance to <code>in_review</code> until operator confirms send. Delivery failure never reverses a decision.</p>
         </section>

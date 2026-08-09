@@ -232,11 +232,11 @@ tr:last-child td { border-bottom: 0; }
         <section class="card">
           <div class="row gap-2 mb"><h3 class="card-title">SMTP relay</h3><span class="badge ok">active</span></div>
           <dl class="kv"><div><dt>Host</dt><dd>smtp.videoclinic.de</dd></div><div><dt>Port</dt><dd>587 (STARTTLS)</dd></div><div><dt>Username</dt><dd>dms@videoclinic.de</dd></div><div><dt>Password</dt><dd>•••••••• (OS credential store)</dd></div><div><dt>From</dt><dd>dms@videoclinic.de</dd></div><div><dt>Recipient (snapshot)</dt><dd>anna@videoclinic.de</dd></div></dl>
-          <p class="hint">Permalink: <code>dms://open?workspace=ws-9c3b7d1a&amp;document=doc-77a12bce&amp;target=review&amp;review=r-21</code> — IDs only; survives rename and version bump.</p>
+          <p class="hint">Review task permalink: <code>dms://open?workspace=ws-9c3b7d1a&amp;document=doc-77a12bce&amp;target=review&amp;review=r-21</code> — IDs only; survives rename and version bump.</p>
         </section>
         <section class="card">
           <div class="row gap-2 mb"><h3 class="card-title">mailto: fallback</h3><span class="badge warn">available</span></div>
-          <dl class="kv"><div><dt>Default handler</dt><dd>Microsoft Outlook (Windows)</dd></div><div><dt>Recipient</dt><dd>anna@videoclinic.de</dd></div><div><dt>Subject</dt><dd>[DMS] Review HR Data Privacy Policy</dd></div><div><dt>Body</dt><dd>Relative path, action, confidentiality, CAP-0020 permalink. No document content.</dd></div></dl>
+          <dl class="kv"><div><dt>Default handler</dt><dd>Microsoft Outlook (Windows)</dd></div><div><dt>Recipient</dt><dd>anna@videoclinic.de</dd></div><div><dt>Subject</dt><dd>[Internal] DMS review requested — HR Data Privacy Policy — V1.4</dd></div><div><dt>Body</dt><dd>A review decision is requested.<br/><br/>Action: Review and decide<br/>Title: HR Data Privacy Policy<br/>Document: policies/HR/Privacy-Policy.docx<br/>Requested by: Lara Becker<br/>Target version: V1.4<br/>Confidentiality: Internal<br/><br/>Open review task:<br/><code>dms://open?workspace=ws-9c3b7d1a&amp;document=doc-77a12bce&amp;target=review&amp;review=r-21</code></dd></div></dl>
           <p class="hint">State does not advance to <code>in_review</code> until operator confirms send. Delivery failure never reverses a decision.</p>
         </section>
       </div>

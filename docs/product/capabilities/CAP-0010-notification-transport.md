@@ -16,10 +16,9 @@ When implemented, the following must hold:
    password is always resolved from the OS credential store, never stored in
    `.dms`.
 2. When the transport is `smtp`, a review request uses the configured relay to
-   send the notification. Successful relay acceptance is recorded in the
-   workflow event chain; failure leaves the document in `draft` and offers a
-   retry. Email contains only the relative path, action, confidentiality
-   label, and local-app deep link (privacy rules).
+   send the canonical review-request notification below. Successful relay
+   acceptance is recorded in the workflow event chain; failure leaves the
+   document in `draft` and offers a retry.
 3. The local-app deep link is a CAP-0020 permalink URI. It identifies the
    workspace and stable document ID, plus the review-request target ID, without
    embedding document content, draft file name, version label, or an absolute
@@ -29,9 +28,9 @@ When implemented, the following must hold:
    eligible local workspace is available, the app reports that condition and
    does not open an arbitrary path or record a workflow decision.
 4. When the transport is `mailto`, the desktop app opens the host's default
-   mail handler with a pre-filled `mailto:` URI including the same notification
-   fields. The lifecycle state does not advance to `in_review` until the
-   operator explicitly confirms in the app that the message was sent.
+   mail handler with the canonical review-request subject and body below in a
+   pre-filled `mailto:` URI. The lifecycle state does not advance to `in_review`
+   until the operator explicitly confirms in the app that the message was sent.
 5. After an `approved`, `rejected`, or `changed_requested` decision is recorded,
    the app notifies the requester's snapshotted email address. The notification
    contains the relative path, decision outcome, confidentiality label, and a
@@ -49,6 +48,42 @@ When implemented, the following must hold:
 8. If the host has no registered mail handler and the transport is `mailto`,
    the action surfaces a clear message naming the missing handler; the
    workflow does not silently fall back to SMTP.
+
+## Review-request notification (contract)
+
+Every review-request notification uses this exact UTF-8 plain-text template for
+the SMTP message and the pre-filled `mailto:` draft. The subject and body have
+the following literal labels and field order:
+
+```text
+Subject: [<confidentiality-label>] DMS review requested — <document-title> — <target-version>
+
+A review decision is requested.
+
+Action: Review and decide
+Title: <document-title>
+Document: <edit-root-relative-source-path>
+Requested by: <requester-display-name>
+Target version: <target-version>
+Confidentiality: <confidentiality-label>
+
+Open review task:
+<review-permalink>
+```
+
+- `<document-title>` is the DMS-managed `title` control field, not the source
+  file name, Office document properties, or Markdown front matter.
+- `<edit-root-relative-source-path>` is the current filesystem-derived source
+  path relative to the edit root.
+- `<requester-display-name>` is the display name snapshotted with the review
+  request; the requester’s email address is not included in the message body.
+- `<target-version>` is the candidate version snapshotted with the review
+  request (for example, `V1.4`). It remains review evidence and is not a
+  reserved or released version.
+- `<review-permalink>` is the CAP-0020 review-target URI. It is the only
+  document link in the notification; the email contains no source-file URL,
+  released-PDF URL, public web URL, attachment, document content, or decision
+  control.
 
 ## Non-goals
 
