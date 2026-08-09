@@ -67,6 +67,15 @@ fn document_control_is_persisted_independently_from_source_locator() {
         .expect("update control data");
     workspace.save().expect("save workspace");
 
+    let metadata = fs::read_to_string(
+        edit_root
+            .path()
+            .join(METADATA_DIRECTORY)
+            .join(METADATA_FILENAME),
+    )
+    .expect("read workspace metadata");
+    assert!(metadata.contains(r#""relative_path": "procedures/Onboarding.md""#));
+
     let reopened = Workspace::open(edit_root.path()).expect("reopen workspace");
     let stored = reopened.document(document.id).expect("stored document");
     assert_eq!(

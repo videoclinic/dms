@@ -80,6 +80,7 @@ pub struct Workspace {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Document {
     pub id: Uuid,
+    #[serde(with = "relative_path_serde")]
     pub relative_path: PathBuf,
     pub lifecycle: Lifecycle,
     pub control: DocumentControl,
@@ -460,6 +461,61 @@ fn validate_relative_source_path(path: &Path) -> Result<()> {
         return Err(DmsError::InvalidRelativePath(path.to_path_buf()));
     }
     Ok(())
+}
+
+mod relative_path_serde {
+    use std::path::{Component, Path, PathBuf};
+
+    use serde::{de::Error as _, ser::Error as _, Deserialize, Deserializer, Serializer};
+
+    use super::validate_relative_source_path;
+
+    pub fn serialize<S>(path: &Path, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        validate_relative_source_path(path).map_err(S::Error::custom)?;
+        let components = path
+            .components()
+            .filter_map(|component| match component {
+                Component::Normal(value) => Some(value),
+                Component::CurDir => None,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_) => None,
+            })
+            .map(|component| {
+                let component = component
+                    .to_str()
+                    .ok_or_else(|| S::Error::custom("relative source path is not valid UTF-8"))?;
+                if component.contains('\\') {
+                    return Err(S::Error::custom(
+                        "relative source path cannot contain backslashes",
+                    ));
+                }
+                Ok(component)
+            })
+            .collect::<std::result::Result<Vec<_>, S::Error>>()?;
+        serializer.serialize_str(&components.join("/"))
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> std::result::Result<PathBuf, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        let components = value.split('/').collect::<Vec<_>>();
+        if components
+            .iter()
+            .any(|component| component.is_empty() || *component == "." || *component == "..")
+            || value.contains('\\')
+        {
+            return Err(D::Error::custom(
+                "relative source path must use clean '/'-separated components",
+            ));
+        }
+        let path = components.iter().collect::<PathBuf>();
+        validate_relative_source_path(&path).map_err(D::Error::custom)?;
+        Ok(path)
+    }
 }
 
 fn is_metadata_path(path: &Path) -> bool {

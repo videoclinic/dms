@@ -16,7 +16,8 @@ persistence.
 
 - Stable workspace, document, and note IDs are persisted identifiers.
 - Source paths are canonicalized, must resolve under the configured edit root,
-  and are stored relative to it.
+  and are stored relative to it with platform-independent `/` separators in
+  metadata and machine-readable output.
 - Source filename/path are locator facts; control data is independent metadata.
 - `Workspace::save` is the only persistence boundary for mutating callers.
 
