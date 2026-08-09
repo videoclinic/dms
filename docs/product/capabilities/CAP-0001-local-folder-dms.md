@@ -36,6 +36,11 @@ When implemented, the following must hold:
    cache, relative folder policies that reference Entra user object IDs, and
    document-control-data fields required by CAP-0008, CAP-0015, CAP-0019, and
    CAP-0021. It stores no SMTP password, OAuth token, or other credential.
+9. **Workspace** is the first route inside CAP-0005's Configuration workspace.
+   When no workspace is open, the same route is the sole **Set up workspace**
+   entry point; it guides the operator through edit-root and publish-root
+   selection and the explicit `.dms` initialization confirmation. Other
+   Configuration routes remain unavailable until that workspace exists.
 
 ## Non-goals
 

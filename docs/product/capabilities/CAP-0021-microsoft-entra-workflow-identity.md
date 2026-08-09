@@ -17,12 +17,14 @@ When implemented, the following must hold:
    tenant ID, one group object ID, and a display label. The desktop client ID is
    product configuration, not a workspace secret. The application does not
    create or modify the Entra group.
-2. While a binding exists, **Configuration** shows its tenant display, group
-   label/object ID, connection state, eligible-person count, and last refresh in
-   a compact current-source summary. **Manage identity source** opens first setup
-   and replacement as a secondary surface; the Tenant ID/group object ID form,
-   preview, and replacement warning do not permanently occupy a main
-   Configuration column.
+2. While a binding exists, **Configuration → Workflow** shows its tenant
+   display, group label/object ID, connection state, eligible-person count, and
+   last refresh in a compact current-source summary. **Manage identity source**
+   opens first setup and replacement as a secondary surface from Workflow with a
+   visible return to that route; the identity source has no independent
+   Configuration-navigation entry. The Tenant ID/group object ID form, preview,
+   and replacement warning do not permanently occupy a main Configuration
+   column.
 3. First setup and a later binding replacement require an operator to enter the
    tenant ID and group object ID supplied by Microsoft 365 administration, sign
    in interactively, preview the resolved source, and explicitly apply the

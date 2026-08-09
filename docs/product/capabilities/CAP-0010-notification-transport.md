@@ -11,10 +11,12 @@
 
 When implemented, the following must hold:
 
-1. The workspace configuration stores the selected notification transport
-   (`smtp` or `mailto`) and the non-secret SMTP relay settings. The relay
-   password is always resolved from the OS credential store, never stored in
-   `.dms`.
+1. **Configuration → Notifications** stores the selected notification transport
+   (`smtp` or `mailto`) and the non-secret SMTP relay settings. The persistent
+   Configuration navigation also exposes Workspace, Document defaults, and
+   Workflow so notification settings remain a discoverable peer rather than an
+   isolated page. The relay password is always resolved from the OS credential
+   store, never stored in `.dms`.
 2. When the transport is `smtp`, a review request uses the configured relay to
    send the canonical review-request notification below. Successful relay
    acceptance is recorded in the workflow event chain; failure leaves the

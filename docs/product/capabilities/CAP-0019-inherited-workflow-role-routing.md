@@ -16,12 +16,15 @@ When implemented, the following must hold:
    read-only people source. A routing policy references an immutable Entra user
    object ID, not an application profile. The application exposes no user CRUD
    or group-membership management.
-2. Under **Configuration**, workflow-role routing uses the same defaults-first
-   policy layout as CAP-0008: a compact people-source summary shows the bound
-   group and its refresh/connection state, while an edit-root-relative tree and
-   selected-folder editor define routing defaults and exceptions. **Manage
-   identity source** opens CAP-0021 setup as a secondary surface; Entra setup
-   does not occupy a permanent routing column.
+2. Under **Configuration → Workflow**, workflow-role routing uses the same
+   defaults-first policy layout as CAP-0008: a compact people-source summary
+   shows the bound group and its refresh/connection state, while an
+   edit-root-relative tree and selected-folder editor define routing defaults
+   and exceptions. The persistent Configuration navigation also exposes
+   Workspace, Document defaults, and Notifications. **Manage identity source**
+   opens CAP-0021 as a secondary surface with a visible return to Workflow;
+   Entra setup does not occupy a permanent routing column or a separate
+   Configuration-navigation entry.
 3. The operator selects the edit root or an existing folder from that tree, then
    assigns one responsible editor and one approver. The root assignments are the
    required defaults after a valid identity-source binding. A folder may change

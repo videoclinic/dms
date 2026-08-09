@@ -7,147 +7,168 @@
       "title": "Workspace configuration",
       "html": "html/CAP-0001-local-folder-dms.html",
       "png": "exports/CAP-0001-local-folder-dms.png",
-      "nav": "config"
+      "nav": "config",
+      "configSection": "workspace"
     },
     {
       "id": "CAP-0002",
       "title": "Document lifecycle",
       "html": "html/CAP-0002-document-lifecycle.html",
       "png": "exports/CAP-0002-document-lifecycle.png",
-      "nav": "library"
+      "nav": "library",
+      "configSection": null
     },
     {
       "id": "CAP-0003",
       "title": "Document notes",
       "html": "html/CAP-0003-document-notes.html",
       "png": "exports/CAP-0003-document-notes.png",
-      "nav": "library"
+      "nav": "library",
+      "configSection": null
     },
     {
       "id": "CAP-0004",
       "title": "Verify integrity",
       "html": "html/CAP-0004-release-integrity.html",
       "png": "exports/CAP-0004-release-integrity.png",
-      "nav": "releases"
+      "nav": "releases",
+      "configSection": null
     },
     {
       "id": "CAP-0005",
       "title": "Desktop shell overview",
       "html": "html/CAP-0005-desktop-shell.html",
       "png": "exports/CAP-0005-desktop-shell.png",
-      "nav": "library"
+      "nav": "library",
+      "configSection": null
     },
     {
       "id": "CAP-0006",
       "title": "Folder-first library explorer",
       "html": "html/CAP-0006-library-explorer.html",
       "png": "exports/CAP-0006-library-explorer.png",
-      "nav": "library"
+      "nav": "library",
+      "configSection": null
     },
     {
       "id": "CAP-0007",
       "title": "Source draft → PDF export",
       "html": "html/CAP-0007-draft-pdf-export.html",
       "png": "exports/CAP-0007-draft-pdf-export.png",
-      "nav": "releases"
+      "nav": "releases",
+      "configSection": null
     },
     {
       "id": "CAP-0008",
       "title": "Confidentiality policies",
       "html": "html/CAP-0008-confidentiality-classification.html",
       "png": "exports/CAP-0008-confidentiality-classification.png",
-      "nav": "config"
+      "nav": "config",
+      "configSection": "document-defaults"
     },
     {
       "id": "CAP-0009",
       "title": "Open draft in host editor",
       "html": "html/CAP-0009-release-editor.html",
       "png": "exports/CAP-0009-release-editor.png",
-      "nav": "library"
+      "nav": "library",
+      "configSection": null
     },
     {
       "id": "CAP-0010",
       "title": "Notification transport",
       "html": "html/CAP-0010-notification-transport.html",
       "png": "exports/CAP-0010-notification-transport.png",
-      "nav": "config"
+      "nav": "config",
+      "configSection": "notifications"
     },
     {
       "id": "CAP-0011",
       "title": "Workflow chain & evidence",
       "html": "html/CAP-0011-approval-evidence.html",
       "png": "exports/CAP-0011-approval-evidence.png",
-      "nav": "audit"
+      "nav": "audit",
+      "configSection": null
     },
     {
       "id": "CAP-0012",
       "title": "Audit export",
       "html": "html/CAP-0012-audit-export.html",
       "png": "exports/CAP-0012-audit-export.png",
-      "nav": "audit"
+      "nav": "audit",
+      "configSection": null
     },
     {
       "id": "CAP-0013",
       "title": "Library maintenance",
       "html": "html/CAP-0013-library-maintenance.html",
       "png": "exports/CAP-0013-library-maintenance.png",
-      "nav": "maintenance"
+      "nav": "maintenance",
+      "configSection": null
     },
     {
       "id": "CAP-0014",
       "title": "Workspace integrity",
       "html": "html/CAP-0014-workspace-integrity.html",
       "png": "exports/CAP-0014-workspace-integrity.png",
-      "nav": "maintenance"
+      "nav": "maintenance",
+      "configSection": null
     },
     {
       "id": "CAP-0015",
       "title": "Document control data",
       "html": "html/CAP-0015-document-control-data.html",
       "png": "exports/CAP-0015-document-control-data.png",
-      "nav": "library"
+      "nav": "library",
+      "configSection": null
     },
     {
       "id": "CAP-0016",
       "title": "Publish tree maintenance",
       "html": "html/CAP-0016-publish-tree-maintenance.html",
       "png": "exports/CAP-0016-publish-tree-maintenance.png",
-      "nav": "releases"
+      "nav": "releases",
+      "configSection": null
     },
     {
       "id": "CAP-0017",
       "title": "Periodic review",
       "html": "html/CAP-0017-periodic-document-review.html",
       "png": "exports/CAP-0017-periodic-document-review.png",
-      "nav": "audit"
+      "nav": "audit",
+      "configSection": null
     },
     {
       "id": "CAP-0018",
       "title": "Claude Desktop handoff",
       "html": "html/CAP-0018-claude-desktop-change-assistance.html",
       "png": "exports/CAP-0018-claude-desktop-change-assistance.png",
-      "nav": "library"
+      "nav": "library",
+      "configSection": null
     },
     {
       "id": "CAP-0019",
       "title": "Microsoft Entra workflow roles",
       "html": "html/CAP-0019-inherited-workflow-role-routing.html",
       "png": "exports/CAP-0019-inherited-workflow-role-routing.png",
-      "nav": "config"
+      "nav": "config",
+      "configSection": "workflow"
     },
     {
       "id": "CAP-0020",
       "title": "Document permalinks",
       "html": "html/CAP-0020-document-permalinks.html",
       "png": "exports/CAP-0020-document-permalinks.png",
-      "nav": "library"
+      "nav": "library",
+      "configSection": null
     },
     {
       "id": "CAP-0021",
       "title": "Microsoft Entra workflow identity",
       "html": "html/CAP-0021-microsoft-entra-workflow-identity.html",
       "png": "exports/CAP-0021-microsoft-entra-workflow-identity.png",
-      "nav": "config"
+      "nav": "config",
+      "configSection": "workflow"
     }
   ]
 }

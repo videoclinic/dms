@@ -353,3 +353,23 @@ Capability-local rules stay in their CAP files.
   approver and remains eligible in the group. Filesystem and SharePoint/OneDrive
   ACLs remain the source-file access boundary, and the app does not synchronize
   document content.
+
+## ADR-0022 — One Configuration workspace with task-based routes
+
+- **Decision:** Configuration is one primary destination with persistent
+  in-surface routes: **Workspace**, **Document defaults**, **Workflow**, and
+  **Notifications**. The active route is explicit and uses the existing
+  Configuration activity rather than creating a separate top-level destination
+  or tab. Confidentiality catalogue administration and Microsoft Entra
+  identity-source setup are contextual secondary surfaces that return to their
+  invoking route. Before a workspace exists, only **Set up workspace** is
+  available; workspace-bound settings are unavailable with an explanation.
+- **Why:** Root paths, classification defaults, workflow routing, and mail
+  transport are configured at different times, but they are all workspace
+  configuration. A collection of CAP-shaped pages leaves operators without a
+  predictable way to find a setting or return to a related one.
+- **Consequences:** The primary sidebar remains short. Workflow identity does
+  not become a fifth peer destination, and catalogue maintenance stays secondary
+  to Document defaults. Maintenance, releases, audit, and Library retain their
+  separate operational roles. Saved Configuration views retain the active route;
+  the no-workspace setup route cannot imply that missing policy settings exist.

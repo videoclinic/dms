@@ -27,6 +27,7 @@ const CAPS = [
     file: "CAP-0001-local-folder-dms",
     title: "Workspace configuration",
     nav: "config",
+    configSection: "workspace",
     subtitle: "Dual roots, workspace ID, and .dms metadata under the edit root.",
     actions: ["Choose edit root", "Choose publish root", "Reveal .dms"],
     body: `
@@ -55,7 +56,13 @@ const CAPS = [
           </ul>
           <div class="callout warn">No SMTP password is stored here — relay credentials live in the OS credential store.</div>
         </section>
-      </div>`,
+      </div>
+      <section class="card">
+        <div class="row between" style="gap:1rem;flex-wrap:wrap">
+          <div><h3 class="card-title" style="margin-bottom:0.25rem">No workspace yet</h3><p class="muted" style="margin:0">At first launch, Configuration offers only this entry. Document defaults, Workflow, and Notifications become available after the operator confirms workspace initialization.</p></div>
+          <button class="btn">Set up workspace</button>
+        </div>
+      </section>`,
   },
   {
     id: "CAP-0002",
@@ -460,6 +467,7 @@ const CAPS = [
     file: "CAP-0008-confidentiality-classification",
     title: "Confidentiality policies",
     nav: "config",
+    configSection: "document-defaults",
     subtitle: "Set the root default, then add only the folder exceptions that need a different confidentiality type.",
     body: `
       ${defaultsFirstStyles()}
@@ -538,6 +546,7 @@ const CAPS = [
     file: "CAP-0010-notification-transport",
     title: "Notification transport",
     nav: "config",
+    configSection: "notifications",
     subtitle: "Major review requests and post-release minor-publication notices use SMTP or mailto:.",
     body: `
       <div class="grid-2">
@@ -855,6 +864,7 @@ const CAPS = [
     file: "CAP-0019-inherited-workflow-role-routing",
     title: "Microsoft Entra workflow roles",
     nav: "config",
+    configSection: "workflow",
     subtitle: "Set editor and approver defaults at the root, then add only the folder exceptions that need different routing.",
     body: `
       ${defaultsFirstStyles()}
@@ -953,12 +963,14 @@ const CAPS = [
     file: "CAP-0021-microsoft-entra-workflow-identity",
     title: "Microsoft Entra workflow identity",
     nav: "config",
+    configSection: "workflow",
+    configSecondary: "Identity source",
     subtitle: "Keep the bound group visible as a compact, read-only source; open setup or replacement only when the workspace source changes.",
     body: `${defaultsFirstStyles()}
       <section class="config-summary">
         <div class="summary-copy"><strong>Current identity source ${badge("connected", "ok")}</strong><span>videoclinic.de · VC DMS Workflow Users · 9c14…bf72 · 3 eligible people · refreshed 2025-08-05 09:16 UTC</span></div>
         <button class="btn outline">Refresh people</button>
-        <button class="btn outline">Manage identity source…</button>
+        <button class="btn outline">Replace identity source…</button>
       </section>
       <div class="grid-2">
         <section class="card">
@@ -1019,6 +1031,27 @@ function event(type, ts, who, cmt, hash, pred) {
 }
 function ver(v, date, cls, state, kind) {
   return `<div class="ver"><div class="row gap-2"><strong>${v}</strong>${badge(state, kind)}</div><p class="muted">${date}</p><p>${cls}</p></div>`;
+}
+const CONFIG_ROUTES = [
+  { id: "workspace", label: "Workspace", detail: "Roots and local metadata" },
+  { id: "document-defaults", label: "Document defaults", detail: "Classification and catalogues" },
+  { id: "workflow", label: "Workflow", detail: "People and role routing" },
+  { id: "notifications", label: "Notifications", detail: "Review and release email" },
+];
+function configurationNavigation(cap) {
+  if (!cap.configSection) return "";
+  const current = CONFIG_ROUTES.find((route) => route.id === cap.configSection);
+  const secondary = cap.configSecondary
+    ? `<div class="config-secondary"><span>${current.label}</span><span aria-hidden="true">›</span><strong>${cap.configSecondary}</strong><button class="btn outline config-back">← Back to ${current.label}</button></div>`
+    : `<span class="badge info">Current: ${current.label}</span>`;
+  const routes = CONFIG_ROUTES.map((route) => {
+    const active = route.id === cap.configSection;
+    return `<a class="config-tab${active ? " active" : ""}" href="#"${active ? ' aria-current="page"' : ""}><strong>${route.label}</strong><span>${route.detail}</span></a>`;
+  }).join("");
+  return `<section class="configuration-nav" aria-label="Configuration navigation">
+    <div class="config-nav-head"><div><h3>Configuration</h3><p>Set up the workspace once, then choose the task that matches the setting you need.</p></div>${secondary}</div>
+    <nav class="config-tabs" aria-label="Configuration sections">${routes}</nav>
+  </section>`;
 }
 function documentControlDataSelectionPane() {
   // CAP-0015 owns this shared selection-pane content; CAP-0006 owns its placement.
@@ -1275,7 +1308,21 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .content { padding: 1.25rem 1.5rem 2rem; display: flex; flex-direction: column; gap: 1rem; }
 .cap-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; }
 .cap-head h2 { margin: 0; font-size: 1.25rem; font-weight: 700; }
-.subtitle { margin: 0; color: var(--muted-foreground); font-size: 0.875rem; max-width: 60rem; }
+.subtitle { margin: 0; color: var(--muted-foreground); font-size: 0.875rem; max-width: 60rem; }${cap.configSection ? `
+.configuration-nav { display: flex; flex-direction: column; gap: 0.75rem; padding: 0.85rem 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.config-nav-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.config-nav-head > div { min-width: 0; }
+.config-nav-head h3 { margin: 0; font-size: 0.95rem; }
+.config-nav-head p { margin: 0.2rem 0 0; color: var(--muted-foreground); font-size: 0.78rem; }
+.config-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.45rem; }
+.config-tab { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; padding: 0.55rem 0.65rem; border: 1px solid var(--border); border-radius: calc(var(--radius) - 2px); background: var(--background); }
+.config-tab strong { font-size: 0.8rem; }
+.config-tab span { color: var(--muted-foreground); font-size: 0.68rem; line-height: 1.3; }
+.config-tab.active { border-color: color-mix(in oklch, var(--info) 38%, var(--border)); background: color-mix(in oklch, var(--info) 10%, white); color: var(--info); }
+.config-tab.active span { color: color-mix(in oklch, var(--info) 75%, var(--muted-foreground)); }
+.config-secondary { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; color: var(--muted-foreground); font-size: 0.78rem; }
+.config-secondary strong { color: var(--foreground); }
+.config-back { height: 1.75rem; margin-left: 0.25rem; font-size: 0.72rem; }` : ""}
 .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; }
 .card-title { margin: 0 0 0.6rem; font-size: 0.95rem; font-weight: 600; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
@@ -1429,7 +1476,8 @@ tr:last-child td { border-bottom: 0; }
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
       <p class="subtitle">${cap.subtitle}</p>
-      ${cap.body}
+      ${cap.configSection ? `${configurationNavigation(cap)}
+      ` : ""}${cap.body}
     </main>
   </div>
 </div>
@@ -1484,6 +1532,7 @@ const manifest = {
     html: `html/${r.html}`,
     png: `exports/${r.png}`,
     nav: r.nav,
+    configSection: r.configSection || null,
   })),
 };
 fs.writeFileSync(path.join(__dirname, "manifest.json"), JSON.stringify(manifest, null, 2));

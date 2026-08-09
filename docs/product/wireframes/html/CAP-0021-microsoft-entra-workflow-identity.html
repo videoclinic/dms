@@ -74,6 +74,20 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .cap-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; }
 .cap-head h2 { margin: 0; font-size: 1.25rem; font-weight: 700; }
 .subtitle { margin: 0; color: var(--muted-foreground); font-size: 0.875rem; max-width: 60rem; }
+.configuration-nav { display: flex; flex-direction: column; gap: 0.75rem; padding: 0.85rem 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.config-nav-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.config-nav-head > div { min-width: 0; }
+.config-nav-head h3 { margin: 0; font-size: 0.95rem; }
+.config-nav-head p { margin: 0.2rem 0 0; color: var(--muted-foreground); font-size: 0.78rem; }
+.config-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.45rem; }
+.config-tab { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; padding: 0.55rem 0.65rem; border: 1px solid var(--border); border-radius: calc(var(--radius) - 2px); background: var(--background); }
+.config-tab strong { font-size: 0.8rem; }
+.config-tab span { color: var(--muted-foreground); font-size: 0.68rem; line-height: 1.3; }
+.config-tab.active { border-color: color-mix(in oklch, var(--info) 38%, var(--border)); background: color-mix(in oklch, var(--info) 10%, white); color: var(--info); }
+.config-tab.active span { color: color-mix(in oklch, var(--info) 75%, var(--muted-foreground)); }
+.config-secondary { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; color: var(--muted-foreground); font-size: 0.78rem; }
+.config-secondary strong { color: var(--foreground); }
+.config-back { height: 1.75rem; margin-left: 0.25rem; font-size: 0.72rem; }
 .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; }
 .card-title { margin: 0 0 0.6rem; font-size: 0.95rem; font-weight: 600; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
@@ -227,6 +241,10 @@ tr:last-child td { border-bottom: 0; }
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
       <p class="subtitle">Keep the bound group visible as a compact, read-only source; open setup or replacement only when the workspace source changes.</p>
+      <section class="configuration-nav" aria-label="Configuration navigation">
+    <div class="config-nav-head"><div><h3>Configuration</h3><p>Set up the workspace once, then choose the task that matches the setting you need.</p></div><div class="config-secondary"><span>Workflow</span><span aria-hidden="true">›</span><strong>Identity source</strong><button class="btn outline config-back">← Back to Workflow</button></div></div>
+    <nav class="config-tabs" aria-label="Configuration sections"><a class="config-tab" href="#"><strong>Workspace</strong><span>Roots and local metadata</span></a><a class="config-tab" href="#"><strong>Document defaults</strong><span>Classification and catalogues</span></a><a class="config-tab active" href="#" aria-current="page"><strong>Workflow</strong><span>People and role routing</span></a><a class="config-tab" href="#"><strong>Notifications</strong><span>Review and release email</span></a></nav>
+  </section>
       <style>
     .config-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; padding: 0.75rem 0.9rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
     .config-summary .summary-copy { min-width: 14rem; flex: 1; }
@@ -240,7 +258,7 @@ tr:last-child td { border-bottom: 0; }
       <section class="config-summary">
         <div class="summary-copy"><strong>Current identity source <span class="badge ok">connected</span></strong><span>videoclinic.de · VC DMS Workflow Users · 9c14…bf72 · 3 eligible people · refreshed 2025-08-05 09:16 UTC</span></div>
         <button class="btn outline">Refresh people</button>
-        <button class="btn outline">Manage identity source…</button>
+        <button class="btn outline">Replace identity source…</button>
       </section>
       <div class="grid-2">
         <section class="card">

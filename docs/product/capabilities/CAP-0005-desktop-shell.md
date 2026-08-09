@@ -39,7 +39,20 @@ When implemented, the following must hold:
    pins expanded.
 9. While collapsed, primary destinations remain reachable as icon-only rail
    entries and/or via the hamburger menu; labels are not required on the rail.
-10. While collapsed, the rail also exposes distinct, icon-only **Saved views**
+10. **Configuration** is one primary destination with persistent in-surface
+    navigation, rather than a collection of sidebar destinations or unrelated
+    full-page screens. With a workspace open, that navigation presents these
+    v1 routes and marks the current route: **Workspace**, **Document defaults**,
+    **Workflow**, and **Notifications**. Choosing a route keeps the single
+    Configuration activity current and changes its route state; it does not
+    create another primary destination or a duplicate Configuration tab.
+    Confidentiality catalogue administration and Microsoft Entra identity-source
+    setup are explicit secondary surfaces from Document defaults and Workflow
+    respectively; dismissing either returns to its invoking Configuration route.
+    Before a workspace is open, the app exposes only **Set up workspace** for
+    choosing the roots; workspace-bound routes are unavailable with an explicit
+    explanation, never presented as empty or broken pages.
+11. While collapsed, the rail also exposes distinct, icon-only **Saved views**
     and **Open panes** controls. Activating either opens an adjacent temporary
     flyout for that group without expanding the whole left menu:
     - the Saved views flyout lists each view's full canonical label, opens its
@@ -50,7 +63,7 @@ When implemented, the following must hold:
     Rail icons have accessible names and hover labels; a constrained flyout may
     elide a label only when its full canonical label remains available as the
     item's accessible name.
-11. **Open activities** are automatic, browser-like **panes/tabs** below the
+12. **Open activities** are automatic, browser-like **panes/tabs** below the
     primary destinations. A pane label states its **task** and current target:
     - a document-scoped pane is `Task · <DMS-managed title> · <document
       number>` (for example, `Audit · HR Data Privacy Policy · DOC-014`); the
@@ -82,7 +95,7 @@ When implemented, the following must hold:
     Closing the last document-scoped tab does not exit the app. Open activities
     end with the application session and are not restored automatically after a
     relaunch.
-12. An operator can explicitly save the current surface as a **saved view**.
+13. An operator can explicitly save the current surface as a **saved view**.
     The main header always exposes `☆ Bookmark this view`; after saving it,
     that control shows `★ Bookmarked` and exposes an explicit remove-bookmark
     action. Saved views appear in their own **Saved views** group above Open
@@ -95,7 +108,7 @@ When implemented, the following must hold:
     An inaccessible workspace or missing document is shown as unavailable and
     remains removable. Saved views are per-user app preferences in the OS
     app-config store, not `.dms` workflow or process evidence.
-13. The left menu foot shows the current workspace identity (display name or
+14. The left menu foot shows the current workspace identity (display name or
     workspace ID) and root path summary when expanded; the foot is hidden
     when the menu is collapsed to keep the rail narrow.
 

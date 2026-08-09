@@ -16,12 +16,15 @@ When implemented, the following must hold:
    hyphens; for example `restricted`) and a display label. Renaming a label
    never changes its ID. Deletion is rejected while a folder policy, document,
    or historical release references the ID.
-2. Under **Configuration**, confidentiality uses the same defaults-first policy
-   layout as CAP-0019: a compact workspace-default summary identifies the edit
-   root's type and enabled-type count, while direct folder policies are the
-   primary workspace. **Manage confidentiality types** opens catalogue
-   administration as a secondary surface; the full type list and its controls do
-   not occupy a permanent Configuration column.
+2. Under **Configuration → Document defaults**, confidentiality uses the same
+   defaults-first policy layout as CAP-0019: a compact workspace-default summary
+   identifies the edit root's type and enabled-type count, while direct folder
+   policies are the primary workspace. The persistent Configuration navigation
+   also exposes Workspace, Workflow, and Notifications so this policy editor is
+   not a dead-end page. **Manage confidentiality types** opens catalogue
+   administration as a secondary surface and returns to Document defaults when
+   dismissed; the full type list and its controls do not occupy a permanent
+   Configuration column.
 3. The folder-policy editor shows an
    edit-root-relative folder tree containing the edit root and every accessible
    descendant folder, including empty folders and folders without library
