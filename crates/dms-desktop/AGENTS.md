@@ -12,6 +12,7 @@ macOS.
 | `src/` | Tauri startup, IPC commands, `dms-core` adapter, OS user preferences |
 | `ui/` | Static shell UI, session activities, saved-view interactions, UI tests |
 | `capabilities/` | Tauri window permissions |
+| `icons/` | SVG source and derived PNG/Windows application icons |
 | `tauri.conf.json` | Desktop window, local frontend, security, and bundle configuration |
 | `tests/` | Desktop integration coverage when separate fixtures are needed |
 
