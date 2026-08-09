@@ -23,6 +23,9 @@ Own falsifiable capability contracts (`CAP-*.md`) and the product index.
   explicitly distinct data sources. Do not relabel document control data as
   "Master data" or imply source-metadata synchronization without changing the
   owning CAP contract.
+- In wireframe tables, use **Name** only for the exact filesystem-derived source
+  file name and **Title** for the DMS-managed `title` field. Do not abbreviate
+  that field as "Doc" or call it "Master data".
 - CAP-0005 owns open-activity naming and reuse: document panes use task +
   DMS title + optional document number, while their stable identity is workspace
   + task + document ID.

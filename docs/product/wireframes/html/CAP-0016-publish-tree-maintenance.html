@@ -226,14 +226,22 @@ tr:last-child td { border-bottom: 0; }
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">List known releases, verify-all, reveal in host file manager, archive orphans.</p>
+      <p class="subtitle">Filter releases by DMS-managed Title, set rows per page, open recorded PDFs, verify-all, reveal in host file manager, archive orphans.</p>
       
       <section class="card">
         <h3 class="card-title">Publish-tree</h3>
+        <div class="row between mb" style="flex-wrap:wrap;gap:0.75rem">
+          <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Title filter <input aria-label="Filter by title" placeholder="e.g. Doc" style="height:2rem;width:15rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.65rem;font:inherit;color:var(--foreground);background:var(--background)"/></label>
+          <span class="muted">5 matching releases</span>
+        </div>
         <div class="table-wrap"><table>
-    <thead><tr><th>Doc</th><th>Version</th><th>Publish path</th><th>Released</th><th>SHA-256</th><th>State</th><th>Verify</th></tr></thead>
-    <tbody><tr><td>HR Data Privacy Policy</td><td>V2.0</td><td>policies/HR/Handbook_V2.0_restricted.pdf</td><td>2025-08-01 09:44</td><td>9f2c…b1e0</td><td><span class="badge ok">current</span></td><td><span class="badge ok">match</span></td></tr><tr><td>Acceptable Use</td><td>V2.0</td><td>policies/IT/AUP_V2.0_internal.pdf</td><td>2025-07-29 14:12</td><td>3a91…77ee</td><td><span class="badge ok">current</span></td><td><span class="badge ok">match</span></td></tr><tr><td>Incident Response</td><td>V3.1</td><td>procedures/IRP_V3.1_restricted.pdf</td><td>2025-06-30 11:20</td><td>1199…aa01</td><td><span class="badge ok">current</span></td><td><span class="badge ok">match</span></td></tr><tr><td>Vendor Onboarding</td><td>V1.0</td><td>procedures/Onboarding_V1.0_internal.pdf</td><td>2024-11-04 09:00</td><td>—</td><td><span class="badge warn">orphaned</span></td><td><span class="badge danger">missing file</span></td></tr><tr><td>Backup Config</td><td>V1.4</td><td>policies/IT/Backup_V1.4_internal.pdf</td><td>2025-05-12 16:45</td><td>5b3a…ffe2</td><td><span class="badge muted">withdrawn</span></td><td><span class="badge ok">match</span></td></tr></tbody>
+    <thead><tr><th>Title</th><th>Version</th><th>Publish path</th><th>Released</th><th>SHA-256</th><th>State</th><th>Verify</th><th>Action</th></tr></thead>
+    <tbody><tr><td>HR Data Privacy Policy</td><td>V2.0</td><td>policies/HR/Handbook_V2.0_restricted.pdf</td><td>2025-08-01 09:44</td><td>9f2c…b1e0</td><td><span class="badge ok">current</span></td><td><span class="badge ok">match</span></td><td><button class="btn outline">Open PDF</button></td></tr><tr><td>Acceptable Use</td><td>V2.0</td><td>policies/IT/AUP_V2.0_internal.pdf</td><td>2025-07-29 14:12</td><td>3a91…77ee</td><td><span class="badge ok">current</span></td><td><span class="badge ok">match</span></td><td><button class="btn outline">Open PDF</button></td></tr><tr><td>Incident Response</td><td>V3.1</td><td>procedures/IRP_V3.1_restricted.pdf</td><td>2025-06-30 11:20</td><td>1199…aa01</td><td><span class="badge ok">current</span></td><td><span class="badge ok">match</span></td><td><button class="btn outline">Open PDF</button></td></tr><tr><td>Vendor Onboarding</td><td>V1.0</td><td>procedures/Onboarding_V1.0_internal.pdf</td><td>2024-11-04 09:00</td><td>—</td><td><span class="badge warn">orphaned</span></td><td><span class="badge danger">missing file</span></td><td><button class="btn outline" disabled>Open PDF</button></td></tr><tr><td>Backup Config</td><td>V1.4</td><td>policies/IT/Backup_V1.4_internal.pdf</td><td>2025-05-12 16:45</td><td>5b3a…ffe2</td><td><span class="badge muted">withdrawn</span></td><td><span class="badge ok">match</span></td><td><button class="btn outline">Open PDF</button></td></tr></tbody>
   </table></div>
+        <div class="row between" style="margin-top:0.75rem;flex-wrap:wrap;gap:0.75rem">
+          <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Rows per page <select aria-label="Release rows per page" style="height:2rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.45rem;font:inherit;color:var(--foreground);background:var(--background)"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
+          <div class="row gap-2"><span class="muted">1–5 of 5</span><button class="btn outline" disabled>Previous</button><button class="btn outline" disabled>Next</button></div>
+        </div>
         <p class="hint">Release records are immutable. Correction = withdraw + Begin revision + new approval + new version.</p>
       </section>
     </main>

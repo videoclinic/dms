@@ -40,7 +40,7 @@ When implemented, the following must hold:
      its extension. Each file row states whether it is **In library**, **Not in
      library** (a supported source draft), or not a supported draft. A
      registered document additionally shows its DMS-managed document title and
-     control data in a separate **Document** field; that title never replaces
+     control data in a separate **Title** field; that title never replaces
      the source file name. Single-click selects a folder or file row;
      double-click or Enter opens a folder. Selecting a tree node or breadcrumb
      segment opens that folder directly.

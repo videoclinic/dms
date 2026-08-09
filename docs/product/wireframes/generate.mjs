@@ -316,7 +316,7 @@ const CAPS = [
           </div>
           <div class="table-wrap"><table>
             <thead><tr>
-              <th></th><th>Name</th><th>Library</th><th>Document</th><th>State</th><th>Released</th>
+              <th></th><th>Name</th><th>Library</th><th>Title</th><th>State</th><th>Released</th>
             </tr></thead>
             <tbody>
               <tr>
@@ -611,7 +611,7 @@ const CAPS = [
         <section class="card">
           <h3 class="card-title">Drafts requiring attention</h3>
           ${table(
-            ["Document", "Old path", "Status", "Suggestion"],
+            ["Title", "Old path", "Status", "Suggestion"],
             [
               ["Acceptable Use", "policies/IT/AUP.docx", badge("renamed", "warn"), "Match: policies/IT/AUP-v2.docx"],
               ["Backup Config", "policies/IT/Backup.docx", badge("missing", "danger"), "No candidate — restore from backup"],
@@ -699,7 +699,7 @@ const CAPS = [
             <span class="muted grow">List truncated — focus is the selection pane</span>
           </div>
           <div class="table-wrap"><table>
-            <thead><tr><th></th><th>Name</th><th>Document</th><th>State</th><th>Released</th></tr></thead>
+            <thead><tr><th></th><th>Name</th><th>Title</th><th>State</th><th>Released</th></tr></thead>
             <tbody>
               <tr class="selected">
                 <td><span class="check on">☑</span></td>
@@ -718,7 +718,7 @@ const CAPS = [
             </tbody>
           </table></div>
         </section>
-        ${documentMasterDataSelectionPane()}
+        ${documentControlDataSelectionPane()}
       </div>`,
   },
   {
@@ -726,21 +726,29 @@ const CAPS = [
     file: "CAP-0016-publish-tree-maintenance",
     title: "Publish tree maintenance",
     nav: "releases",
-    subtitle: "List known releases, verify-all, reveal in host file manager, archive orphans.",
+    subtitle: "Filter releases by DMS-managed Title, set rows per page, open recorded PDFs, verify-all, reveal in host file manager, archive orphans.",
     actions: ["Verify all releases", "Reveal publish folder", "Archive orphans"],
     body: `
       <section class="card">
         <h3 class="card-title">Publish-tree</h3>
+        <div class="row between mb" style="flex-wrap:wrap;gap:0.75rem">
+          <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Title filter <input aria-label="Filter by title" placeholder="e.g. Doc" style="height:2rem;width:15rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.65rem;font:inherit;color:var(--foreground);background:var(--background)"/></label>
+          <span class="muted">5 matching releases</span>
+        </div>
         ${table(
-          ["Doc", "Version", "Publish path", "Released", "SHA-256", "State", "Verify"],
+          ["Title", "Version", "Publish path", "Released", "SHA-256", "State", "Verify", "Action"],
           [
-            ["HR Data Privacy Policy", "V2.0", "policies/HR/Handbook_V2.0_restricted.pdf", "2025-08-01 09:44", "9f2c…b1e0", badge("current", "ok"), badge("match", "ok")],
-            ["Acceptable Use", "V2.0", "policies/IT/AUP_V2.0_internal.pdf", "2025-07-29 14:12", "3a91…77ee", badge("current", "ok"), badge("match", "ok")],
-            ["Incident Response", "V3.1", "procedures/IRP_V3.1_restricted.pdf", "2025-06-30 11:20", "1199…aa01", badge("current", "ok"), badge("match", "ok")],
-            ["Vendor Onboarding", "V1.0", "procedures/Onboarding_V1.0_internal.pdf", "2024-11-04 09:00", "—", badge("orphaned", "warn"), badge("missing file", "danger")],
-            ["Backup Config", "V1.4", "policies/IT/Backup_V1.4_internal.pdf", "2025-05-12 16:45", "5b3a…ffe2", badge("withdrawn", "muted"), badge("match", "ok")],
+            ["HR Data Privacy Policy", "V2.0", "policies/HR/Handbook_V2.0_restricted.pdf", "2025-08-01 09:44", "9f2c…b1e0", badge("current", "ok"), badge("match", "ok"), "<button class=\"btn outline\">Open PDF</button>"],
+            ["Acceptable Use", "V2.0", "policies/IT/AUP_V2.0_internal.pdf", "2025-07-29 14:12", "3a91…77ee", badge("current", "ok"), badge("match", "ok"), "<button class=\"btn outline\">Open PDF</button>"],
+            ["Incident Response", "V3.1", "procedures/IRP_V3.1_restricted.pdf", "2025-06-30 11:20", "1199…aa01", badge("current", "ok"), badge("match", "ok"), "<button class=\"btn outline\">Open PDF</button>"],
+            ["Vendor Onboarding", "V1.0", "procedures/Onboarding_V1.0_internal.pdf", "2024-11-04 09:00", "—", badge("orphaned", "warn"), badge("missing file", "danger"), "<button class=\"btn outline\" disabled>Open PDF</button>"],
+            ["Backup Config", "V1.4", "policies/IT/Backup_V1.4_internal.pdf", "2025-05-12 16:45", "5b3a…ffe2", badge("withdrawn", "muted"), badge("match", "ok"), "<button class=\"btn outline\">Open PDF</button>"],
           ]
         )}
+        <div class="row between" style="margin-top:0.75rem;flex-wrap:wrap;gap:0.75rem">
+          <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Rows per page <select aria-label="Release rows per page" style="height:2rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.45rem;font:inherit;color:var(--foreground);background:var(--background)"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
+          <div class="row gap-2"><span class="muted">1–5 of 5</span><button class="btn outline" disabled>Previous</button><button class="btn outline" disabled>Next</button></div>
+        </div>
         <p class="hint">Release records are immutable. Correction = withdraw + Begin revision + new approval + new version.</p>
       </section>`,
   },
@@ -774,7 +782,7 @@ const CAPS = [
         <section class="card">
           <h3 class="card-title">Due &amp; overdue</h3>
           ${table(
-            ["Document", "Current release", "Next due", "Status", "Action"],
+            ["Title", "Current release", "Next due", "Status", "Action"],
             [
               ["Acceptable Use", "V2.0", "2025-07-15", badge("overdue", "danger"), "Start review / Remind"],
               ["Backup Config", "V1.4", "2025-08-22", badge("due ≤30d", "warn"), "Start review / Remind"],
@@ -924,7 +932,7 @@ function event(type, ts, who, cmt, hash, pred) {
 function ver(v, date, cls, state, kind) {
   return `<div class="ver"><div class="row gap-2"><strong>${v}</strong>${badge(state, kind)}</div><p class="muted">${date}</p><p>${cls}</p></div>`;
 }
-function documentMasterDataSelectionPane() {
+function documentControlDataSelectionPane() {
   // CAP-0015 owns this shared selection-pane content; CAP-0006 owns its placement.
   return `<aside class="card detail-pane">
     <div class="row between mb">
