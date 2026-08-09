@@ -31,9 +31,9 @@ When implemented, the following must hold:
    additionally records the interactive Microsoft Entra tenant/object ID and is
    rejected unless it matches the snapshotted effective approver (CAP-0019 /
    CAP-0021). Other workflow events do not claim Entra actor verification.
-4. The history of a document lists every event in chain order with its event
-   hash, predecessor hash, type, timestamp, changelog, requested target version
-   and mode, decision comment, requester, effective editor and approver,
+4. The history of a document lists every event **newest first**. Each row retains
+   its event hash, predecessor hash, type, timestamp, changelog, requested target
+   version and mode, decision comment, requester, effective editor and approver,
    revision digest, and confidentiality snapshot. Failed, rejected, cancelled,
    and changes-requested reviews remain in that history. The list is readable
    without leaving the desktop app.

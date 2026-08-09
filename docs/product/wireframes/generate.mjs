@@ -557,17 +557,17 @@ const CAPS = [
     title: "Workflow chain & evidence",
     nav: "audit",
     activity: "audit-doc-77a12bce",
-    subtitle: "Canonical event body, required changelog + target candidate, optional non-approval reason.",
+    subtitle: "Newest event first. Canonical body, required changelog + target candidate, optional non-approval reason.",
     actions: ["Verify workflow", "Export chain"],
     body: `
       <section class="card">
-        <h3 class="card-title">Chain — HR Data Privacy Policy</h3>
+        <h3 class="card-title">Chain (newest first) — HR Data Privacy Policy</h3>
         <div class="stack">
-          ${event("review_requested", "2025-08-01 09:14 UTC", "Lukas Roth", "Changelog: replaced retention table with 24-month rule. Target: V1.4 (minor version change).", "5b3a…ffe1", "—")}
-          ${event("review_decision_rejected", "2025-08-01 09:42 UTC", "Anna Berg", "Why was approval not granted? Optional comment: clarify the retention exception in §3.2.", "5b3a…ffe2", "5b3a…ffe1")}
-          ${event("review_requested", "2025-08-02 11:02 UTC", "Lukas Roth", "New nomination: V1.4 selected again after rejection; updated changelog records the §3.2 clarification.", "5b3a…ffe3", "5b3a…ffe2")}
-          ${event("review_decision_approved", "2025-08-02 11:26 UTC", "Anna Berg", "Approved target V1.4. Decision comment optional and omitted.", "5b3a…ffe4", "5b3a…ffe3")}
           ${event("release", "2025-08-02 11:29 UTC", "—", "Release approved version: atomic export committed V1.4.", "5b3a…ffe5", "5b3a…ffe4")}
+          ${event("review_decision_approved", "2025-08-02 11:26 UTC", "Anna Berg", "Approved target V1.4. Decision comment optional and omitted.", "5b3a…ffe4", "5b3a…ffe3")}
+          ${event("review_requested", "2025-08-02 11:02 UTC", "Lukas Roth", "New nomination: V1.4 selected again after rejection; updated changelog records the §3.2 clarification.", "5b3a…ffe3", "5b3a…ffe2")}
+          ${event("review_decision_rejected", "2025-08-01 09:42 UTC", "Anna Berg", "Why was approval not granted? Optional comment: clarify the retention exception in §3.2.", "5b3a…ffe2", "5b3a…ffe1")}
+          ${event("review_requested", "2025-08-01 09:14 UTC", "Lukas Roth", "Changelog: replaced retention table with 24-month rule. Target: V1.4 (minor version change).", "5b3a…ffe1", "—")}
         </div>
         <div class="callout warn">Rejected and changes-requested decisions prompt for a reason but allow no comment. All review requests remain chain evidence even without a release.</div>
         <div class="callout ok">${badge("chain valid", "ok")} Verify workflow recomputed each event hash from its canonical body.</div>
