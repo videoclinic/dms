@@ -5,7 +5,7 @@
 | Class | Where it lives | Notes |
 | --- | --- | --- |
 | Draft source documents (Office and Markdown) | Edit root (operator-controlled) | Content is business documentation; app does not upload it |
-| Released versioned PDFs | Publish root (operator-controlled) | Final published artifacts (`*_VMAJOR.MINOR_<confidentiality-type-id>.pdf`); the path exposes the classification ID |
+| Released versioned PDFs | Publish root (operator-controlled) | Final released artifacts (`*_VMAJOR.MINOR_<confidentiality-type-id>.pdf`); the path exposes the classification ID |
 | DMS metadata, library membership, notes, approval state, checksums | `<edit-root>/.dms/` | Local only; may contain personal names in notes or approver fields |
 | Microsoft Entra workflow identity binding and display cache | `<edit-root>/.dms/` | Tenant/group object IDs, referenced user object IDs, and cached display name/email for routing; no app-managed user accounts or OAuth tokens |
 | Document control data and workflow-role policies (title, owner, number, type, review dates, assigned editor/approver) | `<edit-root>/.dms/` | Local control metadata; not Office properties, Markdown front matter, or document body content |

@@ -51,7 +51,7 @@ When implemented, the following must hold:
 
 - Automatic deletion of old versions on a retention schedule
 - Content diff between two PDF versions
-- Publishing to a second remote store
+- Distributing released PDFs to a second remote store
 
 ## Links
 - Wireframe (HTML): [`../wireframes/html/CAP-0016-publish-tree-maintenance.html`](../wireframes/html/CAP-0016-publish-tree-maintenance.html)

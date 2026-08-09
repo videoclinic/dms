@@ -57,7 +57,7 @@ When implemented, the following must hold:
 4. Operator can **unregister** a document from the active library only when no
    content or periodic review is open. Unregister preserves its stable ID,
    document control data, notes, workflow/release history, and checksums in read-only
-   history; it never deletes the source file or a published PDF. Re-registering
+   history; it never deletes the source file or a released PDF. Re-registering
    that record associates a confirmed in-root draft path with the same ID.
 5. **In library** document rows keep the exact source file name in **Name** and
    surface enough DMS-managed data to scan the current folder without leaving
@@ -85,7 +85,7 @@ When implemented, the following must hold:
 7. **Multi-select** of two or more file rows uses the **same selection pane**.
    It provides a batch summary (count, short identity list, clear) and
    **multi-applicable actions only**. A homogeneous selection of **Not in
-   A homogeneous selection of **Not in library** supported source files exposes **Add _N_ documents to library**.
+   library** supported source files exposes **Add _N_ documents to library**.
    A homogeneous selection of **In library** documents replaces document
    control data with its applicable batch actions. Mixed selections and
    unsupported files expose no action that cannot apply to every selected row. Single-document

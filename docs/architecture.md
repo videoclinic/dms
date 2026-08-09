@@ -50,8 +50,10 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
 - Application-managed version history consists of immutable release PDFs and
   their evidence. Source drafts remain mutable working copies; draft recovery
   comes from workspace backups rather than an embedded source-version store.
-- This prevents “edited here, published who-knows-where” drift: publish location
-  is a pure function of configured roots + relative path + version label.
+- The publish root is a storage location, not an additional lifecycle stage:
+  successful release creates the released PDF. Its location is a pure function
+  of configured roots + relative path + version label, preventing “edited here,
+  released who-knows-where” drift.
 
 ## Trust and control boundary
 

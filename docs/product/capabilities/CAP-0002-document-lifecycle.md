@@ -24,7 +24,10 @@ When implemented, the following must hold:
    `released`, and `obsolete` lifecycle states. `rejected`, `changed_requested`
    (decision), `withdrawn` (release), and `cancelled` (review) are workflow
    outcomes recorded on the event chain; they are not separate long-lived
-   primary states except where CAP-0015 defines `obsolete`.
+   primary states except where CAP-0015 defines `obsolete`. The **publish root**
+   is the storage destination for released PDFs; `published` is not a state or
+   workflow. The explicit release action is the sole transition that creates a
+   released PDF.
 4. Submitting a document for review requires a non-empty changelog, the
    requesting workflow person, the document's effective configured approver,
    and a SHA-256 digest of the current draft. The requester identity and email

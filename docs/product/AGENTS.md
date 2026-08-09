@@ -29,6 +29,9 @@ Own falsifiable capability contracts (`CAP-*.md`) and the product index.
 - CAP-0005 owns open-activity naming and reuse: document panes use task +
   DMS title + optional document number, while their stable identity is workspace
   + task + document ID.
+- **Publish root** and **publish tree** name the filesystem destination and its
+  views only. **Release** is the sole workflow action and lifecycle transition
+  that creates a released PDF; there is no `published` state or workflow.
 
 ## Work Guidance
 

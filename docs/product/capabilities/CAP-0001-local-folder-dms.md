@@ -14,7 +14,8 @@ When implemented, the following must hold:
 
 1. Operator configures a DMS workspace with two rooted paths:
    - **edit root** — tree where Office and Markdown source drafts are edited
-   - **publish root** — tree where released versioned PDFs are written
+   - **publish root** — storage tree where released versioned PDFs are written;
+     “publish” names the destination, not a separate workflow stage
 2. Both absolute roots and a stable opaque workspace ID are persisted in `.dms`
    and restored when the workspace is reopened. The ID is assigned when the
    workspace is initialized and remains unchanged for its lifetime.

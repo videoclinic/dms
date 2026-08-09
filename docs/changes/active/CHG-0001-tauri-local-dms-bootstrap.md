@@ -11,6 +11,7 @@
 | Follow-up request | Direct operator request: the "Effective approver" and "Effective editor" users are defined how this users are managed; the capability to maintain these users is missing; a synchronisation with Entra ID and/or SharePoint/OneDrive members; make a suggestion how to manage the users without creating a new user management in a Microsoft 365 setup. Proceed as recommended. |
 | Follow-up request | Direct operator request: before every later approval nomination, the editor records a changelog and selects a minor, major, or manual target version; only an approved and successfully released target is occupied, while failed review evidence remains auditable; approvers are prompted for an optional non-approval comment. |
 | Follow-up request | Direct operator request: show CAP-0011 workflow-chain entries newest first. |
+| Follow-up request | Direct operator request: reconcile published/release terminology. `publish root` names the storage destination only; release is the sole workflow action and lifecycle transition that creates a released PDF. |
 | Affected CAPs | CAP-0001 … CAP-0021 |
 | Decision records | ADR-0001 … ADR-0021 in `docs/design-decisions.md` |
 

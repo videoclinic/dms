@@ -28,8 +28,9 @@ Capability-local rules stay in their CAP files.
 
 - **Decision:** Draft/working documents remain Microsoft Office formats (for
   example `.docx`, `.xlsx`, `.pptx`) or Markdown (`.md`) under the edit root.
-  Only PDF artifacts enter the released state under the publish root. Git-style
-  content VCS is not required.
+  Only PDFs produced by a successful release enter the `released` state and are
+  written under the publish root. “Publish” names that destination; it is not a
+  separate workflow or lifecycle stage. Git-style content VCS is not required.
 - **Why:** Authors retain familiar Office workflows or use portable plain-text
   Markdown; the controlled released form is a stable PDF suitable for
   distribution and integrity checking.
@@ -73,8 +74,8 @@ Capability-local rules stay in their CAP files.
   Library documents are identified by path relative to the edit root. Released
   PDFs are written under the publish root using the same relative directory
   segments; missing directories are created on release.
-- **Why:** Separates work-in-progress Office trees from published controlled
-  PDFs while preventing path mismatch (“edited in A, published in random B”).
+- **Why:** Separates work-in-progress Office trees from released controlled PDFs
+  while preventing path mismatch (“edited in A, released into random B”).
   Reconstructing the tree keeps human navigation consistent across roots.
 - **Consequences:** Moving/renaming a draft outside the app breaks the relative
   link until repaired; changing either root is a workspace configuration
