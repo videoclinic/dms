@@ -1,4 +1,4 @@
-# CAP-0011 — Approval evidence (change comments and decision comments)
+# CAP-0011 — Approval evidence (changelog and decision comments)
 
 | Field | Value |
 | --- | --- |
@@ -16,24 +16,27 @@ When implemented, the following must hold:
    timestamp, requester, effective editor and approver IDs (when applicable),
    local OS user, authenticated Microsoft Entra tenant/object IDs for a review
    decision, revision digest (when applicable), confidentiality snapshot (when
-   applicable), approved change class and rationale (when applicable), and
-   operator comment text. The chain head is the SHA-256 of the canonical body.
+   applicable), requested target version, target-version mode, review changelog,
+   optional decision comment, and operator comment text. The chain head is the
+   SHA-256 of the canonical body.
 2. Two comment types are first-class:
-   - **Change comment** — entered at review-request time; explains what the
-     author changed since the last release.
-   - **Decision comment** — entered by the approver at decision time;
-     explains the rationale.
-   Both are required text (no empty comment) and are part of the canonical
-   event body, not editable later.
+   - **Changelog** — required at review-request time; explains what the editor
+     changed since the last release and remains recorded for every outcome.
+   - **Decision comment** — optional text entered by the approver at decision
+     time. Rejected and changes-requested decisions explicitly ask why approval
+     was not granted, but permit no comment.
+   Any supplied text is part of the canonical event body and is not editable
+   later.
 3. Every workflow event records a single local OS user. A review-decision event
    additionally records the interactive Microsoft Entra tenant/object ID and is
    rejected unless it matches the snapshotted effective approver (CAP-0019 /
    CAP-0021). Other workflow events do not claim Entra actor verification.
 4. The history of a document lists every event in chain order with its event
-   hash, predecessor hash, type, timestamp, author comment, decision comment,
-   requester, effective editor and approver, revision digest, approved change
-   class, and confidentiality snapshot. The list is readable without leaving
-   the desktop app.
+   hash, predecessor hash, type, timestamp, changelog, requested target version
+   and mode, decision comment, requester, effective editor and approver,
+   revision digest, and confidentiality snapshot. Failed, rejected, cancelled,
+   and changes-requested reviews remain in that history. The list is readable
+   without leaving the desktop app.
 5. The application exposes a **Verify workflow** routine that recomputes each
    event hash from its canonical body and confirms the chain. The result is
    `valid`, `tampered at <event-id>`, or `missing`. Verification never
@@ -63,8 +66,9 @@ When implemented, the following must hold:
    - `report_generated` — audit or other report exported from the workspace
    Each event uses the canonical body and required comment/reason fields
    defined by the owning CAP. The release event embeds the version label
-   (`VMAJOR.MINOR`), the produced PDF digest, and the approved source-draft
-   digest; the document-control-data event embeds before/after values.
+   (`VMAJOR.MINOR`), selected target-version mode, the produced PDF digest, and
+   the approved source-draft digest; the document-control-data event embeds
+   before/after values.
 9. Periodic-review events are first-class canonical events of the same shape
    and bind to the reviewed release record and PDF digest (CAP-0017). Their
    types are:

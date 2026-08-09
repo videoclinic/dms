@@ -25,7 +25,7 @@ When implemented, the following must hold:
    (decision), `withdrawn` (release), and `cancelled` (review) are workflow
    outcomes recorded on the event chain; they are not separate long-lived
    primary states except where CAP-0015 defines `obsolete`.
-4. Submitting a document for review requires a non-empty change summary, the
+4. Submitting a document for review requires a non-empty changelog, the
    requesting workflow person, the document's effective configured approver,
    and a SHA-256 digest of the current draft. The requester identity and email
    are snapshotted on the request. The approver is derived from the nearest
@@ -34,17 +34,29 @@ When implemented, the following must hold:
    use the installed desktop app with access to the same workspace; approval is
    not available in email or a browser. The notification carries a CAP-0020
    permalink (workspace ID + document ID + review-request target) to this
-   review request (CAP-0010).
-   After the first release it also requires an operator-selected change class
-   (`cosmetic/minor` or `substantive/major`) with rationale. The class is bound
-   to the review and any change requires a new review.
+   review request (CAP-0010). The first review proposes `V1.0`. For every later
+   review, the editor selects exactly one target-version mode:
+   - **Minor version change** proposes the next minor version of the current
+     release (`V1.3` → `V1.4`).
+   - **Major version change** proposes the next major version and resets the
+     minor component (`V1.3` → `V2.0`).
+   - **Manual version set** supplies `V<major>.<minor>` with non-negative integer
+     components, numerically greater than the current released version, and not
+     equal to any committed release version for that document. It may skip
+     otherwise-unused values.
+   The request snapshots the changelog, target-version mode, and candidate label.
+   The candidate is review evidence, not a reservation; changing any of those
+   values requires a new review request.
    Notification uses the workspace transport (CAP-0010): SMTP acceptance or
    operator-confirmed `mailto:` send. The document enters `in_review` only after
    that transport step succeeds; a failed send leaves the document in `draft`
    and offers a retryable redelivery.
 5. The effective approver records `approved`, `rejected`, or
-   `changed_requested` in the application with a non-empty decision comment.
-   The app requires interactive Microsoft Entra sign-in and accepts the decision
+   `changed_requested` in the application. A decision comment is optional. On a
+   `rejected` or `changed_requested` decision, the UI asks **Why was approval not
+   granted?** but permits an empty response; any supplied comment is immutable
+   workflow evidence. The app requires interactive Microsoft Entra sign-in and
+   accepts the decision
    only when the signed-in tenant/object ID equals the request's snapshotted
    approver and the person remains eligible in the configured group. It records
    requester, approver, Entra actor, local OS user, decision time, revision
@@ -54,8 +66,8 @@ When implemented, the following must hold:
    attempt and never reverses the decision. A `changed_requested` decision
    returns the document to `draft`.
 6. If draft bytes no longer match the requested-review digest, approval is
-   invalidated and the document returns to `draft`; a new change summary and
-   review request are required.
+   invalidated and the document returns to `draft`; a new changelog, target
+   version selection, and review request are required.
 7. On release, the **application** performs versioning and PDF export (CAP-0007):
    it produces a new PDF under the publish root at the mirrored relative
    directory, named `<stem>_V<major>.<minor>_<confidentiality-type-id>.pdf`
@@ -66,21 +78,24 @@ When implemented, the following must hold:
    release does not replace or delete it. Release records link draft path
    → versioned PDF path.
 9. Version numbers are monotonic per stable document ID. The first release is
-   `V1.0`. An approved cosmetic change increments minor (`V1.0` → `V1.1`);
-   an approved substantive change increments major and resets minor to zero
-   (`V1.7` → `V2.0`). There is no minor default when classification is
-   uncertain: uncertain changes are substantive/major.
-   A committed release number is never reused, including after withdrawal. A
-   failed attempt before commit does not consume the number and leaves no final
-   PDF. The app refuses to overwrite an existing PDF path.
+   `V1.0`. Each later review carries its editor-selected candidate from outcome
+   4. Approval records that accepted target, but only the explicit **Release
+   approved version** action commits it as a release number after CAP-0007
+   completes its atomic export. A candidate in a rejected, changes-requested,
+   cancelled, invalidated, or failed-export review does not consume or occupy a
+   version and may be selected again on a later review. A committed release
+   number is never reused, including after withdrawal. The app refuses to
+   overwrite an existing PDF path.
 10. Released state always points at a PDF produced by the app export path; the
     app does not accept an arbitrary operator-dropped PDF as a substitute for
     that export in the normal release flow.
-11. Release is allowed only from a current `approved` revision and stores the
-    approved source-draft SHA-256 digest, effective confidentiality type,
-    effective editor and approver, approval-chain head, effective date, and
-    next-review-due (CAP-0015 / CAP-0017 / CAP-0019) with the immutable release
-    record. Release fails if the document is `obsolete` or `missing`.
+11. Release is an explicit **Release approved version** action allowed only from
+    a current `approved` revision. It confirms the review's accepted target and
+    stores the approved source-draft SHA-256 digest, target-version mode and
+    label, changelog, effective confidentiality type, effective editor and
+    approver, approval-chain head, effective date, and next-review-due
+    (CAP-0015 / CAP-0017 / CAP-0019) with the immutable release record. Release
+    fails if the document is `obsolete` or `missing`.
 12. Lifecycle, approval, and version history are readable after restart from
     `.dms`. Git is not required for lifecycle progression.
 13. Each library document carries a stable document ID assigned at library add.
@@ -145,9 +160,9 @@ When implemented, the following must hold:
 - Approval is operator-maintained (ADR-0004).
 - The workflow hash chain is tamper-evident only within the trusted filesystem
   boundary; it is not identity verification or a digital signature.
-- General notes remain governed by CAP-0003; review change summaries and
-  approval decision comments are workflow evidence and cannot be edited or
-  deleted through the notes UI.
+- General notes remain governed by CAP-0003; review changelogs and supplied
+  decision comments are workflow evidence and cannot be edited or deleted
+  through the notes UI.
 - Each workflow event follows the canonical event body defined in ADR-0013;
   recomputing and re-hashing is the verification routine exposed to operators
   (CAP-0012).
@@ -156,12 +171,9 @@ When implemented, the following must hold:
 - Content-conformance overrides are exceptional workflow evidence, not a
   substitute for correcting the source draft or its configured classification.
 - Naming pattern and dual-root placement: ADR-0006, ADR-0007.
-- Cosmetic means spelling, grammar, formatting, pagination, or equivalent
-  presentation-only correction that does not change meaning, obligation,
-  process step, role, control, scope, decision, or data handling. Any such
-  semantic change—or uncertainty about semantic impact—is substantive/major.
-- Claude Desktop may suggest a class and change-summary wording under CAP-0018,
-  but the operator remains responsible for both and approval remains mandatory.
+- Claude Desktop may suggest a target-version mode and changelog wording under
+  CAP-0018, but the editor remains responsible for the selected target and
+  approval remains mandatory.
 
 ## Links
 - Wireframe (HTML): [`../wireframes/html/CAP-0002-document-lifecycle.html`](../wireframes/html/CAP-0002-document-lifecycle.html)

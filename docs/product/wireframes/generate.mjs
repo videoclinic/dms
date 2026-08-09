@@ -62,15 +62,15 @@ const CAPS = [
     file: "CAP-0002-document-lifecycle",
     title: "Document lifecycle",
     nav: "library",
-    subtitle: "Draft → in_review → approved → released. Change class + approval evidence required.",
-    actions: ["Begin revision", "Submit for review"],
+    subtitle: "Draft → in_review → approved → released. Required changelog + target version; candidates are not reserved.",
+    actions: ["Begin revision", "Preview review request", "Submit V1.4 for review"],
     body: `
       <section class="card">
         <div class="row between">
           <div class="row gap-2">
             <h2 class="doc-title">HR Data Privacy Policy</h2>
-            ${badge("in_review", "info")}
-            <span class=\"muted\">V1.3 released</span>
+            ${badge("draft", "warn")}
+            <span class=\"muted\">V1.3 released · candidate V1.4 is not occupied</span>
           </div>
         </div>
         ${kv([
@@ -85,7 +85,7 @@ const CAPS = [
         <h3 class="card-title">Lifecycle pipeline</h3>
         <div class="pipeline">
           ${["draft", "in_review", "approved", "released", "obsolete"]
-            .map((s, i) => `<div class="step ${i < 2 ? "active" : ""}"><span class="dot"></span>${s}</div>`)
+            .map((s, i) => `<div class="step ${i < 1 ? "active" : ""}"><span class="dot"></span>${s}</div>`)
             .join("")}
         </div>
       </section>
@@ -93,25 +93,27 @@ const CAPS = [
         <section class="card">
           <h3 class="card-title">Submit for review (required fields)</h3>
           ${kv([
-            ["Change summary *", "<span class=\"muted\">(required, non-empty)</span>"],
-            ["Change class", "<span class=\"muted\">(cosmetic/minor or substantive/major; required after first release)</span>"],
-            ["Rationale", "<span class=\"muted\">(required with change class)</span>"],
+            ["Changelog *", "Updated retention table to 24 months."],
+            ["Target version *", "Minor V1.4 <span class=\"muted\">(selected)</span> · Major V2.0 · Manual V&lt;major&gt;.&lt;minor&gt;"],
+            ["Manual validation", "<span class=\"muted\">Greater unused target required when manual is selected</span>"],
+            ["Candidate", "V1.4 <span class=\"muted\">(review evidence only; no reservation)</span>"],
             ["Draft SHA-256", "<span class=\"muted\">(computed from current draft bytes on submit)</span>"],
             ["Requester", "Lukas Roth <lukas@vc.de> <span class=\"muted\">(snapshotted on submit)</span>"],
             ["Approver (derived)", "Anna Berg <anna@vc.de> · Entra group verified"],
-            ["Decision authority", "Anna signs in with Microsoft Entra before approving"],
-            ["Transport", "SMTP relay (password from OS credential store)"],
+            ["Decision authority", "Anna signs in with Microsoft Entra before deciding"],
           ])}
-          <p class="hint">Document enters <code>in_review</code> only after the transport step succeeds. Empty or missing required fields fail closed.</p>
+          <div class="row gap-2" style="margin-top:0.75rem;flex-wrap:wrap"><button class="btn outline">Preview review request</button><button class="btn">Submit V1.4 for review</button></div>
+          <p class="hint">Preview is non-mutating. Submit snapshots the changelog, mode, and candidate; failures leave the document in <code>draft</code>.</p>
         </section>
         <section class="card">
-          <h3 class="card-title">Workflow chain (canonical event types)</h3>
+          <h3 class="card-title">Review evidence and release rule</h3>
           <ul class="timeline">
-            <li><strong>review_requested</strong> — Lukas Roth — 2025-08-01 09:14 UTC</li>
-            <li><strong>review_decision_approved</strong> — Anna Berg — 09:42 UTC</li>
-            <li><strong>release</strong> (V1.3) — 09:44 UTC</li>
-            <li><strong>revision_begun</strong> — 2025-08-02 11:02 UTC</li>
+            <li><strong>review_requested</strong> — changelog + V1.4/minor snapshot</li>
+            <li><strong>rejected / changes requested</strong> — candidate stays unoccupied; optional reason retained</li>
+            <li><strong>approved</strong> — accepted V1.4 target is ready for release</li>
+            <li><strong>Release approved version</strong> — only successful atomic export commits V1.4</li>
           </ul>
+          <div class="callout warn">A rejected, cancelled, invalidated, or failed-export review does not consume V1.4. The next nomination repeats this form and may select V1.4 again.</div>
           <p class="hint">Chain head 5b3a…ffe2 — verify recomputes from canonical body (CAP-0011).</p>
         </section>
       </div>`,
@@ -555,17 +557,19 @@ const CAPS = [
     title: "Workflow chain & evidence",
     nav: "audit",
     activity: "audit-doc-77a12bce",
-    subtitle: "Canonical event body, hash chain, required change + decision comments.",
+    subtitle: "Canonical event body, required changelog + target candidate, optional non-approval reason.",
     actions: ["Verify workflow", "Export chain"],
     body: `
       <section class="card">
         <h3 class="card-title">Chain — HR Data Privacy Policy</h3>
         <div class="stack">
-          ${event("review_requested", "2025-08-01 09:14 UTC", "Lukas Roth", "Replaced retention table with 24-month rule.", "5b3a…ffe1", "—")}
-          ${event("review_decision_approved", "2025-08-01 09:42 UTC", "Anna Berg", "Formatting only; obligations unchanged.", "5b3a…ffe2", "5b3a…ffe1")}
-          ${event("release", "2025-08-01 09:44 UTC", "—", "Substantive change: 24-month retention obligation.", "5b3a…ffe3", "5b3a…ffe2")}
-          ${event("revision_begun", "2025-08-02 11:02 UTC", "Lukas Roth", "Starting next change cycle.", "5b3a…ffe4", "5b3a…ffe3")}
+          ${event("review_requested", "2025-08-01 09:14 UTC", "Lukas Roth", "Changelog: replaced retention table with 24-month rule. Target: V1.4 (minor version change).", "5b3a…ffe1", "—")}
+          ${event("review_decision_rejected", "2025-08-01 09:42 UTC", "Anna Berg", "Why was approval not granted? Optional comment: clarify the retention exception in §3.2.", "5b3a…ffe2", "5b3a…ffe1")}
+          ${event("review_requested", "2025-08-02 11:02 UTC", "Lukas Roth", "New nomination: V1.4 selected again after rejection; updated changelog records the §3.2 clarification.", "5b3a…ffe3", "5b3a…ffe2")}
+          ${event("review_decision_approved", "2025-08-02 11:26 UTC", "Anna Berg", "Approved target V1.4. Decision comment optional and omitted.", "5b3a…ffe4", "5b3a…ffe3")}
+          ${event("release", "2025-08-02 11:29 UTC", "—", "Release approved version: atomic export committed V1.4.", "5b3a…ffe5", "5b3a…ffe4")}
         </div>
+        <div class="callout warn">Rejected and changes-requested decisions prompt for a reason but allow no comment. All review requests remain chain evidence even without a release.</div>
         <div class="callout ok">${badge("chain valid", "ok")} Verify workflow recomputed each event hash from its canonical body.</div>
       </section>`,
   },
@@ -574,7 +578,7 @@ const CAPS = [
     file: "CAP-0012-audit-export",
     title: "Audit export",
     nav: "audit",
-    subtitle: "Operator-triggered PDF/CSV reports. Generating a report is itself a workflow event.",
+    subtitle: "Operator-triggered PDF/CSV reports include successful and unsuccessful review attempts.",
     actions: ["Generate PDF", "Generate CSV"],
     body: `
       <section class="card">
@@ -597,7 +601,7 @@ const CAPS = [
             ["Audit-2025-06.pdf", "2025-07-01 08:00 UTC", "Approver: Anna Berg", "—", badge("missing file", "warn"), "—"],
           ]
         )}
-        <p class="hint">Reports never embed draft or PDF bytes — metadata, digests, and the event chain only.</p>
+        <p class="hint">Reports never embed draft or PDF bytes — metadata, digests, and the event chain only. Each review attempt includes its changelog, target candidate/mode, outcome, and any decision comment.</p>
       </section>`,
   },
   {
@@ -618,7 +622,7 @@ const CAPS = [
             <button class="btn outline">Confidentiality catalogue</button>
             <button class="btn outline">Document-type catalogue</button>
             <button class="btn danger">Withdraw release</button>
-            <button class="btn danger">Reject draft in review</button>
+            <button class="btn danger">Reject / request changes</button>
           </div>
         </aside>
         <section class="card">
@@ -826,8 +830,8 @@ const CAPS = [
         <section class="card">
           <h3 class="card-title">Operator handoff</h3>
           <div class="callout warn mb">Claude Desktop is a local client, but model processing may send the displayed payload to Anthropic. Confirm before handoff. Cancellation sends nothing.</div>
-          <p><strong>Suggested class:</strong> cosmetic / minor (formatting only).</p>
-          <p><strong>Suggested summary:</strong> Replaced retention table with 24-month rule; clarified §5.1 approver role.</p>
+          <p><strong>Suggested target mode:</strong> minor version change.</p>
+          <p><strong>Suggested changelog:</strong> Replaced retention table with 24-month rule; clarified §5.1 approver role.</p>
           <p class="hint">AI output is untrusted. Operator edits before acceptance. Workflow records <code>assistance_used: true</code>, provider <code>Claude Desktop</code>.</p>
         </section>
       </div>`,

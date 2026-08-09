@@ -87,10 +87,15 @@ Capability-local rules stay in their CAP files.
   `Handbook_V1.0_restricted.pdf`, `Handbook_V1.1_restricted.pdf`,
   `Handbook_V2.0_confidential.pdf`). The filename carries the effective
   confidentiality type's stable, portable ID snapshotted at release. First
-  release is `V1.0`. Cosmetic, non-semantic changes increment minor;
-  substantive or uncertain changes increment major and reset minor to zero.
-  Each release creates a new file; existing version paths are never overwritten.
-  The approved change class determines the bump.
+  release is `V1.0`. For every later review request, the editor supplies a
+  required changelog and selects the next minor version, the next major version,
+  or a validated manual `V<major>.<minor>` target. A manual target must be
+  numerically greater than the current released version and not already
+  committed. The candidate is review evidence, not a reservation: it becomes a
+  committed release version only after approval and successful atomic export;
+  rejected, changes-requested, cancelled, or failed-export reviews leave it
+  available for a later review. Each release creates a new file; existing version
+  paths are never overwritten.
 - **Why:** Version and confidentiality are visible in ordinary file explorers
   and backups without opening the app; supports ISO controlled-document
   version labeling.
@@ -206,8 +211,9 @@ Capability-local rules stay in their CAP files.
   type, predecessor event hash, ISO-8601 UTC timestamp, requester, effective
   approver, and responsible editor IDs (when applicable), local OS user,
   authenticated Microsoft Entra tenant/object IDs for a review decision,
-  revision digest (when applicable), confidentiality snapshot and approved
-  change class (when applicable), and the operator comment text.
+  revision digest (when applicable), confidentiality snapshot, requested target
+  version, target-selection mode, review changelog, optional decision comment,
+  and the operator comment text.
 - **Why:** A canonical schema is the only way the chain is verifiable later
   and the only way two installations can compare evidence.
 - **Consequences:** Any reader can recompute and verify each event hash and the

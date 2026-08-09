@@ -217,7 +217,7 @@ tr:last-child td { border-bottom: 0; }
       <div class="grow"></div>
       <span class="ham-note">☰ when menu folded</span>
       <span class="badge ok">Workspace healthy</span>
-      <div class="header-actions"><button class="btn outline bookmark-btn" title="Bookmark this view" aria-pressed="false">☆ Bookmark this view</button><button class="btn">Begin revision</button><button class="btn outline">Submit for review</button></div>
+      <div class="header-actions"><button class="btn outline bookmark-btn" title="Bookmark this view" aria-pressed="false">☆ Bookmark this view</button><button class="btn">Begin revision</button><button class="btn outline">Preview review request</button><button class="btn outline">Submit V1.4 for review</button></div>
     </header>
     <main class="content">
       <div class="cap-head">
@@ -226,14 +226,14 @@ tr:last-child td { border-bottom: 0; }
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Draft → in_review → approved → released. Change class + approval evidence required.</p>
+      <p class="subtitle">Draft → in_review → approved → released. Required changelog + target version; candidates are not reserved.</p>
       
       <section class="card">
         <div class="row between">
           <div class="row gap-2">
             <h2 class="doc-title">HR Data Privacy Policy</h2>
-            <span class="badge info">in_review</span>
-            <span class="muted">V1.3 released</span>
+            <span class="badge warn">draft</span>
+            <span class="muted">V1.3 released · candidate V1.4 is not occupied</span>
           </div>
         </div>
         <dl class="kv"><div><dt>Document ID</dt><dd>doc-77a12bce</dd></div><div><dt>Relative draft path</dt><dd>policies/HR/Handbook.docx</dd></div><div><dt>Effective editor / approver</dt><dd>Lukas Roth / Anna Berg</dd></div><div><dt>Workflow identity</dt><dd>Entra group: VC DMS Workflow Users</dd></div><div><dt>Effective confidentiality</dt><dd>Internal (inherited from /policies/HR)</dd></div></dl>
@@ -241,23 +241,25 @@ tr:last-child td { border-bottom: 0; }
       <section class="card">
         <h3 class="card-title">Lifecycle pipeline</h3>
         <div class="pipeline">
-          <div class="step active"><span class="dot"></span>draft</div><div class="step active"><span class="dot"></span>in_review</div><div class="step "><span class="dot"></span>approved</div><div class="step "><span class="dot"></span>released</div><div class="step "><span class="dot"></span>obsolete</div>
+          <div class="step active"><span class="dot"></span>draft</div><div class="step "><span class="dot"></span>in_review</div><div class="step "><span class="dot"></span>approved</div><div class="step "><span class="dot"></span>released</div><div class="step "><span class="dot"></span>obsolete</div>
         </div>
       </section>
       <div class="grid-2">
         <section class="card">
           <h3 class="card-title">Submit for review (required fields)</h3>
-          <dl class="kv"><div><dt>Change summary *</dt><dd><span class="muted">(required, non-empty)</span></dd></div><div><dt>Change class</dt><dd><span class="muted">(cosmetic/minor or substantive/major; required after first release)</span></dd></div><div><dt>Rationale</dt><dd><span class="muted">(required with change class)</span></dd></div><div><dt>Draft SHA-256</dt><dd><span class="muted">(computed from current draft bytes on submit)</span></dd></div><div><dt>Requester</dt><dd>Lukas Roth <lukas@vc.de> <span class="muted">(snapshotted on submit)</span></dd></div><div><dt>Approver (derived)</dt><dd>Anna Berg <anna@vc.de> · Entra group verified</dd></div><div><dt>Decision authority</dt><dd>Anna signs in with Microsoft Entra before approving</dd></div><div><dt>Transport</dt><dd>SMTP relay (password from OS credential store)</dd></div></dl>
-          <p class="hint">Document enters <code>in_review</code> only after the transport step succeeds. Empty or missing required fields fail closed.</p>
+          <dl class="kv"><div><dt>Changelog *</dt><dd>Updated retention table to 24 months.</dd></div><div><dt>Target version *</dt><dd>Minor V1.4 <span class="muted">(selected)</span> · Major V2.0 · Manual V&lt;major&gt;.&lt;minor&gt;</dd></div><div><dt>Manual validation</dt><dd><span class="muted">Greater unused target required when manual is selected</span></dd></div><div><dt>Candidate</dt><dd>V1.4 <span class="muted">(review evidence only; no reservation)</span></dd></div><div><dt>Draft SHA-256</dt><dd><span class="muted">(computed from current draft bytes on submit)</span></dd></div><div><dt>Requester</dt><dd>Lukas Roth <lukas@vc.de> <span class="muted">(snapshotted on submit)</span></dd></div><div><dt>Approver (derived)</dt><dd>Anna Berg <anna@vc.de> · Entra group verified</dd></div><div><dt>Decision authority</dt><dd>Anna signs in with Microsoft Entra before deciding</dd></div></dl>
+          <div class="row gap-2" style="margin-top:0.75rem;flex-wrap:wrap"><button class="btn outline">Preview review request</button><button class="btn">Submit V1.4 for review</button></div>
+          <p class="hint">Preview is non-mutating. Submit snapshots the changelog, mode, and candidate; failures leave the document in <code>draft</code>.</p>
         </section>
         <section class="card">
-          <h3 class="card-title">Workflow chain (canonical event types)</h3>
+          <h3 class="card-title">Review evidence and release rule</h3>
           <ul class="timeline">
-            <li><strong>review_requested</strong> — Lukas Roth — 2025-08-01 09:14 UTC</li>
-            <li><strong>review_decision_approved</strong> — Anna Berg — 09:42 UTC</li>
-            <li><strong>release</strong> (V1.3) — 09:44 UTC</li>
-            <li><strong>revision_begun</strong> — 2025-08-02 11:02 UTC</li>
+            <li><strong>review_requested</strong> — changelog + V1.4/minor snapshot</li>
+            <li><strong>rejected / changes requested</strong> — candidate stays unoccupied; optional reason retained</li>
+            <li><strong>approved</strong> — accepted V1.4 target is ready for release</li>
+            <li><strong>Release approved version</strong> — only successful atomic export commits V1.4</li>
           </ul>
+          <div class="callout warn">A rejected, cancelled, invalidated, or failed-export review does not consume V1.4. The next nomination repeats this form and may select V1.4 again.</div>
           <p class="hint">Chain head 5b3a…ffe2 — verify recomputes from canonical body (CAP-0011).</p>
         </section>
       </div>

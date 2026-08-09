@@ -27,7 +27,7 @@ linked tests is a coverage gap, not implemented proof.
 | [CAP-0008](capabilities/CAP-0008-confidentiality-classification.md) | Inherited document confidentiality classification | not implemented |
 | [CAP-0009](capabilities/CAP-0009-release-editor.md) | Release editor (host source editor) | not implemented |
 | [CAP-0010](capabilities/CAP-0010-notification-transport.md) | Notification transport (SMTP or host mail handler) | not implemented |
-| [CAP-0011](capabilities/CAP-0011-approval-evidence.md) | Approval evidence (change and decision comments, chain) | not implemented |
+| [CAP-0011](capabilities/CAP-0011-approval-evidence.md) | Approval evidence (changelog and decision comments, chain) | not implemented |
 | [CAP-0012](capabilities/CAP-0012-audit-export.md) | Audit and report export | not implemented |
 | [CAP-0013](capabilities/CAP-0013-library-maintenance.md) | Library maintenance beyond add/remove | not implemented |
 | [CAP-0014](capabilities/CAP-0014-workspace-integrity.md) | Workspace integrity (locks, backups, restore) | not implemented |

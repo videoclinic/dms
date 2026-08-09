@@ -34,8 +34,11 @@ Planned control model:
 - Application-driven PDF release: host-installed Microsoft Office exports Office
   drafts; Markdown renders locally through a CommonMark HTML print shell and
   native WebView PDF APIs, with header/footer chrome from the release context.
-  First release is `V1.0`; cosmetic changes increment the minor version, while
-  substantive or uncertain changes increment the major version.
+  First release is `V1.0`. For every later review request, the editor records a
+  required changelog and proposes the next minor, the next major, or a validated
+  manual target version. A candidate becomes a released version only after
+  approval and atomic PDF export; unsuccessful reviews keep their evidence but
+  do not occupy that target version.
 - Released PDFs use
   `<stem>_V<major>.<minor>_<confidentiality-type-id>.pdf` and receive SHA-256
   integrity checksums.
@@ -46,7 +49,7 @@ Planned control model:
   permalinks.
 - Local-only workspace metadata, backups, restore support, confidentiality
   policies, periodic review, audit export, and optional consented Claude Desktop
-  assistance for advisory change wording and classification.
+  assistance for advisory changelog wording and target-version mode.
 
 ## Deliberate boundaries
 

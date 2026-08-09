@@ -33,16 +33,15 @@ When implemented, the following must hold:
    not claim a callable Claude Desktop API, delivery confirmation, or automatic
    response capture.
 6. The prompt asks for two advisory outputs:
-   - whether the changes appear **cosmetic/minor** or **substantive/major** under
-     CAP-0002, including uncertainty and rationale;
-   - a concise proposed changelog/change-summary comment grounded only in the
-     supplied differences.
+   - a suggested target-version mode (`minor version change`, `major version
+     change`, or `manual version set`) under CAP-0002, including rationale;
+   - a concise proposed changelog grounded only in the supplied differences.
 7. Claude output is untrusted suggestion text. It cannot change lifecycle,
    choose a version, write `.dms`, approve a document, or bypass required
-   fields. The operator reviews and edits any accepted text and explicitly
-   chooses the change class.
+   fields. The editor reviews and edits any accepted text and explicitly
+   chooses the target-version mode and candidate.
 8. When an operator accepts all or part of a suggestion, only the accepted text
-   is copied into the editable change-summary field. The eventual workflow event
+   is copied into the editable changelog field. The eventual workflow event
    records `assistance_used: true` and provider label `Claude Desktop`; prompts
    and rejected responses are not persisted by the DMS.
 9. If deterministic text extraction is unsupported, incomplete, or exceeds the
@@ -57,7 +56,7 @@ When implemented, the following must hold:
 - Treating Claude Desktop as a local/offline model
 - Direct invocation or response automation through an undocumented interface
 - Supplying an Anthropic API key or embedding an API client
-- Letting AI decide approval, classification, or version number
+- Letting AI decide approval, target-version mode, or version number
 - Installing or configuring Claude Desktop for the operator
 - A custom Claude Desktop MCP extension in v1
 
@@ -65,7 +64,7 @@ When implemented, the following must hold:
 - Wireframe (HTML): [`../wireframes/html/CAP-0018-claude-desktop-change-assistance.html`](../wireframes/html/CAP-0018-claude-desktop-change-assistance.html)
 - Wireframe (PNG): [`../wireframes/exports/CAP-0018-claude-desktop-change-assistance.png`](../wireframes/exports/CAP-0018-claude-desktop-change-assistance.png)
 
-- Lifecycle and change class: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
+- Lifecycle and target version: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
 - Privacy: [`../../privacy.md`](../../privacy.md)
 - ADR-0018: [`../../design-decisions.md`](../../design-decisions.md)
 - Anthropic local MCP documentation: <https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop>

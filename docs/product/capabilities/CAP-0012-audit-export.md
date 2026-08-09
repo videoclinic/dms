@@ -19,9 +19,10 @@ When implemented, the following must hold:
    `<edit-root>/.dms/exports/`. The report contains the workflow history
    (events, hashes, timestamps, comments), the release history (version,
    relative path, confidentiality, checksum, approval-chain head), and the
-   current classification summary.
-   Periodic-review requests/results and approved major/minor change class are
-   included for each applicable release cycle.
+   current classification summary. Every review request is included regardless
+   of its outcome, with its changelog, requested target version, target-version
+   mode, decision outcome, and any decision comment. Periodic-review
+   requests/results are included for each applicable release cycle.
 3. Reports do not embed source-draft content or released PDF bytes. They
    carry identifying metadata and SHA-256 digests so a separate copy of the
    document can be matched against a recorded checksum.

@@ -41,9 +41,10 @@ When implemented, the following must hold:
    `withdrawn`. The PDF remains on disk, the workflow event records the
    withdrawal, and the explorer no longer surfaces the release as the
    current version (CAP-0002 outcome 14).
-7. **Reject a draft in review.** An approver records `rejected` with a
-   required decision comment; the document returns to `draft` and the
-   rejection is recorded in the canonical event chain.
+7. **Reject a draft in review.** An approver records `rejected`; the UI asks
+   why approval was not granted but the decision comment is optional. The
+   document returns to `draft`, and the rejection, candidate version, changelog,
+   and any comment are recorded in the canonical event chain.
 8. **Supported draft extensions.** Library add accepts `.md` plus the declared
    v1 Office extensions (at least `.docx`; `.xlsx` / `.pptx` as implemented).
    Other extensions fail closed with a clear message (CAP-0007).
