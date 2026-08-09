@@ -66,17 +66,20 @@ When implemented, the following must hold:
    the same reference-protection rule as confidentiality types (CAP-0008 /
    CAP-0013): types referenced by documents or history cannot be hard-deleted.
 10. Document-control-data edits are recorded as
-    `document_control_data_changed` events with
-    before/after values. Changing title, document number, document type, owner,
-    effective date, or effective confidentiality while content review is open
-    or after approval invalidates that request/approval. Review-schedule changes
-    do not invalidate content approval but remain auditable.
+    `document_control_data_changed` events with before/after values. Changing
+    title, document number, document type, owner, or effective date while
+    content review is open or after approval invalidates that request/approval.
+    Changing the document's effective confidentiality through CAP-0008 has the
+    same invalidation effect. Review-schedule changes do not invalidate content
+    approval but remain auditable.
 11. The CAP-0006 selection pane and any expanded document-control-data form show
     document control data, current released version (with a recent release list
     when space allows),
     next review due (with **overdue** highlight when past due and not obsolete),
-    lifecycle state, and effective editor/approver (CAP-0019). For exactly one
-    selected document, the pane groups **Document control data**, **Actions**,
+    lifecycle state, effective confidentiality with its source and
+    inherited/overridden status (CAP-0008), and effective editor/approver
+    (CAP-0019). For exactly one selected document, the pane groups **Document
+    control data**, **Actions**,
     **Revision cycle**, and **Releases** into independently foldable sections;
     the document identity and lifecycle state remain visible while any section
     is folded. Document actions sit in the same pane under the document control

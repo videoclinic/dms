@@ -74,6 +74,7 @@ When implemented, the following must hold:
    - an always-visible **Source file** identity with the exact file name and its
      edit-root-relative folder/path, derived from the filesystem
    - CAP-0015 **Document control data** and related status (effective
+     confidentiality with its source and inherited/overridden status, effective
      editor/approver, current release, draft-newer marker)
    - **document actions** for that selection
    CAP-0015 owns field rules and revision/obsolescence semantics; CAP-0006 owns
@@ -98,6 +99,9 @@ When implemented, the following must hold:
    - **Open latest released PDF** (CAP-0015) when a current released version
      exists
    - **Edit document control data** (CAP-0015)
+   - **Override confidentiality** (CAP-0008) for the selected document; the
+     action selects or clears that document's explicit type and is unavailable
+     for multi-select
    - **Submit for review**, **Begin revision**, **Cancel review**, **Release**
      when the lifecycle allows (CAP-0002 / CAP-0015)
    - **Mark obsolete** (CAP-0015)

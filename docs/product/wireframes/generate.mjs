@@ -460,8 +460,11 @@ const CAPS = [
     file: "CAP-0008-confidentiality-classification",
     title: "Confidentiality policies",
     nav: "config",
-    subtitle: "Select a folder, save its direct policy, or remove a non-root policy to inherit again.",
+    subtitle: "Select a folder in Configuration's edit-root-relative tree, choose its type, then save a direct policy or remove a non-root policy to inherit again.",
     body: `
+      <style>
+        .app[data-cap="CAP-0008"] .policy-editor-details > div { grid-template-columns: 1fr; gap: 0.2rem; }
+      </style>
       <div class="grid-2">
         <section class="card">
           <h3 class="card-title">Workspace catalogue</h3>
@@ -472,14 +475,37 @@ const CAPS = [
         </section>
         <section class="card">
           <h3 class="card-title">Folder policy editor</h3>
-          <div class="type-card mb">
-            ${kv([
-              ["Selected folder", "policies/HR/"],
-              ["Direct policy", "Restricted"],
-              ["After removal", "Internal from edit-root"],
-            ])}
+          <div class="grid-explorer" style="grid-template-columns:12.5rem minmax(0,1fr);gap:0.75rem">
+            <div class="tree" style="border:1px solid var(--border);border-radius:calc(var(--radius) - 2px);padding:0.65rem">
+              <div class="label" style="margin-bottom:0.45rem">Select a folder</div>
+              <ul class="tree-root">
+                <li>
+                  <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📂 edit-root</span></div>
+                  <ul>
+                    <li>
+                      <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📂 policies</span></div>
+                      <ul>
+                        <li><div class="tree-node active"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 HR</span></div></li>
+                        <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 IT</span></div></li>
+                      </ul>
+                    </li>
+                    <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 records</span></div></li>
+                    <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 Archive (empty)</span></div></li>
+                  </ul>
+                </li>
+              </ul>
+              <p class="hint" style="margin-top:0.55rem">Choose an existing node. <code>.dms</code> is hidden; Library navigation does not set this selection.</p>
+            </div>
+            <div class="type-card mb">
+            <dl class="kv policy-editor-details">
+              <div><dt>Selected folder</dt><dd>policies/HR/</dd></div>
+              <div><dt>Policy type</dt><dd><select aria-label="Policy type" style="width:100%;height:2rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.5rem;background:var(--background);color:var(--foreground)"><option>Public</option><option>Internal</option><option selected>Restricted</option><option>Confidential</option></select></dd></div>
+              <div><dt>Existing direct policy</dt><dd>Restricted</dd></div>
+              <div><dt>After removal</dt><dd>Internal from edit-root</dd></div>
+            </dl>
             <div class="row gap-2" style="margin-top:0.75rem"><button class="btn">Save folder policy</button><button class="btn danger">Remove folder policy</button></div>
             <p class="hint">Save creates or replaces a policy at this folder only. It does not change ancestor or child policies.</p>
+            </div>
           </div>
           <div class="callout warn"><strong>Remove only removes this non-root policy.</strong> The folder remains. Its documents and descendants inherit from the nearest remaining ancestor unless they have a nearer folder policy or document override. The root policy can be changed but not removed.</div>
           <h3 class="card-title" style="margin-top:1rem">Direct folder policies (edit-root relative)</h3>
@@ -1046,15 +1072,16 @@ function documentControlDataSelectionPane() {
         ["Draft", badge("newer than last release", "warn")],
         ["Effective editor", "Lukas Roth"],
         ["Effective approver", "Anna Berg"],
-        ["Confidentiality", "Internal (inherited)"],
+        ["Confidentiality", "Internal (inherited from policies/HR)"],
       ])}<p class="hint">Stored in workspace metadata under <code>.dms</code>. Not read from or synchronized with Office document properties. Renaming the source file does not change these values.</p></div>
     </details>
     <details class="selection-section" open>
-      <summary>Actions <span>15 available</span></summary>
+      <summary>Actions <span>16 available</span></summary>
       <div class="selection-section-body stack-btns">
         <button class="btn outline">Open draft</button>
         <button class="btn outline">Open latest released PDF</button>
         <button class="btn outline">Edit document control data</button>
+        <button class="btn outline">Override confidentiality…</button>
         <button class="btn outline">Submit for review</button>
         <button class="btn outline">Begin revision</button>
         <button class="btn outline">Cancel review</button>
