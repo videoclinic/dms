@@ -118,16 +118,11 @@ const CAPS = [
     file: "CAP-0003-document-notes",
     title: "Document notes",
     nav: "library",
-    subtitle: "Free-text notes by stable document ID. Survive renames and lifecycle transitions.",
+    subtitle: "Free-text notes by stable document ID. Newest first; New note field above the latest note.",
     actions: ["Add note"],
     body: `
       <section class="card">
         <h3 class="card-title">Notes — HR Data Privacy Policy <span class="muted">(doc-77a12bce)</span></h3>
-        <div class="stack">
-          ${note("2025-08-02 11:08 — Lukas Roth", "Confirmed retention table updated to 24 months; double-check audit log entry.")}
-          ${note("2025-07-29 16:22 — Anna Berg", "Need legal review wording on §4 before next release.")}
-          ${note("2025-07-21 09:05 — Lukas Roth", "Renamed draft locally — locator updated, ID preserved.")}
-        </div>
         <div class="composer">
           <label class="label">New note</label>
           <div class="textarea">Plain text — line breaks preserved. UTF-8.</div>
@@ -136,7 +131,12 @@ const CAPS = [
             <button class="btn">Save note</button>
           </div>
         </div>
-        <p class="hint">Deleting a note never deletes the document or workflow evidence comments (CAP-0011).</p>
+        <div class="stack">
+          ${note("2025-08-02 11:08 — Lukas Roth", "Confirmed retention table updated to 24 months; double-check audit log entry.")}
+          ${note("2025-07-29 16:22 — Anna Berg", "Need legal review wording on §4 before next release.")}
+          ${note("2025-07-21 09:05 — Lukas Roth", "Renamed draft locally — locator updated, ID preserved.")}
+        </div>
+        <p class="hint">List is newest-first. The compose field stays above the latest note. Deleting a note never deletes the document or workflow evidence comments (CAP-0011).</p>
       </section>`,
   },
   {
@@ -1244,7 +1244,7 @@ tr:last-child td { border-bottom: 0; }
 .note, .event, .layer, .type-card, .ver, .person { border: 1px solid var(--border); border-radius: calc(var(--radius) - 2px); padding: 0.75rem 0.85rem; }
 .note header, .event .row { font-size: 0.78rem; color: var(--muted-foreground); margin-bottom: 0.35rem; }
 .note p, .event p, .layer p, .type-card p, .ver p, .person p { margin: 0.15rem 0 0; font-size: 0.875rem; }
-.composer { margin-top: 0.9rem; border: 1px dashed var(--border); border-radius: var(--radius); padding: 0.85rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.composer { margin: 0 0 0.9rem; border: 1px dashed var(--border); border-radius: var(--radius); padding: 0.85rem; display: flex; flex-direction: column; gap: 0.5rem; }
 .label { font-size: 0.75rem; font-weight: 600; color: var(--muted-foreground); }
 .textarea { min-height: 4rem; border: 1px solid var(--input); border-radius: calc(var(--radius) - 2px); padding: 0.6rem 0.75rem; color: var(--muted-foreground); font-size: 0.875rem; background: var(--background); }
 .tree-list { list-style: none; margin: 0; padding: 0; font-size: 0.875rem; }

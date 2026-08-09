@@ -20,6 +20,11 @@ When implemented, the following must hold:
    obsolete) unless the operator deletes them.
 5. Deleting a note is an explicit action and does not delete the document file
    or workflow evidence comments (CAP-0011).
+6. The notes list is ordered **newest first** by note timestamp. The **New note**
+   compose field (body input, author, save) sits **above** the latest note in
+   that list so the operator writes without scrolling past existing entries.
+   After a successful save, the new note becomes the top list entry under the
+   compose field; the compose field clears and stays above the list.
 
 ## Non-goals
 
