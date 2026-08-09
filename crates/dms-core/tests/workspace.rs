@@ -1,4 +1,4 @@
-use std::{fs, thread, time::Duration};
+use std::{fs, path::PathBuf, thread, time::Duration};
 
 use dms_core::{ControlUpdate, DmsError, Workspace, METADATA_DIRECTORY, METADATA_FILENAME};
 use tempfile::TempDir;
@@ -48,10 +48,8 @@ fn workspace_init_persists_canonical_roots_and_stable_id() {
 fn document_control_is_persisted_independently_from_source_locator() {
     let (edit_root, _publish_root, mut workspace) = initialized_workspace();
     let document = add_markdown_document(&mut workspace, &edit_root, "procedures/Onboarding.md");
-    assert_eq!(
-        document.relative_path.to_string_lossy(),
-        "procedures/Onboarding.md"
-    );
+    let relative_path = PathBuf::from("procedures").join("Onboarding.md");
+    assert_eq!(document.relative_path, relative_path);
     assert_eq!(document.control.title, "Onboarding");
 
     let updated = workspace
@@ -78,10 +76,7 @@ fn document_control_is_persisted_independently_from_source_locator() {
 
     let reopened = Workspace::open(edit_root.path()).expect("reopen workspace");
     let stored = reopened.document(document.id).expect("stored document");
-    assert_eq!(
-        stored.relative_path.to_string_lossy(),
-        "procedures/Onboarding.md"
-    );
+    assert_eq!(stored.relative_path, relative_path);
     assert_eq!(stored.control.title, "New hire onboarding");
     assert_eq!(stored.control.document_number.as_deref(), Some("PR-001"));
     assert_eq!(updated.id, stored.id);
