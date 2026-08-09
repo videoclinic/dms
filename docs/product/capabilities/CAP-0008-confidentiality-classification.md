@@ -68,6 +68,9 @@ When implemented, the following must hold:
    approval-required content review is open or after approval but before release,
    the request/approval is invalidated and a new review is required. Historical
    snapshots remain unchanged.
+12. The folder-exceptions table follows CAP-0005's growing-table interaction;
+    its text filter case-insensitively matches the edit-root-relative path and
+    confidentiality type before pagination.
 
 ## Non-goals
 

@@ -61,6 +61,9 @@ When implemented, the following must hold:
 10. Role routing does not grant or revoke filesystem access and does not prevent
    source-file editing. Filesystem, SharePoint, and OneDrive ACLs remain the
    access-control boundary.
+11. The folder-exceptions table follows CAP-0005's growing-table interaction;
+    its text filter case-insensitively matches the edit-root-relative path,
+    effective editor, effective approver, and routing state before pagination.
 
 ## Non-goals
 

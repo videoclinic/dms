@@ -234,10 +234,16 @@ tr:last-child td { border-bottom: 0; }
       </section>
       <section class="card">
         <h3 class="card-title">Recent reports</h3>
-        <div class="table-wrap"><table>
+        <div class="row between mb" style="flex-wrap:wrap;gap:0.75rem">
+    <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Report history <input aria-label="Filter report history" placeholder="e.g. Audit-2025 or missing" style="height:2rem;width:15rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.65rem;font:inherit;color:var(--foreground);background:var(--background)"/></label>
+    <span class="muted">4 matching reports</span>
+  </div><div class="table-wrap"><table>
     <thead><tr><th>Report</th><th>Generated</th><th>Filter</th><th>SHA-256</th><th>Verify</th><th>Size</th></tr></thead>
     <tbody><tr><td>Audit-2025-08.pdf</td><td>2025-08-05 08:30 UTC</td><td>All</td><td>f1a0…d223</td><td><span class="badge ok">valid</span></td><td>412 KB</td></tr><tr><td>Audit-2025-07.pdf</td><td>2025-08-01 08:15 UTC</td><td>Confidential only</td><td>b73e…9c44</td><td><span class="badge ok">valid</span></td><td>1.2 MB</td></tr><tr><td>Audit-2025-07.csv</td><td>2025-08-01 08:15 UTC</td><td>All</td><td>1199…aa01</td><td><span class="badge ok">valid</span></td><td>84 KB</td></tr><tr><td>Audit-2025-06.pdf</td><td>2025-07-01 08:00 UTC</td><td>Approver: Anna Berg</td><td>—</td><td><span class="badge warn">missing file</span></td><td>—</td></tr></tbody>
-  </table></div>
+  </table></div><div class="row between" style="margin-top:0.75rem;flex-wrap:wrap;gap:0.75rem">
+    <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Rows per page <select aria-label="Table rows per page" style="height:2rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.45rem;font:inherit;color:var(--foreground);background:var(--background)"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
+    <div class="row gap-2"><span class="muted">1–4 of 4</span><button class="btn outline" disabled>Previous</button><button class="btn outline" disabled>Next</button></div>
+  </div>
         <p class="hint">Reports never embed draft or PDF bytes — metadata, digests, and the event chain only. They include every major review attempt and each direct minor release with its approver-notification delivery attempt.</p>
       </section>
     </main>

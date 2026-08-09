@@ -252,8 +252,12 @@ tr:last-child td { border-bottom: 0; }
         <section class="card list-card">
           <div class="row gap-2 mb">
             <span class="badge info">1 selected</span>
-            <span class="muted grow">List truncated — focus is the selection pane</span>
+            <span class="muted grow">Current-folder results — selection pane in focus</span>
           </div>
+          <div class="row between mb" style="flex-wrap:wrap;gap:0.75rem">
+    <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Search <input aria-label="Search current library folder" placeholder="Name or Title" style="height:2rem;width:15rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.65rem;font:inherit;color:var(--foreground);background:var(--background)"/></label>
+    <span class="muted">2 matching rows</span>
+  </div>
           <div class="table-wrap"><table>
             <thead><tr><th></th><th>Name</th><th>Title</th><th>State</th><th>Released</th></tr></thead>
             <tbody>
@@ -273,6 +277,10 @@ tr:last-child td { border-bottom: 0; }
               </tr>
             </tbody>
           </table></div>
+          <div class="row between" style="margin-top:0.75rem;flex-wrap:wrap;gap:0.75rem">
+    <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Rows per page <select aria-label="Document rows per page" style="height:2rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.45rem;font:inherit;color:var(--foreground);background:var(--background)"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
+    <div class="row gap-2"><span class="muted">1–2 of 2</span><button class="btn outline" disabled>Previous</button><button class="btn outline" disabled>Next</button></div>
+  </div>
         </section>
         <aside class="card detail-pane">
     <div class="row between mb">

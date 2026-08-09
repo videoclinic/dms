@@ -44,6 +44,9 @@ When implemented, the following must hold:
    supported version creates a metadata backup, migrates atomically, and records
    the migration. An unknown newer version opens read-only and is never
    rewritten. Failed migration restores the pre-migration metadata.
+9. The growing backup-archive table follows CAP-0005's table interaction; its
+   text filter case-insensitively matches backup filename, creation time, and
+   manifest digest before pagination.
 
 ## Non-goals
 

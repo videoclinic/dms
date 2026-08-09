@@ -39,6 +39,9 @@ When implemented, the following must hold:
    content as long as the underlying events have not changed. The export
    also records a SHA-256 over the report file so an external reader can
    confirm integrity.
+7. The growing **Recent reports** table follows CAP-0005's table interaction;
+   its text filter case-insensitively matches report name, generated time,
+   recorded report filter, and verification state before pagination.
 
 ## Non-goals
 

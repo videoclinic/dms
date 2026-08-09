@@ -161,15 +161,19 @@ const CAPS = [
     body: `
       <section class="card">
         <h3 class="card-title">Released versions — SHA-256 verification</h3>
-        ${table(
-          ["Version", "Relative path", "Released", "SHA-256", "Result", "Action"],
-          [
+        ${growingTable({
+          headers: ["Version", "Relative path", "Released", "SHA-256", "Result", "Action"],
+          rows: [
             ["V2.0", "policies/HR/Handbook_V2.0_restricted.pdf", "2025-08-02 09:44", "9f2c…b1e0", badge("match", "ok"), "Reveal"],
             ["V1.7", "policies/HR/Handbook_V1.7_restricted.pdf", "2025-07-12 12:01", "73b1…4cd2", badge("match", "ok"), "Reveal"],
             ["V1.6", "policies/HR/Handbook_V1.6_restricted.pdf", "2025-06-05 14:30", "2a91…77ee", badge("mismatch", "danger"), "Reveal"],
             ["V1.5", "policies/HR/Handbook_V1.5_restricted.pdf", "2025-05-09 10:12", "—", badge("missing file", "warn"), "Reveal"],
-          ]
-        )}
+          ],
+          filterLabel: "Version or path",
+          filterAriaLabel: "Filter integrity results",
+          filterPlaceholder: "e.g. V2.0 or mismatch",
+          matchingLabel: "verification results",
+        })}
         <p class="hint">Per-version outcomes; verification never rewrites PDF bytes.</p>
       </section>`,
   },
@@ -279,7 +283,7 @@ const CAPS = [
           <div class="row" style="height:2rem;min-width:0;flex:1;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.75rem;font-size:0.82rem;gap:0.45rem">
             <span class="muted">DMS Workspace</span><span>›</span><span>policies</span><span>›</span><strong>HR</strong>
           </div>
-          <div style="height:2rem;width:16rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0.42rem 0.7rem;font-size:0.78rem;color:var(--muted-foreground)">Search HR and subfolders</div>
+          <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Search <input aria-label="Search current folder and descendants" placeholder="HR and subfolders" style="height:2rem;width:16rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.7rem;font:inherit;color:var(--foreground);background:var(--background)"/></label>
         </div>
         <p class="hint" style="margin-top:0.45rem">Back / Forward / Up and clickable breadcrumbs stay synchronized with the tree and current-folder contents.</p>
       </section>
@@ -334,7 +338,7 @@ const CAPS = [
           <div class="row gap-2 mb" style="flex-wrap:wrap">
             ${badge("3 in library", "info")}
             ${badge("2 not in library", "warn")}
-            <span class="muted grow" style="text-align:right">All immediate children · Search: HR + descendants</span>
+            <span class="muted grow" style="text-align:right">All immediate children · Current-folder search includes descendants</span>
           </div>
           <div class="table-wrap"><table>
             <thead><tr>
@@ -397,6 +401,7 @@ const CAPS = [
               </tr>
             </tbody>
           </table></div>
+          ${tablePagination({ ariaLabel: "Library rows per page", count: 8 })}
           <p class="hint"><strong>Name is the source file:</strong> it always shows the exact filesystem name, including the extension. Registered files show the independent DMS title and number under Document.</p>
         </section>
         <aside class="card detail-pane">
@@ -506,13 +511,17 @@ const CAPS = [
           </div>
           <div class="row gap-2" style="margin-top:0.75rem"><button class="btn">Save folder exception</button><button class="btn danger">Remove exception</button></div>
           <h3 class="card-title" style="margin-top:1rem">Folder exceptions</h3>
-          ${table(
-            ["Path", "Type", "State"],
-            [
+          ${growingTable({
+            headers: ["Path", "Type", "State"],
+            rows: [
               ["policies/HR/", "Restricted", "direct"],
               ["records/", "Confidential", "direct"],
-            ]
-          )}
+            ],
+            filterLabel: "Path or type",
+            filterAriaLabel: "Filter confidentiality folder exceptions",
+            filterPlaceholder: "e.g. HR or Restricted",
+            matchingLabel: "folder exceptions",
+          })}
           <p class="hint">Remove restores the nearest remaining default. The edit-root policy is required and cannot be removed; review and release snapshots do not change.</p>
         </section>
       </div>`,
@@ -615,15 +624,19 @@ const CAPS = [
       </section>
       <section class="card">
         <h3 class="card-title">Recent reports</h3>
-        ${table(
-          ["Report", "Generated", "Filter", "SHA-256", "Verify", "Size"],
-          [
+        ${growingTable({
+          headers: ["Report", "Generated", "Filter", "SHA-256", "Verify", "Size"],
+          rows: [
             ["Audit-2025-08.pdf", "2025-08-05 08:30 UTC", "All", "f1a0…d223", badge("valid", "ok"), "412 KB"],
             ["Audit-2025-07.pdf", "2025-08-01 08:15 UTC", "Confidential only", "b73e…9c44", badge("valid", "ok"), "1.2 MB"],
             ["Audit-2025-07.csv", "2025-08-01 08:15 UTC", "All", "1199…aa01", badge("valid", "ok"), "84 KB"],
             ["Audit-2025-06.pdf", "2025-07-01 08:00 UTC", "Approver: Anna Berg", "—", badge("missing file", "warn"), "—"],
-          ]
-        )}
+          ],
+          filterLabel: "Report history",
+          filterAriaLabel: "Filter report history",
+          filterPlaceholder: "e.g. Audit-2025 or missing",
+          matchingLabel: "reports",
+        })}
         <p class="hint">Reports never embed draft or PDF bytes — metadata, digests, and the event chain only. They include every major review attempt and each direct minor release with its approver-notification delivery attempt.</p>
       </section>`,
   },
@@ -650,15 +663,19 @@ const CAPS = [
         </aside>
         <section class="card">
           <h3 class="card-title">Drafts requiring attention</h3>
-          ${table(
-            ["Title", "Old path", "Status", "Suggestion"],
-            [
+          ${growingTable({
+            headers: ["Title", "Old path", "Status", "Suggestion"],
+            rows: [
               ["Acceptable Use", "policies/IT/AUP.docx", badge("renamed", "warn"), "Match: policies/IT/AUP-v2.docx"],
               ["Backup Config", "policies/IT/Backup.docx", badge("missing", "danger"), "No candidate — restore from backup"],
               ["Vendor Onboarding", "procedures/Onboarding.docx", badge("candidate", "info"), "Match by last digest"],
               ["Office lock ignored", "~$AUP.docx", badge("ignored", "muted"), "Lock/temp sidecar — never a candidate"],
-            ]
-          )}
+            ],
+            filterLabel: "Finding",
+            filterAriaLabel: "Filter rescan findings",
+            filterPlaceholder: "e.g. Backup or missing",
+            matchingLabel: "findings",
+          })}
         </section>
       </div>`,
   },
@@ -691,14 +708,18 @@ const CAPS = [
         <section class="card">
           <h3 class="card-title">Backup archives</h3>
           <p class="muted mb">.dms + controlled drafts + release PDFs + manifest (paths, sizes, SHA-256). Restore verifies the manifest first.</p>
-          ${table(
-            ["Backup", "Created", "Files", "Manifest SHA-256"],
-            [
+          ${growingTable({
+            headers: ["Backup", "Created", "Files", "Manifest SHA-256"],
+            rows: [
               ["dms-backup-2025-08-05.zip", "2025-08-05 08:00 UTC", "1,284", "9f2c…b1e0"],
               ["dms-backup-2025-07-29.zip", "2025-07-29 08:00 UTC", "1,279", "3a91…77ee"],
               ["dms-backup-2025-07-22.zip", "2025-07-22 08:00 UTC", "1,272", "5b3a…ffe2"],
-            ]
-          )}
+            ],
+            filterLabel: "Backup",
+            filterAriaLabel: "Filter backup archives",
+            filterPlaceholder: "e.g. 2025-08 or 9f2c",
+            matchingLabel: "backup archives",
+          })}
           <p class="hint">Retention is operator-managed. No automatic expiry or off-machine upload.</p>
         </section>
       </div>`,
@@ -736,8 +757,14 @@ const CAPS = [
         <section class="card list-card">
           <div class="row gap-2 mb">
             ${badge("1 selected", "info")}
-            <span class="muted grow">List truncated — focus is the selection pane</span>
+            <span class="muted grow">Current-folder results — selection pane in focus</span>
           </div>
+          ${tableFilter({
+            label: "Search",
+            ariaLabel: "Search current library folder",
+            placeholder: "Name or Title",
+            summary: "2 matching rows",
+          })}
           <div class="table-wrap"><table>
             <thead><tr><th></th><th>Name</th><th>Title</th><th>State</th><th>Released</th></tr></thead>
             <tbody>
@@ -757,6 +784,7 @@ const CAPS = [
               </tr>
             </tbody>
           </table></div>
+          ${tablePagination({ ariaLabel: "Document rows per page", count: 2 })}
         </section>
         ${documentControlDataSelectionPane()}
       </div>`,
@@ -771,24 +799,21 @@ const CAPS = [
     body: `
       <section class="card">
         <h3 class="card-title">Publish-tree</h3>
-        <div class="row between mb" style="flex-wrap:wrap;gap:0.75rem">
-          <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Title filter <input aria-label="Filter by title" placeholder="e.g. Doc" style="height:2rem;width:15rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.65rem;font:inherit;color:var(--foreground);background:var(--background)"/></label>
-          <span class="muted">5 matching releases</span>
-        </div>
-        ${table(
-          ["Title", "Version", "Publish path", "Released", "SHA-256", "State", "Verify", "Action"],
-          [
+        ${growingTable({
+          headers: ["Title", "Version", "Publish path", "Released", "SHA-256", "State", "Verify", "Action"],
+          rows: [
             ["HR Data Privacy Policy", "V2.0", "policies/HR/Handbook_V2.0_restricted.pdf", "2025-08-01 09:44", "9f2c…b1e0", badge("current", "ok"), badge("match", "ok"), "<button class=\"btn outline\">Open PDF</button>"],
             ["Acceptable Use", "V2.0", "policies/IT/AUP_V2.0_internal.pdf", "2025-07-29 14:12", "3a91…77ee", badge("current", "ok"), badge("match", "ok"), "<button class=\"btn outline\">Open PDF</button>"],
             ["Incident Response", "V3.1", "procedures/IRP_V3.1_restricted.pdf", "2025-06-30 11:20", "1199…aa01", badge("current", "ok"), badge("match", "ok"), "<button class=\"btn outline\">Open PDF</button>"],
             ["Vendor Onboarding", "V1.0", "procedures/Onboarding_V1.0_internal.pdf", "2024-11-04 09:00", "—", badge("orphaned", "warn"), badge("missing file", "danger"), "<button class=\"btn outline\" disabled>Open PDF</button>"],
             ["Backup Config", "V1.4", "policies/IT/Backup_V1.4_internal.pdf", "2025-05-12 16:45", "5b3a…ffe2", badge("withdrawn", "muted"), badge("match", "ok"), "<button class=\"btn outline\">Open PDF</button>"],
-          ]
-        )}
-        <div class="row between" style="margin-top:0.75rem;flex-wrap:wrap;gap:0.75rem">
-          <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Rows per page <select aria-label="Release rows per page" style="height:2rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.45rem;font:inherit;color:var(--foreground);background:var(--background)"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
-          <div class="row gap-2"><span class="muted">1–5 of 5</span><button class="btn outline" disabled>Previous</button><button class="btn outline" disabled>Next</button></div>
-        </div>
+          ],
+          filterLabel: "Title filter",
+          filterAriaLabel: "Filter releases by title",
+          filterPlaceholder: "e.g. Doc",
+          matchingLabel: "releases",
+          pageAriaLabel: "Release rows per page",
+        })}
         <p class="hint">Release records are immutable. Correction = withdraw + Begin revision + new approval + new version.</p>
       </section>`,
   },
@@ -821,16 +846,20 @@ const CAPS = [
         </div>
         <section class="card">
           <h3 class="card-title">Due &amp; overdue</h3>
-          ${table(
-            ["Title", "Current release", "Next due", "Status", "Action"],
-            [
+          ${growingTable({
+            headers: ["Title", "Current release", "Next due", "Status", "Action"],
+            rows: [
               ["Acceptable Use", "V2.0", "2025-07-15", badge("overdue", "danger"), "Start review / Remind"],
               ["Backup Config", "V1.4", "2025-08-22", badge("due ≤30d", "warn"), "Start review / Remind"],
               ["Incident Response", "V3.1", "2025-08-30", badge("due ≤30d", "warn"), "Start review / Remind"],
               ["Vendor Onboarding", "V1.0", "2025-09-14", badge("due", "muted"), "Start review / Remind"],
               ["Code of Conduct", "V1.2", "2025-12-01", badge("ok", "ok"), "Start review / Remind"],
-            ]
-          )}
+            ],
+            filterLabel: "Title or status",
+            filterAriaLabel: "Filter due and overdue documents",
+            filterPlaceholder: "e.g. overdue or Acceptable",
+            matchingLabel: "documents",
+          })}
         </section>
       </div>`,
   },
@@ -903,13 +932,17 @@ const CAPS = [
           </div>
           <div class="row gap-2" style="margin-top:0.75rem"><button class="btn">Save folder exception</button><button class="btn danger">Remove exception</button></div>
           <h3 class="card-title" style="margin-top:1rem">Folder exceptions</h3>
-          ${table(
-            ["Path", "Editor", "Approver", "State"],
-            [
+          ${growingTable({
+            headers: ["Path", "Editor", "Approver", "State"],
+            rows: [
               ["policies/IT/", "Lukas Roth", "Anna Berg", "direct"],
               ["records/", "Unresolved", "Anna Berg", "Mira Klein ineligible"],
-            ]
-          )}
+            ],
+            filterLabel: "Path or person",
+            filterAriaLabel: "Filter workflow folder exceptions",
+            filterPlaceholder: "e.g. IT or Anna",
+            matchingLabel: "folder exceptions",
+          })}
           <div class="callout warn" style="margin-top:0.75rem">An unresolved role blocks a new review. DMS Desktop never chooses a replacement; an operator reroutes the policy from the current Entra group.</div>
         </section>
       </div>`,
@@ -975,14 +1008,18 @@ const CAPS = [
       <div class="grid-2">
         <section class="card">
           <h3 class="card-title">Eligible people — read only</h3>
-          ${table(
-            ["Person", "Email", "Object ID", "State"],
-            [
+          ${growingTable({
+            headers: ["Person", "Email", "Object ID", "State"],
+            rows: [
               ["Lukas Roth", "lukas@vc.de", "a714…51bf", badge("active", "ok")],
               ["Anna Berg", "anna@vc.de", "b023…882a", badge("active", "ok")],
               ["Mira Klein", "mira@vc.de", "c144…0d91", badge("active", "ok")],
-            ]
-          )}
+            ],
+            filterLabel: "Person or email",
+            filterAriaLabel: "Filter eligible people",
+            filterPlaceholder: "e.g. Anna or vc.de",
+            matchingLabel: "eligible people",
+          })}
           <p class="hint">Use this read-only list only to select editor/approver routing. Add, remove, disable, and profile changes happen in Microsoft Entra.</p>
         </section>
         <section class="card">
@@ -1015,6 +1052,34 @@ function table(headers, rows) {
       .map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`)
       .join("")}</tbody>
   </table></div>`;
+}
+function tableFilter({ label, ariaLabel, placeholder, summary }) {
+  return `<div class="row between mb" style="flex-wrap:wrap;gap:0.75rem">
+    <label class="muted" style="display:flex;align-items:center;gap:0.45rem">${label} <input aria-label="${ariaLabel}" placeholder="${placeholder}" style="height:2rem;width:15rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.65rem;font:inherit;color:var(--foreground);background:var(--background)"/></label>
+    <span class="muted">${summary}</span>
+  </div>`;
+}
+function tablePagination({ ariaLabel, count }) {
+  return `<div class="row between" style="margin-top:0.75rem;flex-wrap:wrap;gap:0.75rem">
+    <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Rows per page <select aria-label="${ariaLabel}" style="height:2rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.45rem;font:inherit;color:var(--foreground);background:var(--background)"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
+    <div class="row gap-2"><span class="muted">1–${count} of ${count}</span><button class="btn outline" disabled>Previous</button><button class="btn outline" disabled>Next</button></div>
+  </div>`;
+}
+function growingTable({
+  headers,
+  rows,
+  filterLabel,
+  filterAriaLabel,
+  filterPlaceholder,
+  matchingLabel,
+  pageAriaLabel = "Table rows per page",
+}) {
+  return `${tableFilter({
+    label: filterLabel,
+    ariaLabel: filterAriaLabel,
+    placeholder: filterPlaceholder,
+    summary: `${rows.length} matching ${matchingLabel}`,
+  })}${table(headers, rows)}${tablePagination({ ariaLabel: pageAriaLabel, count: rows.length })}`;
 }
 function note(head, body) {
   return `<article class="note"><header>${head}</header><p>${body}</p></article>`;

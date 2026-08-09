@@ -155,8 +155,9 @@ When implemented, the following must hold:
     title and document number plus every file's exact source file name and
     relative path case-insensitively. Results retain their relative path and can
     be sorted by title, document number, lifecycle state, latest release, or
-    next-review-due date. Search is an explicit result state; clearing it
-    restores the complete current-folder listing.
+    next-review-due date. Search is an explicit result state whose matching rows
+    follow CAP-0005's growing-table pagination; clearing it restores the
+    complete current-folder listing.
 15. A CAP-0020 document permalink that resolves successfully lands here: the
     library navigator selects that document (revealing its folder as needed)
     and shows the selection pane. Resolution never keys off file name or

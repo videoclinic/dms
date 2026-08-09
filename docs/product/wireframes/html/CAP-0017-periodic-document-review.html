@@ -242,10 +242,16 @@ tr:last-child td { border-bottom: 0; }
         </div>
         <section class="card">
           <h3 class="card-title">Due &amp; overdue</h3>
-          <div class="table-wrap"><table>
+          <div class="row between mb" style="flex-wrap:wrap;gap:0.75rem">
+    <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Title or status <input aria-label="Filter due and overdue documents" placeholder="e.g. overdue or Acceptable" style="height:2rem;width:15rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.65rem;font:inherit;color:var(--foreground);background:var(--background)"/></label>
+    <span class="muted">5 matching documents</span>
+  </div><div class="table-wrap"><table>
     <thead><tr><th>Title</th><th>Current release</th><th>Next due</th><th>Status</th><th>Action</th></tr></thead>
     <tbody><tr><td>Acceptable Use</td><td>V2.0</td><td>2025-07-15</td><td><span class="badge danger">overdue</span></td><td>Start review / Remind</td></tr><tr><td>Backup Config</td><td>V1.4</td><td>2025-08-22</td><td><span class="badge warn">due ≤30d</span></td><td>Start review / Remind</td></tr><tr><td>Incident Response</td><td>V3.1</td><td>2025-08-30</td><td><span class="badge warn">due ≤30d</span></td><td>Start review / Remind</td></tr><tr><td>Vendor Onboarding</td><td>V1.0</td><td>2025-09-14</td><td><span class="badge muted">due</span></td><td>Start review / Remind</td></tr><tr><td>Code of Conduct</td><td>V1.2</td><td>2025-12-01</td><td><span class="badge ok">ok</span></td><td>Start review / Remind</td></tr></tbody>
-  </table></div>
+  </table></div><div class="row between" style="margin-top:0.75rem;flex-wrap:wrap;gap:0.75rem">
+    <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Rows per page <select aria-label="Table rows per page" style="height:2rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.45rem;font:inherit;color:var(--foreground);background:var(--background)"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
+    <div class="row gap-2"><span class="muted">1–5 of 5</span><button class="btn outline" disabled>Previous</button><button class="btn outline" disabled>Next</button></div>
+  </div>
         </section>
       </div>
     </main>

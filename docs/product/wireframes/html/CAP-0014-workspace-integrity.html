@@ -243,10 +243,16 @@ tr:last-child td { border-bottom: 0; }
         <section class="card">
           <h3 class="card-title">Backup archives</h3>
           <p class="muted mb">.dms + controlled drafts + release PDFs + manifest (paths, sizes, SHA-256). Restore verifies the manifest first.</p>
-          <div class="table-wrap"><table>
+          <div class="row between mb" style="flex-wrap:wrap;gap:0.75rem">
+    <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Backup <input aria-label="Filter backup archives" placeholder="e.g. 2025-08 or 9f2c" style="height:2rem;width:15rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.65rem;font:inherit;color:var(--foreground);background:var(--background)"/></label>
+    <span class="muted">3 matching backup archives</span>
+  </div><div class="table-wrap"><table>
     <thead><tr><th>Backup</th><th>Created</th><th>Files</th><th>Manifest SHA-256</th></tr></thead>
     <tbody><tr><td>dms-backup-2025-08-05.zip</td><td>2025-08-05 08:00 UTC</td><td>1,284</td><td>9f2c…b1e0</td></tr><tr><td>dms-backup-2025-07-29.zip</td><td>2025-07-29 08:00 UTC</td><td>1,279</td><td>3a91…77ee</td></tr><tr><td>dms-backup-2025-07-22.zip</td><td>2025-07-22 08:00 UTC</td><td>1,272</td><td>5b3a…ffe2</td></tr></tbody>
-  </table></div>
+  </table></div><div class="row between" style="margin-top:0.75rem;flex-wrap:wrap;gap:0.75rem">
+    <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Rows per page <select aria-label="Table rows per page" style="height:2rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.45rem;font:inherit;color:var(--foreground);background:var(--background)"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
+    <div class="row gap-2"><span class="muted">1–3 of 3</span><button class="btn outline" disabled>Previous</button><button class="btn outline" disabled>Next</button></div>
+  </div>
           <p class="hint">Retention is operator-managed. No automatic expiry or off-machine upload.</p>
         </section>
       </div>

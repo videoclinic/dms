@@ -111,6 +111,14 @@ When implemented, the following must hold:
 14. The left menu foot shows the current workspace identity (display name or
     workspace ID) and root path summary when expanded; the foot is hidden
     when the menu is collapsed to keep the rail narrow.
+15. Every operator-facing data table whose result set can grow as workspace
+    content or durable records accumulate provides a case-insensitive,
+    surface-appropriate text filter and a **Rows per page** choice of 10, 25,
+    50, or 100. Filtering applies before pagination; clearing the filter,
+    changing the filter, or changing the page size starts at the first matching
+    row. Previous/Next pagination is available only when the filtered result
+    exceeds the selected page size. Tables that enumerate a bounded fixed
+    product configuration are excluded.
 
 ## Non-goals
 

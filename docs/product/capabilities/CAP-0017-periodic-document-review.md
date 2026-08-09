@@ -46,6 +46,9 @@ When implemented, the following must hold:
 10. Reminder email is an explicit operator action from the due/overdue list.
     Sending a reminder does not create another review request and cannot change
     lifecycle state.
+11. The growing due/overdue table follows CAP-0005's table interaction; its
+    text filter case-insensitively matches DMS title, current release, due date,
+    and review status before pagination.
 
 ## Non-goals
 

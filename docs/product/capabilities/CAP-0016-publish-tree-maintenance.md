@@ -24,7 +24,8 @@ When implemented, the following must hold:
    the unfiltered release list.
 5. The operator can select the number of matching release records shown per
    page before pagination begins. The selected page size applies to the current
-   title-filter result; pagination appears only when the result exceeds it.
+   title-filter result; Previous/Next paging actions are enabled only when the
+   result exceeds it.
 6. **Verify all releases** for a document (or the whole workspace) runs
    CAP-0004 verification for every non-missing recorded PDF and reports
    per-version `match` / `mismatch` / `missing file`.

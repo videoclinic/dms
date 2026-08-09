@@ -263,10 +263,16 @@ tr:last-child td { border-bottom: 0; }
       <div class="grid-2">
         <section class="card">
           <h3 class="card-title">Eligible people — read only</h3>
-          <div class="table-wrap"><table>
+          <div class="row between mb" style="flex-wrap:wrap;gap:0.75rem">
+    <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Person or email <input aria-label="Filter eligible people" placeholder="e.g. Anna or vc.de" style="height:2rem;width:15rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.65rem;font:inherit;color:var(--foreground);background:var(--background)"/></label>
+    <span class="muted">3 matching eligible people</span>
+  </div><div class="table-wrap"><table>
     <thead><tr><th>Person</th><th>Email</th><th>Object ID</th><th>State</th></tr></thead>
     <tbody><tr><td>Lukas Roth</td><td>lukas@vc.de</td><td>a714…51bf</td><td><span class="badge ok">active</span></td></tr><tr><td>Anna Berg</td><td>anna@vc.de</td><td>b023…882a</td><td><span class="badge ok">active</span></td></tr><tr><td>Mira Klein</td><td>mira@vc.de</td><td>c144…0d91</td><td><span class="badge ok">active</span></td></tr></tbody>
-  </table></div>
+  </table></div><div class="row between" style="margin-top:0.75rem;flex-wrap:wrap;gap:0.75rem">
+    <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Rows per page <select aria-label="Table rows per page" style="height:2rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.45rem;font:inherit;color:var(--foreground);background:var(--background)"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
+    <div class="row gap-2"><span class="muted">1–3 of 3</span><button class="btn outline" disabled>Previous</button><button class="btn outline" disabled>Next</button></div>
+  </div>
           <p class="hint">Use this read-only list only to select editor/approver routing. Add, remove, disable, and profile changes happen in Microsoft Entra.</p>
         </section>
         <section class="card">

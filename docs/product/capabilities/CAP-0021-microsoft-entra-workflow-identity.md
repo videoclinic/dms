@@ -62,8 +62,11 @@ When implemented, the following must hold:
    requests carry no draft/released document bytes, root paths, approval comments,
    or document-control data.
 10. The identity source routes workflow responsibility and verifies an approval
-   actor only. It does not grant or revoke filesystem, SharePoint, or OneDrive
-   access. Those access-control systems remain independently administered.
+    actor only. It does not grant or revoke filesystem, SharePoint, or OneDrive
+    access. Those access-control systems remain independently administered.
+11. The read-only eligible-people table follows CAP-0005's growing-table
+    interaction; its text filter case-insensitively matches person display name,
+    email address, object ID, and account state before pagination.
 
 ## Non-goals
 

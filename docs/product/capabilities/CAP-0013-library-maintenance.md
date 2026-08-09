@@ -53,6 +53,10 @@ When implemented, the following must hold:
    rescan.
 10. **Document-type catalogue maintenance.** Same add/rename/disable rules as
     confidentiality types (CAP-0015).
+11. The **Drafts requiring attention** rescan-result table follows CAP-0005's
+    growing-table interaction; its text filter case-insensitively matches DMS
+    title, old path, finding status, and reassociation suggestion before
+    pagination.
 
 ## Non-goals
 

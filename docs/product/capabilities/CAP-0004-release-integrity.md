@@ -22,6 +22,9 @@ When implemented, the following must hold:
 5. Workspace-level or per-document **verify all releases** is available as
    described in CAP-0016 and reports per-version outcomes without stopping at
    the first failure.
+6. The release-integrity result table follows CAP-0005's growing-table
+   interaction: its text filter case-insensitively matches version, relative
+   publish path, and verification result before pagination.
 
 ## Non-goals
 
