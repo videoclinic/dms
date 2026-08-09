@@ -1,2 +1,3 @@
 .temp
 /target/
+/crates/dms-desktop/gen/

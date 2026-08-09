@@ -1,0 +1,41 @@
+name: Desktop platform smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88
+        with:
+          components: clippy, rustfmt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: Swatinem/rust-cache@v2
+      - name: Rust format
+        run: cargo fmt --check
+      - name: Rust tests
+        run: cargo test --workspace
+      - name: Rust lint
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Shell model tests
+        run: node --test crates/dms-desktop/ui/app.test.mjs
+      - name: Launch desktop app
+        run: cargo run -p dms-desktop
+        env:
+          DMS_DESKTOP_SMOKE: "1"

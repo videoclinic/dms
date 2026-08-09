@@ -2,8 +2,8 @@
 
 ## Purpose
 
-Own the Rust implementation shared by the headless `dms` CLI and the future
-Tauri desktop adapter.
+Own the Rust implementation shared by the headless `dms` CLI and the Tauri
+desktop adapter.
 
 ## Ownership
 
@@ -11,6 +11,7 @@ Tauri desktop adapter.
 | --- | --- |
 | `dms-core/` | Tauri-independent workspace domain and `.dms` persistence |
 | `dms-cli/` | Headless `dms` command parsing and presentation |
+| `dms-desktop/` | Tauri startup, WebView shell, OS preferences, and core IPC adapter |
 
 ## Local Contracts
 
@@ -25,8 +26,8 @@ Tauri desktop adapter.
 
 ## Work Guidance
 
-- Keep UI/OS adapters outside `dms-core`; a later Tauri crate calls its public
-  API just as `dms-cli` does.
+- Keep UI/OS adapters outside `dms-core`; `dms-desktop` calls its public API just
+  as `dms-cli` does.
 - Return actionable errors without printing document content or credentials.
 - Add focused unit or integration coverage with every material behaviour change.
 
@@ -42,5 +43,6 @@ Tauri desktop adapter.
 | --- | --- | --- |
 | `dms-core/AGENTS.md` | Domain records and workspace persistence | Shared core Rust code or tests |
 | `dms-cli/AGENTS.md` | Command interface and CLI integration tests | CLI Rust code or tests |
+| `dms-desktop/AGENTS.md` | Tauri adapter, local WebView shell, and OS user preferences | Desktop Rust, frontend assets, permissions, or tests |
 
 Parent: `../AGENTS.md`.

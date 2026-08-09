@@ -1,11 +1,11 @@
 [workspace]
-members = ["crates/dms-core", "crates/dms-cli"]
+members = ["crates/dms-core", "crates/dms-cli", "crates/dms-desktop"]
 resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.76"
+rust-version = "1.88"
 license = "MIT"
 
 [workspace.dependencies]
@@ -16,3 +16,5 @@ serde_json = "1.0"
 thiserror = "2.0"
 uuid = { version = "1.11", features = ["serde", "v4"] }
 tempfile = "3.14"
+tauri = "2.11.5"
+tauri-build = "2.6.3"

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>DMS Desktop</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.mjs"></script>
+</head>
+<body>
+  <div id="app" class="app">
+    <aside id="sidebar" class="sidebar" aria-label="Application navigation">
+      <div class="brand-row">
+        <span class="brand-mark" aria-hidden="true">DMS</span>
+        <strong class="expanded-only">DMS Desktop</strong>
+        <button id="collapse-sidebar" class="icon-button expanded-only" type="button" aria-label="Collapse left menu" title="Collapse left menu">«</button>
+      </div>
+      <nav id="primary-navigation" class="primary-navigation" aria-label="Primary destinations"></nav>
+      <div id="expanded-groups" class="expanded-only"></div>
+      <div id="collapsed-groups" class="collapsed-only"></div>
+      <div id="sidebar-flyout" class="sidebar-flyout collapsed-only" hidden></div>
+      <div id="workspace-foot" class="workspace-foot expanded-only"></div>
+    </aside>
+
+    <section class="workspace-shell">
+      <header class="main-header">
+        <button id="open-sidebar" class="icon-button collapsed-only" type="button" aria-label="Open left menu" title="Open left menu">☰</button>
+        <h1 id="activity-heading">Set up workspace</h1>
+        <span class="header-spacer"></span>
+        <button id="bookmark-view" class="button secondary" type="button" hidden>☆ Bookmark this view</button>
+      </header>
+      <main id="main-content" class="main-content"></main>
+    </section>
+  </div>
+</body>
+</html>
