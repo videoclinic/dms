@@ -400,21 +400,31 @@ const CAPS = [
     file: "CAP-0007-draft-pdf-export",
     title: "Source draft → PDF export",
     nav: "releases",
-    subtitle: "Office exports through host Office; Markdown renders locally through native WebView PDF APIs. Classified filename → temp PDF → validate → SHA-256 → atomic rename.",
+    subtitle: "Office via host Office (temp token fill); Markdown via CommonMark print shell + WebView PDF. Shared export chrome from .dms. Classified filename → temp PDF → validate → SHA-256 → atomic rename.",
     body: `
       <section class="card">
         <h3 class="card-title">Export pipeline</h3>
         <div class="pipeline">
-          ${["Identify source format", "Office or local Markdown render", "Export to temp PDF", "Validate header", "SHA-256 digest", "Atomic rename"]
+          ${["Identify source format", "Build export chrome from .dms", "Office temp token fill or MD print shell", "Export to temp PDF", "Validate header", "SHA-256 digest", "Atomic rename"]
             .map((s) => `<div class="step active"><span class="dot"></span>${s}</div>`)
             .join("")}
         </div>
       </section>
       <section class="card">
+        <h3 class="card-title">Markdown print shell (Option A)</h3>
+        ${kv([
+          ["Body", "CommonMark HTML; YAML front matter stripped"],
+          ["Chrome source", "Release context only (not front matter / Office props)"],
+          ["Footer captions", "Vertraulichkeitsstufe: <label> · Version: <major>.<minor>"],
+          ["Assets", "Shipped shell.html + print.css + logo (Vorlage-derived)"],
+        ])}
+        <p class="muted">CAP-0002 marker checks still read the Markdown body on disk. Print-shell footers repeat chrome on the PDF and do not replace that gate.</p>
+      </section>
+      <section class="card">
         <h3 class="card-title">Fail-closed conditions</h3>
         <ul class="list danger-list">
           <li>Office missing or unlicensed for an Office draft → abort, no partial version</li>
-          <li>Markdown render failure → abort, no partial version</li>
+          <li>Markdown render or print-shell failure → abort, no partial version</li>
           <li>Unsupported draft extension → abort with clear message</li>
           <li>Temp empty or missing %PDF header → remove temp, no release record</li>
           <li>Target path occupied by non-app file → fail (ADR-0007)</li>
@@ -425,6 +435,7 @@ const CAPS = [
         ${kv([
           ["Final filename", "Handbook_V2.0_restricted.pdf"],
           ["Classification snapshot", "Restricted (type ID: restricted)"],
+          ["Export chrome version", "2.0"],
         ])}
         <p class="muted">A successful release record only exists when: export produced a valid, non-empty PDF, its SHA-256 was computed, and the atomic rename to the versioned path succeeded. Failure at any step removes the temp file when possible and never commits a release record.</p>
       </section>`,

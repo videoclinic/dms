@@ -116,11 +116,15 @@ When implemented, the following must hold:
     value. Caption matching normalizes surrounding whitespace and casing;
     version and confidentiality values must match exactly after whitespace
     normalization. The DOCX scanner covers body text, tables, text boxes, and
-    every header/footer part, including section-specific footers. The Markdown
-    scanner checks rendered body text outside front matter, HTML comments, and
-    fenced or indented code blocks. Other draft formats may not enter review or
-    release until equivalent visible-content coverage is implemented and tested
-    alongside CAP-0007.
+    every header/footer part, including section-specific footers (including
+    unresolved `{VERSION}` / `{CONFIDENTIALITY}` tokens, which do not satisfy
+    the gate until export would replace them — the gate reads the draft on
+    disk, not the temp export copy). The Markdown scanner checks rendered body
+    text outside front matter, HTML comments, and fenced or indented code
+    blocks. The CAP-0007 Markdown print-shell footer is export chrome only and
+    does not satisfy this source-draft check by itself. Other draft formats may
+    not enter review or release until equivalent visible-content coverage is
+    implemented and tested alongside CAP-0007.
     A failed check blocks the transition by default and reports the expected and
     detected marker values and locations without retaining other draft content.
     The operator may explicitly proceed after accepting a false-positive

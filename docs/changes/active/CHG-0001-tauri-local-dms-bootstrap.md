@@ -60,8 +60,9 @@ macOS** that:
 - Optionally hands a previewed local text comparison to installed Claude
   Desktop for advisory major/minor classification and changelog wording
 - On release: app snapshots effective confidentiality type, assigns version,
-  mirrors tree under publish root, exports Office drafts via preinstalled Office
-  or Markdown drafts through native WebView PDF APIs to
+  mirrors tree under publish root, builds export chrome from `.dms`, exports
+  Office drafts via preinstalled Office (temp-copy token fill) or Markdown
+  drafts through a CommonMark HTML print shell plus native WebView PDF APIs to
   `<stem>_VMAJOR.MINOR_<confidentiality-type-id>.pdf`, checksums it
 - Keeps editable source drafts in place after release
 - Attaches notes; verifies released PDF checksums
@@ -86,7 +87,7 @@ macOS** that:
 | 2 | `.dms` store + dual-root open/configure + confidentiality and workflow-role policies | pending | Tests: persist/reload edit+publish roots, stable workspace ID, and schema version; safe older-schema migration/newer-schema read-only; create/replace a direct folder policy, remove a non-root policy, refuse root-policy removal, and recompute nearest inherited class; inherit each workflow role independently; init `.dms` only on confirm |
 | 3 | Folder-first Library explorer + add/unregister/reassociate + selection pane | pending | Tests: folder pane is visible by default and includes empty edit-root folders while hiding `.dms`; Back/Forward/Up, breadcrumb, tree, and immediate-child contents stay synchronized; every file row keeps its exact filesystem name while an in-library row shows DMS-managed document data separately; one or more unregistered supported source files (including `.md`) can be selected and added from the right pane, while mixed/unsupported selections expose no incompatible batch action; folder navigation reuses one Library activity and updates its folder label; add under edit root; reject outside path; unregister preserves history; rename/reassociate updates only the source locator and does not change document control data or history; ambiguous move is never auto-linked; current-folder and Entire-library search scopes return matching files with paths and clear back to the complete folder listing; single controlled-document selection shows an always-visible Source file identity plus CAP-0015 Document control data and actions in the right pane; the data is loaded from `.dms`, not Office properties or Markdown front matter; its data, action, revision, and release sections fold independently while retaining document and source-file identity; navigating to an already-open task+document focuses the existing pane, while different tasks for that document may remain open; multi-select of controlled documents shows only multi-applicable actions in the same pane; a saved library view restores folder/sort and a single-document stable ID but never batch selection; copy permalink uses workspace+document IDs only and never changes saved views |
 | 4 | Lifecycle + approval notification + version assign + tree mirror | pending | Tests: request requires summary, requester, change class, effective approver, and transport success; CAP-0020 deep link resolves only an accessible registered workspace to the intended review request and still resolves after rename/version bump; each decision notifies the snapshotted requester, with failure retryable and non-reverting; approver-policy change invalidates an open review; cosmetic→minor, substantive/uncertain→major; DOCX body/header/footer and Markdown rendered-body version and confidentiality markers must equal the candidate release and effective type before review and again before release; missing, mismatched, and conflicting markers block by default; an explicit, reasoned false-positive override is revision-bound, visible to the approver, and recorded in the event chain; comments/event hash persist; metadata change invalidates approval; first version V1.0; refuse overwrite |
-| 5 | Format-specific local PDF export on release (Win + macOS adapters) | pending | Tests/integration: export Office drafts through installed Office (or a test double) and Markdown through the native WebView PDF API to the versioned, classified path on each OS; snapshot the effective type ID into the filename; failure rolls back version success |
+| 5 | Format-specific local PDF export on release (Win + macOS adapters) | pending | Tests/integration: export Office drafts through installed Office (or a test double), replacing `{CONFIDENTIALITY}`/`{VERSION}` on a temp copy from the release chrome map; export Markdown through CommonMark + shipped print shell (logo, `Vertraulichkeitsstufe:` / `Version:` footers from the same map, front matter stripped) + native WebView PDF API to the versioned, classified path on each OS; PDF chrome values match the release snapshot; failure rolls back version success; WebView2 and WKWebView smoke cover multi-page footer chrome |
 | 6 | Notes on documents | pending | Tests: note CRUD persistence across restart |
 | 7 | Release checksum + periodic review + verify | pending | Tests: exported PDF → expected SHA-256; tamper → mismatch; release snapshots draft digest/class/chain; periodic confirm keeps version; changes-required begins revision; full backup manifest covers both roots |
 | 8 | Optional Claude Desktop handoff | pending | Tests: disabled/missing app never blocks; policy and consent gate payload; accepted suggestion remains editable and cannot mutate lifecycle |
@@ -118,8 +119,12 @@ macOS** that:
 - Path mapping: `publish_abs = publish_root / relative_parent / versioned_name`
   (ADR-0006).
 - PDF export: one format dispatcher with Office adapters (Windows COM / macOS
-  automation) and Markdown's native WebView PDF adapters (ADR-0008); CI uses
-  fakes when platform export is unavailable.
+  automation) and Markdown print-shell + native WebView PDF adapters (ADR-0008
+  Option A). Shared export chrome comes only from `.dms` release context.
+  Ship default `shell.html` / `print.css` / logo derived from the corporate
+  Vorlage; do not route Markdown through Word. CI uses fakes when platform
+  export is unavailable; phase 5 must still spike fixed header/footer + page
+  indicators on WebView2 and WKWebView.
 
 ## Resume checklist
 

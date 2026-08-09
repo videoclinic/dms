@@ -102,21 +102,34 @@ Capability-local rules stay in their CAP files.
 ## ADR-0008 — Format-specific local PDF export
 
 - **Decision:** The application dispatches PDF export by source format. Office
-  drafts use preinstalled Microsoft Office desktop apps on Windows and macOS;
-  Markdown (`.md`) drafts are rendered locally as CommonMark HTML and printed by
-  the native WebView PDF API. Both paths use one export interface and the same
-  versioned target, validation, checksum, and atomic-commit flow. Release does
-  not rely on the operator manually exporting and selecting a PDF.
+  drafts use preinstalled Microsoft Office desktop apps on Windows and macOS.
+  Markdown (`.md`) drafts are rendered locally as CommonMark HTML inside a
+  shipped **print shell** (HTML/CSS/logo chrome derived from the corporate
+  Vorlage layout) and printed by the native WebView PDF API. Markdown release
+  does **not** convert through Word or a runtime `.docx` template. Both paths
+  share one export interface, one release-context **export chrome** map
+  (version label, confidentiality display label and type ID, optional title /
+  document number) sourced only from `.dms`, and the same versioned target,
+  validation, checksum, and atomic-commit flow. Release does not rely on the
+  operator manually exporting and selecting a PDF. Office drafts may still
+  contain `{CONFIDENTIALITY}` / `{VERSION}` tokens that export replaces on a
+  temporary copy before invoking Office.
 - **Why:** This preserves the established Office release path while letting
   Markdown release without requiring Office, a bundled browser, or a cloud
-  conversion service.
+  conversion service, and still produces corporate header/footer chrome aligned
+  with the Vorlage without making Office properties or Markdown front matter
+  authoritative (CAP-0015).
 - **Consequences:** Licensed desktop Office is a runtime dependency only for
   Office drafts. Office automation may use platform-native mechanisms (for
-  example COM on Windows and AppleScript/Office automation on macOS); Markdown
-  export requires supported native WebView PDF APIs on each OS. CI may use test
-  doubles, but platform integration must prove both adapters. No successful
-  version record exists unless the selected exporter produces the valid PDF that
-  the app validates, checksums, and atomically commits.
+  example COM on Windows and AppleScript/Office automation on macOS). Markdown
+  export requires supported native WebView PDF APIs on each OS and a proven
+  print-shell layout (fixed header/footer and page indicators under WebView2
+  and WKWebView). CAP-0002 visible-content markers remain a source-draft check;
+  the Markdown print shell may repeat the canonical captions but does not
+  replace that gate. CI may use test doubles, but platform integration must
+  prove both adapters. No successful version record exists unless the selected
+  exporter produces the valid PDF that the app validates, checksums, and
+  atomically commits.
 
 ## ADR-0009 — SMTP notification opens local-app approval
 
