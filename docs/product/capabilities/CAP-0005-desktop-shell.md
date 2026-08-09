@@ -39,7 +39,18 @@ When implemented, the following must hold:
    pins expanded.
 9. While collapsed, primary destinations remain reachable as icon-only rail
    entries and/or via the hamburger menu; labels are not required on the rail.
-10. **Open activities** are automatic, browser-like **panes/tabs** below the
+10. While collapsed, the rail also exposes distinct, icon-only **Saved views**
+    and **Open panes** controls. Activating either opens an adjacent temporary
+    flyout for that group without expanding the whole left menu:
+    - the Saved views flyout lists each view's full canonical label, opens its
+      target under the existing reuse rules, and offers its remove action;
+    - the Open panes flyout lists each pane's full canonical label, focuses that
+      pane, and offers its close action.
+    The flyout dismisses without changing the persisted sidebar preference.
+    Rail icons have accessible names and hover labels; a constrained flyout may
+    elide a label only when its full canonical label remains available as the
+    item's accessible name.
+11. **Open activities** are automatic, browser-like **panes/tabs** below the
     primary destinations. A pane label states its **task** and current target:
     - a document-scoped pane is `Task · <DMS-managed title> · <document
       number>` (for example, `Audit · HR Data Privacy Policy · DOC-014`); the
@@ -71,7 +82,7 @@ When implemented, the following must hold:
     Closing the last document-scoped tab does not exit the app. Open activities
     end with the application session and are not restored automatically after a
     relaunch.
-11. An operator can explicitly save the current surface as a **saved view**.
+12. An operator can explicitly save the current surface as a **saved view**.
     The main header always exposes `☆ Bookmark this view`; after saving it,
     that control shows `★ Bookmarked` and exposes an explicit remove-bookmark
     action. Saved views appear in their own **Saved views** group above Open
@@ -84,7 +95,7 @@ When implemented, the following must hold:
     An inaccessible workspace or missing document is shown as unavailable and
     remains removable. Saved views are per-user app preferences in the OS
     app-config store, not `.dms` workflow or process evidence.
-12. The left menu foot shows the current workspace identity (display name or
+13. The left menu foot shows the current workspace identity (display name or
     workspace ID) and root path summary when expanded; the foot is hidden
     when the menu is collapsed to keep the rail narrow.
 

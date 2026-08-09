@@ -168,13 +168,14 @@ const CAPS = [
     nav: "library",
     activity: "shell",
     bookmarked: true,
-    subtitle: "Tauri 2 shell on Windows and macOS. Foldable left menu, session-only open activities, and explicit per-user saved views.",
+    subtitle: "Tauri 2 shell on Windows and macOS. Foldable left menu, icon-rail flyouts for saved views and open panes, session-only activities, and explicit per-user saved views.",
     body: `
       <section class="card">
         <h3 class="card-title">Chrome contract</h3>
         <div class="stack">
           ${layer("Foldable left menu", "Primary destinations, Saved views, and Open panes. Expanded/collapsed preference persists per OS user (not in .dms).")}
           ${layer("Hamburger when folded", "Header control re-opens the menu as temporary expand/overlay; pin expanded to keep it open.")}
+          ${layer("Collapsed group flyouts", "Star and pane icons in the collapsed rail open only their Saved views or Open panes flyout; they do not expand the full left menu. Each flyout retains full labels plus open/remove or focus/close actions.")}
           ${layer("Open activity panes/tabs", "Automatic, session-only quicklinks. Labels state task + target: Audit · HR Data Privacy Policy · DOC-014 for a document or Library · policies/HR for a folder. Opening the same task + document focuses its existing pane; × closes that activity only.")}
           ${layer("Saved views", "Use ☆ Bookmark this view in the header. ★ Bookmarked is an explicit, per-user shortcut restored after relaunch; it is not a .dms workflow record.")}
           ${layer("Permalink handler", "OS-registered dms:// URI resolves workspace + document IDs (CAP-0020); opens/focuses matching activity tab.")}
@@ -219,10 +220,19 @@ const CAPS = [
               <div title="Audit">📋</div>
               <div title="Maintenance">🧰</div>
               <div title="Config">⚙️</div>
+              <div style="width:1.5rem;height:1px;background:var(--border);margin:0.1rem 0"></div>
+              <div class="on" title="Saved views (2)">★</div>
+              <div title="Open panes (3)">▤</div>
             </div>
             <div class="mini-main">
               <div class="mini-header"><span class="ham">☰</span> Audit · HR Data Privacy Policy · DOC-014</div>
-              <p class="muted" style="padding:0.75rem;margin:0;font-size:0.8rem">Hamburger expands the left menu. Icon rail still switches primary destinations. Saved views and Open panes appear when expanded; Bookmark this view stays in the header.</p>
+              <div style="align-self:flex-start;width:12.5rem;margin:0.75rem;text-align:left;border:1px solid var(--border);border-radius:0.35rem;background:var(--background);box-shadow:0 0.25rem 0.75rem color-mix(in oklch,var(--foreground) 10%,transparent);font-size:0.7rem">
+                <div style="display:flex;justify-content:space-between;padding:0.45rem 0.55rem;border-bottom:1px solid var(--border);font-weight:700;color:var(--foreground)"><span>Saved views</span><span class="muted" style="font-size:0.65rem">2</span></div>
+                <div style="padding:0.42rem 0.55rem">★ Library · policies/HR <span class="muted" style="float:right">Open · −</span></div>
+                <div style="padding:0.42rem 0.55rem">★ Shell chrome <span class="muted" style="float:right">Open · −</span></div>
+                <div style="display:flex;justify-content:space-between;padding:0.45rem 0.55rem;border-top:1px solid var(--border);color:var(--muted-foreground)"><span>▤ Open panes</span><span>3 ›</span></div>
+              </div>
+              <p class="muted" style="padding:0 0.75rem;margin:0;font-size:0.75rem">★ and ▤ open only their group flyout. The hamburger still expands the full menu.</p>
             </div>
           </div>
         </section>
