@@ -41,8 +41,10 @@ When implemented, the following must hold:
    event hash from its canonical body and confirms the chain. The result is
    `valid`, `tampered at <event-id>`, or `missing`. Verification never
    rewrites any data.
-6. The event chain head is stored with each release record so a downstream
-   reader can confirm that the released version was the approved revision.
+6. The event chain head is stored with each release record. An
+   approval-required release additionally stores its approval-chain head so a
+   downstream reader can confirm that the released version was the approved
+   revision; a minor release records no approval decision.
 7. Comment length, encoding, and disallowed characters are documented and
    enforced at entry. Comments are stored as UTF-8 text; line breaks are
    preserved. A line length limit applies for legibility (default 500
@@ -53,6 +55,8 @@ When implemented, the following must hold:
    - `review_decision_rejected` — approver rejected; document returns to `draft`
    - `review_decision_changed_requested` — approver asked for changes; document returns to `draft`
    - `release` — successful versioned PDF write under the publish root
+   - `minor_publication_notified` — attempted or confirmed post-release notice to
+     the effective approver snapshotted for a direct minor release
    - `release_withdrawn` — release record removed from the active current set; PDF preserved
    - `review_cancelled` — author (or operator) cancelled an open review
    - `revision_begun` — released document returned to `draft` for the next cycle
@@ -67,8 +71,10 @@ When implemented, the following must hold:
    Each event uses the canonical body and required comment/reason fields
    defined by the owning CAP. The release event embeds the version label
    (`VMAJOR.MINOR`), selected target-version mode, the produced PDF digest, and
-   the approved source-draft digest; the document-control-data event embeds
-   before/after values.
+   the source-draft digest. It identifies whether approval was required and,
+   when it was, the approved source-draft digest and approval-chain head; a
+   direct minor release embeds the effective approver notification delivery
+   attempt. The document-control-data event embeds before/after values.
 9. Periodic-review events are first-class canonical events of the same shape
    and bind to the reviewed release record and PDF digest (CAP-0017). Their
    types are:

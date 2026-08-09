@@ -226,38 +226,38 @@ tr:last-child td { border-bottom: 0; }
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Newest event first. Canonical body, required changelog + target candidate, optional non-approval reason.</p>
+      <p class="subtitle">Newest event first. Major approval evidence and direct minor-release publication notices are chained together.</p>
       
       <section class="card">
         <h3 class="card-title">Chain (newest first) — HR Data Privacy Policy</h3>
         <div class="stack">
           <article class="event">
-    <div class="row gap-2"><span class="badge info">release</span><span class="muted">2025-08-02 11:29 UTC</span><span class="muted">by —</span></div>
-    <p>Release approved version: atomic export committed V1.4.</p>
+    <div class="row gap-2"><span class="badge info">minor_publication_notified</span><span class="muted">2025-08-02 11:30 UTC</span><span class="muted">by —</span></div>
+    <p>Minor V1.4 publication notice delivered to Anna Berg after committed export.</p>
     <p class="hint mono">hash 5b3a…ffe5 ← pred 5b3a…ffe4</p>
   </article>
           <article class="event">
-    <div class="row gap-2"><span class="badge info">review_decision_approved</span><span class="muted">2025-08-02 11:26 UTC</span><span class="muted">by Anna Berg</span></div>
-    <p>Approved target V1.4. Decision comment optional and omitted.</p>
+    <div class="row gap-2"><span class="badge info">release</span><span class="muted">2025-08-02 11:29 UTC</span><span class="muted">by Lukas Roth</span></div>
+    <p>Direct minor release: atomic export committed V1.4; approval not required.</p>
     <p class="hint mono">hash 5b3a…ffe4 ← pred 5b3a…ffe3</p>
   </article>
           <article class="event">
-    <div class="row gap-2"><span class="badge info">review_requested</span><span class="muted">2025-08-02 11:02 UTC</span><span class="muted">by Lukas Roth</span></div>
-    <p>New nomination: V1.4 selected again after rejection; updated changelog records the §3.2 clarification.</p>
+    <div class="row gap-2"><span class="badge info">review_decision_approved</span><span class="muted">2025-08-01 09:42 UTC</span><span class="muted">by Anna Berg</span></div>
+    <p>Approved major target V2.0. Decision comment optional and omitted.</p>
     <p class="hint mono">hash 5b3a…ffe3 ← pred 5b3a…ffe2</p>
   </article>
           <article class="event">
-    <div class="row gap-2"><span class="badge info">review_decision_rejected</span><span class="muted">2025-08-01 09:42 UTC</span><span class="muted">by Anna Berg</span></div>
-    <p>Why was approval not granted? Optional comment: clarify the retention exception in §3.2.</p>
+    <div class="row gap-2"><span class="badge info">review_requested</span><span class="muted">2025-08-01 09:14 UTC</span><span class="muted">by Lukas Roth</span></div>
+    <p>Changelog: restructured control scope. Target: V2.0 (major version change).</p>
     <p class="hint mono">hash 5b3a…ffe2 ← pred 5b3a…ffe1</p>
   </article>
           <article class="event">
-    <div class="row gap-2"><span class="badge info">review_requested</span><span class="muted">2025-08-01 09:14 UTC</span><span class="muted">by Lukas Roth</span></div>
-    <p>Changelog: replaced retention table with 24-month rule. Target: V1.4 (minor version change).</p>
+    <div class="row gap-2"><span class="badge info">review_decision_rejected</span><span class="muted">2025-07-29 09:42 UTC</span><span class="muted">by Anna Berg</span></div>
+    <p>Why was approval not granted? Optional comment: clarify the retention exception in §3.2.</p>
     <p class="hint mono">hash 5b3a…ffe1 ← pred —</p>
   </article>
         </div>
-        <div class="callout warn">Rejected and changes-requested decisions prompt for a reason but allow no comment. All review requests remain chain evidence even without a release.</div>
+        <div class="callout warn">Rejected and changes-requested major decisions prompt for a reason but allow no comment. Major review requests and direct minor publications remain chain evidence.</div>
         <div class="callout ok"><span class="badge ok">chain valid</span> Verify workflow recomputed each event hash from its canonical body.</div>
       </section>
     </main>

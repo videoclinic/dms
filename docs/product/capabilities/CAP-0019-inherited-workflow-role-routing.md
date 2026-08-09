@@ -29,11 +29,13 @@ When implemented, the following must hold:
    effective editor and approver, their Entra display name/email, and whether
    each is inherited or explicitly overridden. It also exposes an unresolved
    identity rather than displaying a stale person as active.
-5. A review request uses the document's effective approver only after the app
-   refreshes and resolves that person in the bound Entra group. The approval
-   email and its local-app deep link address that person and the specific review
-   request (CAP-0010). The responsible editor is workflow-routing and audit
-   metadata; it is not an alternate approver.
+5. An approval-required review request uses the document's effective approver
+   only after the app refreshes and resolves that person in the bound Entra
+   group. The approval email and its local-app deep link address that person and
+   the specific review request (CAP-0010). A direct minor release performs the
+   same refresh and resolution before it snapshots the effective approver as the
+   publication-notification recipient. The responsible editor is workflow-routing
+   and audit metadata; it is not an alternate approver.
 6. Changing a policy changes only inheriting descendants. A change to the
    effective approver while a review is open invalidates that review and requires
    a new request; explicit overrides and nearer folder assignments remain

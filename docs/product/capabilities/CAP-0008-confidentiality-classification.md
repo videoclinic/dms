@@ -42,10 +42,10 @@ When implemented, the following must hold:
 8. A review request and a released version snapshot the effective type ID and
    display label in their immutable workflow/release evidence. Later policy
    changes or label renames do not rewrite historical records or PDF filenames.
-9. If a document's effective confidentiality type changes while content review
-   is open or after approval but before release, the request/approval is
-   invalidated and a new review is required. Historical snapshots remain
-   unchanged.
+9. If a document's effective confidentiality type changes while an
+   approval-required content review is open or after approval but before release,
+   the request/approval is invalidated and a new review is required. Historical
+   snapshots remain unchanged.
 
 ## Non-goals
 

@@ -62,8 +62,8 @@ const CAPS = [
     file: "CAP-0002-document-lifecycle",
     title: "Document lifecycle",
     nav: "library",
-    subtitle: "Draft → in_review → approved → released. Required changelog + target version; candidates are not reserved.",
-    actions: ["Begin revision", "Preview review request", "Submit V1.4 for review"],
+    subtitle: "Major changes require approval. Minor changes release directly and notify the assigned approver after publication.",
+    actions: ["Begin revision", "Release V1.4 minor version", "Preview V2.0 review request"],
     body: `
       <section class="card">
         <div class="row between">
@@ -91,29 +91,29 @@ const CAPS = [
       </section>
       <div class="grid-2">
         <section class="card">
-          <h3 class="card-title">Submit for review (required fields)</h3>
+          <h3 class="card-title">Release candidate (required fields)</h3>
           ${kv([
             ["Changelog *", "Updated retention table to 24 months."],
             ["Target version *", "Minor V1.4 <span class=\"muted\">(selected)</span> · Major V2.0 · Manual V&lt;major&gt;.&lt;minor&gt;"],
             ["Manual validation", "<span class=\"muted\">Greater unused target required when manual is selected</span>"],
-            ["Candidate", "V1.4 <span class=\"muted\">(review evidence only; no reservation)</span>"],
-            ["Draft SHA-256", "<span class=\"muted\">(computed from current draft bytes on submit)</span>"],
-            ["Requester", "Lukas Roth <lukas@vc.de> <span class=\"muted\">(snapshotted on submit)</span>"],
-            ["Approver (derived)", "Anna Berg <anna@vc.de> · Entra group verified"],
-            ["Decision authority", "Anna signs in with Microsoft Entra before deciding"],
+            ["Candidate", "V1.4 <span class=\"muted\">(minor release; no approval required)</span>"],
+            ["Draft SHA-256", "<span class=\"muted\">(computed from current draft bytes before release)</span>"],
+            ["Released by", "Lukas Roth <lukas@vc.de> <span class=\"muted\">(snapshotted on release)</span>"],
+            ["Approver notification", "Anna Berg <anna@vc.de> · effective approver snapshot"],
+            ["Approval rule", "V1.0 and targets that increase the major component require Entra-verified approval"],
           ])}
-          <div class="row gap-2" style="margin-top:0.75rem;flex-wrap:wrap"><button class="btn outline">Preview review request</button><button class="btn">Submit V1.4 for review</button></div>
-          <p class="hint">Preview is non-mutating. Submit snapshots the changelog, mode, and candidate; failures leave the document in <code>draft</code>.</p>
+          <div class="row gap-2" style="margin-top:0.75rem;flex-wrap:wrap"><button class="btn outline">Preview V2.0 review request</button><button class="btn">Release V1.4 minor version</button></div>
+          <p class="hint">Minor release snapshots the changelog, mode, candidate, and effective approver. It stays in <code>draft</code> until successful atomic export.</p>
         </section>
         <section class="card">
-          <h3 class="card-title">Review evidence and release rule</h3>
+          <h3 class="card-title">Major approval and minor publication rule</h3>
           <ul class="timeline">
-            <li><strong>review_requested</strong> — changelog + V1.4/minor snapshot</li>
-            <li><strong>rejected / changes requested</strong> — candidate stays unoccupied; optional reason retained</li>
-            <li><strong>approved</strong> — accepted V1.4 target is ready for release</li>
-            <li><strong>Release approved version</strong> — only successful atomic export commits V1.4</li>
+            <li><strong>V1.4 minor</strong> — direct release; no review request or decision</li>
+            <li><strong>minor publication notice</strong> — notify Anna after V1.4 atomic export commits</li>
+            <li><strong>V2.0 major</strong> — review request, Entra-verified decision, then release</li>
+            <li><strong>rejected / changes requested</strong> — major candidate stays unoccupied; optional reason retained</li>
           </ul>
-          <div class="callout warn">A rejected, cancelled, invalidated, or failed-export review does not consume V1.4. The next nomination repeats this form and may select V1.4 again.</div>
+          <div class="callout warn">A rejected, cancelled, invalidated, or failed-export major review does not consume its candidate. A failed minor export does not consume V1.4 either.</div>
           <p class="hint">Chain head 5b3a…ffe2 — verify recomputes from canonical body (CAP-0011).</p>
         </section>
       </div>`,
@@ -524,7 +524,7 @@ const CAPS = [
     file: "CAP-0010-notification-transport",
     title: "Notification transport",
     nav: "config",
-    subtitle: "SMTP relay (OS credential store) or mailto: with operator-confirmed send.",
+    subtitle: "Major review requests and post-release minor-publication notices use SMTP or mailto:.",
     body: `
       <div class="grid-2">
         <section class="card">
@@ -535,19 +535,19 @@ const CAPS = [
             ["Username", "dms@videoclinic.de"],
             ["Password", "•••••••• (OS credential store)"],
             ["From", "dms@videoclinic.de"],
-            ["Recipient (snapshot)", "anna@videoclinic.de"],
+            ["Minor-publication recipient", "anna@videoclinic.de (effective approver snapshot)"],
           ])}
-          <p class="hint">Review task permalink: <code>dms://open?workspace=ws-9c3b7d1a&amp;document=doc-77a12bce&amp;target=review&amp;review=r-21</code> — IDs only; survives rename and version bump.</p>
+          <p class="hint">Major review requests use a review-target permalink containing only workspace, document, and review IDs; it survives rename and version bump.</p>
         </section>
         <section class="card">
-          <div class="row gap-2 mb"><h3 class="card-title">mailto: fallback</h3>${badge("available", "warn")}</div>
+          <div class="row gap-2 mb"><h3 class="card-title">Minor-publication notice</h3>${badge("released V1.4", "ok")}</div>
           ${kv([
-            ["Default handler", "Microsoft Outlook (Windows)"],
+            ["Transport", "mailto: via Microsoft Outlook (Windows)"],
             ["Recipient", "anna@videoclinic.de"],
-            ["Subject", "[Internal] DMS review requested — HR Data Privacy Policy — V1.4"],
-            ["Body", "A review decision is requested.<br/><br/>Action: Review and decide<br/>Title: HR Data Privacy Policy<br/>Document: policies/HR/Privacy-Policy.docx<br/>Requested by: Lara Becker<br/>Target version: V1.4<br/>Confidentiality: Internal<br/><br/>Open review task:<br/><code>dms://open?workspace=ws-9c3b7d1a&amp;document=doc-77a12bce&amp;target=review&amp;review=r-21</code>"],
+            ["Subject", "[Internal] DMS minor version released — HR Data Privacy Policy — V1.4"],
+            ["Body", "A new minor version of your assigned document has been released.<br/><br/>Title: HR Data Privacy Policy<br/>Document: policies/HR/Privacy-Policy.docx<br/>Released by: Lara Becker<br/>Released version: V1.4<br/>Confidentiality: Internal<br/><br/>Open document:<br/><code>dms://open?workspace=ws-9c3b7d1a&amp;document=doc-77a12bce</code>"],
           ])}
-          <p class="hint">State does not advance to <code>in_review</code> until operator confirms send. Delivery failure never reverses a decision.</p>
+          <p class="hint">V1.0 and major candidates send a review request before entering <code>in_review</code>. Minor notices are sent only after committed release; delivery failure never reverses it.</p>
         </section>
       </div>`,
   },
@@ -557,19 +557,19 @@ const CAPS = [
     title: "Workflow chain & evidence",
     nav: "audit",
     activity: "audit-doc-77a12bce",
-    subtitle: "Newest event first. Canonical body, required changelog + target candidate, optional non-approval reason.",
+    subtitle: "Newest event first. Major approval evidence and direct minor-release publication notices are chained together.",
     actions: ["Verify workflow", "Export chain"],
     body: `
       <section class="card">
         <h3 class="card-title">Chain (newest first) — HR Data Privacy Policy</h3>
         <div class="stack">
-          ${event("release", "2025-08-02 11:29 UTC", "—", "Release approved version: atomic export committed V1.4.", "5b3a…ffe5", "5b3a…ffe4")}
-          ${event("review_decision_approved", "2025-08-02 11:26 UTC", "Anna Berg", "Approved target V1.4. Decision comment optional and omitted.", "5b3a…ffe4", "5b3a…ffe3")}
-          ${event("review_requested", "2025-08-02 11:02 UTC", "Lukas Roth", "New nomination: V1.4 selected again after rejection; updated changelog records the §3.2 clarification.", "5b3a…ffe3", "5b3a…ffe2")}
-          ${event("review_decision_rejected", "2025-08-01 09:42 UTC", "Anna Berg", "Why was approval not granted? Optional comment: clarify the retention exception in §3.2.", "5b3a…ffe2", "5b3a…ffe1")}
-          ${event("review_requested", "2025-08-01 09:14 UTC", "Lukas Roth", "Changelog: replaced retention table with 24-month rule. Target: V1.4 (minor version change).", "5b3a…ffe1", "—")}
+          ${event("minor_publication_notified", "2025-08-02 11:30 UTC", "—", "Minor V1.4 publication notice delivered to Anna Berg after committed export.", "5b3a…ffe5", "5b3a…ffe4")}
+          ${event("release", "2025-08-02 11:29 UTC", "Lukas Roth", "Direct minor release: atomic export committed V1.4; approval not required.", "5b3a…ffe4", "5b3a…ffe3")}
+          ${event("review_decision_approved", "2025-08-01 09:42 UTC", "Anna Berg", "Approved major target V2.0. Decision comment optional and omitted.", "5b3a…ffe3", "5b3a…ffe2")}
+          ${event("review_requested", "2025-08-01 09:14 UTC", "Lukas Roth", "Changelog: restructured control scope. Target: V2.0 (major version change).", "5b3a…ffe2", "5b3a…ffe1")}
+          ${event("review_decision_rejected", "2025-07-29 09:42 UTC", "Anna Berg", "Why was approval not granted? Optional comment: clarify the retention exception in §3.2.", "5b3a…ffe1", "—")}
         </div>
-        <div class="callout warn">Rejected and changes-requested decisions prompt for a reason but allow no comment. All review requests remain chain evidence even without a release.</div>
+        <div class="callout warn">Rejected and changes-requested major decisions prompt for a reason but allow no comment. Major review requests and direct minor publications remain chain evidence.</div>
         <div class="callout ok">${badge("chain valid", "ok")} Verify workflow recomputed each event hash from its canonical body.</div>
       </section>`,
   },
@@ -578,7 +578,7 @@ const CAPS = [
     file: "CAP-0012-audit-export",
     title: "Audit export",
     nav: "audit",
-    subtitle: "Operator-triggered PDF/CSV reports include successful and unsuccessful review attempts.",
+    subtitle: "Operator-triggered PDF/CSV reports include major review attempts and direct minor publications.",
     actions: ["Generate PDF", "Generate CSV"],
     body: `
       <section class="card">
@@ -601,7 +601,7 @@ const CAPS = [
             ["Audit-2025-06.pdf", "2025-07-01 08:00 UTC", "Approver: Anna Berg", "—", badge("missing file", "warn"), "—"],
           ]
         )}
-        <p class="hint">Reports never embed draft or PDF bytes — metadata, digests, and the event chain only. Each review attempt includes its changelog, target candidate/mode, outcome, and any decision comment.</p>
+        <p class="hint">Reports never embed draft or PDF bytes — metadata, digests, and the event chain only. They include every major review attempt and each direct minor release with its approver-notification delivery attempt.</p>
       </section>`,
   },
   {

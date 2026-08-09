@@ -38,14 +38,20 @@ When implemented, the following must hold:
    content or the decision comment. Failure to send or confirm this outcome
    notification records a retryable delivery attempt and never reverses the
    recorded decision.
-6. A workspace may switch transport at any time. Switching from `mailto` to
+6. After a successful minor-version release, the app notifies the effective
+   approver snapshotted for that release that their assigned document has a new
+   minor publication. The notification is sent only after atomic export commits
+   the release; SMTP failure or unconfirmed `mailto:` send records a retryable
+   delivery attempt and never reverses the committed release. Minor releases do
+   not send a review request before release.
+7. A workspace may switch transport at any time. Switching from `mailto` to
    `smtp` requires a relay configuration; switching from `smtp` to `mailto`
    clears the relay settings but keeps Microsoft Entra workflow-role bindings.
-7. The workflow history records each review-request and decision-outcome
-   notification with its recipient, transport, delivery status, SMTP response
-   code (or `mailto`-sent confirmation), and timestamp. An operator-visible
-   report can filter by transport and delivery status.
-8. If the host has no registered mail handler and the transport is `mailto`,
+8. The workflow history records each review-request, decision-outcome, and
+   minor-publication notification with its recipient, transport, delivery status,
+   SMTP response code (or `mailto`-sent confirmation), and timestamp. An
+   operator-visible report can filter by transport and delivery status.
+9. If the host has no registered mail handler and the transport is `mailto`,
    the action surfaces a clear message naming the missing handler; the
    workflow does not silently fall back to SMTP.
 
@@ -84,6 +90,33 @@ Open review task:
   document link in the notification; the email contains no source-file URL,
   released-PDF URL, public web URL, attachment, document content, or decision
   control.
+
+## Minor-publication notification (contract)
+
+Every successful minor-version release sends this UTF-8 plain-text template to
+the effective approver snapshotted with that release. It has no review action or
+decision control:
+
+```text
+Subject: [<confidentiality-label>] DMS minor version released — <document-title> — <released-version>
+
+A new minor version of your assigned document has been released.
+
+Title: <document-title>
+Document: <edit-root-relative-source-path>
+Released by: <requester-display-name>
+Released version: <released-version>
+Confidentiality: <confidentiality-label>
+
+Open document:
+<document-permalink>
+```
+
+- `<released-version>` is the committed minor release label, not an uncommitted
+  candidate.
+- `<document-permalink>` is the CAP-0020 document URI without a review target.
+- The notification contains no document content, source/PDF URL, attachment, or
+  approval control.
 
 ## Non-goals
 

@@ -18,10 +18,12 @@ When implemented, the following must hold:
    written to an operator-chosen path inside the edit root, default
    `<edit-root>/.dms/exports/`. The report contains the workflow history
    (events, hashes, timestamps, comments), the release history (version,
-   relative path, confidentiality, checksum, approval-chain head), and the
+   relative path, confidentiality, checksum, workflow-chain head, and
+   approval-chain head when approval was required), and the
    current classification summary. Every review request is included regardless
    of its outcome, with its changelog, requested target version, target-version
-   mode, decision outcome, and any decision comment. Periodic-review
+   mode, decision outcome, and any decision comment. Direct minor releases and
+   their approver-notification delivery attempts are included. Periodic-review
    requests/results are included for each applicable release cycle.
 3. Reports do not embed source-draft content or released PDF bytes. They
    carry identifying metadata and SHA-256 digests so a separate copy of the

@@ -34,11 +34,13 @@ Planned control model:
 - Application-driven PDF release: host-installed Microsoft Office exports Office
   drafts; Markdown renders locally through a CommonMark HTML print shell and
   native WebView PDF APIs, with header/footer chrome from the release context.
-  First release is `V1.0`. For every later review request, the editor records a
-  required changelog and proposes the next minor, the next major, or a validated
-  manual target version. A candidate becomes a released version only after
-  approval and atomic PDF export; unsuccessful reviews keep their evidence but
-  do not occupy that target version.
+  First release is `V1.0`. For every later release, the editor records a required
+  changelog and proposes the next minor, the next major, or a validated manual
+  target version. `V1.0` and major-version candidates require approval; a minor
+  candidate releases directly after validation and notifies its effective
+  approver after publication. A candidate becomes a released version only after
+  required approval and atomic PDF export; unsuccessful reviews keep their
+  evidence but do not occupy that target version.
 - Released PDFs use
   `<stem>_V<major>.<minor>_<confidentiality-type-id>.pdf` and receive SHA-256
   integrity checksums.

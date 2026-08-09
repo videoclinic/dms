@@ -88,15 +88,17 @@ Capability-local rules stay in their CAP files.
   `Handbook_V1.0_restricted.pdf`, `Handbook_V1.1_restricted.pdf`,
   `Handbook_V2.0_confidential.pdf`). The filename carries the effective
   confidentiality type's stable, portable ID snapshotted at release. First
-  release is `V1.0`. For every later review request, the editor supplies a
-  required changelog and selects the next minor version, the next major version,
-  or a validated manual `V<major>.<minor>` target. A manual target must be
-  numerically greater than the current released version and not already
-  committed. The candidate is review evidence, not a reservation: it becomes a
-  committed release version only after approval and successful atomic export;
-  rejected, changes-requested, cancelled, or failed-export reviews leave it
-  available for a later review. Each release creates a new file; existing version
-  paths are never overwritten.
+  release is `V1.0`. Before every later release, the editor supplies a required
+  changelog and selects the next minor version, the next major version, or a
+  validated manual `V<major>.<minor>` target. A manual target must be numerically
+  greater than the current released version and not already committed. `V1.0`
+  and every target that increases the major component require approval; a minor
+  target releases directly after validation and notifies the effective approver
+  after publication. The candidate is review evidence, not a reservation: it
+  becomes a committed release version only after required approval and successful
+  atomic export; rejected, changes-requested, cancelled, or failed-export reviews
+  leave it available for a later review. Each release creates a new file; existing
+  version paths are never overwritten.
 - **Why:** Version and confidentiality are visible in ordinary file explorers
   and backups without opening the app; supports ISO controlled-document
   version labeling.

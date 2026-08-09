@@ -62,7 +62,10 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
   user-chosen import paths that must still resolve under the edit root for
   library membership.
 - Approval and release are operator actions; the app records process state and
-  enforces naming/path rules.
+  enforces naming/path rules. `V1.0` and every later candidate that increases
+  the major component require Entra-verified approval. A minor candidate releases
+  directly after validation and then notifies the effective approver of the new
+  publication; delivery failure never reverses the committed release.
 - An approver uses the app against the same workspace (for example, through a
   shared or mapped edit root). An approval email is a notification with a
   CAP-0020 permalink deep link (workspace ID + document ID + review target) to
