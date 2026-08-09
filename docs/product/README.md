@@ -38,6 +38,11 @@ linked tests is a coverage gap, not implemented proof.
 | [CAP-0019](capabilities/CAP-0019-inherited-workflow-role-routing.md) | Inherited editor and approver routing | not implemented |
 | [CAP-0020](capabilities/CAP-0020-document-permalinks.md) | Document permalinks (stable local-app URI) | not implemented |
 | [CAP-0021](capabilities/CAP-0021-microsoft-entra-workflow-identity.md) | Microsoft Entra workflow identity source | not implemented |
+| [CAP-0022](capabilities/CAP-0022-headless-core-cli.md) | Headless DMS core CLI | implemented |
+
+CAP-0022 is a Tauri-independent initial core surface. It does not promote the
+pending desktop, lifecycle, export, or workflow CAPs; the future Tauri shell
+uses the same `dms-core` library.
 
 ## Wireframes
 

@@ -93,7 +93,7 @@ Project-wide style and workflow preferences also live in user memory; this secti
 ## Architectural decisions
 
 - **Agent harness protected by tirith.sh.** Reading passwords or access tokens is prohibited. Extract variables from `.env` / config files without relaying their values; use environment variables by importing them for Bash execution. `***` in output is a tirith redaction marker, not a literal value — never "fix" it to a variable ref.
-- **Product shape.** Tauri 2 desktop app for Windows and macOS; operator-maintained document control; dual roots (edit + publish) with mirrored relative trees; foldable left menu (hamburger when collapsed) with session-only open-activity panes/tabs plus per-user saved views; folder-dominant, Windows Explorer-like library workspace with a persistent relative tree, Back/Forward/Up + breadcrumbs, current-folder contents, exact source-file names, and a selection pane that separates filesystem-derived Source file identity from DMS-managed document control data and document/batch actions; stable document permalinks (`workspace ID` + `document ID`); Microsoft 365 workflow routing selects eligible people from one Microsoft Entra group per workspace without an app user roster and requires interactive Entra sign-in for review decisions; Office and Markdown source drafts; editors document changes and propose a minor, major, or validated manual target version for each later review; unapproved candidates never occupy a version but remain audit evidence; app-driven PDF export commits the approved target to checksummed `*_VMAJOR.MINOR_<confidentiality-type-id>.pdf` through installed Office for Office formats and a CommonMark HTML print shell plus native WebView PDF APIs for Markdown (export chrome from `.dms`); `<edit-root>/.dms` metadata with no application database. Detail: `docs/architecture.md` and `docs/design-decisions.md`.
+- **Product shape.** A shared `dms-core` Rust library and separate headless `dms` CLI provide the initial local metadata core; the planned Tauri 2 desktop app targets Windows and macOS. The product uses operator-maintained document control; dual roots (edit + publish) with mirrored relative trees; foldable left menu (hamburger when collapsed) with session-only open-activity panes/tabs plus per-user saved views; folder-dominant, Windows Explorer-like library workspace with a persistent relative tree, Back/Forward/Up + breadcrumbs, current-folder contents, exact source-file names, and a selection pane that separates filesystem-derived Source file identity from DMS-managed document control data and document/batch actions; stable document permalinks (`workspace ID` + `document ID`); Microsoft 365 workflow routing selects eligible people from one Microsoft Entra group per workspace without an app user roster and requires interactive Entra sign-in for review decisions; Office and Markdown source drafts; editors document changes and propose a minor, major, or validated manual target version for each later review; unapproved candidates never occupy a version but remain audit evidence; app-driven PDF export commits the approved target to checksummed `*_VMAJOR.MINOR_<confidentiality-type-id>.pdf` through installed Office for Office formats and a CommonMark HTML print shell plus native WebView PDF APIs for Markdown (export chrome from `.dms`); `<edit-root>/.dms` metadata with no application database. Detail: `docs/architecture.md` and `docs/design-decisions.md`.
 - **Application records.** CAP files under `docs/product/` are behaviour contracts; CHG files under `docs/changes/` are progress authority. Code and tests prove behaviour.
 
 ## Codebase Knowledge Graph (codebase-memory-mcp)
@@ -124,6 +124,7 @@ ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
 | Child | Owns | Read when editing… |
 | --- | --- | --- |
 | `docs/AGENTS.md` | Architecture, privacy, ADRs, CAP/CHG product records | Product behaviour, progress records, or design docs |
+| `crates/AGENTS.md` | Rust workspace, shared core, and CLI contracts | Rust source, packages, or tests |
 | `skills/AGENTS.md` | Repository-local agent playbooks under `skills/` | Skill authoring, skill layout, or playbook contracts |
 
 ### Cross-cutting (root-owned until a child boundary exists)
@@ -133,7 +134,8 @@ ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
 | Root `AGENTS.md` | DOX rail, user preferences, architectural decisions, this index |
 | Root `CLAUDE.md` | Versioned Claude Code entry point; directs team agents to the DOX contract and shared safety/workflow rules |
 | Root `README.md` | Public project overview and current concept state; it summarizes but does not replace CAP, CHG, or architecture records |
-| Application source / package manifests / CI | Not present yet. When added under CHG-0001, create nearest child AGENTS.md and refresh this index |
+| Root `LICENSE` | MIT license for project source and documentation |
+| `Cargo.toml`, `Cargo.lock`, `crates/` | Rust workspace: shared `dms-core` and standalone `dms` CLI; desktop source will join this workspace later |
 
 ### Index scope
 

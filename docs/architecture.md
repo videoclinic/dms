@@ -12,7 +12,9 @@ PDFs under a **publish root**, with integrity checksums.
 
 | Layer | Responsibility |
 | --- | --- |
-| Tauri 2 shell (Rust) | Windowing, filesystem access, checksums, path mapping, format-specific PDF export orchestration, OS integration, registered local-app URI handler (document permalinks) |
+| `dms-core` Rust library | Tauri-independent workspace metadata, library registry, document control data, notes, path validation, and future lifecycle rules shared by every application surface |
+| `dms` CLI (Rust) | Headless operator and automation access to the implemented `dms-core` workspace features; no WebView, Tauri runtime, Office automation, Entra flow, or mail transport |
+| Tauri 2 shell (Rust) | Windowing, WebView IPC, format-specific PDF export orchestration, OS integration, registered local-app URI handler (document permalinks), and an adapter over `dms-core` |
 | Frontend (web UI in WebView) | Foldable left menu with hamburger when collapsed; open-activity panes/tabs as quicklinks; one Configuration workspace with persistent Workspace, Document defaults, Workflow, and Notifications routes plus contextual secondary setup; folder-dominant Library workspace with a persistent edit-root-relative tree, Windows Explorer-like Back/Forward/Up and breadcrumb navigation, current-folder child folders + exact source-file names + controlled-document data, and a selection pane that separates filesystem-derived Source file identity from CAP-0015 DMS-managed document control data and single/batch actions; add/remove control, lifecycle, change commentary, approval, release/verify, confidentiality and workflow-role policies, audit export, publish history, copy/resolve document permalinks |
 | Microsoft Office (host-installed) | PDF export engine for Office drafts invoked by the app on release (Word/Excel/PowerPoint as applicable) |
 | Native WebView PDF API | Prints Markdown CommonMark HTML through a shipped print shell (header/footer chrome from release-context export map) to PDF on release |
@@ -113,6 +115,20 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
 - Confidentiality labels as a replacement for filesystem access control
 - Auto-adding every file under the edit root without operator library action
 - Centralised anti-virus, DLP, or e-signature services
+
+## ADR-0023 — Shared Rust core with a first-class headless CLI
+
+- **Decision:** The repository is a Cargo workspace with a Tauri-independent
+  `dms-core` library and a separate `dms` executable. The future Tauri desktop
+  shell consumes the same library; the CLI is not a Tauri app, plugin, or
+  bundled sidecar.
+- **Why:** Local metadata and document-control rules must be testable and usable
+  in scripted operator workflows without creating a WebView or making the CLI
+  depend on desktop runtime capabilities.
+- **Consequences:** `dms-core` may not depend on Tauri or frontend packages.
+  The CLI performs only local, explicit workspace operations and does not
+  bypass future lifecycle, identity, export, or credential boundaries. Tauri
+  adapters own user-interface and OS-integration concerns.
 
 ## Related
 

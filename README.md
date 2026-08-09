@@ -5,18 +5,19 @@ system (DMS) for operator-maintained ISO 27001 document control.
 
 ## Current state
 
-This repository is at the **product-record and wireframe stage**. It contains no
-application source, packages, build pipeline, or runnable desktop app yet.
+This repository has a runnable headless core CLI and product records/wireframes
+for the planned desktop application. The Tauri desktop app is not implemented.
 
 | Surface | Current state |
 | --- | --- |
-| Product contract | 21 capability records (`CAP-0001` … `CAP-0021`), all `not implemented` |
-| Implementation plan | `CHG-0001` is active; product-record and architecture bootstrap is complete, app skeleton work has not started |
-| Architecture | Tauri 2 design for Windows and macOS with no application database or required Git workflow |
+| Product contract | 22 capability records; `CAP-0022` is implemented, while the desktop and later workflow CAPs remain pending |
+| Implementation plan | `CHG-0001` phase 1 is active: shared core + CLI slice is complete; Tauri skeleton work remains |
+| Architecture | Rust workspace with a standalone CLI and planned Tauri 2 desktop shell; no application database or required Git workflow |
+| Core automation | `dms` CLI for local workspace initialization, document registration/control data, and notes |
 | Operator UI | Static HTML and PNG wireframes for every capability; design references only |
 
-The records describe intended behaviour, not released functionality. Code and
-executable tests will be the proof of implementation when development begins.
+CAP-0022 is proven by executable tests. The remaining CAPs describe intended
+desktop and workflow behaviour, not released functionality.
 
 ## Intended product
 
@@ -28,6 +29,8 @@ release and store workspace metadata in `<edit-root>/.dms/`.
 Planned control model:
 
 - Tauri 2 desktop application for Windows and macOS.
+- Tauri-independent `dms-core` Rust library and a standalone `dms` CLI for the
+  initial local metadata core; the desktop shell will call the same library.
 - Folder-dominant, Windows Explorer-like controlled-library workspace with
   persistent tree navigation, breadcrumbs, Back/Forward/Up, and a source-file
   identity distinct from DMS-managed document-control data.
@@ -75,7 +78,26 @@ source-file access-control boundary.
 
 ## Development status
 
-There is no setup or run command yet because the application skeleton has not
-been created. Development resumes from `CHG-0001`, starting with the Tauri 2
-skeleton and source-tree DOX contract. Do not promote a capability from `not
-implemented` until executable tests prove its outcomes.
+Install a current stable Rust toolchain, then run:
+
+```sh
+cargo test --workspace
+cargo run -p dms-cli -- --help
+```
+
+Initialize an explicit workspace and register a source draft:
+
+```sh
+cargo run -p dms-cli -- workspace init \
+  --edit-root /path/to/edit-root --publish-root /path/to/publish-root --confirm
+cargo run -p dms-cli -- document add \
+  --edit-root /path/to/edit-root --path /path/to/edit-root/Policy.md
+```
+
+Use `--json` for structured command results. Development resumes from
+`CHG-0001` phase 1; the Tauri desktop shell, release lifecycle, export, and
+workflow features remain pending.
+
+## License
+
+MIT © 2026 Videoclinic. See [`LICENSE`](LICENSE).
