@@ -30,7 +30,7 @@ Planned control model:
 
 - Tauri 2 desktop application for Windows and macOS.
 - Tauri-independent `dms-core` Rust library and a standalone `dms` CLI for the
-  initial local metadata core; the desktop shell will call the same library.
+  initial local metadata core; the desktop shell calls the same library.
 - Folder-dominant, Windows Explorer-like controlled-library workspace with
   persistent tree navigation, breadcrumbs, Back/Forward/Up, and a source-file
   identity distinct from DMS-managed document-control data.
