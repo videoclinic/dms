@@ -1107,8 +1107,12 @@ fn backup_archive_contains_metadata_controlled_sources_releases_and_verified_man
         .collect::<Vec<_>>();
     assert!(paths.contains(&"edit/.dms/workspace.json"));
     assert!(paths.contains(&"edit/Policies/Handbook.md"));
-    assert!(paths
-        .contains(&format!("publish/{}", outcome.release.relative_pdf_path.display()).as_str()));
+    let pdf_archive =
+        format!("publish/{}", outcome.release.relative_pdf_path.display()).replace('\\', "/");
+    assert!(
+        paths.contains(&pdf_archive.as_str()),
+        "manifest entries: {paths:#?}"
+    );
 }
 
 #[test]
