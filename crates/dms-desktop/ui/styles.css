@@ -143,6 +143,17 @@ button { cursor: pointer; }
 }
 .card h2 { margin: 0 0 8px; font-size: 22px; }
 .card p { color: #5b6b78; line-height: 1.55; }
+.setup-workspace { max-width: 1080px; margin: 0 auto; }
+.setup-workspace > header { max-width: 760px; margin-bottom: 20px; }
+.setup-workspace > header h2 { margin: 8px 0; font-size: 26px; }
+.setup-workspace > header p { margin: 0; color: #5b6b78; line-height: 1.55; }
+.setup-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+.setup-grid .card { height: 100%; }
+.setup-grid .card h3 { margin: 0 0 8px; font-size: 18px; }
+.setup-form { display: grid; gap: 14px; margin-top: 20px; }
+.setup-form .button { justify-self: start; }
+.confirm-field { display: flex; align-items: start; gap: 8px; color: #43535f; font-size: 13px; line-height: 1.45; }
+.confirm-field input { margin-top: 2px; }
 .form-row { display: flex; align-items: end; gap: 10px; margin-top: 22px; }
 .field { display: grid; flex: 1; gap: 6px; }
 .field label { font-size: 13px; font-weight: 700; }

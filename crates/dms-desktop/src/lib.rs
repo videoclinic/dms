@@ -145,6 +145,20 @@ fn open_workspace(edit_root: String) -> Result<WorkspaceSummary, String> {
 }
 
 #[tauri::command]
+fn initialize_workspace(
+    edit_root: String,
+    publish_root: String,
+    confirmed: bool,
+) -> Result<WorkspaceSummary, String> {
+    if !confirmed {
+        return Err("workspace initialization requires explicit confirmation".to_owned());
+    }
+    Workspace::init(Path::new(&edit_root), Path::new(&publish_root))
+        .map_err(|error| error.to_string())?;
+    workspace_summary(Path::new(&edit_root))
+}
+
+#[tauri::command]
 fn load_library(edit_root: String, folder: String) -> Result<LibrarySnapshot, String> {
     library_snapshot(Path::new(&edit_root), Path::new(&folder))
 }
@@ -617,6 +631,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             load_preferences,
             save_preferences,
+            initialize_workspace,
             open_workspace,
             load_library,
             search_library,
@@ -678,6 +693,45 @@ mod tests {
         save_preferences_at(&path, &preferences).unwrap();
 
         assert_eq!(load_preferences_at(&path).unwrap(), preferences);
+    }
+
+    #[test]
+    fn desktop_adapter_refuses_unconfirmed_workspace_initialization_without_touching_roots() {
+        let directory = tempfile::tempdir().unwrap();
+        let edit_root = directory.path().join("edit");
+        let publish_root = directory.path().join("publish");
+
+        let error = initialize_workspace(
+            edit_root.to_string_lossy().into_owned(),
+            publish_root.to_string_lossy().into_owned(),
+            false,
+        )
+        .unwrap_err();
+
+        assert!(error.contains("explicit confirmation"));
+        assert!(!edit_root.exists());
+        assert!(!publish_root.exists());
+    }
+
+    #[test]
+    fn desktop_adapter_initializes_and_reopens_confirmed_dual_root_workspace() {
+        let directory = tempfile::tempdir().unwrap();
+        let edit_root = directory.path().join("edit");
+        let publish_root = directory.path().join("publish");
+        fs::create_dir(&edit_root).unwrap();
+        let root = edit_root.to_string_lossy().into_owned();
+
+        let initialized = initialize_workspace(
+            root.clone(),
+            publish_root.to_string_lossy().into_owned(),
+            true,
+        )
+        .unwrap();
+        let reopened = open_workspace(root).unwrap();
+
+        assert_eq!(reopened, initialized);
+        assert!(edit_root.join(".dms/workspace.json").is_file());
+        assert!(publish_root.is_dir());
     }
 
     #[test]

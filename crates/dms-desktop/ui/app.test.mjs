@@ -8,7 +8,9 @@ import {
   defaultPreferences,
   openActivity,
   savedViewId,
+  setupMarkup,
   toggleSavedView,
+  workspaceSetupRequest,
 } from "./app.mjs";
 
 const workspaceId = "5ef3db10-8f6d-4ae4-9d68-ecb1eaac8235";
@@ -23,6 +25,38 @@ function documentActivity(task) {
     route_state: {},
   };
 }
+
+test("workspace setup exposes existing-open and confirmed dual-root initialization", () => {
+  const markup = setupMarkup("");
+
+  assert.match(markup, /id="open-workspace-form"/);
+  assert.match(markup, /id="initialize-workspace-form"/);
+  assert.match(markup, /name="editRoot"/);
+  assert.match(markup, /name="publishRoot"/);
+  assert.match(markup, /name="confirmed"[^>]*required/);
+});
+
+test("workspace setup maps each form to its explicit desktop command", () => {
+  assert.deepEqual(
+    workspaceSetupRequest("open-workspace-form", { editRoot: " C:\\DMS\\Edit " }),
+    { command: "open_workspace", arguments: { editRoot: "C:\\DMS\\Edit" } },
+  );
+  assert.deepEqual(
+    workspaceSetupRequest("initialize-workspace-form", {
+      editRoot: " /Users/name/DMS/Edit ",
+      publishRoot: " /Users/name/DMS/Publish ",
+      confirmed: "on",
+    }),
+    {
+      command: "initialize_workspace",
+      arguments: {
+        editRoot: "/Users/name/DMS/Edit",
+        publishRoot: "/Users/name/DMS/Publish",
+        confirmed: true,
+      },
+    },
+  );
+});
 
 test("preferences start expanded and persist no session activities", () => {
   const state = createInitialState(defaultPreferences());

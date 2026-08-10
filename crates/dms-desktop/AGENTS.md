@@ -12,7 +12,7 @@ macOS.
 | `src/` | Tauri startup, IPC commands, `dms-core` adapter, OS user preferences |
 | `src/assistance.rs` | Supported-location detection and process launch for Claude Desktop on Windows and macOS |
 | `src/export.rs` | `.docx`/Markdown PDF adapters, Office automation, native WebView PDF capture, and format-specific tests |
-| `ui/app.mjs` | Static shell, session activities, saved-view persistence, and IPC orchestration |
+| `ui/app.mjs` | Workspace setup, static shell, session activities, saved-view persistence, and IPC orchestration |
 | `ui/library.mjs` | Folder-first explorer state, markup, selection rules, search, and sorting |
 | `ui/notes.mjs` | Per-document note activity state, create/edit/delete markup, and confirmation flow |
 | `ui/maintenance.mjs` | Releases, periodic-review, and full-backup panes with read-only verification, paging, and confirmation copy |
@@ -27,6 +27,9 @@ macOS.
 ## Local Contracts
 
 - Call `dms-core` for workspace domain behaviour; do not duplicate its rules.
+- Before a workspace exists, expose only Set up workspace. Opening requires an
+  existing edit root; initialization requires explicit edit + publish roots and
+  confirmation before the adapter may create `.dms` or the publish root.
 - Store sidebar and saved-view preferences in the OS user app-config directory,
   never under `<edit-root>/.dms`.
 - Keep open activities in frontend session state only.

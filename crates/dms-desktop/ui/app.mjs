@@ -222,8 +222,30 @@ function renderGroups(state) {
   document.querySelectorAll(`[data-flyout="${state.flyout ?? ""}"]`).forEach((button) => button.classList.add("active"));
 }
 
-function setupMarkup(error) {
-  return `<section class="card"><span class="badge">Phase 1 desktop shell</span><h2>Open a DMS workspace</h2><p>Choose an edit root that already contains <code>.dms/workspace.json</code>. Workspace creation remains explicit in the headless CLI until the configuration phase lands.</p><form id="open-workspace-form" class="form-row"><div class="field"><label for="edit-root">Edit root</label><input id="edit-root" name="editRoot" required autocomplete="off" placeholder="C:\\DMS\\Edit or /Users/name/DMS/Edit"></div><button class="button" type="submit">Open workspace</button></form><p class="status" role="alert">${escapeHtml(error)}</p></section>`;
+function setupValue(values, name) {
+  return typeof values.get === "function" ? values.get(name) : values[name];
+}
+
+export function workspaceSetupRequest(formId, values) {
+  const editRoot = String(setupValue(values, "editRoot") ?? "").trim();
+  if (formId === "open-workspace-form") {
+    return { command: "open_workspace", arguments: { editRoot } };
+  }
+  if (formId === "initialize-workspace-form") {
+    return {
+      command: "initialize_workspace",
+      arguments: {
+        editRoot,
+        publishRoot: String(setupValue(values, "publishRoot") ?? "").trim(),
+        confirmed: setupValue(values, "confirmed") === "on" || setupValue(values, "confirmed") === true,
+      },
+    };
+  }
+  throw new Error(`Unknown workspace setup form: ${formId}`);
+}
+
+export function setupMarkup(error) {
+  return `<section class="setup-workspace"><header><span class="badge">Local workspace</span><h2>Set up DMS Desktop</h2><p>Open existing metadata or initialize explicit edit and publish roots. No documents are moved or copied during setup.</p></header><div class="setup-grid"><section class="card"><h3>Open an existing workspace</h3><p>Choose an edit root that already contains <code>.dms/workspace.json</code>.</p><form id="open-workspace-form" class="setup-form"><div class="field"><label for="open-edit-root">Edit root</label><input id="open-edit-root" name="editRoot" required autocomplete="off" placeholder="C:\\DMS\\Edit or /Users/name/DMS/Edit"></div><button class="button" type="submit">Open workspace</button></form></section><section class="card"><h3>Initialize a workspace</h3><p>The desktop creates <code>.dms</code> under the edit root and creates the publish root if it does not exist.</p><form id="initialize-workspace-form" class="setup-form"><div class="field"><label for="initialize-edit-root">Edit root</label><input id="initialize-edit-root" name="editRoot" required autocomplete="off" placeholder="C:\\DMS\\Edit or /Users/name/DMS/Edit"></div><div class="field"><label for="publish-root">Publish root</label><input id="publish-root" name="publishRoot" required autocomplete="off" placeholder="C:\\DMS\\Publish or /Users/name/DMS/Publish"></div><label class="confirm-field"><input type="checkbox" name="confirmed" required> Initialize these roots and create workspace metadata.</label><button class="button" type="submit">Initialize workspace</button></form></section></div><p class="status" role="alert">${escapeHtml(error)}</p></section>`;
 }
 
 function activityMarkup(state, activity) {
@@ -1101,11 +1123,11 @@ async function handleSubmit(event) {
     render(appState);
     return;
   }
-  if (event.target.id !== "open-workspace-form") return;
+  if (!["open-workspace-form", "initialize-workspace-form"].includes(event.target.id)) return;
   event.preventDefault();
-  const editRoot = new FormData(event.target).get("editRoot");
   try {
-    const workspace = await invokeCommand("open_workspace", { editRoot });
+    const request = workspaceSetupRequest(event.target.id, new FormData(event.target));
+    const workspace = await invokeCommand(request.command, request.arguments);
     appState = { ...appState, workspace, error: "" };
     openDestination("Library");
   } catch (error) {
