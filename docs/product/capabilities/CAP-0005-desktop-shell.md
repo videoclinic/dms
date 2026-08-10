@@ -6,7 +6,7 @@
 | Status | not implemented |
 | Framework | Tauri 2 |
 | Supported OS | Windows, macOS (both required) |
-| Tests | Partial phase-1 evidence: [`../../../crates/dms-desktop/src/lib.rs`](../../../crates/dms-desktop/src/lib.rs), [`../../../crates/dms-desktop/ui/app.test.mjs`](../../../crates/dms-desktop/ui/app.test.mjs), [Windows/macOS smoke](../../../.github/workflows/desktop-platform-smoke.yml) |
+| Tests | Partial phases 1–9a evidence: [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [shell/setup frontend tests](../../../crates/dms-desktop/ui/app.test.mjs), [Windows/macOS startup and packaging smoke](../../../.github/workflows/desktop-platform-smoke.yml) |
 
 ## Outcomes (contract — not yet true in runtime)
 

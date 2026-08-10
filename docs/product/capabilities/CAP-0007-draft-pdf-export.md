@@ -5,7 +5,7 @@
 | ID | CAP-0007 |
 | Status | not implemented |
 | Mechanism | Installed Microsoft Office for Office drafts; local CommonMark HTML print shell + native WebView PDF API for Markdown |
-| Tests | Partial phase-5 evidence: [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/export.rs), [Windows/macOS native WebView PDF smoke](https://github.com/videoclinic/dms/actions/runs/31367938246) |
+| Tests | Partial phase-5 evidence: [`dms-desktop` adapter/unit tests](../../../crates/dms-desktop/src/export.rs) cover Markdown chrome and Office placeholder fill with a fake Office exporter; [Windows/macOS native WebView PDF smoke](https://github.com/videoclinic/dms/actions/runs/31367938246) covers the real Markdown print path only |
 
 ## Outcomes (contract — not yet true in runtime)
 

@@ -141,9 +141,19 @@ macOS** that:
 | 6 | Notes on documents | done (core-backed Tauri CRUD, stable-ID Notes activity, draft-preserving errors, explicit delete confirmation, local gates, visual QA, and [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31373187917) pass) | Tests: note CRUD persistence across restart; list is newest-first; New note compose field is above the latest note and remains there after save |
 | 7 | Release checksum + periodic review + verify | done (implementation `8fe38bb`, Windows portability fix `e4f40dc`, schema v5 migration, local gates, visual QA, and [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31381510835) pass) | Tests: exported PDF → expected SHA-256 `match`; tamper → `mismatch`; missing file → `missing_file`; release snapshots draft digest, target-version mode/label, changelog, and chain; a case-insensitive Title filter scopes publish-tree releases; selected rows-per-page controls pagination of the filtered result; each non-missing release exposes a verify-this-release action while missing files surface a "Missing PDF" badge; periodic confirm keeps version and schedules the next review; changes-required begins revision; obsolete marks the document; full backup manifest covers both roots and refuses to overwrite an existing archive |
 | 8 | Optional Claude Desktop handoff | done (implementation `99a26b8`, schema v6 migration, local gates, and [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31385257274) pass) | Tests: disabled/missing app never blocks; policy and consent gate payload; accepted suggestion remains editable and cannot mutate lifecycle |
-| 9 | Packaging smoke + CAP promotion | in-progress (NSIS/DMG artifacts pass; CAP audit and external operator smokes remain) | Windows and macOS smoke covers Office and Markdown PDF export; a Microsoft 365 administrator-configured Entra group smoke covers source preview, direct-member role selection, ineligible-role blocking, and an interactive decision sign-in; CAP statuses updated only with test links; records check if present |
+| 9 | Packaging smoke | done ([Windows/macOS run 31385996931](https://github.com/videoclinic/dms/actions/runs/31385996931) produced NSIS/DMG artifacts and passed workspace, launch, and native Markdown PDF smoke gates) | Windows and macOS jobs build the workspace, launch the desktop, exercise native Markdown PDF export, and produce installable NSIS/DMG artifacts |
+| 9a | Desktop workspace setup | done (explicit dual-root initialization command and setup UI; unconfirmed requests are side-effect-free; focused Rust/frontend tests, full local gates, native form validation, and visual QA pass) | Before a workspace exists, the desktop exposes only Set up workspace; it can open an existing edit root or initialize edit + publish roots only after explicit confirmation; Rust adapter and frontend tests cover refusal, initialization, open, and setup markup; local workspace gates pass |
+| 9b | Periodic-review closure | in-progress | Core tests cover completion, comment-required cancellation with no schedule shift, and reminder attempts with no duplicate request or lifecycle transition; CLI/Tauri commands and desktop controls expose Result, Cancel, and Reminder with explicit confirmation; fake-backed Rust/frontend gates pass |
+| 9c | Audit export | pending | Core + CLI + desktop tests generate deterministic filtered CSV/PDF reports without source/release bytes, include verification verdicts, hash the report, append `ReportGenerated` evidence, and expose recent-report filter/pagination plus verify/open-folder actions |
+| 9d | Workspace integrity and recovery | pending | Advisory lock status/acquire/release/stale takeover and manifest-verified backup restore refuse unsafe paths, symlinks, fresh-lock overwrite, and unconfirmed replacement; core, CLI, desktop, and failure-path tests pass |
+| 9e | Release and library maintenance | pending | Release withdrawal is reasoned and evidenced without deleting history; current release resolution skips withdrawn records; missing/orphan releases remain explicit; the Library can open an existing source draft or latest released PDF through host-mediated commands; Rust/frontend tests pass |
+| 9f | Desktop lifecycle and Configuration surfaces | pending | The desktop invokes implemented core operations for document-control edit, confidentiality override, begin revision, submit/review/decision/release, cancel review, obsolete, evidence history, document defaults, Workflow, Notifications, and Workspace configuration while preserving one routed Configuration activity; adapter/frontend tests prove each operator path |
+| 9g | Permalink OS integration | pending | Windows and macOS register `dms://`; inbound document/review/note links resolve workspace + stable document identity, focus or create the correct activity, survive rename/version changes, and fail closed for unavailable targets; platform smoke passes |
+| 9h | Operator-selected Claude excerpts | pending | Oversized assistance payloads show their size and selectable excerpts; preview retries only with the operator-selected subset, never silently truncates, and still requires digest-bound consent; core, adapter, and frontend tests pass |
+| 9i | Live Office, Entra, and notification adapters | pending | Production release commands wire installed Office automation on Windows/macOS; administrator-configured Microsoft Graph refresh and interactive approver sign-in use OS credential storage; SMTP and host-mail transports send canonical messages without storing credentials in `.dms`; fake-backed tests and operator smoke instructions pass |
+| 9j | External operator smokes + CAP promotion | pending | Licensed Office release smoke passes on Windows and macOS; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass; every implemented CAP links executable evidence, CHG status is done, and the record is archived |
 
-**Current phase:** phase 8 is complete and synchronized; phase 9 is in progress. Keep only one phase in progress.
+**Current phase:** phase 9a is complete and synchronized; phase 9b is in progress. Keep only one phase in progress.
 
 ## Implementation notes
 
@@ -183,7 +193,9 @@ macOS** that:
   Ship default `shell.html` / `print.css` / logo derived from the corporate
   Vorlage; do not route Markdown through Word. CI uses fakes when platform
   export is unavailable; phase 5 must still spike fixed header/footer + page
-  indicators on WebView2 and WKWebView.
+  indicators on WebView2 and WKWebView. The installed-Office adapter exists but
+  is not yet constructed by a production desktop lifecycle command; phase 9i
+  owns that wiring and its licensed-host evidence.
 
 ## Phase 9 audit findings
 
@@ -200,6 +212,22 @@ macOS** that:
   smokes require licensed host applications, a configured tenant/group, and an
   interactive operator identity. CI fakes and unit tests do not satisfy those
   external gates.
+- Phase 9 was expected to be promotion-only, but the CAP audit found unresolved
+  runtime and operator prerequisites across distinct subsystems. Phases 9a–9j
+  make those prerequisites independently gated instead of promoting partial
+  capabilities or treating one packaging run as product completion.
+- Phase 9a closes desktop workspace setup without promoting CAP-0001: the
+  remaining live Entra/configuration and release-path outcomes still depend on
+  phases 9f–9j. CAP-0001 now links the partial executable setup evidence.
+- CI exercises the real native WebView Markdown PDF path, desktop startup, and
+  NSIS/DMG packaging. It does not exercise installed Office, Microsoft Graph,
+  interactive Entra sign-in, SMTP, or host-mail delivery; current production
+  code has no live Graph/notification implementation and does not yet wire the
+  installed-Office adapter into a desktop release command.
+- CAP-0005 and CAP-0006 have substantial partial executable evidence but remain
+  `not implemented`: the full Configuration/lifecycle IPC and required Library
+  selection actions are still absent. Their evidence fields must describe the
+  proven subset without promoting the whole contract.
 
 ## Resume checklist
 

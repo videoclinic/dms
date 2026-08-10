@@ -4,7 +4,7 @@
 | --- | --- |
 | ID | CAP-0006 |
 | Status | not implemented |
-| Tests | none |
+| Tests | Partial phase-3 evidence: [`dms-core` Library tests](../../../crates/dms-core/tests/library.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [Library frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31359360786) |
 
 ## Outcomes (contract — not yet true in runtime)
 
