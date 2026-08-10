@@ -796,6 +796,7 @@ name = "dms-desktop"
 version = "0.1.0"
 dependencies = [
  "block2",
+ "chrono",
  "dms-core",
  "objc2-foundation",
  "objc2-web-kit",

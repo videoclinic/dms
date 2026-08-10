@@ -13,14 +13,16 @@ use uuid::Uuid;
 mod catalogues;
 mod library;
 mod lifecycle;
+mod maintenance;
 mod policies;
 
 pub use catalogues::*;
 pub use library::*;
 pub use lifecycle::*;
+pub use maintenance::*;
 pub use policies::*;
 
-pub const SCHEMA_VERSION: u32 = 4;
+pub const SCHEMA_VERSION: u32 = 5;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 
@@ -170,6 +172,28 @@ pub enum DmsError {
     PermalinkWorkspaceMismatch(Uuid),
     #[error("lifecycle evidence is inconsistent: {0}")]
     LifecycleIntegrity(String),
+    #[error("release {0} was not found")]
+    ReleaseNotFound(Uuid),
+    #[error("document has no current release")]
+    NoCurrentRelease,
+    #[error("periodic review interval must be greater than zero months")]
+    InvalidReviewInterval,
+    #[error("the document is exempt from periodic review")]
+    PeriodicReviewExempt,
+    #[error("the document already has an open review or release candidate")]
+    PeriodicReviewAlreadyOpen,
+    #[error("periodic review {0} was not found")]
+    PeriodicReviewNotFound(Uuid),
+    #[error("periodic review {0} is not open")]
+    PeriodicReviewNotOpen(Uuid),
+    #[error("release {0} must pass integrity verification before periodic review")]
+    ReleaseIntegrityRequired(Uuid),
+    #[error("backup archive already exists at {0}")]
+    BackupPathExists(PathBuf),
+    #[error("backup input is not a regular non-symlink file: {0}")]
+    BackupInputInvalid(PathBuf),
+    #[error("backup manifest failed: {0}")]
+    BackupManifest(String),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -194,6 +218,8 @@ pub struct Workspace {
     pub(crate) workflow_policies: BTreeMap<String, WorkflowPolicy>,
     #[serde(default)]
     pub(crate) notification_settings: Option<NotificationSettings>,
+    #[serde(default = "default_review_interval_months")]
+    pub(crate) default_review_interval_months: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -219,6 +245,14 @@ pub struct Document {
     pub(crate) releases: Vec<ReleaseRecord>,
     #[serde(default)]
     pub(crate) workflow_events: Vec<WorkflowEvent>,
+    #[serde(default)]
+    pub(crate) review_interval_months: Option<u32>,
+    #[serde(default)]
+    pub(crate) review_exemption_reason: Option<String>,
+    #[serde(default)]
+    pub(crate) next_review_due: Option<chrono::NaiveDate>,
+    #[serde(default)]
+    pub(crate) periodic_reviews: Vec<PeriodicReview>,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -290,6 +324,7 @@ impl Workspace {
             identity_cache: BTreeMap::new(),
             workflow_policies: BTreeMap::new(),
             notification_settings: None,
+            default_review_interval_months: default_review_interval_months(),
         };
         workspace.save()?;
         Ok(workspace)
@@ -315,7 +350,7 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = matches!(found, 1..=3);
+        let migrated = matches!(found, 1..=4);
         if found == 1 {
             migrate_v1_catalogues(&mut value)?;
         }
@@ -407,6 +442,9 @@ impl Workspace {
         }
         canonical_existing_directory(&self.edit_root, "stored edit root")?;
         canonical_existing_directory(&self.publish_root, "stored publish root")?;
+        if self.default_review_interval_months == 0 {
+            return Err(DmsError::InvalidReviewInterval);
+        }
 
         let mut document_numbers = BTreeMap::new();
         for (key, document) in &self.documents {
@@ -438,6 +476,9 @@ impl Workspace {
                     return Err(DmsError::EmptyNote);
                 }
             }
+            if matches!(document.review_interval_months, Some(0)) {
+                return Err(DmsError::InvalidReviewInterval);
+            }
         }
         self.validate_policies()?;
         self.validate_lifecycle_records()?;
@@ -453,6 +494,12 @@ impl Workspace {
     pub fn document(&self, document_id: Uuid) -> Result<&Document> {
         self.documents
             .get(&document_id)
+            .ok_or(DmsError::DocumentNotFound(document_id))
+    }
+
+    pub(crate) fn document_mut(&mut self, document_id: Uuid) -> Result<&mut Document> {
+        self.documents
+            .get_mut(&document_id)
             .ok_or(DmsError::DocumentNotFound(document_id))
     }
 
@@ -495,6 +542,10 @@ impl Workspace {
             active_candidate_id: None,
             releases: Vec::new(),
             workflow_events: Vec::new(),
+            review_interval_months: None,
+            review_exemption_reason: None,
+            next_review_due: None,
+            periodic_reviews: Vec::new(),
         };
         self.documents.insert(document.id, document.clone());
         Ok(document)

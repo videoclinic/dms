@@ -1,11 +1,17 @@
-use std::{collections::VecDeque, fs, io::Write, path::Path};
+use std::{
+    collections::VecDeque,
+    fs,
+    io::{Read, Write},
+    path::Path,
+};
 
 use dms_core::{
     AuthenticatedActor, CandidateRequest, CandidateStatus, ControlUpdate, DeliveryReceipt,
     DeliveryStatus, DmsError, EntraIdentitySource, EntraPerson, GraphClient, Lifecycle,
     MarkerStatus, NotificationClient, NotificationMessage, NotificationSettings,
-    NotificationTransport, PdfExporter, ReleaseOutcome, ReviewDecision, RoleUpdate, SmtpSettings,
-    TargetSelection, Version, WorkflowEventType, WorkflowVerification, Workspace, SCHEMA_VERSION,
+    NotificationTransport, PdfExporter, PeriodicReviewResult, PeriodicReviewStatus, ReleaseOutcome,
+    ReleaseVerificationStatus, ReviewDecision, RoleUpdate, SmtpSettings, TargetSelection, Version,
+    WorkflowEventType, WorkflowVerification, Workspace, SCHEMA_VERSION,
 };
 use tempfile::TempDir;
 use uuid::Uuid;
@@ -245,6 +251,22 @@ fn approve_first_release(fixture: &mut Fixture) -> FakeGraph {
         )
         .expect("approval");
     graph
+}
+
+fn release_first(fixture: &mut Fixture) -> (FakeGraph, ReleaseOutcome) {
+    let mut graph = approve_first_release(fixture);
+    let mut exporter = FakeExporter::successful();
+    let outcome = fixture
+        .workspace
+        .release_candidate(
+            fixture.document_id,
+            None,
+            &mut graph,
+            &mut FakeNotifier::default(),
+            &mut exporter,
+        )
+        .expect("release");
+    (graph, outcome)
 }
 
 #[test]
@@ -899,5 +921,240 @@ fn schema_v3_migrates_to_v4_with_empty_evidence_and_backup() {
         .workspace
         .edit_root
         .join(".dms/workspace.v3.json.bak")
+        .is_file());
+}
+
+#[test]
+fn release_verification_reports_match_mismatch_and_missing_without_modifying_pdf() {
+    let mut fixture = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    let (_, outcome) = release_first(&mut fixture);
+    let pdf = fixture
+        .workspace
+        .publish_root
+        .join(&outcome.release.relative_pdf_path);
+    let original = fs::read(&pdf).unwrap();
+
+    assert_eq!(
+        fixture
+            .workspace
+            .verify_release(fixture.document_id, outcome.release.id)
+            .unwrap()
+            .status,
+        ReleaseVerificationStatus::Match
+    );
+    fs::write(&pdf, b"%PDF-1.7\ntampered").unwrap();
+    assert_eq!(
+        fixture
+            .workspace
+            .verify_release(fixture.document_id, outcome.release.id)
+            .unwrap()
+            .status,
+        ReleaseVerificationStatus::Mismatch
+    );
+    assert_eq!(fs::read(&pdf).unwrap(), b"%PDF-1.7\ntampered");
+    fs::remove_file(&pdf).unwrap();
+    assert_eq!(
+        fixture
+            .workspace
+            .verify_release(fixture.document_id, outcome.release.id)
+            .unwrap()
+            .status,
+        ReleaseVerificationStatus::MissingFile
+    );
+    assert_ne!(original, b"%PDF-1.7\ntampered");
+}
+
+#[test]
+fn periodic_review_binds_release_requires_integrity_and_records_result_transitions() {
+    let mut fixture = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    fixture
+        .workspace
+        .configure_default_review_interval(6)
+        .unwrap();
+    let (mut graph, outcome) = release_first(&mut fixture);
+    let marker = fixture
+        .workspace
+        .periodic_review_markers(chrono::Utc::now().date_naive())
+        .unwrap()
+        .remove(0);
+    assert_eq!(marker.release_id, Some(outcome.release.id));
+    assert!(marker.next_review_due.is_some());
+
+    let review = fixture
+        .workspace
+        .start_periodic_review(fixture.document_id)
+        .unwrap();
+    assert_eq!(review.release_id, outcome.release.id);
+    assert_eq!(review.pdf_digest, outcome.release.pdf_digest);
+    assert_eq!(review.confidentiality, outcome.release.confidentiality);
+    let completed = fixture
+        .workspace
+        .complete_periodic_review(
+            fixture.document_id,
+            review.id,
+            PeriodicReviewResult::ConfirmedCurrent,
+            "The released content remains current",
+            &mut graph,
+        )
+        .unwrap();
+    assert_eq!(completed.status, PeriodicReviewStatus::Completed);
+    assert_eq!(
+        completed.result,
+        Some(PeriodicReviewResult::ConfirmedCurrent)
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .verify_workflow(fixture.document_id)
+            .unwrap(),
+        WorkflowVerification::Valid
+    );
+
+    let mut changed = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    let (mut graph, _) = release_first(&mut changed);
+    let review = changed
+        .workspace
+        .start_periodic_review(changed.document_id)
+        .unwrap();
+    changed
+        .workspace
+        .complete_periodic_review(
+            changed.document_id,
+            review.id,
+            PeriodicReviewResult::ChangesRequired,
+            "Responsibilities changed",
+            &mut graph,
+        )
+        .unwrap();
+    assert_eq!(
+        changed
+            .workspace
+            .document(changed.document_id)
+            .unwrap()
+            .lifecycle,
+        Lifecycle::Draft
+    );
+
+    let mut obsolete = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    let (mut graph, _) = release_first(&mut obsolete);
+    let review = obsolete
+        .workspace
+        .start_periodic_review(obsolete.document_id)
+        .unwrap();
+    obsolete
+        .workspace
+        .complete_periodic_review(
+            obsolete.document_id,
+            review.id,
+            PeriodicReviewResult::Obsolete,
+            "This policy no longer applies",
+            &mut graph,
+        )
+        .unwrap();
+    assert_eq!(
+        obsolete
+            .workspace
+            .document(obsolete.document_id)
+            .unwrap()
+            .lifecycle,
+        Lifecycle::Obsolete
+    );
+}
+
+#[test]
+fn backup_archive_contains_metadata_controlled_sources_releases_and_verified_manifest() {
+    let mut fixture = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    let (_, outcome) = release_first(&mut fixture);
+    fixture.workspace.save().unwrap();
+    let archive_path = fixture
+        .workspace
+        .edit_root
+        .parent()
+        .unwrap()
+        .join("workspace.zip");
+
+    let backup = fixture.workspace.backup_workspace(&archive_path).unwrap();
+    assert_eq!(backup.entry_count, 3);
+    assert_eq!(backup.manifest_digest.len(), 64);
+    let file = fs::File::open(&archive_path).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let mut manifest = String::new();
+    archive
+        .by_name("manifest.json")
+        .unwrap()
+        .read_to_string(&mut manifest)
+        .unwrap();
+    let manifest: dms_core::BackupManifest = serde_json::from_str(&manifest).unwrap();
+    let paths = manifest
+        .entries
+        .iter()
+        .map(|entry| entry.archive_path.as_str())
+        .collect::<Vec<_>>();
+    assert!(paths.contains(&"edit/.dms/workspace.json"));
+    assert!(paths.contains(&"edit/Policies/Handbook.md"));
+    assert!(paths
+        .contains(&format!("publish/{}", outcome.release.relative_pdf_path.display()).as_str()));
+}
+
+#[test]
+fn schema_v4_migrates_periodic_review_defaults_and_creates_a_versioned_backup() {
+    let fixture = Fixture::new("# Handbook\n", NotificationTransport::Smtp);
+    fixture.workspace.save().unwrap();
+    let metadata_path = fixture.workspace.edit_root.join(".dms/workspace.json");
+    let mut metadata: serde_json::Value =
+        serde_json::from_slice(&fs::read(&metadata_path).unwrap()).unwrap();
+    metadata["schema_version"] = serde_json::Value::from(4);
+    metadata
+        .as_object_mut()
+        .unwrap()
+        .remove("default_review_interval_months");
+    let document = metadata["documents"][fixture.document_id.to_string()]
+        .as_object_mut()
+        .unwrap();
+    for field in [
+        "review_interval_months",
+        "review_exemption_reason",
+        "next_review_due",
+        "periodic_reviews",
+    ] {
+        document.remove(field);
+    }
+    fs::write(
+        &metadata_path,
+        serde_json::to_vec_pretty(&metadata).unwrap(),
+    )
+    .unwrap();
+
+    let migrated = Workspace::open(&fixture.workspace.edit_root).unwrap();
+    migrated.save().unwrap();
+    let persisted: serde_json::Value =
+        serde_json::from_slice(&fs::read(&metadata_path).unwrap()).unwrap();
+    assert_eq!(persisted["schema_version"], SCHEMA_VERSION);
+    assert_eq!(persisted["default_review_interval_months"], 12);
+    assert!(
+        persisted["documents"][fixture.document_id.to_string()]["periodic_reviews"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(fixture
+        .workspace
+        .edit_root
+        .join(".dms/workspace.v4.json.bak")
         .is_file());
 }

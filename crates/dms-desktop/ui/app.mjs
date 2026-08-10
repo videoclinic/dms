@@ -16,6 +16,13 @@ import {
   noteDocumentState,
   updateNoteDocumentState,
 } from "./notes.mjs";
+import {
+  applyReleaseSnapshot,
+  createReleaseState,
+  periodicReviewMarkup,
+  releaseMaintenanceMarkup,
+  workspaceMaintenanceMarkup,
+} from "./maintenance.mjs";
 
 const DESTINATIONS = [
   ["Library", "▦"],
@@ -40,6 +47,9 @@ export function createInitialState(preferences = defaultPreferences()) {
     workspace: null,
     library: createLibraryState(),
     note_documents: {},
+    releases: createReleaseState(),
+    periodic_reviews: { markers: [], loading: false, error: "" },
+    maintenance: { outcome: null, error: "" },
     sidebar_overlay: false,
     flyout: null,
     error: "",
@@ -218,6 +228,15 @@ function activityMarkup(state, activity) {
   if (activity.destination === "Library") {
     return libraryMarkup(workspace, activity, state.library, state.error);
   }
+  if (activity.destination === "Releases") {
+    return releaseMaintenanceMarkup(state.releases);
+  }
+  if (activity.destination === "Audit & Reports") {
+    return periodicReviewMarkup(state.periodic_reviews);
+  }
+  if (activity.destination === "Maintenance") {
+    return workspaceMaintenanceMarkup(state.maintenance);
+  }
   return `<section class="card"><span class="badge">${escapeHtml(activity.destination)}</span><h2>${escapeHtml(activity.label)}</h2><p>The desktop shell is connected to the shared Rust core. Domain workflows beyond the phase-1 shell remain unavailable until their CHG phases are implemented.</p><dl class="details-grid"><dt>Workspace ID</dt><dd>${escapeHtml(workspace.workspace_id)}</dd><dt>Edit root</dt><dd>${escapeHtml(workspace.edit_root)}</dd><dt>Publish root</dt><dd>${escapeHtml(workspace.publish_root)}</dd><dt>Controlled documents</dt><dd>${escapeHtml(workspace.document_count)}</dd></dl></section>`;
 }
 
@@ -269,6 +288,10 @@ function openDestination(destination) {
   render(appState);
   if (destination === "Library") {
     void loadLibraryFolder(folder, "replace");
+  } else if (destination === "Releases") {
+    void loadReleases();
+  } else if (destination === "Audit & Reports") {
+    void loadPeriodicReviews();
   }
 }
 
@@ -341,6 +364,47 @@ async function loadSelectedDocument() {
     appState = { ...appState, error: String(error) };
     render(appState);
   }
+}
+
+async function loadReleases(command = "load_releases", arguments_ = {}) {
+  appState = { ...appState, releases: { ...appState.releases, loading: true, error: "" } };
+  render(appState);
+  try {
+    const snapshot = await invokeCommand(command, {
+      editRoot: appState.workspace.edit_root,
+      ...arguments_,
+    });
+    appState = { ...appState, releases: applyReleaseSnapshot(appState.releases, snapshot) };
+  } catch (error) {
+    appState = {
+      ...appState,
+      releases: { ...appState.releases, loading: false, error: String(error) },
+    };
+  }
+  render(appState);
+}
+
+async function loadPeriodicReviews() {
+  appState = {
+    ...appState,
+    periodic_reviews: { ...appState.periodic_reviews, loading: true, error: "" },
+  };
+  render(appState);
+  try {
+    const markers = await invokeCommand("load_periodic_reviews", {
+      editRoot: appState.workspace.edit_root,
+    });
+    appState = {
+      ...appState,
+      periodic_reviews: { markers, loading: false, error: "" },
+    };
+  } catch (error) {
+    appState = {
+      ...appState,
+      periodic_reviews: { ...appState.periodic_reviews, loading: false, error: String(error) },
+    };
+  }
+  render(appState);
 }
 
 async function loadDocumentNotes(documentId) {
@@ -604,6 +668,46 @@ async function handleClick(event) {
   if (await handleNotesClick(event)) return;
   if (await handleLibraryClick(event)) return;
 
+  if (event.target.closest("[data-release-verify-all]")) {
+    void loadReleases("verify_all_releases");
+    return;
+  }
+  const verifyRelease = event.target.closest("[data-release-verify]");
+  if (verifyRelease) {
+    void loadReleases("verify_release", {
+      documentId: verifyRelease.dataset.documentId,
+      releaseId: verifyRelease.dataset.releaseVerify,
+    });
+    return;
+  }
+  const startReview = event.target.closest("[data-periodic-review-start]")?.dataset.periodicReviewStart;
+  if (startReview) {
+    try {
+      await invokeCommand("start_periodic_review", {
+        editRoot: appState.workspace.edit_root,
+        documentId: startReview,
+      });
+      await loadPeriodicReviews();
+    } catch (error) {
+      appState = {
+        ...appState,
+        periodic_reviews: { ...appState.periodic_reviews, error: String(error) },
+      };
+      render(appState);
+    }
+    return;
+  }
+  const releasePage = event.target.closest("[data-release-page]")?.dataset.releasePage;
+  if (releasePage) {
+    const delta = releasePage === "next" ? 1 : -1;
+    appState = {
+      ...appState,
+      releases: { ...appState.releases, page: Math.max(0, appState.releases.page + delta) },
+    };
+    render(appState);
+    return;
+  }
+
   const activityRemove = event.target.closest("[data-activity-remove]")?.dataset.activityRemove;
   if (activityRemove) {
     appState = closeActivity(appState, activityRemove);
@@ -617,6 +721,10 @@ async function handleClick(event) {
     const activity = currentActivity(appState);
     if (activity?.task === "Notes" && !noteDocumentState(appState.note_documents, activity.document_id).detail) {
       void loadDocumentNotes(activity.document_id);
+    } else if (activity?.destination === "Releases" && appState.releases.rows.length === 0) {
+      void loadReleases();
+    } else if (activity?.destination === "Audit & Reports" && appState.periodic_reviews.markers.length === 0) {
+      void loadPeriodicReviews();
     }
     return;
   }
@@ -653,6 +761,10 @@ async function handleClick(event) {
           "replace",
           view.document_id ?? null,
         );
+      } else if (view.destination === "Releases") {
+        void loadReleases();
+      } else if (view.destination === "Audit & Reports") {
+        void loadPeriodicReviews();
       }
     }
     render(appState);
@@ -667,6 +779,33 @@ async function handleClick(event) {
 }
 
 async function handleSubmit(event) {
+  if (event.target.id === "release-filter-form") {
+    event.preventDefault();
+    const query = String(new FormData(event.target).get("query") ?? "");
+    appState = { ...appState, releases: { ...appState.releases, query, page: 0 } };
+    render(appState);
+    return;
+  }
+  if (event.target.id === "workspace-backup-form") {
+    event.preventDefault();
+    const archivePath = String(new FormData(event.target).get("archivePath") ?? "").trim();
+    appState = { ...appState, maintenance: { ...appState.maintenance, error: "" } };
+    render(appState);
+    try {
+      const outcome = await invokeCommand("backup_workspace", {
+        editRoot: appState.workspace.edit_root,
+        archivePath,
+      });
+      appState = { ...appState, maintenance: { outcome, error: "" } };
+    } catch (error) {
+      appState = {
+        ...appState,
+        maintenance: { ...appState.maintenance, error: String(error) },
+      };
+    }
+    render(appState);
+    return;
+  }
   if (event.target.id === "document-note-compose-form") {
     event.preventDefault();
     const activity = currentActivity(appState);
@@ -773,6 +912,14 @@ async function handleSubmit(event) {
 }
 
 function handleChange(event) {
+  if (event.target.matches("[data-release-page-size]")) {
+    appState = {
+      ...appState,
+      releases: { ...appState.releases, page_size: Number(event.target.value), page: 0 },
+    };
+    render(appState);
+    return;
+  }
   if (event.target.matches("[data-library-page-size]")) {
     appState = {
       ...appState,

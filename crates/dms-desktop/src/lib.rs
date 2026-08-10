@@ -4,8 +4,9 @@ use std::{
 };
 
 use dms_core::{
-    Document, DocumentControl, EffectiveConfidentiality, EffectiveWorkflowRoles, LibraryEntry,
-    LibraryFolder, LibraryFolderNode, Lifecycle, Note, SourceState, Workspace,
+    BackupOutcome, Document, DocumentControl, EffectiveConfidentiality, EffectiveWorkflowRoles,
+    LibraryEntry, LibraryFolder, LibraryFolderNode, Lifecycle, Note, PeriodicReview,
+    PeriodicReviewMarker, ReleaseVerificationStatus, SourceState, Workspace,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
@@ -79,6 +80,28 @@ pub struct DocumentNotes {
     pub title: String,
     pub document_number: Option<String>,
     pub notes: Vec<Note>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct ReleaseRow {
+    pub document_id: Uuid,
+    pub document_title: String,
+    pub release_id: Uuid,
+    pub version: String,
+    pub relative_pdf_path: String,
+    pub pdf_digest: String,
+    pub confidentiality_id: String,
+    pub confidentiality_label: String,
+    pub workflow_chain_head: String,
+    pub approval_chain_head: Option<String>,
+    pub released_at: String,
+    pub withdrawn: bool,
+    pub verification: ReleaseVerificationStatus,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct ReleaseMaintenance {
+    pub rows: Vec<ReleaseRow>,
 }
 
 #[tauri::command]
@@ -176,6 +199,59 @@ fn load_document_selection(
 fn load_document_notes(edit_root: String, document_id: Uuid) -> Result<DocumentNotes, String> {
     let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
     document_notes(&workspace, document_id)
+}
+
+#[tauri::command]
+fn load_releases(edit_root: String) -> Result<ReleaseMaintenance, String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    release_maintenance(&workspace)
+}
+
+#[tauri::command]
+fn verify_release(
+    edit_root: String,
+    document_id: Uuid,
+    release_id: Uuid,
+) -> Result<ReleaseMaintenance, String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .verify_release(document_id, release_id)
+        .map_err(|error| error.to_string())?;
+    release_maintenance(&workspace)
+}
+
+#[tauri::command]
+fn verify_all_releases(edit_root: String) -> Result<ReleaseMaintenance, String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .verify_all_releases()
+        .map_err(|error| error.to_string())?;
+    release_maintenance(&workspace)
+}
+
+#[tauri::command]
+fn load_periodic_reviews(edit_root: String) -> Result<Vec<PeriodicReviewMarker>, String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .periodic_review_markers(chrono::Utc::now().date_naive())
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn start_periodic_review(edit_root: String, document_id: Uuid) -> Result<PeriodicReview, String> {
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .start_periodic_review(document_id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn backup_workspace(edit_root: String, archive_path: String) -> Result<BackupOutcome, String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .backup_workspace(Path::new(&archive_path))
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -322,6 +398,42 @@ fn document_notes(workspace: &Workspace, document_id: Uuid) -> Result<DocumentNo
     })
 }
 
+fn release_maintenance(workspace: &Workspace) -> Result<ReleaseMaintenance, String> {
+    let mut rows = Vec::new();
+    for document in workspace.documents() {
+        for release in workspace
+            .releases(document.id)
+            .map_err(|error| error.to_string())?
+        {
+            let verification = workspace
+                .verify_release(document.id, release.id)
+                .map_err(|error| error.to_string())?;
+            rows.push(ReleaseRow {
+                document_id: document.id,
+                document_title: document.control.title.clone(),
+                release_id: release.id,
+                version: release.version.to_string(),
+                relative_pdf_path: path_text(&release.relative_pdf_path),
+                pdf_digest: release.pdf_digest.clone(),
+                confidentiality_id: release.confidentiality.type_id.clone(),
+                confidentiality_label: release.confidentiality.label.clone(),
+                workflow_chain_head: release.workflow_chain_head.clone(),
+                approval_chain_head: release.approval_chain_head.clone(),
+                released_at: release.released_at.to_rfc3339(),
+                withdrawn: release.withdrawn,
+                verification: verification.status,
+            });
+        }
+    }
+    rows.sort_by(|left, right| {
+        right
+            .released_at
+            .cmp(&left.released_at)
+            .then_with(|| left.document_title.cmp(&right.document_title))
+    });
+    Ok(ReleaseMaintenance { rows })
+}
+
 fn path_text(path: &Path) -> String {
     if path == Path::new(".") {
         return ".".to_owned();
@@ -367,6 +479,12 @@ pub fn run() {
             reassociate_library_document,
             load_document_selection,
             load_document_notes,
+            load_releases,
+            verify_release,
+            verify_all_releases,
+            load_periodic_reviews,
+            start_periodic_review,
+            backup_workspace,
             add_document_note,
             edit_document_note,
             remove_document_note
@@ -504,5 +622,24 @@ mod tests {
         assert_eq!(reopened.notes.len(), 1);
         assert_eq!(reopened.notes[0].id, first_id);
         assert_eq!(reopened.notes[0].body, "Edited first note");
+    }
+
+    #[test]
+    fn desktop_maintenance_commands_list_releases_and_create_a_manifest_backup() {
+        let directory = tempfile::tempdir().unwrap();
+        let edit_root = directory.path().join("edit");
+        let publish_root = directory.path().join("publish");
+        fs::create_dir_all(&edit_root).unwrap();
+        fs::create_dir_all(&publish_root).unwrap();
+        Workspace::init(&edit_root, &publish_root).unwrap();
+        let root = edit_root.to_string_lossy().into_owned();
+
+        assert!(load_releases(root.clone()).unwrap().rows.is_empty());
+        assert!(load_periodic_reviews(root.clone()).unwrap().is_empty());
+        let archive = directory.path().join("workspace.zip");
+        let outcome = backup_workspace(root, archive.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(outcome.entry_count, 1);
+        assert_eq!(outcome.manifest_digest.len(), 64);
+        assert!(archive.is_file());
     }
 }

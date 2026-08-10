@@ -18,6 +18,7 @@ path = "src/main.rs"
 tauri-build.workspace = true
 
 [dependencies]
+chrono.workspace = true
 dms-core = { path = "../dms-core" }
 pulldown-cmark.workspace = true
 quick-xml.workspace = true

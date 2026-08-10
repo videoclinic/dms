@@ -13,7 +13,8 @@ use zip::ZipArchive;
 
 use super::{
     configured_text, default_author, DmsError, DocumentControl, EffectiveWorkflowRole,
-    EntraIdentitySource, EntraPerson, Lifecycle, ResolutionState, Result, SourceState, Workspace,
+    EntraIdentitySource, EntraPerson, Lifecycle, PeriodicReviewResult, ResolutionState, Result,
+    SourceState, Workspace,
 };
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -279,6 +280,15 @@ pub enum WorkflowEventType {
     RevisionBegun,
     DocumentObsoleted,
     ContentConformanceOverridden,
+    PeriodicReviewRequested,
+    PeriodicReviewCompleted,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PeriodicReviewEventDetails {
+    pub review_id: Uuid,
+    pub release_id: Uuid,
+    pub result: Option<PeriodicReviewResult>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -309,6 +319,8 @@ pub struct WorkflowEventBody {
     pub delivery: Option<DeliveryAttempt>,
     pub content_override: Option<ContentOverride>,
     pub pdf_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub periodic_review: Option<PeriodicReviewEventDetails>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -900,6 +912,7 @@ impl Workspace {
                 document.active_candidate_id = None;
                 document.lifecycle = Lifecycle::Released;
             }
+            self.schedule_next_review(document_id, release.released_at.date_naive())?;
 
             let mut minor_notification = None;
             if !candidate.approval_required {
@@ -1482,6 +1495,7 @@ impl Workspace {
             delivery: details.delivery,
             content_override: None,
             pdf_digest: details.pdf_digest,
+            periodic_review: None,
         };
         self.append_event(document_id, body)
     }
@@ -1517,11 +1531,12 @@ impl Workspace {
             delivery: None,
             content_override: None,
             pdf_digest: None,
+            periodic_review: None,
         };
         self.append_event(document_id, body)
     }
 
-    fn append_event(
+    pub(crate) fn append_event(
         &mut self,
         document_id: Uuid,
         body: WorkflowEventBody,

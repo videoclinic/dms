@@ -14,6 +14,7 @@ macOS.
 | `ui/app.mjs` | Static shell, session activities, saved-view persistence, and IPC orchestration |
 | `ui/library.mjs` | Folder-first explorer state, markup, selection rules, search, and sorting |
 | `ui/notes.mjs` | Per-document note activity state, create/edit/delete markup, and confirmation flow |
+| `ui/maintenance.mjs` | Releases, periodic-review, and full-backup panes with read-only verification, paging, and confirmation copy |
 | `ui/print/` | Shipped app-local Markdown print shell, stylesheet, and logo |
 | `ui/*.test.mjs` | Framework-free shell and Library interaction tests |
 | `capabilities/` | Tauri window permissions |
@@ -35,6 +36,14 @@ macOS.
   action opens a document-scoped activity keyed by stable document ID.
 - Note mutations call `dms-core`, save the workspace metadata, retain failed
   form drafts for retry, and clear the composer only after a successful save.
+- The Releases pane lists every recorded release with its verification status,
+  filters by document title, and exposes per-release and workspace-wide
+  verification actions. It never edits, repairs, or replaces release bytes.
+- The Audit & Reports pane shows periodic-review markers and lets a designated
+  approver request a new review; integrity-gated request failures are surfaced
+  in place.
+- The Maintenance pane writes a workspace backup archive to a user-supplied
+  path and refuses to overwrite an existing archive.
 - Load only app-local frontend assets; do not add remote runtime dependencies.
 - PDF adapters write only to the temporary path supplied by `dms-core`; core
   owns the classified final path, digest, atomic rename, and release evidence.
