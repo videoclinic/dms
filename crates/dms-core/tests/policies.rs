@@ -35,11 +35,13 @@ fn schema_v1_metadata_migrates_to_the_current_store_shape() {
     let publish_root = temp.path().join("publish");
     fs::create_dir_all(edit_root.join(".dms")).expect("metadata directory");
     fs::create_dir_all(&publish_root).expect("publish root");
+    let canonical_edit_root = fs::canonicalize(&edit_root).expect("canonical edit root");
+    let canonical_publish_root = fs::canonicalize(&publish_root).expect("canonical publish root");
 
     let fixture = include_str!("fixtures/workspace-v1.json");
     let mut value: Value = serde_json::from_str(fixture).expect("fixture JSON");
-    value["edit_root"] = Value::String(edit_root.to_string_lossy().into_owned());
-    value["publish_root"] = Value::String(publish_root.to_string_lossy().into_owned());
+    value["edit_root"] = Value::String(canonical_edit_root.to_string_lossy().into_owned());
+    value["publish_root"] = Value::String(canonical_publish_root.to_string_lossy().into_owned());
     fs::write(
         edit_root.join(".dms/workspace.json"),
         serde_json::to_vec_pretty(&value).expect("fixture serialization"),
@@ -48,6 +50,8 @@ fn schema_v1_metadata_migrates_to_the_current_store_shape() {
 
     let workspace = Workspace::open(&edit_root).expect("migrated workspace");
     assert_eq!(workspace.schema_version, SCHEMA_VERSION);
+    assert_eq!(workspace.edit_root, canonical_edit_root);
+    assert_eq!(workspace.publish_root, canonical_publish_root);
     assert_eq!(
         workspace.workspace_id.to_string(),
         "4fc6f944-813c-4fed-8c14-72cb956fa683"
