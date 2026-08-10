@@ -16,7 +16,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        include:
+          - os: windows-latest
+            bundle: nsis
+          - os: macos-latest
+            bundle: dmg
 
     steps:
       - uses: actions/checkout@v4
@@ -43,3 +47,9 @@ jobs:
         run: cargo run -p dms-desktop
         env:
           DMS_DESKTOP_EXPORT_SMOKE: "1"
+      - name: Build installable desktop package
+        uses: tauri-apps/tauri-action@v1
+        with:
+          projectPath: crates/dms-desktop
+          args: --bundles ${{ matrix.bundle }}
+          uploadWorkflowArtifacts: true

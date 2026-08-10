@@ -136,7 +136,7 @@ ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
 | Root `README.md` | Public project overview and current concept state; it summarizes but does not replace CAP, CHG, or architecture records |
 | Root `LICENSE` | MIT license for project source and documentation |
 | `Cargo.toml`, `Cargo.lock`, `crates/` | Rust workspace: shared `dms-core`, standalone `dms` CLI, and Tauri `dms-desktop` adapter |
-| `.github/workflows/desktop-platform-smoke.yml` | Rust 1.88 Windows/macOS workspace gate, desktop launch smoke, and native multi-page WebView PDF export smoke |
+| `.github/workflows/desktop-platform-smoke.yml` | Rust 1.88 Windows/macOS workspace gate, desktop launch smoke, native multi-page WebView PDF export smoke, and NSIS/DMG packaging smoke |
 
 ### Index scope
 
