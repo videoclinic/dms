@@ -271,3 +271,83 @@ fn cli_configures_catalogues_folder_policies_and_identity_routing() {
     assert!(!metadata.contains("client_secret"));
     assert!(!metadata.contains("access_token"));
 }
+
+#[test]
+fn cli_lists_searches_unregisters_and_reassociates_library_files() {
+    let edit_root = tempfile::tempdir().expect("edit root");
+    let publish_root = tempfile::tempdir().expect("publish root");
+    let source = edit_root.path().join("Policies/Handbook.md");
+    fs::create_dir_all(source.parent().expect("source parent")).expect("source folder");
+    fs::write(&source, "# Handbook").expect("source");
+    assert!(dms()
+        .args(["workspace", "init", "--edit-root"])
+        .arg(edit_root.path())
+        .arg("--publish-root")
+        .arg(publish_root.path())
+        .arg("--confirm")
+        .status()
+        .expect("init")
+        .success());
+
+    let listing = dms()
+        .arg("--json")
+        .args(["library", "list", "--edit-root"])
+        .arg(edit_root.path())
+        .args(["--folder", "Policies"])
+        .output()
+        .expect("list folder");
+    assert!(listing.status.success());
+    let listing: Value = serde_json::from_slice(&listing.stdout).expect("listing JSON");
+    assert_eq!(listing["entries"][0]["name"], "Handbook.md");
+    assert_eq!(listing["entries"][0]["membership"], "not_in_library");
+
+    let add = dms()
+        .arg("--json")
+        .args(["document", "add", "--edit-root"])
+        .arg(edit_root.path())
+        .arg("--path")
+        .arg(&source)
+        .output()
+        .expect("add document");
+    assert!(add.status.success());
+    let document: Value = serde_json::from_slice(&add.stdout).expect("document JSON");
+    let document_id = document["id"].as_str().expect("document ID");
+
+    let search = dms()
+        .arg("--json")
+        .args(["library", "search", "--edit-root"])
+        .arg(edit_root.path())
+        .args(["--query", "HANDBOOK.MD"])
+        .output()
+        .expect("search library");
+    assert!(search.status.success());
+    let results: Value = serde_json::from_slice(&search.stdout).expect("search JSON");
+    assert_eq!(results[0]["document"]["id"], document_id);
+
+    let unregister = dms()
+        .arg("--json")
+        .args(["document", "unregister", "--edit-root"])
+        .arg(edit_root.path())
+        .args(["--document", document_id])
+        .output()
+        .expect("unregister");
+    assert!(unregister.status.success());
+    let unregistered: Value = serde_json::from_slice(&unregister.stdout).expect("unregister JSON");
+    assert_eq!(unregistered["source_state"], "unregistered");
+
+    let renamed = edit_root.path().join("Policies/Staff-Handbook.md");
+    fs::rename(&source, &renamed).expect("external rename");
+    let reassociate = dms()
+        .arg("--json")
+        .args(["document", "reassociate", "--edit-root"])
+        .arg(edit_root.path())
+        .args(["--document", document_id, "--path"])
+        .arg(&renamed)
+        .output()
+        .expect("reassociate");
+    assert!(reassociate.status.success());
+    let reassociated: Value =
+        serde_json::from_slice(&reassociate.stdout).expect("reassociate JSON");
+    assert_eq!(reassociated["id"], document_id);
+    assert_eq!(reassociated["relative_path"], "Policies/Staff-Handbook.md");
+}

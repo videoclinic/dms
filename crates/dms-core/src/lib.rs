@@ -11,12 +11,14 @@ use thiserror::Error;
 use uuid::Uuid;
 
 mod catalogues;
+mod library;
 mod policies;
 
 pub use catalogues::*;
+pub use library::*;
 pub use policies::*;
 
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 
@@ -106,6 +108,10 @@ pub enum DmsError {
     ConfidentialityTypeInUse(String),
     #[error("migration backup at {0} does not match the workspace being migrated")]
     MigrationBackupConflict(PathBuf),
+    #[error("library folder {0} must be an existing edit-root-relative directory")]
+    InvalidLibraryFolder(PathBuf),
+    #[error("library entry {0} does not have a supported filesystem name")]
+    InvalidLibraryEntry(PathBuf),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -137,6 +143,8 @@ pub struct Document {
     #[serde(with = "relative_path_serde")]
     pub relative_path: PathBuf,
     pub lifecycle: Lifecycle,
+    #[serde(default)]
+    pub source_state: SourceState,
     pub control: DocumentControl,
     #[serde(default)]
     pub(crate) confidentiality_override: Option<String>,
@@ -234,9 +242,11 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = found == 1;
-        if migrated {
+        let migrated = matches!(found, 1 | 2);
+        if found == 1 {
             migrate_v1_catalogues(&mut value)?;
+        }
+        if migrated {
             value["schema_version"] = serde_json::Value::from(SCHEMA_VERSION);
         } else if found != SCHEMA_VERSION {
             return Err(DmsError::UnsupportedSchema {
@@ -377,18 +387,27 @@ impl Workspace {
         if !is_supported_source(&absolute_path) {
             return Err(DmsError::UnsupportedSource(absolute_path));
         }
-        if self
+        if let Some(existing_id) = self
             .documents
             .values()
-            .any(|document| document.relative_path == relative_path)
+            .find_map(|document| (document.relative_path == relative_path).then_some(document.id))
         {
-            return Err(DmsError::DocumentAlreadyRegistered(relative_path));
+            let existing = self
+                .documents
+                .get_mut(&existing_id)
+                .expect("document ID came from the same map");
+            if existing.source_state == SourceState::Registered {
+                return Err(DmsError::DocumentAlreadyRegistered(relative_path));
+            }
+            existing.source_state = SourceState::Registered;
+            return Ok(existing.clone());
         }
         let title = source_title(&absolute_path)?;
         let document = Document {
             id: Uuid::new_v4(),
             relative_path,
             lifecycle: Lifecycle::Draft,
+            source_state: SourceState::Registered,
             control: DocumentControl {
                 title,
                 document_number: None,

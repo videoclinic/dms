@@ -34,6 +34,10 @@ enum Command {
         #[command(subcommand)]
         command: PolicyCommand,
     },
+    Library {
+        #[command(subcommand)]
+        command: LibraryCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -87,6 +91,48 @@ enum DocumentCommand {
         document_type: Option<String>,
         #[arg(long)]
         owner: Option<String>,
+    },
+    Unregister {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long)]
+        document: Uuid,
+    },
+    Reassociate {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long)]
+        document: Uuid,
+        #[arg(long)]
+        path: PathBuf,
+    },
+    Permalink {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long)]
+        document: Uuid,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum LibraryCommand {
+    Tree {
+        #[arg(long)]
+        edit_root: PathBuf,
+    },
+    List {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long, default_value = ".")]
+        folder: PathBuf,
+    },
+    Search {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long, default_value = ".")]
+        folder: PathBuf,
+        #[arg(long)]
+        query: String,
     },
 }
 
@@ -233,6 +279,33 @@ fn run(cli: Cli) -> CliResult<()> {
         Command::Document { command } => run_document(command, cli.json),
         Command::Note { command } => run_note(command, cli.json),
         Command::Policy { command } => run_policy(command, cli.json),
+        Command::Library { command } => run_library(command, cli.json),
+    }
+}
+
+fn run_library(command: LibraryCommand, json: bool) -> CliResult<()> {
+    match command {
+        LibraryCommand::Tree { edit_root } => {
+            let workspace = Workspace::open(&edit_root)?;
+            let tree = workspace.library_tree()?;
+            print_value(&tree, json, format!("{} library folders", tree.len()))
+        }
+        LibraryCommand::List { edit_root, folder } => {
+            let workspace = Workspace::open(&edit_root)?;
+            let listing = workspace.library_folder(&folder)?;
+            let count = listing.entries.len();
+            print_value(&listing, json, format!("{count} entries"))
+        }
+        LibraryCommand::Search {
+            edit_root,
+            folder,
+            query,
+        } => {
+            let workspace = Workspace::open(&edit_root)?;
+            let results = workspace.search_library(&folder, &query)?;
+            let count = results.len();
+            print_value(&results, json, format!("{count} matching files"))
+        }
     }
 }
 
@@ -471,6 +544,33 @@ fn run_document(command: DocumentCommand, json: bool) -> CliResult<()> {
             )?;
             workspace.save()?;
             print_document(&updated, json, "updated")
+        }
+        DocumentCommand::Unregister {
+            edit_root,
+            document,
+        } => {
+            let mut workspace = Workspace::open(&edit_root)?;
+            let unregistered = workspace.unregister_document(document)?;
+            workspace.save()?;
+            print_document(&unregistered, json, "unregistered")
+        }
+        DocumentCommand::Reassociate {
+            edit_root,
+            document,
+            path,
+        } => {
+            let mut workspace = Workspace::open(&edit_root)?;
+            let reassociated = workspace.reassociate_document(document, &path)?;
+            workspace.save()?;
+            print_document(&reassociated, json, "reassociated")
+        }
+        DocumentCommand::Permalink {
+            edit_root,
+            document,
+        } => {
+            let workspace = Workspace::open(&edit_root)?;
+            let permalink = workspace.document_permalink(document)?;
+            print_value(&permalink, json, permalink.clone())
         }
     }
 }

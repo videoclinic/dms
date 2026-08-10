@@ -11,6 +11,7 @@ persistence.
 | --- | --- |
 | `src/lib.rs` | Versioned workspace store, migration boundary, document-control data, and notes API |
 | `src/catalogues.rs` | Document-type catalogue primitives plus shared stable-ID and label validation |
+| `src/library.rs` | Folder/file discovery, membership, search, registration state, reassociation, and permalinks |
 | `src/policies.rs` | Folder-policy tree, confidentiality inheritance, Entra display binding, and workflow-role resolution |
 | `tests/` | Domain, migration-fixture, and persistence behaviour tests |
 
@@ -21,6 +22,11 @@ persistence.
   and are stored relative to it with platform-independent `/` separators in
   metadata and machine-readable output.
 - Source filename/path are locator facts; control data is independent metadata.
+- Folder discovery exposes only edit-root-relative regular files and directories,
+  excludes `.dms` and Office temporary sidecars, and never auto-registers or
+  auto-reassociates a source.
+- Unregister and reassociate preserve stable document identity and retained
+  document metadata; batch mutations validate atomically before changing state.
 - `Workspace::save` is the only persistence boundary for mutating callers.
 - Schema migrations retain the source metadata backup and verify the migrated
   shape before atomically replacing `workspace.json`.

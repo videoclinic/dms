@@ -21,6 +21,8 @@ executable.
 - Policy commands use explicit edit-root-relative targets. Injected eligible-
   person snapshots use the explicit `@file:PATH` marker and contain only
   non-secret display data.
+- Library commands expose filesystem-derived tree/list/search results separately
+  from explicit document add, unregister, reassociate, and permalink mutations.
 
 ## Work Guidance
 
