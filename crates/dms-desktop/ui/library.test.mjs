@@ -159,6 +159,7 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /<th>Name<\/th><th>Title<\/th>/);
   assert.match(markup, /Handbook\.md/);
   assert.match(markup, /Employee handbook/);
+  assert.match(markup, /data-library-open-notes/);
   assert.match(markup, /data-library-copy-permalink/);
   assert.match(markup, /data-library-unregister/);
   assert.match(markup, /id="library-reassociate-form"/);

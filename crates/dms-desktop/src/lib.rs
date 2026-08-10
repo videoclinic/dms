@@ -5,7 +5,7 @@ use std::{
 
 use dms_core::{
     Document, DocumentControl, EffectiveConfidentiality, EffectiveWorkflowRoles, LibraryEntry,
-    LibraryFolder, LibraryFolderNode, Lifecycle, SourceState, Workspace,
+    LibraryFolder, LibraryFolderNode, Lifecycle, Note, SourceState, Workspace,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
@@ -71,6 +71,14 @@ pub struct DocumentSelection {
     pub effective_confidentiality: Option<EffectiveConfidentiality>,
     pub effective_workflow_roles: Option<EffectiveWorkflowRoles>,
     pub permalink: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct DocumentNotes {
+    pub document_id: Uuid,
+    pub title: String,
+    pub document_number: Option<String>,
+    pub notes: Vec<Note>,
 }
 
 #[tauri::command]
@@ -164,6 +172,59 @@ fn load_document_selection(
     document_selection(Path::new(&edit_root), document_id)
 }
 
+#[tauri::command]
+fn load_document_notes(edit_root: String, document_id: Uuid) -> Result<DocumentNotes, String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    document_notes(&workspace, document_id)
+}
+
+#[tauri::command]
+fn add_document_note(
+    edit_root: String,
+    document_id: Uuid,
+    body: String,
+    author: Option<String>,
+) -> Result<DocumentNotes, String> {
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .add_note(document_id, &body, author.as_deref())
+        .map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
+    document_notes(&workspace, document_id)
+}
+
+#[tauri::command]
+fn edit_document_note(
+    edit_root: String,
+    document_id: Uuid,
+    note_id: Uuid,
+    body: String,
+) -> Result<DocumentNotes, String> {
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .edit_note(document_id, note_id, &body)
+        .map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
+    document_notes(&workspace, document_id)
+}
+
+#[tauri::command]
+fn remove_document_note(
+    edit_root: String,
+    document_id: Uuid,
+    note_id: Uuid,
+) -> Result<DocumentNotes, String> {
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .remove_note(document_id, note_id)
+        .map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
+    document_notes(&workspace, document_id)
+}
+
 fn load_preferences_at(path: &Path) -> Result<Preferences, String> {
     if !path.exists() {
         return Ok(Preferences::default());
@@ -247,6 +308,20 @@ fn document_selection(edit_root: &Path, document_id: Uuid) -> Result<DocumentSel
     })
 }
 
+fn document_notes(workspace: &Workspace, document_id: Uuid) -> Result<DocumentNotes, String> {
+    let document = workspace
+        .document(document_id)
+        .map_err(|error| error.to_string())?;
+    Ok(DocumentNotes {
+        document_id,
+        title: document.control.title.clone(),
+        document_number: document.control.document_number.clone(),
+        notes: workspace
+            .notes(document_id)
+            .map_err(|error| error.to_string())?,
+    })
+}
+
 fn path_text(path: &Path) -> String {
     if path == Path::new(".") {
         return ".".to_owned();
@@ -290,7 +365,11 @@ pub fn run() {
             add_library_documents,
             unregister_library_documents,
             reassociate_library_document,
-            load_document_selection
+            load_document_selection,
+            load_document_notes,
+            add_document_note,
+            edit_document_note,
+            remove_document_note
         ])
         .run(tauri::generate_context!())
         .expect("DMS Desktop failed to start");
@@ -372,5 +451,58 @@ mod tests {
         assert_eq!(selection.relative_path, "Policies/Handbook.md");
         assert_eq!(selection.document_id, document.id);
         assert!(selection.permalink.ends_with(&document.id.to_string()));
+    }
+
+    #[test]
+    fn desktop_note_commands_persist_create_edit_delete_and_newest_first_order() {
+        let edit_root = tempfile::tempdir().unwrap();
+        let publish_root = tempfile::tempdir().unwrap();
+        let mut workspace = Workspace::init(edit_root.path(), publish_root.path()).unwrap();
+        let source = edit_root.path().join("Notes.md");
+        fs::write(&source, "# Notes").unwrap();
+        let document = workspace.add_document(&source).unwrap();
+        workspace.save().unwrap();
+        let root = edit_root.path().to_string_lossy().into_owned();
+
+        let first = add_document_note(
+            root.clone(),
+            document.id,
+            "First note".into(),
+            Some("Raphael".into()),
+        )
+        .unwrap();
+        let first_id = first.notes[0].id;
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        let second =
+            add_document_note(root.clone(), document.id, "Second note".into(), None).unwrap();
+        let second_id = second.notes[0].id;
+        assert_eq!(
+            second.notes.iter().map(|note| note.id).collect::<Vec<_>>(),
+            vec![second_id, first_id]
+        );
+
+        let edited = edit_document_note(
+            root.clone(),
+            document.id,
+            first_id,
+            "Edited first note".into(),
+        )
+        .unwrap();
+        assert_eq!(
+            edited
+                .notes
+                .iter()
+                .find(|note| note.id == first_id)
+                .unwrap()
+                .body,
+            "Edited first note"
+        );
+        let remaining = remove_document_note(root.clone(), document.id, second_id).unwrap();
+        assert_eq!(remaining.notes.len(), 1);
+
+        let reopened = load_document_notes(root, document.id).unwrap();
+        assert_eq!(reopened.notes.len(), 1);
+        assert_eq!(reopened.notes[0].id, first_id);
+        assert_eq!(reopened.notes[0].body, "Edited first note");
     }
 }

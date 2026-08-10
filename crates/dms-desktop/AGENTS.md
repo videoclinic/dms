@@ -13,6 +13,7 @@ macOS.
 | `src/export.rs` | `.docx`/Markdown PDF adapters, Office automation, native WebView PDF capture, and format-specific tests |
 | `ui/app.mjs` | Static shell, session activities, saved-view persistence, and IPC orchestration |
 | `ui/library.mjs` | Folder-first explorer state, markup, selection rules, search, and sorting |
+| `ui/notes.mjs` | Per-document note activity state, create/edit/delete markup, and confirmation flow |
 | `ui/print/` | Shipped app-local Markdown print shell, stylesheet, and logo |
 | `ui/*.test.mjs` | Framework-free shell and Library interaction tests |
 | `capabilities/` | Tauri window permissions |
@@ -30,7 +31,10 @@ macOS.
 - Library navigation keeps one session activity while saved Library views retain
   edit-root-relative folder, sort, and at most one stable document target.
 - The Library selection pane owns add/unregister/reassociate/permalink controls;
-  file rows remain selection-only and preserve exact source names.
+  file rows remain selection-only and preserve exact source names. Its notes
+  action opens a document-scoped activity keyed by stable document ID.
+- Note mutations call `dms-core`, save the workspace metadata, retain failed
+  form drafts for retry, and clear the composer only after a successful save.
 - Load only app-local frontend assets; do not add remote runtime dependencies.
 - PDF adapters write only to the temporary path supplied by `dms-core`; core
   owns the classified final path, digest, atomic rename, and release evidence.

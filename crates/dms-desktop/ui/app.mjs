@@ -9,6 +9,13 @@ import {
   selectedEntries,
   toggleLibrarySelection,
 } from "./library.mjs";
+import {
+  applyDocumentNotes,
+  createNoteDocumentState,
+  documentNotesMarkup,
+  noteDocumentState,
+  updateNoteDocumentState,
+} from "./notes.mjs";
 
 const DESTINATIONS = [
   ["Library", "▦"],
@@ -32,6 +39,7 @@ export function createInitialState(preferences = defaultPreferences()) {
     current_key: null,
     workspace: null,
     library: createLibraryState(),
+    note_documents: {},
     sidebar_overlay: false,
     flyout: null,
     error: "",
@@ -120,7 +128,7 @@ function currentActivity(state) {
 
 function bookmarkActivity(state) {
   const activity = currentActivity(state);
-  if (!activity || activity.destination !== "Library") return activity;
+  if (!activity || activity.task !== "Library") return activity;
   const selected = selectedEntries(state.library);
   const documentId = selected.length === 1 && membershipKind(selected[0]) === "in_library"
     ? entryDocumentId(selected[0])
@@ -204,6 +212,9 @@ function activityMarkup(state, activity) {
     return setupMarkup(state.error);
   }
   const workspace = state.workspace;
+  if (activity.task === "Notes") {
+    return documentNotesMarkup(activity, noteDocumentState(state.note_documents, activity.document_id));
+  }
   if (activity.destination === "Library") {
     return libraryMarkup(workspace, activity, state.library, state.error);
   }
@@ -219,7 +230,7 @@ function render(state) {
   const activity = currentActivity(state);
   document.querySelector("#activity-heading").textContent = activity?.label ?? "Set up workspace";
   const mainContent = document.querySelector("#main-content");
-  mainContent.classList.toggle("library-active", activity?.destination === "Library");
+  mainContent.classList.toggle("library-active", activity?.task === "Library");
   mainContent.innerHTML = state.workspace
     ? activityMarkup(state, activity)
     : setupMarkup(state.error);
@@ -332,6 +343,61 @@ async function loadSelectedDocument() {
   }
 }
 
+async function loadDocumentNotes(documentId) {
+  appState = {
+    ...appState,
+    note_documents: updateNoteDocumentState(appState.note_documents, documentId, {
+      loading: true,
+      error: "",
+    }),
+  };
+  render(appState);
+  try {
+    const detail = await invokeCommand("load_document_notes", {
+      editRoot: appState.workspace.edit_root,
+      documentId,
+    });
+    appState = {
+      ...appState,
+      note_documents: applyDocumentNotes(appState.note_documents, detail),
+    };
+  } catch (error) {
+    appState = {
+      ...appState,
+      note_documents: updateNoteDocumentState(appState.note_documents, documentId, {
+        loading: false,
+        error: String(error),
+      }),
+    };
+  }
+  render(appState);
+}
+
+function openDocumentNotes() {
+  const detail = appState.library.detail;
+  if (!detail) return;
+  const suffix = detail.control.document_number ? ` · ${detail.control.document_number}` : "";
+  appState = openActivity(appState, {
+    workspace_id: appState.workspace.workspace_id,
+    destination: "Library",
+    task: "Notes",
+    label: `Notes · ${detail.control.title}${suffix}`,
+    document_id: detail.document_id,
+    route_state: {},
+  });
+  if (!appState.note_documents[detail.document_id]) {
+    appState = {
+      ...appState,
+      note_documents: {
+        ...appState.note_documents,
+        [detail.document_id]: createNoteDocumentState(),
+      },
+    };
+  }
+  render(appState);
+  void loadDocumentNotes(detail.document_id);
+}
+
 async function refreshWorkspaceAndLibrary() {
   const workspace = await invokeCommand("open_workspace", { editRoot: appState.workspace.edit_root });
   appState = { ...appState, workspace };
@@ -416,6 +482,10 @@ async function handleLibraryClick(event) {
     }
     return true;
   }
+  if (event.target.closest("[data-library-open-notes]")) {
+    openDocumentNotes();
+    return true;
+  }
   if (event.target.closest("[data-library-copy-permalink]")) {
     try {
       if (!navigator.clipboard) throw new Error("Clipboard access is unavailable.");
@@ -444,6 +514,86 @@ async function handleLibraryClick(event) {
   return false;
 }
 
+async function applyNoteMutation(command, arguments_) {
+  const documentId = arguments_.documentId;
+  try {
+    const detail = await invokeCommand(command, {
+      editRoot: appState.workspace.edit_root,
+      ...arguments_,
+    });
+    appState = {
+      ...appState,
+      note_documents: applyDocumentNotes(appState.note_documents, detail),
+    };
+  } catch (error) {
+    appState = {
+      ...appState,
+      note_documents: updateNoteDocumentState(appState.note_documents, documentId, {
+        error: String(error),
+      }),
+    };
+  }
+  render(appState);
+}
+
+async function handleNotesClick(event) {
+  const activity = currentActivity(appState);
+  if (activity?.task !== "Notes") return false;
+  const documentId = activity.document_id;
+  const edit = event.target.closest("[data-note-edit]")?.dataset.noteEdit;
+  if (edit) {
+    const note = noteDocumentState(appState.note_documents, documentId)
+      .detail?.notes.find((candidate) => candidate.id === edit);
+    appState = {
+      ...appState,
+      note_documents: updateNoteDocumentState(appState.note_documents, documentId, {
+        editing_id: edit,
+        editing_body: note?.body ?? "",
+        delete_id: null,
+      }),
+    };
+    render(appState);
+    return true;
+  }
+  if (event.target.closest("[data-note-edit-cancel]")) {
+    appState = {
+      ...appState,
+      note_documents: updateNoteDocumentState(appState.note_documents, documentId, {
+        editing_id: null,
+        editing_body: null,
+      }),
+    };
+    render(appState);
+    return true;
+  }
+  const remove = event.target.closest("[data-note-delete-request]")?.dataset.noteDeleteRequest;
+  if (remove) {
+    appState = {
+      ...appState,
+      note_documents: updateNoteDocumentState(appState.note_documents, documentId, {
+        editing_id: null,
+        delete_id: remove,
+      }),
+    };
+    render(appState);
+    return true;
+  }
+  if (event.target.closest("[data-note-delete-cancel]")) {
+    appState = {
+      ...appState,
+      note_documents: updateNoteDocumentState(appState.note_documents, documentId, { delete_id: null }),
+    };
+    render(appState);
+    return true;
+  }
+  const confirm = event.target.closest("[data-note-delete-confirm]")?.dataset.noteDeleteConfirm;
+  if (confirm) {
+    await applyNoteMutation("remove_document_note", { documentId, noteId: confirm });
+    return true;
+  }
+  return false;
+}
+
 async function handleClick(event) {
   const destination = event.target.closest("[data-destination]")?.dataset.destination;
   if (destination) {
@@ -451,6 +601,7 @@ async function handleClick(event) {
     return;
   }
 
+  if (await handleNotesClick(event)) return;
   if (await handleLibraryClick(event)) return;
 
   const activityRemove = event.target.closest("[data-activity-remove]")?.dataset.activityRemove;
@@ -463,6 +614,10 @@ async function handleClick(event) {
   if (activityKeyValue) {
     appState = { ...appState, current_key: activityKeyValue, flyout: null };
     render(appState);
+    const activity = currentActivity(appState);
+    if (activity?.task === "Notes" && !noteDocumentState(appState.note_documents, activity.document_id).detail) {
+      void loadDocumentNotes(activity.document_id);
+    }
     return;
   }
 
@@ -486,7 +641,9 @@ async function handleClick(event) {
       appState = { ...appState, error: "That saved view's workspace is unavailable. You can remove the saved view." };
     } else {
       appState = openActivity(appState, activityFromSavedView(view));
-      if (view.destination === "Library") {
+      if (view.task === "Notes" && view.document_id) {
+        void loadDocumentNotes(view.document_id);
+      } else if (view.destination === "Library") {
         appState = {
           ...appState,
           library: { ...appState.library, sort: view.route_state?.sort ?? "name" },
@@ -510,6 +667,44 @@ async function handleClick(event) {
 }
 
 async function handleSubmit(event) {
+  if (event.target.id === "document-note-compose-form") {
+    event.preventDefault();
+    const activity = currentActivity(appState);
+    const form = new FormData(event.target);
+    const body = String(form.get("body") ?? "");
+    const author = String(form.get("author") ?? "").trim();
+    appState = {
+      ...appState,
+      note_documents: updateNoteDocumentState(appState.note_documents, activity.document_id, {
+        compose_body: body,
+        compose_author: author,
+      }),
+    };
+    await applyNoteMutation("add_document_note", {
+      documentId: activity.document_id,
+      body,
+      author: author || null,
+    });
+    return;
+  }
+  if (event.target.id === "document-note-edit-form") {
+    event.preventDefault();
+    const activity = currentActivity(appState);
+    const form = new FormData(event.target);
+    const body = String(form.get("body") ?? "");
+    appState = {
+      ...appState,
+      note_documents: updateNoteDocumentState(appState.note_documents, activity.document_id, {
+        editing_body: body,
+      }),
+    };
+    await applyNoteMutation("edit_document_note", {
+      documentId: activity.document_id,
+      noteId: event.target.dataset.noteId,
+      body,
+    });
+    return;
+  }
   if (event.target.id === "library-reassociate-form") {
     event.preventDefault();
     const path = String(new FormData(event.target).get("path") ?? "").trim();
