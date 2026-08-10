@@ -1,8 +1,15 @@
-use std::{fs, path::Path};
+use std::{
+    fs,
+    path::{Component, Path, PathBuf},
+};
 
-use dms_core::Workspace;
+use dms_core::{
+    Document, DocumentControl, EffectiveConfidentiality, EffectiveWorkflowRoles, LibraryEntry,
+    LibraryFolder, LibraryFolderNode, Lifecycle, SourceState, Workspace,
+};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
+use uuid::Uuid;
 
 const PREFERENCES_FILENAME: &str = "preferences.json";
 
@@ -43,6 +50,27 @@ pub struct WorkspaceSummary {
     pub document_count: usize,
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct LibrarySnapshot {
+    pub tree: Vec<LibraryFolderNode>,
+    pub folder: LibraryFolder,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct DocumentSelection {
+    pub document_id: Uuid,
+    pub source_name: String,
+    pub relative_path: String,
+    pub folder: String,
+    pub source_exists: bool,
+    pub source_state: SourceState,
+    pub lifecycle: Lifecycle,
+    pub control: DocumentControl,
+    pub effective_confidentiality: Option<EffectiveConfidentiality>,
+    pub effective_workflow_roles: Option<EffectiveWorkflowRoles>,
+    pub permalink: String,
+}
+
 #[tauri::command]
 fn load_preferences(app: AppHandle) -> Result<Preferences, String> {
     let path = app
@@ -66,6 +94,72 @@ fn save_preferences(app: AppHandle, preferences: Preferences) -> Result<(), Stri
 #[tauri::command]
 fn open_workspace(edit_root: String) -> Result<WorkspaceSummary, String> {
     workspace_summary(Path::new(&edit_root))
+}
+
+#[tauri::command]
+fn load_library(edit_root: String, folder: String) -> Result<LibrarySnapshot, String> {
+    library_snapshot(Path::new(&edit_root), Path::new(&folder))
+}
+
+#[tauri::command]
+fn search_library(
+    edit_root: String,
+    folder: String,
+    query: String,
+) -> Result<Vec<LibraryEntry>, String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .search_library(Path::new(&folder), &query)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn add_library_documents(edit_root: String, paths: Vec<String>) -> Result<Vec<Document>, String> {
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let paths = paths.into_iter().map(PathBuf::from).collect::<Vec<_>>();
+    let documents = workspace
+        .add_documents(&paths)
+        .map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
+    Ok(documents)
+}
+
+#[tauri::command]
+fn unregister_library_documents(
+    edit_root: String,
+    document_ids: Vec<Uuid>,
+) -> Result<Vec<Document>, String> {
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let documents = workspace
+        .unregister_documents(&document_ids)
+        .map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
+    Ok(documents)
+}
+
+#[tauri::command]
+fn reassociate_library_document(
+    edit_root: String,
+    document_id: Uuid,
+    path: String,
+) -> Result<Document, String> {
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let document = workspace
+        .reassociate_document(document_id, Path::new(&path))
+        .map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
+    Ok(document)
+}
+
+#[tauri::command]
+fn load_document_selection(
+    edit_root: String,
+    document_id: Uuid,
+) -> Result<DocumentSelection, String> {
+    document_selection(Path::new(&edit_root), document_id)
 }
 
 fn load_preferences_at(path: &Path) -> Result<Preferences, String> {
@@ -105,6 +199,65 @@ fn workspace_summary(edit_root: &Path) -> Result<WorkspaceSummary, String> {
     })
 }
 
+fn library_snapshot(edit_root: &Path, folder: &Path) -> Result<LibrarySnapshot, String> {
+    let workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
+    Ok(LibrarySnapshot {
+        tree: workspace
+            .library_tree()
+            .map_err(|error| error.to_string())?,
+        folder: workspace
+            .library_folder(folder)
+            .map_err(|error| error.to_string())?,
+    })
+}
+
+fn document_selection(edit_root: &Path, document_id: Uuid) -> Result<DocumentSelection, String> {
+    let workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
+    let document = workspace
+        .document(document_id)
+        .map_err(|error| error.to_string())?;
+    let source_name = document
+        .relative_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "document source name is not valid UTF-8".to_owned())?
+        .to_owned();
+    let folder = document
+        .relative_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .map(path_text)
+        .unwrap_or_else(|| ".".to_owned());
+    Ok(DocumentSelection {
+        document_id,
+        source_name,
+        relative_path: path_text(&document.relative_path),
+        folder,
+        source_exists: workspace.edit_root.join(&document.relative_path).is_file(),
+        source_state: document.source_state,
+        lifecycle: document.lifecycle,
+        control: document.control.clone(),
+        effective_confidentiality: workspace.effective_confidentiality(document_id).ok(),
+        effective_workflow_roles: workspace.effective_workflow_roles(document_id).ok(),
+        permalink: workspace
+            .document_permalink(document_id)
+            .map_err(|error| error.to_string())?,
+    })
+}
+
+fn path_text(path: &Path) -> String {
+    if path == Path::new(".") {
+        return ".".to_owned();
+    }
+    path.components()
+        .filter_map(|component| match component {
+            Component::Normal(value) => value.to_str(),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -117,7 +270,13 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             load_preferences,
             save_preferences,
-            open_workspace
+            open_workspace,
+            load_library,
+            search_library,
+            add_library_documents,
+            unregister_library_documents,
+            reassociate_library_document,
+            load_document_selection
         ])
         .run(tauri::generate_context!())
         .expect("DMS Desktop failed to start");
@@ -174,5 +333,30 @@ mod tests {
             summary.publish_root,
             workspace.publish_root.to_string_lossy()
         );
+    }
+
+    #[test]
+    fn desktop_adapter_lists_and_selects_library_documents() {
+        let edit_root = tempfile::tempdir().unwrap();
+        let publish_root = tempfile::tempdir().unwrap();
+        let mut workspace = Workspace::init(edit_root.path(), publish_root.path()).unwrap();
+        fs::create_dir_all(edit_root.path().join("Policies/Empty")).unwrap();
+        let source = edit_root.path().join("Policies/Handbook.md");
+        fs::write(&source, "# Handbook").unwrap();
+        let document = workspace.add_document(&source).unwrap();
+        workspace.save().unwrap();
+
+        let snapshot = library_snapshot(edit_root.path(), Path::new("Policies")).unwrap();
+        assert_eq!(snapshot.folder.entries.len(), 2);
+        assert!(snapshot
+            .tree
+            .iter()
+            .any(|folder| folder.relative_path == Path::new("Policies/Empty")));
+
+        let selection = document_selection(edit_root.path(), document.id).unwrap();
+        assert_eq!(selection.source_name, "Handbook.md");
+        assert_eq!(selection.relative_path, "Policies/Handbook.md");
+        assert_eq!(selection.document_id, document.id);
+        assert!(selection.permalink.ends_with(&document.id.to_string()));
     }
 }

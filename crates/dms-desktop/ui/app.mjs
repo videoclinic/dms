@@ -1,3 +1,15 @@
+import {
+  applyLibrarySnapshot,
+  createLibraryState,
+  entryDocumentId,
+  historyTarget,
+  libraryMarkup,
+  membershipKind,
+  normalizeLibraryPath,
+  selectedEntries,
+  toggleLibrarySelection,
+} from "./library.mjs";
+
 const DESTINATIONS = [
   ["Library", "▦"],
   ["Releases", "□"],
@@ -19,6 +31,7 @@ export function createInitialState(preferences = defaultPreferences()) {
     activities: [],
     current_key: null,
     workspace: null,
+    library: createLibraryState(),
     sidebar_overlay: false,
     flyout: null,
     error: "",
@@ -31,16 +44,24 @@ function normalizedFolder(folder) {
 }
 
 export function activityKey(activity) {
-  if (activity.document_id) {
-    return `${activity.workspace_id}:${activity.task}:document:${activity.document_id}`;
-  }
   if (activity.task === "Library") {
     return `${activity.workspace_id}:Library`;
+  }
+  if (activity.document_id) {
+    return `${activity.workspace_id}:${activity.task}:document:${activity.document_id}`;
   }
   if (activity.route_state?.folder) {
     return `${activity.workspace_id}:${activity.task}:folder:${normalizedFolder(activity.route_state.folder)}`;
   }
   return `${activity.workspace_id}:${activity.task}`;
+}
+
+export function savedViewId(activity) {
+  if (activity.task !== "Library") return activityKey(activity);
+  const folder = normalizedFolder(activity.route_state?.folder);
+  const sort = activity.route_state?.sort ?? "name";
+  const document = activity.document_id ?? "none";
+  return `${activity.workspace_id}:saved:Library:${folder}:${sort}:${document}`;
 }
 
 export function openActivity(state, activity) {
@@ -65,7 +86,7 @@ export function closeActivity(state, key) {
 }
 
 export function toggleSavedView(preferences, activity) {
-  const id = activityKey(activity);
+  const id = savedViewId(activity);
   const savedViews = preferences.saved_views ?? [];
   const existing = savedViews.some((view) => view.id === id);
   return {
@@ -95,6 +116,24 @@ function escapeHtml(value) {
 
 function currentActivity(state) {
   return state.activities.find((activity) => activity.key === state.current_key) ?? null;
+}
+
+function bookmarkActivity(state) {
+  const activity = currentActivity(state);
+  if (!activity || activity.destination !== "Library") return activity;
+  const selected = selectedEntries(state.library);
+  const documentId = selected.length === 1 && membershipKind(selected[0]) === "in_library"
+    ? entryDocumentId(selected[0])
+    : null;
+  return {
+    ...activity,
+    document_id: documentId,
+    route_state: {
+      ...activity.route_state,
+      folder: normalizeLibraryPath(state.library.folder.relative_path),
+      sort: state.library.sort,
+    },
+  };
 }
 
 function activityFromSavedView(view) {
@@ -165,6 +204,9 @@ function activityMarkup(state, activity) {
     return setupMarkup(state.error);
   }
   const workspace = state.workspace;
+  if (activity.destination === "Library") {
+    return libraryMarkup(workspace, activity, state.library, state.error);
+  }
   return `<section class="card"><span class="badge">${escapeHtml(activity.destination)}</span><h2>${escapeHtml(activity.label)}</h2><p>The desktop shell is connected to the shared Rust core. Domain workflows beyond the phase-1 shell remain unavailable until their CHG phases are implemented.</p><dl class="details-grid"><dt>Workspace ID</dt><dd>${escapeHtml(workspace.workspace_id)}</dd><dt>Edit root</dt><dd>${escapeHtml(workspace.edit_root)}</dd><dt>Publish root</dt><dd>${escapeHtml(workspace.publish_root)}</dd><dt>Controlled documents</dt><dd>${escapeHtml(workspace.document_count)}</dd></dl></section>`;
 }
 
@@ -176,12 +218,16 @@ function render(state) {
 
   const activity = currentActivity(state);
   document.querySelector("#activity-heading").textContent = activity?.label ?? "Set up workspace";
-  document.querySelector("#main-content").innerHTML = state.workspace
+  const mainContent = document.querySelector("#main-content");
+  mainContent.classList.toggle("library-active", activity?.destination === "Library");
+  mainContent.innerHTML = state.workspace
     ? activityMarkup(state, activity)
     : setupMarkup(state.error);
 
   const bookmark = document.querySelector("#bookmark-view");
-  const bookmarked = activity && state.preferences.saved_views.some((view) => view.id === activity.key);
+  const bookmarkTarget = bookmarkActivity(state);
+  const bookmarked = bookmarkTarget
+    && state.preferences.saved_views.some((view) => view.id === savedViewId(bookmarkTarget));
   bookmark.hidden = !activity;
   bookmark.textContent = bookmarked ? "★ Bookmarked" : "☆ Bookmark this view";
   bookmark.classList.toggle("bookmarked", Boolean(bookmarked));
@@ -210,14 +256,202 @@ function openDestination(destination) {
     route_state: folder ? { folder } : {},
   });
   render(appState);
+  if (destination === "Library") {
+    void loadLibraryFolder(folder, "replace");
+  }
 }
 
-function handleClick(event) {
+function updateLibraryActivity(folder) {
+  const activity = currentActivity(appState);
+  if (!activity || activity.destination !== "Library") return;
+  const normalized = normalizeLibraryPath(folder);
+  appState = openActivity(appState, {
+    ...activity,
+    label: normalized === "." ? "Library · /" : `Library · ${normalized}`,
+    document_id: null,
+    route_state: { ...activity.route_state, folder: normalized, sort: appState.library.sort },
+  });
+}
+
+async function loadLibraryFolder(folder, historyMode = "push", documentId = null) {
+  const target = normalizeLibraryPath(folder);
+  appState = { ...appState, library: { ...appState.library, loading: true }, error: "" };
+  render(appState);
+  try {
+    const snapshot = await invokeCommand("load_library", {
+      editRoot: appState.workspace.edit_root,
+      folder: target,
+    });
+    appState = {
+      ...appState,
+      library: applyLibrarySnapshot(appState.library, snapshot, target, historyMode),
+      error: "",
+    };
+    if (documentId) {
+      const entry = appState.library.folder.entries.find(
+        (candidate) => entryDocumentId(candidate) === documentId,
+      );
+      if (entry) {
+        appState = {
+          ...appState,
+          library: {
+            ...appState.library,
+            selection: [normalizeLibraryPath(entry.relative_path)],
+          },
+        };
+      }
+    }
+    updateLibraryActivity(target);
+  } catch (error) {
+    appState = {
+      ...appState,
+      library: { ...appState.library, loading: false },
+      error: String(error),
+    };
+  }
+  render(appState);
+  if (documentId) void loadSelectedDocument();
+}
+
+async function loadSelectedDocument() {
+  const selected = selectedEntries(appState.library);
+  if (selected.length !== 1 || membershipKind(selected[0]) !== "in_library") return;
+  const documentId = entryDocumentId(selected[0]);
+  try {
+    const detail = await invokeCommand("load_document_selection", {
+      editRoot: appState.workspace.edit_root,
+      documentId,
+    });
+    if (selectedEntries(appState.library).some((entry) => entryDocumentId(entry) === documentId)) {
+      appState = { ...appState, library: { ...appState.library, detail }, error: "" };
+      render(appState);
+    }
+  } catch (error) {
+    appState = { ...appState, error: String(error) };
+    render(appState);
+  }
+}
+
+async function refreshWorkspaceAndLibrary() {
+  const workspace = await invokeCommand("open_workspace", { editRoot: appState.workspace.edit_root });
+  appState = { ...appState, workspace };
+  await loadLibraryFolder(appState.library.folder.relative_path, "replace");
+}
+
+async function handleLibraryClick(event) {
+  if (currentActivity(appState)?.destination !== "Library") return false;
+  const folder = event.target.closest("[data-library-folder]")?.dataset.libraryFolder;
+  if (folder) {
+    void loadLibraryFolder(folder);
+    return true;
+  }
+  const history = event.target.closest("[data-library-history]")?.dataset.libraryHistory;
+  if (history) {
+    const target = historyTarget(appState.library, history);
+    if (target) void loadLibraryFolder(target, history);
+    return true;
+  }
+  if (event.target.closest("[data-library-up]")) {
+    const parent = appState.library.folder.parent;
+    if (parent) void loadLibraryFolder(parent);
+    return true;
+  }
+  if (event.target.closest("[data-library-refresh]")) {
+    void loadLibraryFolder(appState.library.folder.relative_path, "replace");
+    return true;
+  }
+  if (event.target.closest("[data-library-clear-search]")) {
+    appState = {
+      ...appState,
+      library: { ...appState.library, results: null, query: "", page: 0, selection: [], detail: null },
+    };
+    render(appState);
+    return true;
+  }
+  if (event.target.closest("[data-library-clear-selection]")) {
+    appState = { ...appState, library: { ...appState.library, selection: [], detail: null } };
+    render(appState);
+    return true;
+  }
+  const pageDirection = event.target.closest("[data-library-page]")?.dataset.libraryPage;
+  if (pageDirection) {
+    const delta = pageDirection === "next" ? 1 : -1;
+    appState = {
+      ...appState,
+      library: { ...appState.library, page: Math.max(0, appState.library.page + delta) },
+    };
+    render(appState);
+    return true;
+  }
+  if (event.target.closest("[data-library-open-selected]")) {
+    const selected = selectedEntries(appState.library)[0];
+    if (selected?.kind === "folder") void loadLibraryFolder(selected.relative_path);
+    return true;
+  }
+  if (event.target.closest("[data-library-add]")) {
+    const paths = selectedEntries(appState.library).map((entry) => normalizeLibraryPath(entry.relative_path));
+    try {
+      await invokeCommand("add_library_documents", {
+        editRoot: appState.workspace.edit_root,
+        paths,
+      });
+      await refreshWorkspaceAndLibrary();
+    } catch (error) {
+      appState = { ...appState, error: String(error) };
+      render(appState);
+    }
+    return true;
+  }
+  if (event.target.closest("[data-library-unregister]")) {
+    const documentIds = selectedEntries(appState.library).map(entryDocumentId).filter(Boolean);
+    try {
+      await invokeCommand("unregister_library_documents", {
+        editRoot: appState.workspace.edit_root,
+        documentIds,
+      });
+      await refreshWorkspaceAndLibrary();
+    } catch (error) {
+      appState = { ...appState, error: String(error) };
+      render(appState);
+    }
+    return true;
+  }
+  if (event.target.closest("[data-library-copy-permalink]")) {
+    try {
+      if (!navigator.clipboard) throw new Error("Clipboard access is unavailable.");
+      await navigator.clipboard.writeText(appState.library.detail.permalink);
+      appState = { ...appState, error: "" };
+    } catch (error) {
+      appState = { ...appState, error: String(error) };
+    }
+    render(appState);
+    return true;
+  }
+  const row = event.target.closest("[data-library-entry]");
+  if (row) {
+    appState = {
+      ...appState,
+      library: toggleLibrarySelection(
+        appState.library,
+        row.dataset.libraryEntry,
+        event.ctrlKey || event.metaKey,
+      ),
+    };
+    render(appState);
+    void loadSelectedDocument();
+    return true;
+  }
+  return false;
+}
+
+async function handleClick(event) {
   const destination = event.target.closest("[data-destination]")?.dataset.destination;
   if (destination) {
     openDestination(destination);
     return;
   }
+
+  if (await handleLibraryClick(event)) return;
 
   const activityRemove = event.target.closest("[data-activity-remove]")?.dataset.activityRemove;
   if (activityRemove) {
@@ -252,6 +486,17 @@ function handleClick(event) {
       appState = { ...appState, error: "That saved view's workspace is unavailable. You can remove the saved view." };
     } else {
       appState = openActivity(appState, activityFromSavedView(view));
+      if (view.destination === "Library") {
+        appState = {
+          ...appState,
+          library: { ...appState.library, sort: view.route_state?.sort ?? "name" },
+        };
+        void loadLibraryFolder(
+          view.route_state?.folder ?? ".",
+          "replace",
+          view.document_id ?? null,
+        );
+      }
     }
     render(appState);
     return;
@@ -265,6 +510,60 @@ function handleClick(event) {
 }
 
 async function handleSubmit(event) {
+  if (event.target.id === "library-reassociate-form") {
+    event.preventDefault();
+    const path = String(new FormData(event.target).get("path") ?? "").trim();
+    try {
+      await invokeCommand("reassociate_library_document", {
+        editRoot: appState.workspace.edit_root,
+        documentId: appState.library.detail.document_id,
+        path,
+      });
+      await refreshWorkspaceAndLibrary();
+    } catch (error) {
+      appState = { ...appState, error: String(error) };
+      render(appState);
+    }
+    return;
+  }
+  if (event.target.id === "library-search-form") {
+    event.preventDefault();
+    const form = new FormData(event.target);
+    const query = String(form.get("query") ?? "").trim();
+    const entireLibrary = form.get("entireLibrary") === "on";
+    if (!query) {
+      appState = {
+        ...appState,
+        library: { ...appState.library, query: "", results: null, page: 0, selection: [], detail: null },
+      };
+      render(appState);
+      return;
+    }
+    try {
+      const results = await invokeCommand("search_library", {
+        editRoot: appState.workspace.edit_root,
+        folder: entireLibrary ? "." : appState.library.folder.relative_path,
+        query,
+      });
+      appState = {
+        ...appState,
+        library: {
+          ...appState.library,
+          query,
+          entire_library: entireLibrary,
+          results,
+          page: 0,
+          selection: [],
+          detail: null,
+        },
+        error: "",
+      };
+    } catch (error) {
+      appState = { ...appState, error: String(error) };
+    }
+    render(appState);
+    return;
+  }
   if (event.target.id !== "open-workspace-form") return;
   event.preventDefault();
   const editRoot = new FormData(event.target).get("editRoot");
@@ -275,6 +574,35 @@ async function handleSubmit(event) {
   } catch (error) {
     appState = { ...appState, error: String(error) };
     render(appState);
+  }
+}
+
+function handleChange(event) {
+  if (event.target.matches("[data-library-page-size]")) {
+    appState = {
+      ...appState,
+      library: { ...appState.library, page_size: Number(event.target.value), page: 0 },
+    };
+    render(appState);
+    return;
+  }
+  if (!event.target.matches("[data-library-sort]")) return;
+  appState = { ...appState, library: { ...appState.library, sort: event.target.value, page: 0 } };
+  updateLibraryActivity(appState.library.folder.relative_path);
+  render(appState);
+}
+
+function handleDoubleClick(event) {
+  const row = event.target.closest("[data-library-entry][data-library-kind='folder']");
+  if (row) void loadLibraryFolder(row.dataset.libraryEntry);
+}
+
+function handleKeyDown(event) {
+  if (event.key !== "Enter") return;
+  const row = event.target.closest("[data-library-entry][data-library-kind='folder']");
+  if (row) {
+    event.preventDefault();
+    void loadLibraryFolder(row.dataset.libraryEntry);
   }
 }
 
@@ -290,6 +618,9 @@ async function start() {
 
   document.addEventListener("click", handleClick);
   document.addEventListener("submit", handleSubmit);
+  document.addEventListener("change", handleChange);
+  document.addEventListener("dblclick", handleDoubleClick);
+  document.addEventListener("keydown", handleKeyDown);
   document.querySelector("#collapse-sidebar").addEventListener("click", () => {
     appState = {
       ...appState,
@@ -304,7 +635,7 @@ async function start() {
     render(appState);
   });
   document.querySelector("#bookmark-view").addEventListener("click", () => {
-    const activity = currentActivity(appState);
+    const activity = bookmarkActivity(appState);
     if (!activity) return;
     appState = {
       ...appState,

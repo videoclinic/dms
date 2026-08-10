@@ -7,6 +7,7 @@ import {
   createInitialState,
   defaultPreferences,
   openActivity,
+  savedViewId,
   toggleSavedView,
 } from "./app.mjs";
 
@@ -96,4 +97,28 @@ test("saved views contain stable IDs and never copy open activities", () => {
 
   const removed = toggleSavedView(preferences, activity);
   assert.deepEqual(removed.saved_views, []);
+});
+
+test("library saved views retain folder, sort, and stable document target without duplicating the activity", () => {
+  const base = {
+    workspace_id: workspaceId,
+    destination: "Library",
+    task: "Library",
+    label: "Library · Policies/HR",
+    document_id: "80693979-420b-4766-9a86-2f6603cd52ab",
+    route_state: { folder: "Policies/HR", sort: "title" },
+  };
+  const second = {
+    ...base,
+    label: "Library · Policies/IT",
+    document_id: null,
+    route_state: { folder: "Policies/IT", sort: "name" },
+  };
+
+  assert.equal(activityKey(base), `${workspaceId}:Library`);
+  assert.notEqual(savedViewId(base), savedViewId(second));
+  const preferences = toggleSavedView(toggleSavedView(defaultPreferences(), base), second);
+  assert.equal(preferences.saved_views.length, 2);
+  assert.equal(preferences.saved_views[0].document_id, base.document_id);
+  assert.deepEqual(preferences.saved_views[0].route_state, base.route_state);
 });

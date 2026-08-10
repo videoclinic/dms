@@ -22,6 +22,7 @@ dms-core = { path = "../dms-core" }
 serde.workspace = true
 serde_json.workspace = true
 tauri.workspace = true
+uuid.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

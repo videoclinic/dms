@@ -10,7 +10,9 @@ macOS.
 | Path | Owns |
 | --- | --- |
 | `src/` | Tauri startup, IPC commands, `dms-core` adapter, OS user preferences |
-| `ui/` | Static shell UI, session activities, saved-view interactions, UI tests |
+| `ui/app.mjs` | Static shell, session activities, saved-view persistence, and IPC orchestration |
+| `ui/library.mjs` | Folder-first explorer state, markup, selection rules, search, and sorting |
+| `ui/*.test.mjs` | Framework-free shell and Library interaction tests |
 | `capabilities/` | Tauri window permissions |
 | `icons/` | SVG source and derived PNG/Windows application icons |
 | `tauri.conf.json` | Desktop window, local frontend, security, and bundle configuration |
@@ -23,6 +25,10 @@ macOS.
   never under `<edit-root>/.dms`.
 - Keep open activities in frontend session state only.
 - Saved document targets use workspace ID + document ID, never source paths.
+- Library navigation keeps one session activity while saved Library views retain
+  edit-root-relative folder, sort, and at most one stable document target.
+- The Library selection pane owns add/unregister/reassociate/permalink controls;
+  file rows remain selection-only and preserve exact source names.
 - Load only app-local frontend assets; do not add remote runtime dependencies.
 
 ## Work Guidance
@@ -34,7 +40,7 @@ macOS.
 ## Verification
 
 - `cargo test -p dms-desktop`
-- `node --test crates/dms-desktop/ui/app.test.mjs`
+- `node --test crates/dms-desktop/ui/*.test.mjs`
 - `DMS_DESKTOP_SMOKE=1 cargo run -p dms-desktop`
 - `.github/workflows/desktop-platform-smoke.yml` on Windows and macOS
 
