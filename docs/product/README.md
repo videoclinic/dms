@@ -19,7 +19,7 @@ linked tests is a coverage gap, not implemented proof.
 | --- | --- | --- |
 | [CAP-0001](capabilities/CAP-0001-local-folder-dms.md) | Dual-root local DMS metadata store | not implemented |
 | [CAP-0002](capabilities/CAP-0002-document-lifecycle.md) | Draft → approval → versioned PDF release | not implemented |
-| [CAP-0003](capabilities/CAP-0003-document-notes.md) | Document notes | not implemented |
+| [CAP-0003](capabilities/CAP-0003-document-notes.md) | Document notes | implemented |
 | [CAP-0004](capabilities/CAP-0004-release-integrity.md) | Released PDF checksum integrity | not implemented |
 | [CAP-0005](capabilities/CAP-0005-desktop-shell.md) | Tauri desktop shell (Windows and macOS) | not implemented |
 | [CAP-0006](capabilities/CAP-0006-library-explorer.md) | Folder-first controlled library explorer | not implemented |
@@ -40,9 +40,10 @@ linked tests is a coverage gap, not implemented proof.
 | [CAP-0021](capabilities/CAP-0021-microsoft-entra-workflow-identity.md) | Microsoft Entra workflow identity source | not implemented |
 | [CAP-0022](capabilities/CAP-0022-headless-core-cli.md) | Headless DMS core CLI | implemented |
 
-CAP-0022 is a Tauri-independent initial core surface. It does not promote the
-pending desktop, lifecycle, export, or workflow CAPs; the future Tauri shell
-uses the same `dms-core` library.
+CAP-0003 and CAP-0022 are implemented. CAP-0022 is a Tauri-independent core
+surface; CAP-0003 uses that same core through the desktop adapter. Neither
+status promotes the remaining partial desktop, lifecycle, export, or workflow
+CAPs.
 
 ## Wireframes
 

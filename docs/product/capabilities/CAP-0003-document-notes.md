@@ -3,12 +3,12 @@
 | Field | Value |
 | --- | --- |
 | ID | CAP-0003 |
-| Status | not implemented |
-| Tests | Partial phase-6 evidence: [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [frontend interaction tests](../../../crates/dms-desktop/ui/notes.test.mjs), and [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31373187917) |
+| Status | implemented |
+| Tests | [`dms-core` persistence tests](../../../crates/dms-core/tests/workspace.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [frontend interaction tests](../../../crates/dms-desktop/ui/notes.test.mjs), and [Windows/macOS package smoke](https://github.com/videoclinic/dms/actions/runs/31385996931) |
 
-## Outcomes (contract — not yet true in runtime)
+## Outcomes
 
-When implemented, the following must hold:
+The document-notes workflow provides the following behaviour:
 
 1. Operator can add, edit, and list free-text notes attached to a registered
    document by its stable document ID (CAP-0001 / ADR-0015).

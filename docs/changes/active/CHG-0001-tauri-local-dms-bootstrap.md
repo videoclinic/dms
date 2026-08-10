@@ -141,7 +141,7 @@ macOS** that:
 | 6 | Notes on documents | done (core-backed Tauri CRUD, stable-ID Notes activity, draft-preserving errors, explicit delete confirmation, local gates, visual QA, and [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31373187917) pass) | Tests: note CRUD persistence across restart; list is newest-first; New note compose field is above the latest note and remains there after save |
 | 7 | Release checksum + periodic review + verify | done (implementation `8fe38bb`, Windows portability fix `e4f40dc`, schema v5 migration, local gates, visual QA, and [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31381510835) pass) | Tests: exported PDF → expected SHA-256 `match`; tamper → `mismatch`; missing file → `missing_file`; release snapshots draft digest, target-version mode/label, changelog, and chain; a case-insensitive Title filter scopes publish-tree releases; selected rows-per-page controls pagination of the filtered result; each non-missing release exposes a verify-this-release action while missing files surface a "Missing PDF" badge; periodic confirm keeps version and schedules the next review; changes-required begins revision; obsolete marks the document; full backup manifest covers both roots and refuses to overwrite an existing archive |
 | 8 | Optional Claude Desktop handoff | done (implementation `99a26b8`, schema v6 migration, local gates, and [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31385257274) pass) | Tests: disabled/missing app never blocks; policy and consent gate payload; accepted suggestion remains editable and cannot mutate lifecycle |
-| 9 | Packaging smoke + CAP promotion | in-progress | Windows and macOS smoke covers Office and Markdown PDF export; a Microsoft 365 administrator-configured Entra group smoke covers source preview, direct-member role selection, ineligible-role blocking, and an interactive decision sign-in; CAP statuses updated only with test links; records check if present |
+| 9 | Packaging smoke + CAP promotion | in-progress (NSIS/DMG artifacts pass; CAP audit and external operator smokes remain) | Windows and macOS smoke covers Office and Markdown PDF export; a Microsoft 365 administrator-configured Entra group smoke covers source preview, direct-member role selection, ineligible-role blocking, and an interactive decision sign-in; CAP statuses updated only with test links; records check if present |
 
 **Current phase:** phase 8 is complete and synchronized; phase 9 is in progress. Keep only one phase in progress.
 
@@ -184,6 +184,22 @@ macOS** that:
   Vorlage; do not route Markdown through Word. CI uses fakes when platform
   export is unavailable; phase 5 must still spike fixed header/footer + page
   indicators on WebView2 and WKWebView.
+
+## Phase 9 audit findings
+
+- [Windows/macOS run 31385996931](https://github.com/videoclinic/dms/actions/runs/31385996931)
+  produced `windows-x64-nsis` and `darwin-aarch64-dmg` workflow artifacts and
+  passed the workspace, launch, and native Markdown PDF smoke gates.
+- CAP-0003 and the existing CAP-0022 have complete executable evidence. The
+  remaining CAPs retain `not implemented`: their contracts include unresolved
+  operator surfaces or transitions, including workspace setup and lifecycle UI,
+  host draft opening, live notification and Entra adapters, audit export,
+  restore/advisory locking, release withdrawal, permalink scheme registration,
+  periodic-review cancellation/reminders, and assistance excerpt trimming.
+- The Office-on-Windows/macOS and administrator-configured Microsoft 365 Entra
+  smokes require licensed host applications, a configured tenant/group, and an
+  interactive operator identity. CI fakes and unit tests do not satisfy those
+  external gates.
 
 ## Resume checklist
 
