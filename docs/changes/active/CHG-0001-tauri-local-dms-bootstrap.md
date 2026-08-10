@@ -153,7 +153,7 @@ macOS** that:
 | 9b.1 | Library tree and sidebar-state correction | done (`node --test ui/app.test.mjs ui/library.test.mjs`; `node --test ui/*.test.mjs`; full Rust format/test/clippy gates; browser visual QA) | Frontend tests prove nested folder branches with explicit expand/collapse controls, current-folder ancestor expansion, and stable unfolded-sidebar state across destination, saved-view, and open-pane actions; visual QA confirms the folder tree reads as a hierarchy |
 | 9b.2 | Recent libraries and native directory browsing | done (`node --test ui/*.test.mjs`; full Rust format/test/clippy gates; Linux desktop launch smoke; browser visual and interaction QA) | Preferences retain at most 10 unique edit roots in most-recent-first order; setup UI can reopen or remove each entry; every directory field exposes a native folder picker that starts at the OS user's home directory; focused Rust/frontend tests, full local gates, and visual QA pass |
 | 9c | Audit export | done (schema v7 migration; focused core/CLI/desktop tests; `cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 36 frontend tests; Linux launch smoke; browser visual QA) | Deterministic document/approver/confidentiality/date-filtered CSV/PDF reports contain classification, workflow, release, periodic-review, target-mode, delivery, hash, and verification evidence without source/release bytes; paths stay inside the edit root and never overwrite; generation appends canonical `report_generated` evidence; CLI and desktop expose generation/list/verify/open-folder operations; Recent reports filters before pagination and surfaces chain, file, and missing/tampered states |
-| 9d | Workspace integrity and recovery | pending | Advisory lock status/acquire/release/stale takeover and manifest-verified backup restore refuse unsafe paths, symlinks, fresh-lock overwrite, and unconfirmed replacement; core, CLI, desktop, and failure-path tests pass |
+| 9d | Workspace integrity and recovery | done (schema v8 migration; core/CLI/Tauri/frontend lock and restore operations; focused failure-path tests; full Rust format/test/Clippy gates; 39 frontend tests; Linux launch smoke) | Advisory lock status/acquire/owner-matched release/stale takeover and manifest-verified backup restore refuse unsafe or cross-platform-colliding paths, symlinks, fresh-lock overwrite, and unconfirmed replacement; restore holds an advisory lock while writing; core, CLI, desktop, and failure-path tests pass |
 | 9e | Release and library maintenance | pending | Release withdrawal is reasoned and evidenced without deleting history; current release resolution skips withdrawn records; missing/orphan releases remain explicit; the Library can open an existing source draft or latest released PDF through host-mediated commands; Rust/frontend tests pass |
 | 9f | Desktop lifecycle and Configuration surfaces | pending | The desktop invokes implemented core operations for document-control edit, confidentiality override, begin revision, submit/review/decision/release, cancel review, obsolete, evidence history, document defaults, Workflow, Notifications, and Workspace configuration while preserving one routed Configuration activity; adapter/frontend tests prove each operator path |
 | 9g | Permalink OS integration | pending | Windows and macOS register `dms://`; inbound document/review/note links resolve workspace + stable document identity, focus or create the correct activity, survive rename/version changes, and fail closed for unavailable targets; platform smoke passes |
@@ -161,7 +161,7 @@ macOS** that:
 | 9i | Live Office, Entra, and notification adapters | pending | Production release commands wire installed Office automation on Windows/macOS; administrator-configured Microsoft Graph refresh and interactive approver sign-in use OS credential storage; SMTP and host-mail transports send canonical messages without storing credentials in `.dms`; fake-backed tests and operator smoke instructions pass |
 | 9j | External operator smokes + CAP promotion | pending | Licensed Office release smoke passes on Windows and macOS; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass; every implemented CAP links executable evidence, CHG status is done, and the record is archived |
 
-**Current phase:** phase 9c is complete locally; phase 9d is pending. Keep only one phase in progress.
+**Current phase:** no phase is in progress. Phase 9e is next.
 
 ## Implementation notes
 
@@ -216,7 +216,7 @@ macOS** that:
   evidence. The remaining CAPs retain `not implemented`: their contracts include
   unresolved operator surfaces or transitions, including workspace setup and lifecycle UI,
   host draft opening, live notification and Entra adapters,
-  restore/advisory locking, release withdrawal, permalink scheme registration,
+  corruption recovery and backup-history surfaces, release withdrawal, permalink scheme registration,
   and assistance excerpt trimming.
 - The Office-on-Windows/macOS and administrator-configured Microsoft 365 Entra
   smokes require licensed host applications, a configured tenant/group, and an
@@ -253,6 +253,14 @@ macOS** that:
   and keeps current-folder ancestors expanded. Navigation clears only a narrow
   flyout; it no longer folds an already-unfolded left menu. Focused and full
   frontend gates, workspace Rust gates, and browser visual QA pass.
+- Phase 9d adds schema-v8 lock-staleness configuration, atomic advisory-lock
+  acquisition and owner-matched desktop release, and manifest-verified restore
+  into confirmed replacement roots. Restore validates all archive entries and
+  destinations before file writes, rejects symlinks, traversal, portable-name
+  collisions, fresh-lock replacement, and unconfirmed overwrite, and holds a
+  destination lock while writing. CAP-0014 remains `not implemented` until its
+  corruption recovery, missing-root reassignment, and backup-history outcomes
+  are delivered.
 
 ## Resume checklist
 

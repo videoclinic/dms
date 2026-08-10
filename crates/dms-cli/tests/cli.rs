@@ -25,6 +25,133 @@ fn cli_requires_confirmation_before_initializing_a_workspace() {
 }
 
 #[test]
+fn cli_exposes_advisory_lock_lifecycle_with_explicit_release() {
+    let edit_root = tempfile::tempdir().unwrap();
+    let publish_root = tempfile::tempdir().unwrap();
+    let initialized = dms()
+        .args(["workspace", "init", "--edit-root"])
+        .arg(edit_root.path())
+        .arg("--publish-root")
+        .arg(publish_root.path())
+        .arg("--confirm")
+        .output()
+        .unwrap();
+    assert!(initialized.status.success());
+
+    let status = dms()
+        .arg("--json")
+        .args(["workspace", "lock-status", "--edit-root"])
+        .arg(edit_root.path())
+        .output()
+        .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<Value>(&status.stdout).unwrap()["state"],
+        "unlocked"
+    );
+    let acquired = dms()
+        .args(["workspace", "lock-acquire", "--edit-root"])
+        .arg(edit_root.path())
+        .output()
+        .unwrap();
+    assert!(acquired.status.success());
+    let duplicate = dms()
+        .args(["workspace", "lock-acquire", "--edit-root"])
+        .arg(edit_root.path())
+        .output()
+        .unwrap();
+    assert!(!duplicate.status.success());
+    assert!(String::from_utf8_lossy(&duplicate.stderr).contains("current advisory lock"));
+
+    let unconfirmed = dms()
+        .args(["workspace", "lock-release", "--edit-root"])
+        .arg(edit_root.path())
+        .output()
+        .unwrap();
+    assert!(!unconfirmed.status.success());
+    assert!(edit_root.path().join(".dms/lock").is_file());
+    let released = dms()
+        .args(["workspace", "lock-release", "--edit-root"])
+        .arg(edit_root.path())
+        .arg("--confirm")
+        .output()
+        .unwrap();
+    assert!(released.status.success());
+    assert!(!edit_root.path().join(".dms/lock").exists());
+}
+
+#[test]
+fn cli_backup_and_restore_require_confirmation_and_rewrite_roots() {
+    let source_edit = tempfile::tempdir().unwrap();
+    let source_publish = tempfile::tempdir().unwrap();
+    let archive_directory = tempfile::tempdir().unwrap();
+    let archive = archive_directory.path().join("workspace.zip");
+    assert!(dms()
+        .args(["workspace", "init", "--edit-root"])
+        .arg(source_edit.path())
+        .arg("--publish-root")
+        .arg(source_publish.path())
+        .arg("--confirm")
+        .status()
+        .unwrap()
+        .success());
+    let backup = dms()
+        .arg("--json")
+        .args(["workspace", "backup", "--edit-root"])
+        .arg(source_edit.path())
+        .arg("--archive")
+        .arg(&archive)
+        .output()
+        .unwrap();
+    assert!(backup.status.success());
+    assert!(archive.is_file());
+
+    let destination = tempfile::tempdir().unwrap();
+    let edit_root = destination.path().join("edit");
+    let publish_root = destination.path().join("publish");
+    fs::create_dir(&edit_root).unwrap();
+    fs::create_dir(&publish_root).unwrap();
+    let restore = |confirm: bool| {
+        let mut command = dms();
+        command
+            .arg("--json")
+            .args(["workspace", "restore", "--archive"])
+            .arg(&archive)
+            .arg("--edit-root")
+            .arg(&edit_root)
+            .arg("--publish-root")
+            .arg(&publish_root);
+        if confirm {
+            command.arg("--confirm");
+        }
+        command.output().unwrap()
+    };
+    let unconfirmed = restore(false);
+    assert!(!unconfirmed.status.success());
+    assert!(!edit_root.join(".dms/workspace.json").exists());
+    let restored = restore(true);
+    assert!(
+        restored.status.success(),
+        "{}",
+        String::from_utf8_lossy(&restored.stderr)
+    );
+    let restored: Value = serde_json::from_slice(&restored.stdout).unwrap();
+    assert_eq!(
+        restored["edit_root"],
+        fs::canonicalize(&edit_root)
+            .unwrap()
+            .to_string_lossy()
+            .as_ref()
+    );
+    assert_eq!(
+        restored["publish_root"],
+        fs::canonicalize(&publish_root)
+            .unwrap()
+            .to_string_lossy()
+            .as_ref()
+    );
+}
+
+#[test]
 fn cli_initializes_registers_and_lists_a_document_as_json() {
     let edit_root = tempfile::tempdir().expect("edit root");
     let publish_root = tempfile::tempdir().expect("publish root");

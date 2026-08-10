@@ -24,6 +24,7 @@ import {
   periodicReviewRequest,
   releaseMaintenanceMarkup,
   workspaceMaintenanceMarkup,
+  workspaceRestoreRequest,
 } from "./maintenance.mjs";
 import {
   assistanceDocumentState,
@@ -95,7 +96,13 @@ export function createInitialState(preferences = defaultPreferences()) {
     releases: createReleaseState(),
     periodic_reviews: { markers: [], loading: false, error: "", notice: "" },
     audit_reports: createAuditReportState(),
-    maintenance: { outcome: null, error: "" },
+    maintenance: {
+      backup_outcome: null,
+      restore_outcome: null,
+      lock_status: null,
+      notice: "",
+      error: "",
+    },
     sidebar_overlay: false,
     flyout: null,
     error: "",
@@ -266,7 +273,12 @@ function setupValue(values, name) {
 export function workspaceSetupRequest(formId, values) {
   const editRoot = String(setupValue(values, "editRoot") ?? "").trim();
   if (formId === "open-workspace-form") {
-    return { command: "open_workspace", arguments: { editRoot } };
+    return {
+      command: "open_workspace",
+      arguments: { editRoot },
+      takeOverStale: setupValue(values, "takeOverStale") === "on"
+        || setupValue(values, "takeOverStale") === true,
+    };
   }
   if (formId === "initialize-workspace-form") {
     return {
@@ -303,7 +315,7 @@ function recentLibrariesMarkup(recentLibraries) {
 
 export function setupMarkup(error, recentLibraries = []) {
   const recent = normalizedRecentLibraries(recentLibraries);
-  return `<section class="setup-workspace"><header><span class="badge">Local workspace</span><h2>Set up DMS Desktop</h2><p>Open existing metadata or initialize explicit edit and publish roots. No documents are moved or copied during setup.</p></header><section class="recent-libraries card" aria-labelledby="recent-libraries-heading"><h3 id="recent-libraries-heading">Recent libraries</h3><div class="recent-libraries-list">${recentLibrariesMarkup(recent)}</div></section><div class="setup-grid"><section class="card"><h3>Open an existing workspace</h3><p>Choose an edit root that already contains <code>.dms/workspace.json</code>.</p><form id="open-workspace-form" class="setup-form">${directoryFieldMarkup("open-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit")}<button class="button" type="submit">Open workspace</button></form></section><section class="card"><h3>Initialize a workspace</h3><p>The desktop creates <code>.dms</code> under the edit root and creates the publish root if it does not exist.</p><form id="initialize-workspace-form" class="setup-form">${directoryFieldMarkup("initialize-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit")}${directoryFieldMarkup("publish-root", "publishRoot", "Publish root", "C:\\DMS\\Publish or /Users/name/DMS/Publish")}<label class="confirm-field"><input type="checkbox" name="confirmed" required> Initialize these roots and create workspace metadata.</label><button class="button" type="submit">Initialize workspace</button></form></section></div><p class="status" role="alert">${escapeHtml(error)}</p></section>`;
+  return `<section class="setup-workspace"><header><span class="badge">Local workspace</span><h2>Set up DMS Desktop</h2><p>Open existing metadata or initialize explicit edit and publish roots. No documents are moved or copied during setup.</p></header><section class="recent-libraries card" aria-labelledby="recent-libraries-heading"><h3 id="recent-libraries-heading">Recent libraries</h3><div class="recent-libraries-list">${recentLibrariesMarkup(recent)}</div></section><div class="setup-grid"><section class="card"><h3>Open an existing workspace</h3><p>Choose an edit root that already contains <code>.dms/workspace.json</code>. A current advisory lock blocks opening.</p><form id="open-workspace-form" class="setup-form">${directoryFieldMarkup("open-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit")}<label class="confirm-field"><input type="checkbox" name="takeOverStale"> Take over the lock only if it is stale.</label><button class="button" type="submit">Open workspace</button></form></section><section class="card"><h3>Initialize a workspace</h3><p>The desktop creates <code>.dms</code> under the edit root and creates the publish root if it does not exist.</p><form id="initialize-workspace-form" class="setup-form">${directoryFieldMarkup("initialize-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit")}${directoryFieldMarkup("publish-root", "publishRoot", "Publish root", "C:\\DMS\\Publish or /Users/name/DMS/Publish")}<label class="confirm-field"><input type="checkbox" name="confirmed" required> Initialize these roots and create workspace metadata.</label><button class="button" type="submit">Initialize workspace</button></form></section></div><p class="status" role="alert">${escapeHtml(error)}</p></section>`;
 }
 
 function activityMarkup(state, activity) {
@@ -391,21 +403,107 @@ function openDestination(destination) {
   } else if (destination === "Audit & Reports") {
     void loadPeriodicReviews();
     void loadAuditReports();
+  } else if (destination === "Maintenance") {
+    void loadWorkspaceLockStatus();
   } else if (destination === "Configuration") {
     void loadClaudeAssistancePolicy();
   }
 }
 
-async function activateWorkspace(workspace) {
+export async function switchWorkspaceSession(
+  currentWorkspace,
+  currentLockStatus,
+  workspace,
+  takeOverStale,
+  invoke,
+) {
+  if (currentWorkspace?.edit_root === workspace.edit_root) return null;
+  const lockStatus = await invoke("acquire_workspace_lock", {
+    editRoot: workspace.edit_root,
+    takeOverStale,
+  });
+  if (currentWorkspace) {
+    const currentOwner = currentLockStatus?.lock;
+    if (!currentOwner) {
+      await invoke("release_workspace_lock", {
+        editRoot: workspace.edit_root,
+        owner: lockStatus.lock,
+        confirmed: true,
+      });
+      throw new Error("Active workspace lock owner is unavailable.");
+    }
+    try {
+      await invoke("release_workspace_lock", {
+        editRoot: currentWorkspace.edit_root,
+        owner: currentOwner,
+        confirmed: true,
+      });
+    } catch (error) {
+      await invoke("release_workspace_lock", {
+        editRoot: workspace.edit_root,
+        owner: lockStatus.lock,
+        confirmed: true,
+      });
+      throw error;
+    }
+  }
+  return lockStatus;
+}
+
+async function activateWorkspace(workspace, takeOverStale = false) {
+  const transitioned = await switchWorkspaceSession(
+    appState.workspace,
+    appState.maintenance.lock_status,
+    workspace,
+    takeOverStale,
+    invokeCommand,
+  );
+  const lockStatus = transitioned ?? appState.maintenance.lock_status;
   const preferences = rememberRecentLibrary(appState.preferences, workspace.edit_root);
   const sidebarOverlay = appState.sidebar_overlay;
+  const initial = createInitialState(preferences);
   appState = {
-    ...createInitialState(preferences),
+    ...initial,
     workspace,
+    maintenance: { ...initial.maintenance, lock_status: lockStatus },
     sidebar_overlay: sidebarOverlay,
   };
   await persistPreferences(appState);
   openDestination("Library");
+}
+
+async function loadWorkspaceLockStatus(notice = "") {
+  try {
+    const lockStatus = await invokeCommand("workspace_lock_status", {
+      editRoot: appState.workspace.edit_root,
+    });
+    appState = {
+      ...appState,
+      maintenance: { ...appState.maintenance, lock_status: lockStatus, notice, error: "" },
+    };
+  } catch (error) {
+    appState = {
+      ...appState,
+      maintenance: { ...appState.maintenance, notice: "", error: String(error) },
+    };
+  }
+  render(appState);
+}
+
+async function applyWorkspaceLockMutation(command, arguments_, notice) {
+  try {
+    await invokeCommand(command, {
+      editRoot: appState.workspace.edit_root,
+      ...arguments_,
+    });
+    await loadWorkspaceLockStatus(notice);
+  } catch (error) {
+    appState = {
+      ...appState,
+      maintenance: { ...appState.maintenance, notice: "", error: String(error) },
+    };
+    render(appState);
+  }
 }
 
 async function loadClaudeAssistancePolicy() {
@@ -1111,6 +1209,8 @@ async function handleClick(event) {
     } else if (activity?.destination === "Audit & Reports") {
       if (appState.audit_reports.rows.length === 0) void loadAuditReports();
       if (appState.periodic_reviews.markers.length === 0) void loadPeriodicReviews();
+    } else if (activity?.destination === "Maintenance" && !appState.maintenance.lock_status) {
+      void loadWorkspaceLockStatus();
     } else if (activity?.destination === "Configuration" && !appState.assistance_policy.value) {
       void loadClaudeAssistancePolicy();
     }
@@ -1281,14 +1381,74 @@ async function handleSubmit(event) {
   if (event.target.id === "workspace-backup-form") {
     event.preventDefault();
     const archivePath = String(new FormData(event.target).get("archivePath") ?? "").trim();
-    appState = { ...appState, maintenance: { ...appState.maintenance, error: "" } };
+    appState = {
+      ...appState,
+      maintenance: { ...appState.maintenance, notice: "", error: "" },
+    };
     render(appState);
     try {
       const outcome = await invokeCommand("backup_workspace", {
         editRoot: appState.workspace.edit_root,
         archivePath,
       });
-      appState = { ...appState, maintenance: { outcome, error: "" } };
+      appState = {
+        ...appState,
+        maintenance: {
+          ...appState.maintenance,
+          backup_outcome: outcome,
+          notice: "Backup created.",
+          error: "",
+        },
+      };
+    } catch (error) {
+      appState = {
+        ...appState,
+        maintenance: { ...appState.maintenance, error: String(error) },
+      };
+    }
+    render(appState);
+    return;
+  }
+  if (event.target.id === "workspace-lock-status-form") {
+    event.preventDefault();
+    await loadWorkspaceLockStatus();
+    return;
+  }
+
+  if (event.target.id === "workspace-lock-config-form") {
+    event.preventDefault();
+    const form = new FormData(event.target);
+    await applyWorkspaceLockMutation(
+      "configure_workspace_lock_staleness",
+      {
+        hours: Number(form.get("hours")),
+        confirmed: form.get("confirmed") === "on",
+      },
+      "Workspace lock-staleness threshold saved.",
+    );
+    return;
+  }
+  if (event.target.id === "workspace-restore-form") {
+    event.preventDefault();
+    appState = {
+      ...appState,
+      maintenance: { ...appState.maintenance, notice: "", error: "" },
+    };
+    render(appState);
+    try {
+      const outcome = await invokeCommand(
+        "restore_workspace_backup",
+        workspaceRestoreRequest(new FormData(event.target)),
+      );
+      appState = {
+        ...appState,
+        maintenance: {
+          ...appState.maintenance,
+          restore_outcome: outcome,
+          notice: "Backup verified and restored.",
+          error: "",
+        },
+      };
     } catch (error) {
       appState = {
         ...appState,
@@ -1395,7 +1555,7 @@ async function handleSubmit(event) {
   try {
     const request = workspaceSetupRequest(event.target.id, new FormData(event.target));
     const workspace = await invokeCommand(request.command, request.arguments);
-    await activateWorkspace(workspace);
+    await activateWorkspace(workspace, request.takeOverStale ?? false);
   } catch (error) {
     appState = { ...appState, error: String(error) };
     render(appState);
@@ -1472,6 +1632,39 @@ function handleKeyDown(event) {
 
 let appState = createInitialState();
 
+export async function closeWorkspaceSession(state, invoke, destroy) {
+  if (!state.workspace) return false;
+  const owner = state.maintenance.lock_status?.lock;
+  if (!owner) {
+    await destroy();
+    return false;
+  }
+  try {
+    await invoke("release_workspace_lock", {
+      editRoot: state.workspace.edit_root,
+      owner,
+      confirmed: true,
+    });
+  } finally {
+    await destroy();
+  }
+  return true;
+}
+
+async function registerWindowCloseHandler() {
+  const appWindow = globalThis.__TAURI__?.window?.getCurrentWindow?.();
+  if (!appWindow?.onCloseRequested) return;
+  await appWindow.onCloseRequested(async (event) => {
+    if (!appState.workspace) return;
+    event.preventDefault();
+    try {
+      await closeWorkspaceSession(appState, invokeCommand, () => appWindow.destroy());
+    } catch (error) {
+      console.warn("Could not remove workspace advisory lock during close", error);
+    }
+  });
+}
+
 async function start() {
   try {
     const preferences = await invokeCommand("load_preferences", {});
@@ -1485,6 +1678,7 @@ async function start() {
   document.addEventListener("change", handleChange);
   document.addEventListener("dblclick", handleDoubleClick);
   document.addEventListener("keydown", handleKeyDown);
+  await registerWindowCloseHandler();
   document.querySelector("#collapse-sidebar").addEventListener("click", () => {
     appState = {
       ...appState,

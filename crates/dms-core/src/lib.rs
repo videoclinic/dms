@@ -13,6 +13,7 @@ use uuid::Uuid;
 mod assistance;
 mod audit;
 mod catalogues;
+mod integrity;
 mod library;
 mod lifecycle;
 mod maintenance;
@@ -21,12 +22,13 @@ mod policies;
 pub use assistance::*;
 pub use audit::*;
 pub use catalogues::*;
+pub use integrity::*;
 pub use library::*;
 pub use lifecycle::*;
 pub use maintenance::*;
 pub use policies::*;
 
-pub const SCHEMA_VERSION: u32 = 7;
+pub const SCHEMA_VERSION: u32 = 8;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 
@@ -198,6 +200,30 @@ pub enum DmsError {
     BackupInputInvalid(PathBuf),
     #[error("backup manifest failed: {0}")]
     BackupManifest(String),
+    #[error("workspace lock staleness must be greater than zero hours")]
+    InvalidLockStaleness,
+    #[error("workspace lock is not a regular non-symlink file: {0}")]
+    InvalidWorkspaceLock(PathBuf),
+    #[error("workspace lock at {0} is invalid: {1}")]
+    InvalidWorkspaceLockData(PathBuf, String),
+    #[error("workspace has a current advisory lock")]
+    WorkspaceLocked,
+    #[error("workspace lock is stale; explicit take-over is required")]
+    StaleWorkspaceLockTakeoverRequired,
+    #[error("workspace lock was not found at {0}")]
+    WorkspaceLockNotFound(PathBuf),
+    #[error("workspace lock owner changed before release")]
+    WorkspaceLockOwnershipChanged,
+    #[error("workspace restore requires explicit confirmation")]
+    RestoreConfirmationRequired,
+    #[error("replacement edit and publish roots must be separate and non-nested")]
+    RestoreRootConflict,
+    #[error("backup archive cannot be restored: {0}")]
+    RestoreArchive(String),
+    #[error("restore target already exists and replacement was not confirmed: {0}")]
+    RestorePathExists(PathBuf),
+    #[error("restore target is unsafe or has a symlink/non-directory ancestor: {0}")]
+    RestoreTargetInvalid(PathBuf),
     #[error("audit report filter is invalid: {0}")]
     InvalidAuditFilter(String),
     #[error("audit report path is invalid: {0}")]
@@ -249,6 +275,8 @@ pub struct Workspace {
     pub(crate) claude_assistance: ClaudeAssistancePolicy,
     #[serde(default)]
     pub(crate) workspace_events: Vec<WorkflowEvent>,
+    #[serde(default = "default_lock_stale_after_hours")]
+    pub(crate) lock_stale_after_hours: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -356,6 +384,7 @@ impl Workspace {
             default_review_interval_months: default_review_interval_months(),
             claude_assistance: ClaudeAssistancePolicy::default(),
             workspace_events: Vec::new(),
+            lock_stale_after_hours: default_lock_stale_after_hours(),
         };
         workspace.save()?;
         Ok(workspace)
@@ -381,7 +410,7 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = matches!(found, 1..=6);
+        let migrated = matches!(found, 1..=7);
         if found == 1 {
             migrate_v1_catalogues(&mut value)?;
         }
@@ -428,40 +457,13 @@ impl Workspace {
 
     pub fn save(&self) -> Result<()> {
         self.validate()?;
-        let metadata_directory = self.edit_root.join(METADATA_DIRECTORY);
         let metadata_path = workspace_metadata_path(&self.edit_root);
         let serialized =
             serde_json::to_vec_pretty(self).map_err(|source| DmsError::InvalidMetadata {
                 path: metadata_path.clone(),
                 source,
             })?;
-        let temporary_path = metadata_directory.join(format!(".workspace-{}.tmp", Uuid::new_v4()));
-        let write_result = (|| -> Result<()> {
-            let mut temporary =
-                fs::File::create(&temporary_path).map_err(|source| DmsError::Io {
-                    path: temporary_path.clone(),
-                    source,
-                })?;
-            temporary
-                .write_all(&serialized)
-                .map_err(|source| DmsError::Io {
-                    path: temporary_path.clone(),
-                    source,
-                })?;
-            temporary.sync_all().map_err(|source| DmsError::Io {
-                path: temporary_path.clone(),
-                source,
-            })?;
-            fs::rename(&temporary_path, &metadata_path).map_err(|source| DmsError::Io {
-                path: metadata_path.clone(),
-                source,
-            })?;
-            Ok(())
-        })();
-        if write_result.is_err() && temporary_path.exists() {
-            let _ = fs::remove_file(&temporary_path);
-        }
-        write_result
+        write_workspace_metadata_atomic(&self.edit_root, &serialized)
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -478,6 +480,9 @@ impl Workspace {
         }
         if self.claude_assistance.max_payload_chars == 0 {
             return Err(DmsError::InvalidClaudePayloadLimit);
+        }
+        if self.lock_stale_after_hours == 0 {
+            return Err(DmsError::InvalidLockStaleness);
         }
         for type_id in &self.claude_assistance.allowed_confidentiality_type_ids {
             if !self.confidentiality_types.contains_key(type_id) {
@@ -768,6 +773,37 @@ fn retain_migration_backup(metadata_path: &Path, from: u32, content: &[u8]) -> R
         path: backup_path,
         source,
     })
+}
+
+pub(crate) fn write_workspace_metadata_atomic(edit_root: &Path, serialized: &[u8]) -> Result<()> {
+    let metadata_directory = edit_root.join(METADATA_DIRECTORY);
+    let metadata_path = workspace_metadata_path(edit_root);
+    let temporary_path = metadata_directory.join(format!(".workspace-{}.tmp", Uuid::new_v4()));
+    let write_result = (|| -> Result<()> {
+        let mut temporary = fs::File::create(&temporary_path).map_err(|source| DmsError::Io {
+            path: temporary_path.clone(),
+            source,
+        })?;
+        temporary
+            .write_all(serialized)
+            .map_err(|source| DmsError::Io {
+                path: temporary_path.clone(),
+                source,
+            })?;
+        temporary.sync_all().map_err(|source| DmsError::Io {
+            path: temporary_path.clone(),
+            source,
+        })?;
+        fs::rename(&temporary_path, &metadata_path).map_err(|source| DmsError::Io {
+            path: metadata_path.clone(),
+            source,
+        })?;
+        Ok(())
+    })();
+    if write_result.is_err() && temporary_path.exists() {
+        let _ = fs::remove_file(&temporary_path);
+    }
+    write_result
 }
 
 fn migrate_v1_catalogues(value: &mut serde_json::Value) -> Result<()> {

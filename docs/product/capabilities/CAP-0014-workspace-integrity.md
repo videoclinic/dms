@@ -5,7 +5,7 @@
 | ID | CAP-0014 |
 | Status | not implemented |
 | Storage | `<edit-root>/.dms/` |
-| Tests | none |
+| Tests | Partial phase 9d evidence: [core integrity tests](../../../crates/dms-core/tests/integrity.rs), [core backup tests](../../../crates/dms-core/tests/lifecycle.rs), [CLI command tests](../../../crates/dms-cli/tests/cli.rs), [desktop adapter tests](../../../crates/dms-desktop/src/lib.rs), and [desktop workspace/maintenance tests](../../../crates/dms-desktop/ui/app.test.mjs) / [maintenance tests](../../../crates/dms-desktop/ui/maintenance.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 

@@ -30,6 +30,9 @@ executable.
 - Report commands generate explicitly filtered CSV/PDF files, list their
   canonical evidence, and verify the recorded file digest. JSON output contains
   report metadata and hashes only, never source or release bytes.
+- Workspace integrity commands expose advisory-lock status, explicit stale
+  takeover and confirmed release, lock-threshold configuration, manifest backup,
+  and confirmed restore into explicit existing replacement roots.
 
 ## Work Guidance
 

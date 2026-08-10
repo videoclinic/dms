@@ -160,8 +160,29 @@ export function periodicReviewMarkup(state) {
 }
 
 export function workspaceMaintenanceMarkup(state) {
-  const outcome = state.outcome
-    ? `<div class="success-panel"><strong>Backup created</strong><span>${escapeHtml(state.outcome.archive_path)}</span><span>${escapeHtml(state.outcome.entry_count)} files · manifest SHA-256 ${escapeHtml(state.outcome.manifest_digest)}</span></div>`
+  const backupOutcome = state.backup_outcome
+    ? `<div class="success-panel"><strong>Backup created</strong><span>${escapeHtml(state.backup_outcome.archive_path)}</span><span>${escapeHtml(state.backup_outcome.entry_count)} files · manifest SHA-256 ${escapeHtml(state.backup_outcome.manifest_digest)}</span></div>`
     : "";
-  return `<section class="card maintenance-card"><span class="badge">Maintenance</span><h2>Full workspace backup</h2><p>The archive contains workspace metadata, every registered source draft, every recorded release PDF, and a SHA-256 manifest. Existing archives are never overwritten.</p><form id="workspace-backup-form" class="form-row"><div class="field"><label for="backup-archive-path">Archive path</label><input id="backup-archive-path" name="archivePath" required autocomplete="off" placeholder="/backups/dms-workspace.zip or C:\\Backups\\dms-workspace.zip"></div><button class="button" type="submit">Create backup</button></form><p class="status" role="alert">${escapeHtml(state.error)}</p>${outcome}</section>`;
+  const restoreOutcome = state.restore_outcome
+    ? `<div class="success-panel"><strong>Workspace restored</strong><span>${escapeHtml(state.restore_outcome.workspace_id)}</span><span>edit: ${escapeHtml(state.restore_outcome.edit_root)}</span><span>publish: ${escapeHtml(state.restore_outcome.publish_root)}</span><span>${escapeHtml(state.restore_outcome.entry_count)} verified files · manifest SHA-256 ${escapeHtml(state.restore_outcome.manifest_digest)}</span></div>`
+    : "";
+  const lock = state.lock_status;
+  const lockOwner = lock?.lock
+    ? `${escapeHtml(lock.lock.os_user)} @ ${escapeHtml(lock.lock.hostname)} · PID ${escapeHtml(lock.lock.process_id)} · ${escapeHtml(lock.lock.acquired_at)}`
+    : "No owner";
+  const lockStatus = lock
+    ? `<div class="integrity ${lock.state === "stale" ? "problem" : "ok"}"><strong>${escapeHtml(lock.state)}</strong><span>${lockOwner}</span><span>Stale after ${escapeHtml(lock.stale_after_hours)} hours</span></div>`
+    : '<p class="status">Lock status has not been loaded.</p>';
+  return `<section class="card maintenance-card"><span class="badge">Maintenance</span><h2>Workspace integrity and recovery</h2><p>Advisory locks expose concurrent-open risk. Backups contain workspace metadata, registered source drafts, release PDFs, and a SHA-256 manifest; lock files are excluded.</p><p class="status" role="alert">${escapeHtml(state.error)}</p>${state.notice ? `<p class="success-panel">${escapeHtml(state.notice)}</p>` : ""}<section class="maintenance-section"><h3>Advisory workspace lock</h3>${lockStatus}<form id="workspace-lock-status-form"><button class="button secondary" type="submit">Refresh status</button></form><form id="workspace-lock-config-form" class="form-row"><div class="field"><label for="lock-stale-hours">Stale after hours</label><input id="lock-stale-hours" name="hours" required min="1" type="number" value="${escapeHtml(lock?.stale_after_hours ?? 24)}"></div><label class="confirm-field"><input type="checkbox" name="confirmed" required> Confirm this workspace setting.</label><button class="button secondary" type="submit">Save threshold</button></form></section><section class="maintenance-section"><h3>Full workspace backup</h3><form id="workspace-backup-form" class="form-row"><div class="field"><label for="backup-archive-path">Archive path</label><input id="backup-archive-path" name="archivePath" required autocomplete="off" placeholder="/backups/dms-workspace.zip or C:\\Backups\\dms-workspace.zip"></div><button class="button" type="submit">Create backup</button></form>${backupOutcome}</section><section class="maintenance-section"><h3>Restore verified backup</h3><p>The selected roots must already exist. Files are written only after the manifest, paths, file types, sizes, digests, and workspace identity pass verification.</p><form id="workspace-restore-form" class="setup-form"><div class="field"><label for="restore-archive-path">Backup archive</label><input id="restore-archive-path" name="archivePath" required autocomplete="off"></div><div class="field"><label for="restore-edit-root">Replacement edit root</label><div class="directory-field"><input id="restore-edit-root" name="editRoot" required autocomplete="off"><button class="button secondary" type="button" data-directory-target="restore-edit-root">Browse…</button></div></div><div class="field"><label for="restore-publish-root">Replacement publish root</label><div class="directory-field"><input id="restore-publish-root" name="publishRoot" required autocomplete="off"><button class="button secondary" type="button" data-directory-target="restore-publish-root">Browse…</button></div></div><label class="confirm-field"><input type="checkbox" name="replaceExisting"> Replace manifest-listed files that already exist.</label><label class="confirm-field"><input type="checkbox" name="takeOverStaleLock"> Remove a stale destination lock. Current locks always block restore.</label><label class="confirm-field"><input type="checkbox" name="confirmed" required> Confirm restore into these exact roots.</label><button class="button danger" type="submit">Verify and restore</button></form>${restoreOutcome}</section></section>`;
+}
+
+export function workspaceRestoreRequest(values) {
+  return {
+    archivePath: String(values.get("archivePath") ?? "").trim(),
+    editRoot: String(values.get("editRoot") ?? "").trim(),
+    publishRoot: String(values.get("publishRoot") ?? "").trim(),
+    replaceExisting: values.get("replaceExisting") === "on",
+    takeOverStaleLock: values.get("takeOverStaleLock") === "on",
+    confirmed: values.get("confirmed") === "on",
+  };
 }

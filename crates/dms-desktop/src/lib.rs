@@ -11,8 +11,9 @@ use dms_core::{
     DeliveryReceipt, Document, DocumentControl, EffectiveConfidentiality, EffectiveWorkflowRoles,
     EntraIdentitySource, EntraPerson, GraphClient, LibraryEntry, LibraryFolder, LibraryFolderNode,
     Lifecycle, Note, NotificationClient, NotificationMessage, NotificationSettings, PeriodicReview,
-    PeriodicReviewMarker, PeriodicReviewResult, ReleaseVerificationStatus, SourceState,
-    WorkflowVerification, Workspace,
+    PeriodicReviewMarker, PeriodicReviewResult, ReleaseVerificationStatus, RestoreOutcome,
+    RestoreRequest, SourceState, WorkflowVerification, Workspace, WorkspaceLock,
+    WorkspaceLockStatus,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
@@ -504,6 +505,73 @@ fn backup_workspace(edit_root: String, archive_path: String) -> Result<BackupOut
 }
 
 #[tauri::command]
+fn workspace_lock_status(edit_root: String) -> Result<WorkspaceLockStatus, String> {
+    Workspace::open(Path::new(&edit_root))
+        .and_then(|workspace| workspace.lock_status())
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn acquire_workspace_lock(
+    edit_root: String,
+    take_over_stale: bool,
+) -> Result<WorkspaceLockStatus, String> {
+    Workspace::open(Path::new(&edit_root))
+        .and_then(|workspace| workspace.acquire_lock(take_over_stale))
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn release_workspace_lock(
+    edit_root: String,
+    owner: WorkspaceLock,
+    confirmed: bool,
+) -> Result<(), String> {
+    if !confirmed {
+        return Err("workspace lock release requires explicit confirmation".to_owned());
+    }
+    dms_core::release_workspace_lock_owned(Path::new(&edit_root), &owner)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn configure_workspace_lock_staleness(
+    edit_root: String,
+    hours: u32,
+    confirmed: bool,
+) -> Result<WorkspaceLockStatus, String> {
+    if !confirmed {
+        return Err("workspace lock-staleness change requires explicit confirmation".to_owned());
+    }
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .configure_lock_staleness(hours)
+        .map_err(|error| error.to_string())?;
+    workspace.lock_status().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn restore_workspace_backup(
+    archive_path: String,
+    edit_root: String,
+    publish_root: String,
+    replace_existing: bool,
+    take_over_stale_lock: bool,
+    confirmed: bool,
+) -> Result<RestoreOutcome, String> {
+    dms_core::restore_workspace_backup(RestoreRequest {
+        archive_path: Path::new(&archive_path),
+        edit_root: Path::new(&edit_root),
+        publish_root: Path::new(&publish_root),
+        replace_existing,
+        take_over_stale_lock,
+        confirmed,
+    })
+    .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn load_claude_assistance_policy(edit_root: String) -> Result<ClaudeAssistancePolicy, String> {
     let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
     Ok(workspace.claude_assistance_policy().clone())
@@ -953,6 +1021,11 @@ pub fn run() {
             cancel_periodic_review,
             remind_periodic_review,
             backup_workspace,
+            workspace_lock_status,
+            acquire_workspace_lock,
+            release_workspace_lock,
+            configure_workspace_lock_staleness,
+            restore_workspace_backup,
             load_claude_assistance_policy,
             configure_claude_assistance,
             claude_assistance_availability,
@@ -1264,6 +1337,62 @@ mod tests {
         assert_eq!(outcome.entry_count, 1);
         assert_eq!(outcome.manifest_digest.len(), 64);
         assert!(archive.is_file());
+    }
+
+    #[test]
+    fn desktop_integrity_commands_require_confirmed_lock_release_and_restore() {
+        let directory = tempfile::tempdir().unwrap();
+        let edit_root = directory.path().join("edit");
+        let publish_root = directory.path().join("publish");
+        fs::create_dir(&edit_root).unwrap();
+        fs::create_dir(&publish_root).unwrap();
+        Workspace::init(&edit_root, &publish_root).unwrap();
+        let root = edit_root.to_string_lossy().into_owned();
+
+        assert_eq!(
+            workspace_lock_status(root.clone()).unwrap().state,
+            dms_core::WorkspaceLockState::Unlocked
+        );
+        let acquired = acquire_workspace_lock(root.clone(), false).unwrap();
+        assert_eq!(acquired.state, dms_core::WorkspaceLockState::Current);
+        let owner = acquired.lock.unwrap();
+        assert!(release_workspace_lock(root.clone(), owner.clone(), false).is_err());
+        assert!(edit_root.join(".dms/lock").is_file());
+        release_workspace_lock(root.clone(), owner, true).unwrap();
+        assert_eq!(
+            configure_workspace_lock_staleness(root.clone(), 12, true)
+                .unwrap()
+                .stale_after_hours,
+            12
+        );
+
+        let archive = directory.path().join("workspace-restore.zip");
+        backup_workspace(root, archive.to_string_lossy().into_owned()).unwrap();
+        let replacement_edit = directory.path().join("replacement-edit");
+        let replacement_publish = directory.path().join("replacement-publish");
+        fs::create_dir(&replacement_edit).unwrap();
+        fs::create_dir(&replacement_publish).unwrap();
+        let restore = |confirmed| {
+            restore_workspace_backup(
+                archive.to_string_lossy().into_owned(),
+                replacement_edit.to_string_lossy().into_owned(),
+                replacement_publish.to_string_lossy().into_owned(),
+                false,
+                false,
+                confirmed,
+            )
+        };
+        assert!(restore(false).is_err());
+        assert!(!replacement_edit.join(".dms/workspace.json").exists());
+        let restored = restore(true).unwrap();
+        assert_eq!(
+            restored.edit_root,
+            fs::canonicalize(replacement_edit).unwrap()
+        );
+        assert_eq!(
+            restored.publish_root,
+            fs::canonicalize(replacement_publish).unwrap()
+        );
     }
 
     #[test]

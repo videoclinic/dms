@@ -15,7 +15,7 @@ macOS.
 | `ui/app.mjs` | Workspace setup, static shell, session activities, saved-view persistence, and IPC orchestration |
 | `ui/library.mjs` | Folder-first explorer state, markup, selection rules, search, and sorting |
 | `ui/notes.mjs` | Per-document note activity state, create/edit/delete markup, and confirmation flow |
-| `ui/maintenance.mjs` | Releases, periodic-review, and full-backup panes with read-only verification, paging, and confirmation copy |
+| `ui/maintenance.mjs` | Releases, periodic-review, advisory-lock status/configuration, full backup, and confirmed restore panes |
 | `ui/reports.mjs` | Audit-report generation filters, recent-report history, verification state, paging, and host actions |
 | `ui/assistance.mjs` | Workspace policy form plus document-scoped payload preview, consent, handoff, and editable response draft |
 | `ui/print/` | Shipped app-local Markdown print shell, stylesheet, and logo |
@@ -31,6 +31,10 @@ macOS.
 - Before a workspace exists, expose only Set up workspace. Opening requires an
   existing edit root; initialization requires explicit edit + publish roots and
   confirmation before the adapter may create `.dms` or the publish root.
+- Opening or switching workspace sessions acquires the destination advisory
+  lock before activation, offers explicit stale takeover from setup, releases
+  the previous lock only after acquisition succeeds, and removes the active
+  lock on a clean window close only when its recorded owner still matches.
 - Store sidebar, saved-view, and recent-library preferences in the OS user
   app-config directory, never under `<edit-root>/.dms`. Recent libraries are at
   most ten unique edit roots in most-recent-first order; removing one never
@@ -63,8 +67,10 @@ macOS.
   cancellation, and reminder require explicit confirmation; delivery and
   integrity failures are surfaced in place. Live Entra/notification adapters
   remain phase 9i work.
-- The Maintenance pane writes a workspace backup archive to a user-supplied
-  path and refuses to overwrite an existing archive.
+- The Maintenance pane shows advisory-lock status and configures its positive
+  staleness threshold. It writes a workspace backup archive to a user-supplied
+  path without overwrite and restores only after explicit roots, replacement
+  policy, lock takeover, and confirmation are supplied to `dms-core`.
 - Claude Desktop assistance remains unavailable unless workspace policy,
   effective confidentiality, a verified current release, and a supported local
   installation all allow it. Every handoff previews the exact payload and

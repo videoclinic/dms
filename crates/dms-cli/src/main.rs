@@ -5,7 +5,7 @@ use dms_core::{
     AuditReportFilter, AuditReportFormat, AuditReportRequest, AuthenticatedActor, ControlUpdate,
     DeliveryReceipt, Document, EntraIdentitySource, EntraPerson, GraphClient, Note,
     NotificationClient, NotificationMessage, NotificationSettings, PeriodicReviewResult,
-    RoleUpdate, Workspace,
+    RestoreRequest, RoleUpdate, Workspace,
 };
 use serde::Serialize;
 use uuid::Uuid;
@@ -70,6 +70,50 @@ enum WorkspaceCommand {
     Verify {
         #[arg(long)]
         edit_root: PathBuf,
+    },
+    LockStatus {
+        #[arg(long)]
+        edit_root: PathBuf,
+    },
+    LockAcquire {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long, help = "Explicitly replace a stale advisory lock")]
+        take_over_stale: bool,
+    },
+    LockRelease {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long, help = "Confirm removal of the advisory lock")]
+        confirm: bool,
+    },
+    ConfigureLockStaleness {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long)]
+        hours: u32,
+        #[arg(long, help = "Confirm the workspace lock-staleness setting")]
+        confirm: bool,
+    },
+    Backup {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long)]
+        archive: PathBuf,
+    },
+    Restore {
+        #[arg(long)]
+        archive: PathBuf,
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long)]
+        publish_root: PathBuf,
+        #[arg(long, help = "Replace manifest-listed destination files")]
+        replace_existing: bool,
+        #[arg(long, help = "Remove a stale destination lock before restore")]
+        take_over_stale_lock: bool,
+        #[arg(long, help = "Confirm restore into the selected roots")]
+        confirm: bool,
     },
 }
 
@@ -661,6 +705,79 @@ fn run_workspace(command: WorkspaceCommand, json: bool) -> CliResult<()> {
                     "workspace {} is valid ({} documents)",
                     result.workspace_id, result.document_count
                 ),
+            )
+        }
+        WorkspaceCommand::LockStatus { edit_root } => {
+            let workspace = Workspace::open(&edit_root)?;
+            let status = workspace.lock_status()?;
+            print_value(&status, json, format!("workspace lock: {:?}", status.state))
+        }
+        WorkspaceCommand::LockAcquire {
+            edit_root,
+            take_over_stale,
+        } => {
+            let workspace = Workspace::open(&edit_root)?;
+            let status = workspace.acquire_lock(take_over_stale)?;
+            print_value(&status, json, "workspace advisory lock acquired".to_owned())
+        }
+        WorkspaceCommand::LockRelease { edit_root, confirm } => {
+            if !confirm {
+                return Err(input_error("workspace lock release requires --confirm"));
+            }
+            dms_core::release_workspace_lock(&edit_root)?;
+            print_value(
+                &serde_json::json!({ "result": "released" }),
+                json,
+                "workspace advisory lock released".to_owned(),
+            )
+        }
+        WorkspaceCommand::ConfigureLockStaleness {
+            edit_root,
+            hours,
+            confirm,
+        } => {
+            if !confirm {
+                return Err(input_error(
+                    "workspace lock-staleness configuration requires --confirm",
+                ));
+            }
+            let mut workspace = Workspace::open(&edit_root)?;
+            workspace.configure_lock_staleness(hours)?;
+            print_value(
+                &serde_json::json!({ "stale_after_hours": hours }),
+                json,
+                format!("workspace locks become stale after {hours} hours"),
+            )
+        }
+        WorkspaceCommand::Backup { edit_root, archive } => {
+            let workspace = Workspace::open(&edit_root)?;
+            let outcome = workspace.backup_workspace(&archive)?;
+            print_value(
+                &outcome,
+                json,
+                format!("created backup {}", archive.display()),
+            )
+        }
+        WorkspaceCommand::Restore {
+            archive,
+            edit_root,
+            publish_root,
+            replace_existing,
+            take_over_stale_lock,
+            confirm,
+        } => {
+            let outcome = dms_core::restore_workspace_backup(RestoreRequest {
+                archive_path: &archive,
+                edit_root: &edit_root,
+                publish_root: &publish_root,
+                replace_existing,
+                take_over_stale_lock,
+                confirmed: confirm,
+            })?;
+            print_value(
+                &outcome,
+                json,
+                format!("restored workspace {}", outcome.workspace_id),
             )
         }
     }

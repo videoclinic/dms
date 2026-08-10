@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeSet,
     fs::{self, File},
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -103,6 +104,7 @@ struct PeriodicEventContext {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct BackupManifestEntry {
     pub archive_path: String,
     pub size: u64,
@@ -110,6 +112,7 @@ pub struct BackupManifestEntry {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct BackupManifest {
     pub workspace_id: Uuid,
     pub created_at: DateTime<Utc>,
@@ -665,6 +668,15 @@ impl Workspace {
         }
         files.sort_by(|left, right| left.archive_path.cmp(&right.archive_path));
         files.dedup_by(|left, right| left.archive_path == right.archive_path);
+        let mut portable_paths = BTreeSet::new();
+        for file in &files {
+            if !portable_paths.insert(crate::portable_archive_key(&file.archive_path)) {
+                return Err(DmsError::BackupManifest(format!(
+                    "backup contains a cross-platform path collision at {}",
+                    file.archive_path
+                )));
+            }
+        }
         Ok(files)
     }
 }
@@ -675,6 +687,8 @@ struct BackupFile {
 }
 
 fn read_backup_file(path: &Path, archive_path: String) -> Result<BackupFile> {
+    crate::validate_archive_path(&archive_path)
+        .map_err(|_| DmsError::BackupInputInvalid(path.to_path_buf()))?;
     let metadata = fs::symlink_metadata(path).map_err(|source| DmsError::Io {
         path: path.to_path_buf(),
         source,
@@ -712,6 +726,13 @@ fn collect_regular_files(
     for entry in entries {
         let path = entry.path();
         if path == archive_path || path == temporary_path {
+            continue;
+        }
+        let filename = path.file_name().and_then(|value| value.to_str());
+        if filename == Some(crate::LOCK_FILENAME)
+            || filename
+                .is_some_and(|value| value.starts_with(".workspace-") && value.ends_with(".tmp"))
+        {
             continue;
         }
         let metadata = fs::symlink_metadata(&path).map_err(|source| DmsError::Io {

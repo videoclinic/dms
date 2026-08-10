@@ -9,6 +9,7 @@ import {
   periodicReviewRequest,
   releaseMaintenanceMarkup,
   workspaceMaintenanceMarkup,
+  workspaceRestoreRequest,
 } from "./maintenance.mjs";
 
 const release = (overrides = {}) => ({
@@ -107,16 +108,57 @@ test("periodic review actions map explicit confirmation to narrow desktop comman
   });
 });
 
-test("workspace backup reports archive path and manifest digest", () => {
+test("workspace integrity renders lock owner, backup evidence, and restore outcome", () => {
   const markup = workspaceMaintenanceMarkup({
     error: "",
-    outcome: {
+    notice: "Backup verified and restored.",
+    lock_status: {
+      state: "stale",
+      stale_after_hours: 24,
+      lock: {
+        os_user: "operator <one>",
+        hostname: "host-1",
+        process_id: 42,
+        acquired_at: "2026-08-10T10:00:00Z",
+      },
+    },
+    backup_outcome: {
       archive_path: "/backup/workspace.zip",
       entry_count: 3,
       manifest_digest: "f".repeat(64),
     },
+    restore_outcome: {
+      workspace_id: "workspace-1",
+      edit_root: "/replacement/edit",
+      publish_root: "/replacement/publish",
+      entry_count: 3,
+      manifest_digest: "e".repeat(64),
+    },
   });
+  assert.match(markup, /operator &lt;one&gt;/);
+  assert.match(markup, /Stale after 24 hours/);
   assert.match(markup, /Backup created/);
   assert.match(markup, /\/backup\/workspace\.zip/);
+  assert.match(markup, /Workspace restored/);
+  assert.match(markup, /name="confirmed" required/);
   assert.match(markup, /manifest SHA-256/);
+});
+
+test("workspace restore request carries every explicit recovery decision", () => {
+  const values = new URLSearchParams({
+    archivePath: " /backup/workspace.zip ",
+    editRoot: " /replacement/edit ",
+    publishRoot: " /replacement/publish ",
+    replaceExisting: "on",
+    takeOverStaleLock: "on",
+    confirmed: "on",
+  });
+  assert.deepEqual(workspaceRestoreRequest(values), {
+    archivePath: "/backup/workspace.zip",
+    editRoot: "/replacement/edit",
+    publishRoot: "/replacement/publish",
+    replaceExisting: true,
+    takeOverStaleLock: true,
+    confirmed: true,
+  });
 });

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   activityKey,
   closeActivity,
+  closeWorkspaceSession,
   createInitialState,
   defaultPreferences,
   openActivity,
@@ -11,6 +12,7 @@ import {
   removeRecentLibrary,
   savedViewId,
   setupMarkup,
+  switchWorkspaceSession,
   toggleSavedView,
   workspaceSetupRequest,
 } from "./app.mjs";
@@ -36,6 +38,7 @@ test("workspace setup exposes existing-open and confirmed dual-root initializati
   assert.match(markup, /name="editRoot"/);
   assert.match(markup, /name="publishRoot"/);
   assert.match(markup, /name="confirmed"[^>]*required/);
+  assert.match(markup, /name="takeOverStale"/);
   assert.equal((markup.match(/data-directory-target=/g) ?? []).length, 3);
   assert.match(markup, /data-recent-library-open="\/Users\/name\/DMS\/Edit"/);
   assert.match(markup, /data-recent-library-remove="\/Users\/name\/DMS\/Edit"/);
@@ -44,7 +47,11 @@ test("workspace setup exposes existing-open and confirmed dual-root initializati
 test("workspace setup maps each form to its explicit desktop command", () => {
   assert.deepEqual(
     workspaceSetupRequest("open-workspace-form", { editRoot: " C:\\DMS\\Edit " }),
-    { command: "open_workspace", arguments: { editRoot: "C:\\DMS\\Edit" } },
+    {
+      command: "open_workspace",
+      arguments: { editRoot: "C:\\DMS\\Edit" },
+      takeOverStale: false,
+    },
   );
   assert.deepEqual(
     workspaceSetupRequest("initialize-workspace-form", {
@@ -61,6 +68,56 @@ test("workspace setup maps each form to its explicit desktop command", () => {
       },
     },
   );
+});
+
+test("clean desktop close releases the active workspace lock before destroying the window", async () => {
+  const calls = [];
+  let destroyed = false;
+  const owner = { os_user: "operator", hostname: "host", process_id: 17, acquired_at: "now" };
+  const closed = await closeWorkspaceSession(
+    {
+      workspace: { edit_root: "/DMS/Edit" },
+      maintenance: { lock_status: { lock: owner } },
+    },
+    async (command, arguments_) => calls.push({ command, arguments_ }),
+    async () => { destroyed = true; },
+  );
+
+  assert.equal(closed, true);
+  assert.deepEqual(calls, [{
+    command: "release_workspace_lock",
+    arguments_: { editRoot: "/DMS/Edit", owner, confirmed: true },
+  }]);
+  assert.equal(destroyed, true);
+});
+
+test("opening a workspace acquires its lock and switches only after releasing the prior lock", async () => {
+  const calls = [];
+  const priorOwner = { process_id: 16 };
+  const newOwner = { process_id: 17 };
+  const status = { state: "current", stale_after_hours: 24, lock: newOwner };
+  const result = await switchWorkspaceSession(
+    { edit_root: "/DMS/Old" },
+    { state: "current", stale_after_hours: 24, lock: priorOwner },
+    { edit_root: "/DMS/New" },
+    true,
+    async (command, arguments_) => {
+      calls.push({ command, arguments_ });
+      return command === "acquire_workspace_lock" ? status : null;
+    },
+  );
+
+  assert.equal(result, status);
+  assert.deepEqual(calls, [
+    {
+      command: "acquire_workspace_lock",
+      arguments_: { editRoot: "/DMS/New", takeOverStale: true },
+    },
+    {
+      command: "release_workspace_lock",
+      arguments_: { editRoot: "/DMS/Old", owner: priorOwner, confirmed: true },
+    },
+  ]);
 });
 
 test("preferences start expanded and persist no session activities", () => {

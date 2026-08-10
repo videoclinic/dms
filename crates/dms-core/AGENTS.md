@@ -13,6 +13,7 @@ persistence.
 | `src/assistance.rs` | Optional Claude Desktop policy, released-PDF/source comparison payloads, and assistance evidence |
 | `src/audit.rs` | Filtered deterministic CSV/PDF audit reports, report-file integrity, and workspace report evidence |
 | `src/catalogues.rs` | Document-type catalogue primitives plus shared stable-ID and label validation |
+| `src/integrity.rs` | Advisory workspace locks, backup-manifest validation, and confirmed root-safe restore |
 | `src/library.rs` | Folder/file discovery, membership, search, registration state, reassociation, and permalinks |
 | `src/lifecycle.rs` | Version candidates, Entra/notification/export ports, content conformance, review decisions, release commits, and hash-chained evidence |
 | `src/maintenance.rs` | Release checksum verification, periodic-review scheduling, result/cancellation/reminder transitions, and full-workspace ZIP backup with SHA-256 manifest |
@@ -78,6 +79,14 @@ persistence.
   refuses symlinks and non-regular files, and writes a Zip archive containing
   metadata, every registered draft, every recorded release PDF, and a
   SHA-256 manifest entry per file.
+- Advisory `.dms/lock` records contain local owner/process evidence. A current
+  lock blocks acquisition; a stale lock requires explicit takeover against the
+  workspace-configured threshold.
+- Restore validates the complete archive manifest, entry types, sizes, digests,
+  workspace identity, destination lock, and confirmed replacement policy before
+  writing only beneath existing operator-selected edit and publish roots. It
+  holds an owner-recorded destination lock throughout file writes and rejects
+  cross-platform path aliases before restoration.
 - Claude assistance is disabled by default, permits only configured
   confidentiality type IDs, verifies the current release before extracting
   comparison text, refuses oversized payloads without truncation, and records
@@ -92,6 +101,8 @@ persistence.
   `v5.json.bak` retained during migration.
 - Schema v7 adds the workspace-level report evidence chain, with a
   `v6.json.bak` retained during migration.
+- Schema v8 adds the positive per-workspace advisory-lock staleness threshold,
+  with a `v7.json.bak` retained during migration.
 
 ## Verification
 
