@@ -9,8 +9,10 @@ persistence.
 
 | Path | Owns |
 | --- | --- |
-| `src/lib.rs` | Workspace schema, validation, document-control data, and notes API |
-| `tests/` | Domain and persistence behaviour tests |
+| `src/lib.rs` | Versioned workspace store, migration boundary, document-control data, and notes API |
+| `src/catalogues.rs` | Document-type catalogue primitives plus shared stable-ID and label validation |
+| `src/policies.rs` | Folder-policy tree, confidentiality inheritance, Entra display binding, and workflow-role resolution |
+| `tests/` | Domain, migration-fixture, and persistence behaviour tests |
 
 ## Local Contracts
 
@@ -20,6 +22,12 @@ persistence.
   metadata and machine-readable output.
 - Source filename/path are locator facts; control data is independent metadata.
 - `Workspace::save` is the only persistence boundary for mutating callers.
+- Schema migrations retain the source metadata backup and verify the migrated
+  shape before atomically replacing `workspace.json`.
+- Folder policies target only existing edit-root-relative directories, exclude
+  `.dms`, and retain non-removable root defaults once configured.
+- Microsoft Entra workspace metadata contains tenant/group identifiers and a
+  read-only person display cache, never credentials or tokens.
 
 ## Work Guidance
 

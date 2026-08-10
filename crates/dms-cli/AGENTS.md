@@ -18,6 +18,9 @@ executable.
 - Mutations require explicit command targets and must not create a desktop
   runtime or invoke a sidecar.
 - `--json` results are structured and contain no document bytes or credentials.
+- Policy commands use explicit edit-root-relative targets. Injected eligible-
+  person snapshots use the explicit `@file:PATH` marker and contain only
+  non-secret display data.
 
 ## Work Guidance
 

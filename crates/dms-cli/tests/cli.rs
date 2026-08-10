@@ -1,6 +1,7 @@
 use std::{fs, process::Command};
 
 use serde_json::Value;
+use uuid::Uuid;
 
 fn dms() -> Command {
     Command::new(env!("CARGO_BIN_EXE_dms"))
@@ -152,4 +153,121 @@ fn cli_adds_and_lists_document_notes() {
     let notes: Value = serde_json::from_slice(&list.stdout).expect("notes JSON");
     assert_eq!(notes[0]["body"], "Initial note");
     assert_eq!(notes[0]["author"], "Raphael");
+}
+
+#[test]
+fn cli_configures_catalogues_folder_policies_and_identity_routing() {
+    let edit_root = tempfile::tempdir().expect("edit root");
+    let publish_root = tempfile::tempdir().expect("publish root");
+    fs::create_dir_all(edit_root.path().join("policies/empty")).expect("policy folders");
+    let init = dms()
+        .args(["workspace", "init", "--edit-root"])
+        .arg(edit_root.path())
+        .arg("--publish-root")
+        .arg(publish_root.path())
+        .arg("--confirm")
+        .output()
+        .expect("initialize workspace");
+    assert!(init.status.success());
+
+    for args in [
+        vec![
+            "policy",
+            "configure-confidentiality-type",
+            "--id",
+            "internal",
+            "--label",
+            "Internal",
+            "--root",
+        ],
+        vec![
+            "policy",
+            "configure-document-type",
+            "--id",
+            "procedure",
+            "--label",
+            "Procedure",
+        ],
+    ] {
+        let output = dms()
+            .args(args)
+            .arg("--edit-root")
+            .arg(edit_root.path())
+            .output()
+            .expect("configure policy");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let folders = dms()
+        .arg("--json")
+        .args(["policy", "folders", "--edit-root"])
+        .arg(edit_root.path())
+        .output()
+        .expect("list policy folders");
+    let folders: Value = serde_json::from_slice(&folders.stdout).expect("folder JSON");
+    assert_eq!(folders[0]["relative_path"], ".");
+    assert!(folders
+        .as_array()
+        .expect("folders")
+        .iter()
+        .any(|folder| folder["relative_path"] == "policies/empty"));
+
+    let remove_root = dms()
+        .args([
+            "policy",
+            "remove-confidentiality",
+            "--folder",
+            ".",
+            "--edit-root",
+        ])
+        .arg(edit_root.path())
+        .output()
+        .expect("reject root removal");
+    assert!(!remove_root.status.success());
+    assert!(String::from_utf8_lossy(&remove_root.stderr).contains("required"));
+
+    let tenant_id = Uuid::new_v4();
+    let group_id = Uuid::new_v4();
+    let editor_id = Uuid::new_v4();
+    let approver_id = Uuid::new_v4();
+    let people_path = edit_root.path().join("eligible-people.json");
+    fs::write(
+        &people_path,
+        serde_json::to_vec(&serde_json::json!([
+            {"object_id": editor_id, "display_name": "Editor", "email": "editor@example.test", "account_enabled": true},
+            {"object_id": approver_id, "display_name": "Approver", "email": "approver@example.test", "account_enabled": true}
+        ]))
+        .expect("people JSON"),
+    )
+    .expect("people file");
+    let identity = dms()
+        .arg("--json")
+        .args(["policy", "replace-identity-source", "--edit-root"])
+        .arg(edit_root.path())
+        .args(["--tenant-id", &tenant_id.to_string()])
+        .args(["--tenant-display", "Example tenant"])
+        .args(["--group-id", &group_id.to_string()])
+        .args(["--group-label", "DMS workflow"])
+        .args([
+            "--eligible-people",
+            &format!("@file:{}", people_path.display()),
+        ])
+        .args(["--root-editor", &editor_id.to_string()])
+        .args(["--root-approver", &approver_id.to_string()])
+        .output()
+        .expect("replace identity source");
+    assert!(
+        identity.status.success(),
+        "{}",
+        String::from_utf8_lossy(&identity.stderr)
+    );
+    let metadata =
+        fs::read_to_string(edit_root.path().join(".dms/workspace.json")).expect("metadata");
+    assert!(metadata.contains(&tenant_id.to_string()));
+    assert!(!metadata.contains("client_secret"));
+    assert!(!metadata.contains("access_token"));
 }

@@ -51,6 +51,9 @@ fn document_control_is_persisted_independently_from_source_locator() {
     let relative_path = PathBuf::from("procedures").join("Onboarding.md");
     assert_eq!(document.relative_path, relative_path);
     assert_eq!(document.control.title, "Onboarding");
+    workspace
+        .configure_document_type("procedure", "Procedure", true)
+        .expect("document type");
 
     let updated = workspace
         .update_control(

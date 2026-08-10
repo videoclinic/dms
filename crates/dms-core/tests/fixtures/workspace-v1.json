@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "workspace_id": "4fc6f944-813c-4fed-8c14-72cb956fa683",
+  "edit_root": "__EDIT_ROOT__",
+  "publish_root": "__PUBLISH_ROOT__",
+  "documents": {
+    "1f38f62c-6d85-47d4-b2ab-1a93930170cb": {
+      "id": "1f38f62c-6d85-47d4-b2ab-1a93930170cb",
+      "relative_path": "procedures/Onboarding.md",
+      "lifecycle": "draft",
+      "control": {
+        "title": "Onboarding",
+        "document_number": null,
+        "document_type": "procedure",
+        "owner": null
+      },
+      "notes": []
+    }
+  }
+}

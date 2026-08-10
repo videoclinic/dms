@@ -1,7 +1,7 @@
-use std::{error::Error, io, path::PathBuf, process};
+use std::{error::Error, fs, io, path::PathBuf, process};
 
 use clap::{Parser, Subcommand};
-use dms_core::{ControlUpdate, Document, Note, Workspace};
+use dms_core::{ControlUpdate, Document, EntraPerson, Note, RoleUpdate, Workspace};
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -29,6 +29,10 @@ enum Command {
     Note {
         #[command(subcommand)]
         command: NoteCommand,
+    },
+    Policy {
+        #[command(subcommand)]
+        command: PolicyCommand,
     },
 }
 
@@ -124,6 +128,82 @@ enum NoteCommand {
     },
 }
 
+#[derive(Debug, Subcommand)]
+enum PolicyCommand {
+    Folders {
+        #[arg(long)]
+        edit_root: PathBuf,
+    },
+    ConfigureConfidentialityType {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        label: String,
+        #[arg(long, default_value_t = true)]
+        enabled: bool,
+        #[arg(long, help = "Set this type as the required edit-root policy")]
+        root: bool,
+    },
+    ConfigureDocumentType {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        label: String,
+        #[arg(long, default_value_t = true)]
+        enabled: bool,
+    },
+    SetConfidentiality {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long)]
+        folder: String,
+        #[arg(long)]
+        type_id: String,
+    },
+    RemoveConfidentiality {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long)]
+        folder: String,
+    },
+    ReplaceIdentitySource {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long)]
+        tenant_id: Uuid,
+        #[arg(long)]
+        tenant_display: String,
+        #[arg(long)]
+        group_id: Uuid,
+        #[arg(long)]
+        group_label: String,
+        #[arg(long, value_name = "@file:PATH")]
+        eligible_people: String,
+        #[arg(long)]
+        root_editor: Uuid,
+        #[arg(long)]
+        root_approver: Uuid,
+    },
+    SetWorkflowRoles {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long)]
+        folder: String,
+        #[arg(long)]
+        editor: Option<Uuid>,
+        #[arg(long)]
+        approver: Option<Uuid>,
+        #[arg(long, conflicts_with = "editor")]
+        clear_editor: bool,
+        #[arg(long, conflicts_with = "approver")]
+        clear_approver: bool,
+    },
+}
+
 #[derive(Serialize)]
 struct VerificationResult {
     workspace_id: Uuid,
@@ -152,6 +232,7 @@ fn run(cli: Cli) -> CliResult<()> {
         Command::Workspace { command } => run_workspace(command, cli.json),
         Command::Document { command } => run_document(command, cli.json),
         Command::Note { command } => run_note(command, cli.json),
+        Command::Policy { command } => run_policy(command, cli.json),
     }
 }
 
@@ -206,6 +287,119 @@ fn run_workspace(command: WorkspaceCommand, json: bool) -> CliResult<()> {
                     "workspace {} is valid ({} documents)",
                     result.workspace_id, result.document_count
                 ),
+            )
+        }
+    }
+}
+
+fn run_policy(command: PolicyCommand, json: bool) -> CliResult<()> {
+    match command {
+        PolicyCommand::Folders { edit_root } => {
+            let workspace = Workspace::open(&edit_root)?;
+            let folders = workspace.policy_folders()?;
+            print_value(&folders, json, format!("{} policy folders", folders.len()))
+        }
+        PolicyCommand::ConfigureConfidentialityType {
+            edit_root,
+            id,
+            label,
+            enabled,
+            root,
+        } => {
+            let mut workspace = Workspace::open(&edit_root)?;
+            let configured = workspace.configure_confidentiality_type(&id, &label, enabled)?;
+            if root {
+                workspace.set_confidentiality_policy(".", &id)?;
+            }
+            workspace.save()?;
+            print_value(
+                &configured,
+                json,
+                format!("configured confidentiality type {id}"),
+            )
+        }
+        PolicyCommand::ConfigureDocumentType {
+            edit_root,
+            id,
+            label,
+            enabled,
+        } => {
+            let mut workspace = Workspace::open(&edit_root)?;
+            let configured = workspace.configure_document_type(&id, &label, enabled)?;
+            workspace.save()?;
+            print_value(&configured, json, format!("configured document type {id}"))
+        }
+        PolicyCommand::SetConfidentiality {
+            edit_root,
+            folder,
+            type_id,
+        } => {
+            let mut workspace = Workspace::open(&edit_root)?;
+            let policy = workspace.set_confidentiality_policy(&folder, &type_id)?;
+            workspace.save()?;
+            print_value(
+                &policy,
+                json,
+                format!("set confidentiality policy for {folder}"),
+            )
+        }
+        PolicyCommand::RemoveConfidentiality { edit_root, folder } => {
+            let mut workspace = Workspace::open(&edit_root)?;
+            workspace.remove_confidentiality_policy(&folder)?;
+            workspace.save()?;
+            print_value(
+                &folder,
+                json,
+                format!("removed confidentiality policy for {folder}"),
+            )
+        }
+        PolicyCommand::ReplaceIdentitySource {
+            edit_root,
+            tenant_id,
+            tenant_display,
+            group_id,
+            group_label,
+            eligible_people,
+            root_editor,
+            root_approver,
+        } => {
+            let people: Vec<EntraPerson> = read_marked_json(&eligible_people)?;
+            let mut workspace = Workspace::open(&edit_root)?;
+            let source = workspace.replace_identity_source(
+                tenant_id,
+                &tenant_display,
+                group_id,
+                &group_label,
+                people,
+            )?;
+            workspace.update_workflow_policy(
+                ".",
+                RoleUpdate::replace(root_editor),
+                RoleUpdate::replace(root_approver),
+            )?;
+            workspace.save()?;
+            print_value(&source, json, "replaced identity source".to_owned())
+        }
+        PolicyCommand::SetWorkflowRoles {
+            edit_root,
+            folder,
+            editor,
+            approver,
+            clear_editor,
+            clear_approver,
+        } => {
+            let editor = role_update(editor, clear_editor);
+            let approver = role_update(approver, clear_approver);
+            if editor == RoleUpdate::Unchanged && approver == RoleUpdate::Unchanged {
+                return Err(input_error("set-workflow-roles requires a role update"));
+            }
+            let mut workspace = Workspace::open(&edit_root)?;
+            let policy = workspace.update_workflow_policy(&folder, editor, approver)?;
+            workspace.save()?;
+            print_value(
+                &policy,
+                json,
+                format!("updated workflow roles for {folder}"),
             )
         }
     }
@@ -338,6 +532,24 @@ fn run_note(command: NoteCommand, json: bool) -> CliResult<()> {
             print_value(&result, json, format!("removed note {note}"))
         }
     }
+}
+
+fn role_update(person: Option<Uuid>, clear: bool) -> RoleUpdate {
+    if let Some(person) = person {
+        RoleUpdate::replace(person)
+    } else if clear {
+        RoleUpdate::Clear
+    } else {
+        RoleUpdate::Unchanged
+    }
+}
+
+fn read_marked_json<T: serde::de::DeserializeOwned>(marker: &str) -> CliResult<T> {
+    let path = marker
+        .strip_prefix("@file:")
+        .ok_or_else(|| input_error("eligible people must use @file:PATH"))?;
+    let bytes = fs::read(path)?;
+    Ok(serde_json::from_slice(&bytes)?)
 }
 
 fn print_document(document: &Document, json: bool, verb: &str) -> CliResult<()> {

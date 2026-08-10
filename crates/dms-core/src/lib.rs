@@ -10,7 +10,13 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
-pub const SCHEMA_VERSION: u32 = 1;
+mod catalogues;
+mod policies;
+
+pub use catalogues::*;
+pub use policies::*;
+
+pub const SCHEMA_VERSION: u32 = 2;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 
@@ -66,24 +72,76 @@ pub enum DmsError {
     EmptyNote,
     #[error("document number {0:?} is already assigned")]
     DuplicateDocumentNumber(String),
+    #[error("confidentiality type ID {0:?} must contain lowercase letters, digits, or hyphens")]
+    InvalidConfidentialityTypeId(String),
+    #[error("confidentiality type {0:?} is not configured")]
+    UnknownConfidentialityType(String),
+    #[error("confidentiality type {0:?} is disabled")]
+    DisabledConfidentialityType(String),
+    #[error("the edit-root confidentiality policy is required")]
+    RequiredRootPolicy,
+    #[error("no effective confidentiality policy is configured")]
+    MissingConfidentialityPolicy,
+    #[error("policy folder {0:?} must be an existing edit-root-relative folder")]
+    InvalidPolicyFolder(String),
+    #[error("a Microsoft Entra identity source must be configured first")]
+    IdentitySourceRequired,
+    #[error("Microsoft Entra person {0} is not an eligible cached group member")]
+    IneligibleEntraPerson(Uuid),
+    #[error("the edit-root workflow policy must assign both editor and approver")]
+    RequiredRootWorkflowPolicy,
+    #[error("identity cache key {key} does not match stored person ID {stored}")]
+    IdentityCacheKeyMismatch { key: Uuid, stored: Uuid },
+    #[error("configuration field {0} cannot be empty")]
+    InvalidConfiguration(String),
+    #[error("document type ID {0:?} must contain lowercase letters, digits, or hyphens")]
+    InvalidDocumentTypeId(String),
+    #[error("document type {0:?} is not configured")]
+    UnknownDocumentType(String),
+    #[error("document type {0:?} is disabled")]
+    DisabledDocumentType(String),
+    #[error("document type {0:?} is referenced by a document")]
+    DocumentTypeInUse(String),
+    #[error("confidentiality type {0:?} is referenced by a live policy or document")]
+    ConfidentialityTypeInUse(String),
+    #[error("migration backup at {0} does not match the workspace being migrated")]
+    MigrationBackupConflict(PathBuf),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Workspace {
     pub schema_version: u32,
     pub workspace_id: Uuid,
     pub edit_root: PathBuf,
     pub publish_root: PathBuf,
-    documents: BTreeMap<Uuid, Document>,
+    pub(crate) documents: BTreeMap<Uuid, Document>,
+    #[serde(default)]
+    pub(crate) document_types: BTreeMap<String, DocumentType>,
+    #[serde(default)]
+    pub(crate) confidentiality_types: BTreeMap<String, ConfidentialityType>,
+    #[serde(default)]
+    pub(crate) confidentiality_policies: BTreeMap<String, ConfidentialityPolicy>,
+    #[serde(default)]
+    pub(crate) identity_source: Option<EntraIdentitySource>,
+    #[serde(default)]
+    pub(crate) identity_cache: BTreeMap<Uuid, EntraPerson>,
+    #[serde(default)]
+    pub(crate) workflow_policies: BTreeMap<String, WorkflowPolicy>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Document {
     pub id: Uuid,
     #[serde(with = "relative_path_serde")]
     pub relative_path: PathBuf,
     pub lifecycle: Lifecycle,
     pub control: DocumentControl,
+    #[serde(default)]
+    pub(crate) confidentiality_override: Option<String>,
+    #[serde(default)]
+    pub(crate) workflow_overrides: DocumentWorkflowOverrides,
     notes: Vec<Note>,
 }
 
@@ -94,6 +152,7 @@ pub enum Lifecycle {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DocumentControl {
     pub title: String,
     pub document_number: Option<String>,
@@ -102,6 +161,7 @@ pub struct DocumentControl {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Note {
     pub id: Uuid,
     pub body: String,
@@ -143,6 +203,12 @@ impl Workspace {
             edit_root,
             publish_root,
             documents: BTreeMap::new(),
+            document_types: BTreeMap::new(),
+            confidentiality_types: BTreeMap::new(),
+            confidentiality_policies: BTreeMap::new(),
+            identity_source: None,
+            identity_cache: BTreeMap::new(),
+            workflow_policies: BTreeMap::new(),
         };
         workspace.save()?;
         Ok(workspace)
@@ -158,9 +224,29 @@ impl Workspace {
             path: metadata_path.clone(),
             source,
         })?;
-        let workspace: Self =
+        let mut value: serde_json::Value =
             serde_json::from_str(&content).map_err(|source| DmsError::InvalidMetadata {
-                path: metadata_path,
+                path: metadata_path.clone(),
+                source,
+            })?;
+        let found = value
+            .get("schema_version")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|version| u32::try_from(version).ok())
+            .unwrap_or_default();
+        let migrated = found == 1;
+        if migrated {
+            migrate_v1_catalogues(&mut value)?;
+            value["schema_version"] = serde_json::Value::from(SCHEMA_VERSION);
+        } else if found != SCHEMA_VERSION {
+            return Err(DmsError::UnsupportedSchema {
+                expected: SCHEMA_VERSION,
+                found,
+            });
+        }
+        let workspace: Self =
+            serde_json::from_value(value).map_err(|source| DmsError::InvalidMetadata {
+                path: workspace_metadata_path(&requested_edit_root),
                 source,
             })?;
         if workspace.edit_root != requested_edit_root {
@@ -170,6 +256,24 @@ impl Workspace {
             });
         }
         workspace.validate()?;
+        if migrated {
+            let serialized = serde_json::to_vec_pretty(&workspace).map_err(|source| {
+                DmsError::InvalidMetadata {
+                    path: metadata_path.clone(),
+                    source,
+                }
+            })?;
+            let verified: Self = serde_json::from_slice(&serialized).map_err(|source| {
+                DmsError::InvalidMetadata {
+                    path: metadata_path.clone(),
+                    source,
+                }
+            })?;
+            verified.validate()?;
+            retain_migration_backup(&metadata_path, found, content.as_bytes())?;
+            verified.save()?;
+            return Ok(verified);
+        }
         Ok(workspace)
     }
 
@@ -243,12 +347,16 @@ impl Workspace {
                     )));
                 }
             }
+            if let Some(type_id) = document.control.document_type.as_deref() {
+                self.require_enabled_document_type(type_id)?;
+            }
             for note in &document.notes {
                 if note.body.trim().is_empty() {
                     return Err(DmsError::EmptyNote);
                 }
             }
         }
+        self.validate_policies()?;
         Ok(())
     }
 
@@ -287,6 +395,8 @@ impl Workspace {
                 document_type: None,
                 owner: None,
             },
+            confidentiality_override: None,
+            workflow_overrides: DocumentWorkflowOverrides::default(),
             notes: Vec::new(),
         };
         self.documents.insert(document.id, document.clone());
@@ -296,6 +406,9 @@ impl Workspace {
     pub fn update_control(&mut self, document_id: Uuid, update: ControlUpdate) -> Result<Document> {
         if let Some(number) = update.document_number.as_ref() {
             self.ensure_document_number_available(document_id, number.as_deref())?;
+        }
+        if let Some(Some(type_id)) = update.document_type.as_ref() {
+            self.require_enabled_document_type(type_id)?;
         }
         let document = self
             .documents
@@ -436,6 +549,61 @@ impl Workspace {
 
 fn workspace_metadata_path(edit_root: &Path) -> PathBuf {
     edit_root.join(METADATA_DIRECTORY).join(METADATA_FILENAME)
+}
+
+fn retain_migration_backup(metadata_path: &Path, from: u32, content: &[u8]) -> Result<()> {
+    let backup_path = metadata_path.with_file_name(format!("workspace.v{from}.json.bak"));
+    if backup_path.exists() {
+        let existing = fs::read(&backup_path).map_err(|source| DmsError::Io {
+            path: backup_path.clone(),
+            source,
+        })?;
+        if existing == content {
+            return Ok(());
+        }
+        return Err(DmsError::MigrationBackupConflict(backup_path));
+    }
+    let mut backup = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&backup_path)
+        .map_err(|source| DmsError::Io {
+            path: backup_path.clone(),
+            source,
+        })?;
+    backup.write_all(content).map_err(|source| DmsError::Io {
+        path: backup_path.clone(),
+        source,
+    })?;
+    backup.sync_all().map_err(|source| DmsError::Io {
+        path: backup_path,
+        source,
+    })
+}
+
+fn migrate_v1_catalogues(value: &mut serde_json::Value) -> Result<()> {
+    let mut document_types = serde_json::Map::new();
+    if let Some(documents) = value
+        .get("documents")
+        .and_then(serde_json::Value::as_object)
+    {
+        for document in documents.values() {
+            let Some(type_id) = document
+                .get("control")
+                .and_then(|control| control.get("document_type"))
+                .and_then(serde_json::Value::as_str)
+            else {
+                continue;
+            };
+            catalogues::validate_portable_id(type_id, DmsError::InvalidDocumentTypeId)?;
+            document_types.insert(
+                type_id.to_owned(),
+                serde_json::json!({ "id": type_id, "label": type_id, "enabled": true }),
+            );
+        }
+    }
+    value["document_types"] = serde_json::Value::Object(document_types);
+    Ok(())
 }
 
 fn canonical_existing_directory(path: &Path, label: &str) -> Result<PathBuf> {
