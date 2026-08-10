@@ -10,19 +10,21 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
+mod assistance;
 mod catalogues;
 mod library;
 mod lifecycle;
 mod maintenance;
 mod policies;
 
+pub use assistance::*;
 pub use catalogues::*;
 pub use library::*;
 pub use lifecycle::*;
 pub use maintenance::*;
 pub use policies::*;
 
-pub const SCHEMA_VERSION: u32 = 5;
+pub const SCHEMA_VERSION: u32 = 6;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 
@@ -194,6 +196,19 @@ pub enum DmsError {
     BackupInputInvalid(PathBuf),
     #[error("backup manifest failed: {0}")]
     BackupManifest(String),
+    #[error("Claude Desktop assistance is disabled for this workspace")]
+    ClaudeAssistanceDisabled,
+    #[error("Claude Desktop assistance is not permitted for confidentiality type {0:?}")]
+    ClaudeAssistanceNotPermitted(String),
+    #[error("Claude Desktop assistance payload limit must be positive")]
+    InvalidClaudePayloadLimit,
+    #[error("cannot extract text from released PDF {path}: {detail}")]
+    PdfTextExtraction { path: PathBuf, detail: String },
+    #[error("Claude Desktop assistance payload has {actual_chars} characters, exceeding the configured limit of {max_chars}; select or trim excerpts explicitly")]
+    ClaudePayloadTooLarge {
+        actual_chars: usize,
+        max_chars: usize,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -220,6 +235,8 @@ pub struct Workspace {
     pub(crate) notification_settings: Option<NotificationSettings>,
     #[serde(default = "default_review_interval_months")]
     pub(crate) default_review_interval_months: u32,
+    #[serde(default)]
+    pub(crate) claude_assistance: ClaudeAssistancePolicy,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -325,6 +342,7 @@ impl Workspace {
             workflow_policies: BTreeMap::new(),
             notification_settings: None,
             default_review_interval_months: default_review_interval_months(),
+            claude_assistance: ClaudeAssistancePolicy::default(),
         };
         workspace.save()?;
         Ok(workspace)
@@ -350,7 +368,7 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = matches!(found, 1..=4);
+        let migrated = matches!(found, 1..=5);
         if found == 1 {
             migrate_v1_catalogues(&mut value)?;
         }
@@ -444,6 +462,14 @@ impl Workspace {
         canonical_existing_directory(&self.publish_root, "stored publish root")?;
         if self.default_review_interval_months == 0 {
             return Err(DmsError::InvalidReviewInterval);
+        }
+        if self.claude_assistance.max_payload_chars == 0 {
+            return Err(DmsError::InvalidClaudePayloadLimit);
+        }
+        for type_id in &self.claude_assistance.allowed_confidentiality_type_ids {
+            if !self.confidentiality_types.contains_key(type_id) {
+                return Err(DmsError::UnknownConfidentialityType(type_id.clone()));
+            }
         }
 
         let mut document_numbers = BTreeMap::new();

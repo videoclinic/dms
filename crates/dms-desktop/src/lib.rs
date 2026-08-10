@@ -1,18 +1,23 @@
 use std::{
+    collections::BTreeSet,
     fs,
     path::{Component, Path, PathBuf},
 };
 
 use dms_core::{
-    BackupOutcome, Document, DocumentControl, EffectiveConfidentiality, EffectiveWorkflowRoles,
-    LibraryEntry, LibraryFolder, LibraryFolderNode, Lifecycle, Note, PeriodicReview,
-    PeriodicReviewMarker, ReleaseVerificationStatus, SourceState, Workspace,
+    BackupOutcome, ClaudeAssistancePayload, ClaudeAssistancePolicy, Document, DocumentControl,
+    EffectiveConfidentiality, EffectiveWorkflowRoles, LibraryEntry, LibraryFolder,
+    LibraryFolderNode, Lifecycle, Note, PeriodicReview, PeriodicReviewMarker,
+    ReleaseVerificationStatus, SourceState, Workspace,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
+mod assistance;
 pub mod export;
+
+use assistance::ClaudeDesktopApp;
 
 const PREFERENCES_FILENAME: &str = "preferences.json";
 
@@ -102,6 +107,16 @@ pub struct ReleaseRow {
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct ReleaseMaintenance {
     pub rows: Vec<ReleaseRow>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct ClaudeAssistanceAvailability {
+    pub available: bool,
+    pub policy_enabled: bool,
+    pub confidentiality_permitted: bool,
+    pub app_installed: bool,
+    pub reason: String,
+    pub privacy_notice: String,
 }
 
 #[tauri::command]
@@ -255,6 +270,87 @@ fn backup_workspace(edit_root: String, archive_path: String) -> Result<BackupOut
 }
 
 #[tauri::command]
+fn load_claude_assistance_policy(edit_root: String) -> Result<ClaudeAssistancePolicy, String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    Ok(workspace.claude_assistance_policy().clone())
+}
+
+#[tauri::command]
+fn configure_claude_assistance(
+    edit_root: String,
+    enabled: bool,
+    allowed_confidentiality_type_ids: Vec<String>,
+    max_payload_chars: usize,
+) -> Result<(), String> {
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let allowed = allowed_confidentiality_type_ids
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+    workspace
+        .configure_claude_assistance(enabled, allowed, max_payload_chars)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn claude_assistance_availability(
+    edit_root: String,
+    document_id: Uuid,
+) -> Result<ClaudeAssistanceAvailability, String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    assistance_availability(
+        &workspace,
+        document_id,
+        ClaudeDesktopApp::locate().is_some(),
+    )
+}
+
+#[tauri::command]
+fn preview_claude_assistance(
+    edit_root: String,
+    document_id: Uuid,
+) -> Result<ClaudeAssistancePayload, String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let availability = assistance_availability(
+        &workspace,
+        document_id,
+        ClaudeDesktopApp::locate().is_some(),
+    )?;
+    if !availability.available {
+        return Err(availability.reason);
+    }
+    workspace
+        .prepare_claude_assistance(document_id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn launch_claude_assistance(
+    edit_root: String,
+    document_id: Uuid,
+    payload_digest: String,
+    confirmed: bool,
+) -> Result<(), String> {
+    if !confirmed {
+        return Err(
+            "explicit confirmation is required before handing data to Claude Desktop".to_owned(),
+        );
+    }
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let payload = workspace
+        .prepare_claude_assistance(document_id)
+        .map_err(|error| error.to_string())?;
+    if payload.payload_digest != payload_digest {
+        return Err(
+            "the previewed Claude Desktop payload has changed; preview it again".to_owned(),
+        );
+    }
+    ClaudeDesktopApp::locate()
+        .ok_or_else(|| "Claude Desktop is not installed in a supported location".to_owned())?
+        .launch()
+}
+
+#[tauri::command]
 fn add_document_note(
     edit_root: String,
     document_id: Uuid,
@@ -398,6 +494,56 @@ fn document_notes(workspace: &Workspace, document_id: Uuid) -> Result<DocumentNo
     })
 }
 
+fn assistance_availability(
+    workspace: &Workspace,
+    document_id: Uuid,
+    app_installed: bool,
+) -> Result<ClaudeAssistanceAvailability, String> {
+    workspace
+        .document(document_id)
+        .map_err(|error| error.to_string())?;
+    let policy = workspace.claude_assistance_policy();
+    const PRIVACY_NOTICE: &str = "Claude Desktop is a local client, but model processing may send the displayed payload to Anthropic. Only the exact previewed payload is copied after explicit confirmation.";
+    if !policy.enabled {
+        return Ok(ClaudeAssistanceAvailability {
+            available: false,
+            policy_enabled: false,
+            confidentiality_permitted: false,
+            app_installed,
+            reason: "Claude Desktop assistance is disabled for this workspace".to_owned(),
+            privacy_notice: PRIVACY_NOTICE.to_owned(),
+        });
+    }
+    let confidentiality = workspace
+        .effective_confidentiality(document_id)
+        .map_err(|error| error.to_string())?;
+    let confidentiality_permitted = policy
+        .allowed_confidentiality_type_ids
+        .contains(&confidentiality.type_id);
+    let has_release = workspace
+        .releases(document_id)
+        .map_err(|error| error.to_string())?
+        .iter()
+        .any(|release| !release.withdrawn);
+    let reason = if !confidentiality_permitted {
+        "workspace policy does not permit this confidentiality type"
+    } else if !app_installed {
+        "Claude Desktop is not installed in a supported location"
+    } else if !has_release {
+        "a current released PDF is required before evaluating changes"
+    } else {
+        "Available"
+    };
+    Ok(ClaudeAssistanceAvailability {
+        available: confidentiality_permitted && app_installed && has_release,
+        policy_enabled: true,
+        confidentiality_permitted,
+        app_installed,
+        reason: reason.to_owned(),
+        privacy_notice: PRIVACY_NOTICE.to_owned(),
+    })
+}
+
 fn release_maintenance(workspace: &Workspace) -> Result<ReleaseMaintenance, String> {
     let mut rows = Vec::new();
     for document in workspace.documents() {
@@ -485,6 +631,11 @@ pub fn run() {
             load_periodic_reviews,
             start_periodic_review,
             backup_workspace,
+            load_claude_assistance_policy,
+            configure_claude_assistance,
+            claude_assistance_availability,
+            preview_claude_assistance,
+            launch_claude_assistance,
             add_document_note,
             edit_document_note,
             remove_document_note
@@ -569,6 +720,53 @@ mod tests {
         assert_eq!(selection.relative_path, "Policies/Handbook.md");
         assert_eq!(selection.document_id, document.id);
         assert!(selection.permalink.ends_with(&document.id.to_string()));
+    }
+
+    #[test]
+    fn disabled_or_missing_claude_desktop_is_reported_without_blocking_workspace_use() {
+        let edit_root = tempfile::tempdir().unwrap();
+        let publish_root = tempfile::tempdir().unwrap();
+        let mut workspace = Workspace::init(edit_root.path(), publish_root.path()).unwrap();
+        let source = edit_root.path().join("Handbook.md");
+        fs::write(&source, "# Handbook").unwrap();
+        let document = workspace.add_document(&source).unwrap();
+        workspace.save().unwrap();
+
+        let disabled = assistance_availability(&workspace, document.id, false).unwrap();
+        assert!(!disabled.available);
+        assert!(!disabled.policy_enabled);
+        assert!(disabled.reason.contains("disabled"));
+
+        workspace
+            .configure_confidentiality_type("internal", "Internal", true)
+            .unwrap();
+        workspace
+            .set_confidentiality_policy(".", "internal")
+            .unwrap();
+        workspace
+            .configure_claude_assistance(
+                true,
+                ["internal".to_owned()].into_iter().collect(),
+                dms_core::DEFAULT_CLAUDE_PAYLOAD_LIMIT,
+            )
+            .unwrap();
+        let missing = assistance_availability(&workspace, document.id, false).unwrap();
+        assert!(!missing.available);
+        assert!(missing.policy_enabled);
+        assert!(missing.confidentiality_permitted);
+        assert!(missing.reason.contains("not installed"));
+    }
+
+    #[test]
+    fn launch_refuses_unconfirmed_handoff_before_any_workspace_or_app_access() {
+        let error = launch_claude_assistance(
+            "missing".to_owned(),
+            Uuid::nil(),
+            "digest".to_owned(),
+            false,
+        )
+        .unwrap_err();
+        assert!(error.contains("explicit confirmation"));
     }
 
     #[test]

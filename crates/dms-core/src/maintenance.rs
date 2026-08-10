@@ -513,6 +513,7 @@ impl Workspace {
             target_version: Some(review.version),
             target_mode: None,
             changelog: None,
+            assistance: None,
             decision_comment: None,
             operator_comment: comment,
             delivery: None,

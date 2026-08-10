@@ -23,6 +23,13 @@ import {
   releaseMaintenanceMarkup,
   workspaceMaintenanceMarkup,
 } from "./maintenance.mjs";
+import {
+  assistanceDocumentState,
+  assistanceMarkup,
+  assistancePolicyMarkup,
+  createAssistanceState,
+  updateAssistanceState,
+} from "./assistance.mjs";
 
 const DESTINATIONS = [
   ["Library", "▦"],
@@ -47,6 +54,8 @@ export function createInitialState(preferences = defaultPreferences()) {
     workspace: null,
     library: createLibraryState(),
     note_documents: {},
+    assistance_documents: {},
+    assistance_policy: { value: null, error: "" },
     releases: createReleaseState(),
     periodic_reviews: { markers: [], loading: false, error: "" },
     maintenance: { outcome: null, error: "" },
@@ -225,6 +234,12 @@ function activityMarkup(state, activity) {
   if (activity.task === "Notes") {
     return documentNotesMarkup(activity, noteDocumentState(state.note_documents, activity.document_id));
   }
+  if (activity.task === "Claude assistance") {
+    return assistanceMarkup(
+      activity,
+      assistanceDocumentState(state.assistance_documents, activity.document_id),
+    );
+  }
   if (activity.destination === "Library") {
     return libraryMarkup(workspace, activity, state.library, state.error);
   }
@@ -236,6 +251,9 @@ function activityMarkup(state, activity) {
   }
   if (activity.destination === "Maintenance") {
     return workspaceMaintenanceMarkup(state.maintenance);
+  }
+  if (activity.destination === "Configuration") {
+    return assistancePolicyMarkup(state.assistance_policy);
   }
   return `<section class="card"><span class="badge">${escapeHtml(activity.destination)}</span><h2>${escapeHtml(activity.label)}</h2><p>The desktop shell is connected to the shared Rust core. Domain workflows beyond the phase-1 shell remain unavailable until their CHG phases are implemented.</p><dl class="details-grid"><dt>Workspace ID</dt><dd>${escapeHtml(workspace.workspace_id)}</dd><dt>Edit root</dt><dd>${escapeHtml(workspace.edit_root)}</dd><dt>Publish root</dt><dd>${escapeHtml(workspace.publish_root)}</dd><dt>Controlled documents</dt><dd>${escapeHtml(workspace.document_count)}</dd></dl></section>`;
 }
@@ -292,7 +310,24 @@ function openDestination(destination) {
     void loadReleases();
   } else if (destination === "Audit & Reports") {
     void loadPeriodicReviews();
+  } else if (destination === "Configuration") {
+    void loadClaudeAssistancePolicy();
   }
+}
+
+async function loadClaudeAssistancePolicy() {
+  try {
+    const value = await invokeCommand("load_claude_assistance_policy", {
+      editRoot: appState.workspace.edit_root,
+    });
+    appState = { ...appState, assistance_policy: { value, error: "" } };
+  } catch (error) {
+    appState = {
+      ...appState,
+      assistance_policy: { ...appState.assistance_policy, error: String(error) },
+    };
+  }
+  render(appState);
 }
 
 function updateLibraryActivity(folder) {
@@ -462,6 +497,139 @@ function openDocumentNotes() {
   void loadDocumentNotes(detail.document_id);
 }
 
+async function loadClaudeAssistanceAvailability(documentId) {
+  appState = {
+    ...appState,
+    assistance_documents: updateAssistanceState(appState.assistance_documents, documentId, {
+      loading: true,
+      error: "",
+    }),
+  };
+  render(appState);
+  try {
+    const availability = await invokeCommand("claude_assistance_availability", {
+      editRoot: appState.workspace.edit_root,
+      documentId,
+    });
+    appState = {
+      ...appState,
+      assistance_documents: updateAssistanceState(appState.assistance_documents, documentId, {
+        availability,
+        loading: false,
+      }),
+    };
+  } catch (error) {
+    appState = {
+      ...appState,
+      assistance_documents: updateAssistanceState(appState.assistance_documents, documentId, {
+        loading: false,
+        error: String(error),
+      }),
+    };
+  }
+  render(appState);
+}
+
+function openDocumentAssistance() {
+  const detail = appState.library.detail;
+  if (!detail) return;
+  const suffix = detail.control.document_number ? ` · ${detail.control.document_number}` : "";
+  appState = openActivity(appState, {
+    workspace_id: appState.workspace.workspace_id,
+    destination: "Library",
+    task: "Claude assistance",
+    label: `Evaluate changes · ${detail.control.title}${suffix}`,
+    document_id: detail.document_id,
+    route_state: {},
+  });
+  if (!appState.assistance_documents[detail.document_id]) {
+    appState = {
+      ...appState,
+      assistance_documents: {
+        ...appState.assistance_documents,
+        [detail.document_id]: createAssistanceState(),
+      },
+    };
+  }
+  render(appState);
+  void loadClaudeAssistanceAvailability(detail.document_id);
+}
+
+async function handleAssistanceClick(event) {
+  const activity = currentActivity(appState);
+  if (activity?.task !== "Claude assistance") return false;
+  const documentId = activity.document_id;
+  if (event.target.closest("[data-assistance-preview]")) {
+    try {
+      const payload = await invokeCommand("preview_claude_assistance", {
+        editRoot: appState.workspace.edit_root,
+        documentId,
+      });
+      appState = {
+        ...appState,
+        assistance_documents: updateAssistanceState(appState.assistance_documents, documentId, {
+          payload,
+          error: "",
+          launched: false,
+        }),
+      };
+    } catch (error) {
+      appState = {
+        ...appState,
+        assistance_documents: updateAssistanceState(appState.assistance_documents, documentId, {
+          error: String(error),
+        }),
+      };
+    }
+    render(appState);
+    return true;
+  }
+  if (event.target.closest("[data-assistance-handoff]")) {
+    const consent = document.querySelector("[data-assistance-consent]")?.checked;
+    const state = assistanceDocumentState(appState.assistance_documents, documentId);
+    try {
+      if (!consent) throw new Error("Review the exact payload and confirm external processing first.");
+      if (!navigator.clipboard) throw new Error("Clipboard access is unavailable.");
+      await navigator.clipboard.writeText(state.payload.prompt);
+      await invokeCommand("launch_claude_assistance", {
+        editRoot: appState.workspace.edit_root,
+        documentId,
+        payloadDigest: state.payload.payload_digest,
+        confirmed: true,
+      });
+      appState = {
+        ...appState,
+        assistance_documents: updateAssistanceState(appState.assistance_documents, documentId, {
+          launched: true,
+          error: "",
+        }),
+      };
+    } catch (error) {
+      appState = {
+        ...appState,
+        assistance_documents: updateAssistanceState(appState.assistance_documents, documentId, {
+          error: String(error),
+        }),
+      };
+    }
+    render(appState);
+    return true;
+  }
+  if (event.target.closest("[data-assistance-accept]")) {
+    const response = document.querySelector("[data-assistance-response]")?.value ?? "";
+    appState = {
+      ...appState,
+      assistance_documents: updateAssistanceState(appState.assistance_documents, documentId, {
+        response,
+        accepted_changelog: response,
+      }),
+    };
+    render(appState);
+    return true;
+  }
+  return false;
+}
+
 async function refreshWorkspaceAndLibrary() {
   const workspace = await invokeCommand("open_workspace", { editRoot: appState.workspace.edit_root });
   appState = { ...appState, workspace };
@@ -548,6 +716,10 @@ async function handleLibraryClick(event) {
   }
   if (event.target.closest("[data-library-open-notes]")) {
     openDocumentNotes();
+    return true;
+  }
+  if (event.target.closest("[data-library-open-assistance]")) {
+    openDocumentAssistance();
     return true;
   }
   if (event.target.closest("[data-library-copy-permalink]")) {
@@ -666,6 +838,7 @@ async function handleClick(event) {
   }
 
   if (await handleNotesClick(event)) return;
+  if (await handleAssistanceClick(event)) return;
   if (await handleLibraryClick(event)) return;
 
   if (event.target.closest("[data-release-verify-all]")) {
@@ -721,10 +894,14 @@ async function handleClick(event) {
     const activity = currentActivity(appState);
     if (activity?.task === "Notes" && !noteDocumentState(appState.note_documents, activity.document_id).detail) {
       void loadDocumentNotes(activity.document_id);
+    } else if (activity?.task === "Claude assistance" && !assistanceDocumentState(appState.assistance_documents, activity.document_id).availability) {
+      void loadClaudeAssistanceAvailability(activity.document_id);
     } else if (activity?.destination === "Releases" && appState.releases.rows.length === 0) {
       void loadReleases();
     } else if (activity?.destination === "Audit & Reports" && appState.periodic_reviews.markers.length === 0) {
       void loadPeriodicReviews();
+    } else if (activity?.destination === "Configuration" && !appState.assistance_policy.value) {
+      void loadClaudeAssistancePolicy();
     }
     return;
   }
@@ -765,6 +942,8 @@ async function handleClick(event) {
         void loadReleases();
       } else if (view.destination === "Audit & Reports") {
         void loadPeriodicReviews();
+      } else if (view.destination === "Configuration") {
+        void loadClaudeAssistancePolicy();
       }
     }
     render(appState);
@@ -779,6 +958,30 @@ async function handleClick(event) {
 }
 
 async function handleSubmit(event) {
+  if (event.target.id === "claude-policy-form") {
+    event.preventDefault();
+    const form = new FormData(event.target);
+    const allowedConfidentialityTypeIds = String(form.get("allowedIds") ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    try {
+      await invokeCommand("configure_claude_assistance", {
+        editRoot: appState.workspace.edit_root,
+        enabled: form.get("enabled") === "on",
+        allowedConfidentialityTypeIds,
+        maxPayloadChars: Number(form.get("maxPayloadChars")),
+      });
+      await loadClaudeAssistancePolicy();
+    } catch (error) {
+      appState = {
+        ...appState,
+        assistance_policy: { ...appState.assistance_policy, error: String(error) },
+      };
+      render(appState);
+    }
+    return;
+  }
   if (event.target.id === "release-filter-form") {
     event.preventDefault();
     const query = String(new FormData(event.target).get("query") ?? "");
@@ -912,6 +1115,25 @@ async function handleSubmit(event) {
 }
 
 function handleChange(event) {
+  const activity = currentActivity(appState);
+  if (activity?.task === "Claude assistance" && event.target.matches("[data-assistance-response]")) {
+    appState = {
+      ...appState,
+      assistance_documents: updateAssistanceState(appState.assistance_documents, activity.document_id, {
+        response: event.target.value,
+      }),
+    };
+    return;
+  }
+  if (activity?.task === "Claude assistance" && event.target.matches("[data-assistance-changelog]")) {
+    appState = {
+      ...appState,
+      assistance_documents: updateAssistanceState(appState.assistance_documents, activity.document_id, {
+        accepted_changelog: event.target.value,
+      }),
+    };
+    return;
+  }
   if (event.target.matches("[data-release-page-size]")) {
     appState = {
       ...appState,

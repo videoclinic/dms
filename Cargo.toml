@@ -15,6 +15,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 quick-xml = "0.37.5"
 pulldown-cmark = "0.13.0"
+pdf-extract = "0.12.0"
 sha2 = "0.10.9"
 thiserror = "2.0"
 uuid = { version = "1.11", features = ["serde", "v4"] }

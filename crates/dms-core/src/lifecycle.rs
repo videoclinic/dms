@@ -12,9 +12,9 @@ use uuid::Uuid;
 use zip::ZipArchive;
 
 use super::{
-    configured_text, default_author, DmsError, DocumentControl, EffectiveWorkflowRole,
-    EntraIdentitySource, EntraPerson, Lifecycle, PeriodicReviewResult, ResolutionState, Result,
-    SourceState, Workspace,
+    configured_text, default_author, AssistanceEvidence, DmsError, DocumentControl,
+    EffectiveWorkflowRole, EntraIdentitySource, EntraPerson, Lifecycle, PeriodicReviewResult,
+    ResolutionState, Result, SourceState, Workspace,
 };
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -231,6 +231,8 @@ pub struct ReleaseCandidate {
     pub mode: TargetVersionMode,
     pub approval_required: bool,
     pub changelog: String,
+    #[serde(default)]
+    pub assistance: Option<AssistanceEvidence>,
     pub requester: PersonSnapshot,
     pub metadata: CandidateMetadataSnapshot,
     pub source_digest: String,
@@ -254,6 +256,8 @@ pub struct ReleaseRecord {
     pub source_digest: String,
     pub pdf_digest: String,
     pub changelog: String,
+    #[serde(default)]
+    pub assistance: Option<AssistanceEvidence>,
     pub mode: TargetVersionMode,
     pub approval_required: bool,
     pub approval_chain_head: Option<String>,
@@ -314,6 +318,8 @@ pub struct WorkflowEventBody {
     pub target_version: Option<Version>,
     pub target_mode: Option<TargetVersionMode>,
     pub changelog: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assistance: Option<AssistanceEvidence>,
     pub decision_comment: Option<String>,
     pub operator_comment: Option<String>,
     pub delivery: Option<DeliveryAttempt>,
@@ -355,6 +361,7 @@ pub struct CandidateRequest {
     pub changelog: String,
     pub requester_object_id: Uuid,
     pub review_override_reason: Option<String>,
+    pub assistance: Option<AssistanceEvidence>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -508,6 +515,7 @@ impl Workspace {
             mode,
             approval_required,
             changelog,
+            assistance: request.assistance.clone(),
             requester,
             metadata,
             source_digest,
@@ -877,6 +885,7 @@ impl Workspace {
                 source_digest: candidate.source_digest.clone(),
                 pdf_digest: pdf_digest.clone(),
                 changelog: candidate.changelog.clone(),
+                assistance: candidate.assistance.clone(),
                 mode: candidate.mode,
                 approval_required: candidate.approval_required,
                 approval_chain_head: candidate.approval_event_hash.clone(),
@@ -1490,6 +1499,7 @@ impl Workspace {
             target_version: Some(candidate.version),
             target_mode: Some(candidate.mode),
             changelog: Some(candidate.changelog.clone()),
+            assistance: candidate.assistance.clone(),
             decision_comment: details.decision_comment,
             operator_comment: details.operator_comment,
             delivery: details.delivery,
@@ -1526,6 +1536,7 @@ impl Workspace {
             target_version: None,
             target_mode: None,
             changelog: None,
+            assistance: None,
             decision_comment: None,
             operator_comment,
             delivery: None,
@@ -1613,6 +1624,23 @@ pub fn scan_content_markers(
             confidentiality_locations,
         ),
     })
+}
+
+pub(crate) fn visible_source_text(path: &Path) -> Result<String> {
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    match extension.as_str() {
+        "md" => markdown_visible_text(path),
+        "docx" => Ok(docx_visible_text(path)?
+            .into_iter()
+            .map(|(_, text)| text)
+            .collect::<Vec<_>>()
+            .join("\n")),
+        _ => Err(DmsError::UnsupportedContentScanner(path.to_path_buf())),
+    }
 }
 
 fn markdown_visible_text(path: &Path) -> Result<String> {

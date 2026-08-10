@@ -10,6 +10,7 @@ persistence.
 | Path | Owns |
 | --- | --- |
 | `src/lib.rs` | Versioned workspace store, migration boundary, document-control data, and notes API |
+| `src/assistance.rs` | Optional Claude Desktop policy, released-PDF/source comparison payloads, and assistance evidence |
 | `src/catalogues.rs` | Document-type catalogue primitives plus shared stable-ID and label validation |
 | `src/library.rs` | Folder/file discovery, membership, search, registration state, reassociation, and permalinks |
 | `src/lifecycle.rs` | Version candidates, Entra/notification/export ports, content conformance, review decisions, release commits, and hash-chained evidence |
@@ -66,15 +67,18 @@ persistence.
   refuses symlinks and non-regular files, and writes a Zip archive containing
   metadata, every registered draft, every recorded release PDF, and a
   SHA-256 manifest entry per file.
+- Claude assistance is disabled by default, permits only configured
+  confidentiality type IDs, verifies the current release before extracting
+  comparison text, refuses oversized payloads without truncation, and records
+  only explicit accepted-use evidence in lifecycle records.
 
 ## Work Guidance
 
 - Keep public operations deterministic and explicit.
 - Add migration support before increasing `SCHEMA_VERSION`.
-- Schema v5 adds `default_review_interval_months`,
-  `review_interval_months`, `review_exemption_reason`, `next_review_due`, and
-  `periodic_reviews` per document, with a `v4.json.bak` retained during
-  migration.
+- Schema v6 adds the default-disabled workspace Claude-assistance policy and
+  optional candidate/release/workflow assistance evidence, with a
+  `v5.json.bak` retained during migration.
 
 ## Verification
 

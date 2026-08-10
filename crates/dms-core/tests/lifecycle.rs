@@ -6,9 +6,9 @@ use std::{
 };
 
 use dms_core::{
-    AuthenticatedActor, CandidateRequest, CandidateStatus, ControlUpdate, DeliveryReceipt,
-    DeliveryStatus, DmsError, EntraIdentitySource, EntraPerson, GraphClient, Lifecycle,
-    MarkerStatus, NotificationClient, NotificationMessage, NotificationSettings,
+    AssistanceEvidence, AuthenticatedActor, CandidateRequest, CandidateStatus, ControlUpdate,
+    DeliveryReceipt, DeliveryStatus, DmsError, EntraIdentitySource, EntraPerson, GraphClient,
+    Lifecycle, MarkerStatus, NotificationClient, NotificationMessage, NotificationSettings,
     NotificationTransport, PdfExporter, PeriodicReviewResult, PeriodicReviewStatus, ReleaseOutcome,
     ReleaseVerificationStatus, ReviewDecision, RoleUpdate, SmtpSettings, TargetSelection, Version,
     WorkflowEventType, WorkflowVerification, Workspace, SCHEMA_VERSION,
@@ -129,6 +129,7 @@ impl Fixture {
             changelog: "Clarify onboarding responsibilities".to_owned(),
             requester_object_id: self.requester_id,
             review_override_reason: None,
+            assistance: None,
         }
     }
 }
@@ -267,6 +268,53 @@ fn release_first(fixture: &mut Fixture) -> (FakeGraph, ReleaseOutcome) {
         )
         .expect("release");
     (graph, outcome)
+}
+
+#[test]
+fn accepted_assistance_is_explicit_evidence_without_granting_lifecycle_authority() {
+    let mut fixture = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    let mut graph = fixture.graph();
+    let mut request = fixture.candidate_request(TargetSelection::NextMajor);
+    request.assistance = Some(AssistanceEvidence::claude_desktop());
+
+    fixture
+        .workspace
+        .submit_candidate(request, &mut graph, &mut FakeNotifier::accepted())
+        .unwrap();
+
+    let candidate = fixture.workspace.candidates(fixture.document_id).unwrap()[0];
+    assert_eq!(candidate.status, CandidateStatus::InReview);
+    assert_eq!(
+        candidate
+            .assistance
+            .as_ref()
+            .map(|evidence| evidence.provider.as_str()),
+        Some("Claude Desktop")
+    );
+    let history = fixture
+        .workspace
+        .workflow_history(fixture.document_id)
+        .unwrap();
+    let event = history.last().unwrap();
+    assert_eq!(
+        event
+            .body
+            .assistance
+            .as_ref()
+            .map(|evidence| evidence.provider.as_str()),
+        Some("Claude Desktop")
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .document(fixture.document_id)
+            .unwrap()
+            .lifecycle,
+        Lifecycle::InReview
+    );
 }
 
 #[test]
@@ -1160,5 +1208,40 @@ fn schema_v4_migrates_periodic_review_defaults_and_creates_a_versioned_backup() 
         .workspace
         .edit_root
         .join(".dms/workspace.v4.json.bak")
+        .is_file());
+}
+
+#[test]
+fn schema_v5_migrates_disabled_claude_assistance_policy_and_creates_backup() {
+    let fixture = Fixture::new("# Handbook\n", NotificationTransport::Smtp);
+    fixture.workspace.save().unwrap();
+    let metadata_path = fixture.workspace.edit_root.join(".dms/workspace.json");
+    let mut metadata: serde_json::Value =
+        serde_json::from_slice(&fs::read(&metadata_path).unwrap()).unwrap();
+    metadata["schema_version"] = serde_json::Value::from(5);
+    metadata
+        .as_object_mut()
+        .unwrap()
+        .remove("claude_assistance");
+    fs::write(
+        &metadata_path,
+        serde_json::to_vec_pretty(&metadata).unwrap(),
+    )
+    .unwrap();
+
+    let migrated = Workspace::open(&fixture.workspace.edit_root).unwrap();
+    assert!(!migrated.claude_assistance_policy().enabled);
+    assert!(migrated
+        .claude_assistance_policy()
+        .allowed_confidentiality_type_ids
+        .is_empty());
+    assert_eq!(
+        migrated.claude_assistance_policy().max_payload_chars,
+        dms_core::DEFAULT_CLAUDE_PAYLOAD_LIMIT
+    );
+    assert!(fixture
+        .workspace
+        .edit_root
+        .join(".dms/workspace.v5.json.bak")
         .is_file());
 }
