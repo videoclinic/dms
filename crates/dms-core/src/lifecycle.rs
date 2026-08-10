@@ -370,13 +370,20 @@ pub struct DecisionOutcome {
 }
 
 #[derive(Clone, Debug)]
+pub struct ExportChrome {
+    pub version_label: String,
+    pub confidentiality: ConfidentialitySnapshot,
+    pub title: String,
+    pub document_number: Option<String>,
+}
+
+#[derive(Clone, Debug)]
 pub struct ExportRequest {
     pub document_id: Uuid,
     pub source_path: PathBuf,
     pub temporary_pdf_path: PathBuf,
     pub final_pdf_path: PathBuf,
-    pub version: Version,
-    pub confidentiality: ConfidentialitySnapshot,
+    pub chrome: ExportChrome,
 }
 
 pub trait PdfExporter {
@@ -814,14 +821,18 @@ impl Workspace {
             path: parent.to_path_buf(),
             source,
         })?;
-        let temporary_path = parent.join(format!(".release-{}.tmp", Uuid::new_v4()));
+        let temporary_path = parent.join(format!(".release-{}.tmp.pdf", Uuid::new_v4()));
         let export_request = ExportRequest {
             document_id,
             source_path,
             temporary_pdf_path: temporary_path.clone(),
             final_pdf_path: final_path.clone(),
-            version: candidate.version,
-            confidentiality: candidate.metadata.confidentiality.clone(),
+            chrome: ExportChrome {
+                version_label: candidate.version.to_string(),
+                confidentiality: candidate.metadata.confidentiality.clone(),
+                title: candidate.metadata.control.title.clone(),
+                document_number: candidate.metadata.control.document_number.clone(),
+            },
         };
         if let Err(error) = exporter.export(&export_request) {
             let _ = fs::remove_file(&temporary_path);

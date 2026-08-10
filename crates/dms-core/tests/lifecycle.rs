@@ -204,6 +204,13 @@ impl FakeExporter {
 
 impl PdfExporter for FakeExporter {
     fn export(&mut self, request: &dms_core::ExportRequest) -> std::result::Result<(), String> {
+        assert_eq!(
+            request
+                .temporary_pdf_path
+                .extension()
+                .and_then(|value| value.to_str()),
+            Some("pdf")
+        );
         if let Some(error) = self.fail.clone() {
             return Err(error);
         }

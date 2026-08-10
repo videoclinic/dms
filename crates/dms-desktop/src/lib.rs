@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
+pub mod export;
+
 const PREFERENCES_FILENAME: &str = "preferences.json";
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -264,6 +266,18 @@ pub fn run() {
         .setup(|app| {
             if std::env::var_os("DMS_DESKTOP_SMOKE").is_some() {
                 app.handle().exit(0);
+            } else if std::env::var_os("DMS_DESKTOP_EXPORT_SMOKE").is_some() {
+                let handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    let code = match export::platform_pdf_smoke(handle.clone()) {
+                        Ok(()) => 0,
+                        Err(error) => {
+                            eprintln!("DMS Desktop PDF export smoke failed: {error}");
+                            1
+                        }
+                    };
+                    handle.exit(code);
+                });
             }
             Ok(())
         })

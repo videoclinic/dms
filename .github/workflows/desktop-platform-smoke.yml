@@ -39,3 +39,7 @@ jobs:
         run: cargo run -p dms-desktop
         env:
           DMS_DESKTOP_SMOKE: "1"
+      - name: Export multi-page Markdown through the native WebView PDF API
+        run: cargo run -p dms-desktop
+        env:
+          DMS_DESKTOP_EXPORT_SMOKE: "1"
