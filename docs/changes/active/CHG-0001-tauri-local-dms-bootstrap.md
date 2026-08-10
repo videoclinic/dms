@@ -152,7 +152,7 @@ macOS** that:
 | 9b | Periodic-review closure | done (`cargo test --workspace`; `cargo clippy --workspace --all-targets -- -D warnings`; `node --test ui/*.test.mjs`; focused periodic-review lifecycle tests) | Core tests cover completion, comment-required cancellation with no schedule shift, and reminder attempts with no duplicate request or lifecycle transition; CLI/Tauri commands and desktop controls expose Result, Cancel, and Reminder with explicit confirmation; fake-backed Rust/frontend gates pass |
 | 9b.1 | Library tree and sidebar-state correction | done (`node --test ui/app.test.mjs ui/library.test.mjs`; `node --test ui/*.test.mjs`; full Rust format/test/clippy gates; browser visual QA) | Frontend tests prove nested folder branches with explicit expand/collapse controls, current-folder ancestor expansion, and stable unfolded-sidebar state across destination, saved-view, and open-pane actions; visual QA confirms the folder tree reads as a hierarchy |
 | 9b.2 | Recent libraries and native directory browsing | done (`node --test ui/*.test.mjs`; full Rust format/test/clippy gates; Linux desktop launch smoke; browser visual and interaction QA) | Preferences retain at most 10 unique edit roots in most-recent-first order; setup UI can reopen or remove each entry; every directory field exposes a native folder picker that starts at the OS user's home directory; focused Rust/frontend tests, full local gates, and visual QA pass |
-| 9c | Audit export | in-progress | Core + CLI + desktop tests generate deterministic filtered CSV/PDF reports without source/release bytes, include verification verdicts, hash the report, append `ReportGenerated` evidence, and expose recent-report filter/pagination plus verify/open-folder actions |
+| 9c | Audit export | done (schema v7 migration; focused core/CLI/desktop tests; `cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 36 frontend tests; Linux launch smoke; browser visual QA) | Deterministic document/approver/confidentiality/date-filtered CSV/PDF reports contain classification, workflow, release, periodic-review, target-mode, delivery, hash, and verification evidence without source/release bytes; paths stay inside the edit root and never overwrite; generation appends canonical `report_generated` evidence; CLI and desktop expose generation/list/verify/open-folder operations; Recent reports filters before pagination and surfaces chain, file, and missing/tampered states |
 | 9d | Workspace integrity and recovery | pending | Advisory lock status/acquire/release/stale takeover and manifest-verified backup restore refuse unsafe paths, symlinks, fresh-lock overwrite, and unconfirmed replacement; core, CLI, desktop, and failure-path tests pass |
 | 9e | Release and library maintenance | pending | Release withdrawal is reasoned and evidenced without deleting history; current release resolution skips withdrawn records; missing/orphan releases remain explicit; the Library can open an existing source draft or latest released PDF through host-mediated commands; Rust/frontend tests pass |
 | 9f | Desktop lifecycle and Configuration surfaces | pending | The desktop invokes implemented core operations for document-control edit, confidentiality override, begin revision, submit/review/decision/release, cancel review, obsolete, evidence history, document defaults, Workflow, Notifications, and Workspace configuration while preserving one routed Configuration activity; adapter/frontend tests prove each operator path |
@@ -161,7 +161,7 @@ macOS** that:
 | 9i | Live Office, Entra, and notification adapters | pending | Production release commands wire installed Office automation on Windows/macOS; administrator-configured Microsoft Graph refresh and interactive approver sign-in use OS credential storage; SMTP and host-mail transports send canonical messages without storing credentials in `.dms`; fake-backed tests and operator smoke instructions pass |
 | 9j | External operator smokes + CAP promotion | pending | Licensed Office release smoke passes on Windows and macOS; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass; every implemented CAP links executable evidence, CHG status is done, and the record is archived |
 
-**Current phase:** phase 9b.2 is complete locally; phase 9c is in progress. Keep only one phase in progress.
+**Current phase:** phase 9c is complete locally; phase 9d is pending. Keep only one phase in progress.
 
 ## Implementation notes
 
@@ -212,10 +212,10 @@ macOS** that:
 - [Windows/macOS run 31385996931](https://github.com/videoclinic/dms/actions/runs/31385996931)
   produced `windows-x64-nsis` and `darwin-aarch64-dmg` workflow artifacts and
   passed the workspace, launch, and native Markdown PDF smoke gates.
-- CAP-0003 and the existing CAP-0022 have complete executable evidence. The
-  remaining CAPs retain `not implemented`: their contracts include unresolved
-  operator surfaces or transitions, including workspace setup and lifecycle UI,
-  host draft opening, live notification and Entra adapters, audit export,
+- CAP-0003, CAP-0012, and the existing CAP-0022 have complete executable
+  evidence. The remaining CAPs retain `not implemented`: their contracts include
+  unresolved operator surfaces or transitions, including workspace setup and lifecycle UI,
+  host draft opening, live notification and Entra adapters,
   restore/advisory locking, release withdrawal, permalink scheme registration,
   and assistance excerpt trimming.
 - The Office-on-Windows/macOS and administrator-configured Microsoft 365 Entra
@@ -229,6 +229,10 @@ macOS** that:
 - Phase 9a closes desktop workspace setup without promoting CAP-0001: the
   remaining live Entra/configuration and release-path outcomes still depend on
   phases 9f–9j. CAP-0001 now links the partial executable setup evidence.
+- Phase 9c closes CAP-0012 with core-owned deterministic report semantics,
+  schema-v7 report evidence, CLI/desktop adapters, and the Audit & Reports
+  operator surface. External installed-Office and Entra smokes are unrelated to
+  this local export capability.
 - CI exercises the real native WebView Markdown PDF path, desktop startup, and
   NSIS/DMG packaging. It does not exercise installed Office, Microsoft Graph,
   interactive Entra sign-in, SMTP, or host-mail delivery; current production

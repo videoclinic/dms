@@ -6,12 +6,13 @@ use std::{
 };
 
 use dms_core::{
-    AuthenticatedActor, BackupOutcome, ClaudeAssistancePayload, ClaudeAssistancePolicy,
-    DeliveryAttempt, DeliveryReceipt, Document, DocumentControl, EffectiveConfidentiality,
-    EffectiveWorkflowRoles, EntraIdentitySource, EntraPerson, GraphClient, LibraryEntry,
-    LibraryFolder, LibraryFolderNode, Lifecycle, Note, NotificationClient, NotificationMessage,
-    NotificationSettings, PeriodicReview, PeriodicReviewMarker, PeriodicReviewResult,
-    ReleaseVerificationStatus, SourceState, Workspace,
+    AuditReportRecord, AuditReportRequest, AuditReportVerificationStatus, AuthenticatedActor,
+    BackupOutcome, ClaudeAssistancePayload, ClaudeAssistancePolicy, DeliveryAttempt,
+    DeliveryReceipt, Document, DocumentControl, EffectiveConfidentiality, EffectiveWorkflowRoles,
+    EntraIdentitySource, EntraPerson, GraphClient, LibraryEntry, LibraryFolder, LibraryFolderNode,
+    Lifecycle, Note, NotificationClient, NotificationMessage, NotificationSettings, PeriodicReview,
+    PeriodicReviewMarker, PeriodicReviewResult, ReleaseVerificationStatus, SourceState,
+    WorkflowVerification, Workspace,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
@@ -159,6 +160,19 @@ pub struct ReleaseRow {
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct ReleaseMaintenance {
     pub rows: Vec<ReleaseRow>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct AuditReportRow {
+    #[serde(flatten)]
+    pub report: AuditReportRecord,
+    pub verification: AuditReportVerificationStatus,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct AuditReportSnapshot {
+    pub rows: Vec<AuditReportRow>,
+    pub evidence_chain: WorkflowVerification,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -330,6 +344,40 @@ fn verify_all_releases(edit_root: String) -> Result<ReleaseMaintenance, String> 
         .verify_all_releases()
         .map_err(|error| error.to_string())?;
     release_maintenance(&workspace)
+}
+
+#[tauri::command]
+fn load_audit_reports(edit_root: String) -> Result<AuditReportSnapshot, String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    audit_report_snapshot(&workspace)
+}
+
+#[tauri::command]
+fn generate_audit_report(
+    edit_root: String,
+    request: AuditReportRequest,
+) -> Result<AuditReportSnapshot, String> {
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .generate_audit_report(request)
+        .map_err(|error| error.to_string())?;
+    audit_report_snapshot(&workspace)
+}
+
+#[tauri::command]
+fn verify_audit_report(edit_root: String, event_id: Uuid) -> Result<AuditReportSnapshot, String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .verify_report(event_id)
+        .map_err(|error| error.to_string())?;
+    audit_report_snapshot(&workspace)
+}
+
+#[tauri::command]
+fn open_audit_report_folder(edit_root: String, event_id: Uuid) -> Result<(), String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    open_directory(&audit_report_folder(&workspace, event_id)?)
 }
 
 #[tauri::command]
@@ -779,6 +827,70 @@ fn release_maintenance(workspace: &Workspace) -> Result<ReleaseMaintenance, Stri
     Ok(ReleaseMaintenance { rows })
 }
 
+fn audit_report_snapshot(workspace: &Workspace) -> Result<AuditReportSnapshot, String> {
+    let reports = workspace.recent_reports();
+    let verifications = workspace
+        .verify_reports()
+        .map_err(|error| error.to_string())?;
+    if reports.len() != verifications.len() {
+        return Err("audit report evidence and verification counts differ".to_owned());
+    }
+    let rows = reports
+        .into_iter()
+        .zip(verifications)
+        .map(|(report, verification)| {
+            if report.event_id != verification.event_id {
+                return Err("audit report evidence and verification order differ".to_owned());
+            }
+            Ok(AuditReportRow {
+                report,
+                verification: verification.status,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(AuditReportSnapshot {
+        rows,
+        evidence_chain: workspace.verify_report_chain(),
+    })
+}
+
+fn audit_report_folder(workspace: &Workspace, event_id: Uuid) -> Result<PathBuf, String> {
+    let report = workspace
+        .recent_reports()
+        .into_iter()
+        .find(|report| report.event_id == event_id)
+        .ok_or_else(|| format!("audit report event {event_id} was not found"))?;
+    let parent = workspace
+        .edit_root
+        .join(report.relative_path())
+        .parent()
+        .ok_or_else(|| "audit report path has no containing folder".to_owned())?
+        .to_path_buf();
+    let canonical_root = fs::canonicalize(&workspace.edit_root)
+        .map_err(|error| format!("cannot resolve the edit root: {error}"))?;
+    let canonical_parent = fs::canonicalize(&parent)
+        .map_err(|error| format!("cannot resolve the report folder: {error}"))?;
+    if !canonical_parent.starts_with(canonical_root) {
+        return Err("the report folder is outside the edit root".to_owned());
+    }
+    Ok(canonical_parent)
+}
+
+fn open_directory(path: &Path) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    let mut command = std::process::Command::new("explorer.exe");
+    #[cfg(target_os = "macos")]
+    let mut command = std::process::Command::new("open");
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut command = std::process::Command::new("xdg-open");
+
+    command
+        .arg(path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| format!("cannot open report folder {}: {error}", path.display()))
+}
+
 fn path_text(path: &Path) -> String {
     if path == Path::new(".") {
         return ".".to_owned();
@@ -831,6 +943,10 @@ pub fn run() {
             load_releases,
             verify_release,
             verify_all_releases,
+            load_audit_reports,
+            generate_audit_report,
+            verify_audit_report,
+            open_audit_report_folder,
             load_periodic_reviews,
             start_periodic_review,
             complete_periodic_review,
@@ -1148,5 +1264,56 @@ mod tests {
         assert_eq!(outcome.entry_count, 1);
         assert_eq!(outcome.manifest_digest.len(), 64);
         assert!(archive.is_file());
+    }
+
+    #[test]
+    fn desktop_audit_report_commands_generate_list_verify_and_resolve_the_folder() {
+        let directory = tempfile::tempdir().unwrap();
+        let edit_root = directory.path().join("edit");
+        let publish_root = directory.path().join("publish");
+        fs::create_dir_all(&edit_root).unwrap();
+        fs::create_dir_all(&publish_root).unwrap();
+        let mut workspace = Workspace::init(&edit_root, &publish_root).unwrap();
+        workspace
+            .configure_confidentiality_type("internal", "Internal", true)
+            .unwrap();
+        workspace
+            .set_confidentiality_policy(".", "internal")
+            .unwrap();
+        let source = edit_root.join("Policy.md");
+        fs::write(&source, "# Policy\n\nSOURCE BYTES").unwrap();
+        let document = workspace.add_document(&source).unwrap();
+        workspace.save().unwrap();
+        let root = edit_root.to_string_lossy().into_owned();
+
+        let snapshot = generate_audit_report(
+            root.clone(),
+            dms_core::AuditReportRequest {
+                format: dms_core::AuditReportFormat::Csv,
+                relative_path: Some(PathBuf::from(".dms/exports/policy.csv")),
+                filter: dms_core::AuditReportFilter {
+                    document_ids: vec![document.id],
+                    confidentiality_type_ids: vec!["internal".to_owned()],
+                    ..Default::default()
+                },
+            },
+        )
+        .unwrap();
+
+        assert_eq!(snapshot.rows.len(), 1);
+        assert_eq!(
+            snapshot.rows[0].verification,
+            AuditReportVerificationStatus::Match
+        );
+        let event_id = snapshot.rows[0].report.event_id;
+        assert_eq!(load_audit_reports(root.clone()).unwrap(), snapshot);
+        assert_eq!(
+            verify_audit_report(root, event_id).unwrap().rows[0].verification,
+            AuditReportVerificationStatus::Match
+        );
+        assert_eq!(
+            audit_report_folder(&Workspace::open(&edit_root).unwrap(), event_id).unwrap(),
+            fs::canonicalize(edit_root.join(".dms/exports")).unwrap()
+        );
     }
 }

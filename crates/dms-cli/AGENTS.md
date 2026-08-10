@@ -27,6 +27,9 @@ executable.
   operations. Result, cancellation, and reminder require `--confirm`; result and
   reminder report the unavailable live Entra/notification adapter explicitly
   until phase 9i supplies production integrations.
+- Report commands generate explicitly filtered CSV/PDF files, list their
+  canonical evidence, and verify the recorded file digest. JSON output contains
+  report metadata and hashes only, never source or release bytes.
 
 ## Work Guidance
 

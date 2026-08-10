@@ -289,6 +289,7 @@ pub enum WorkflowEventType {
     PeriodicReviewCompleted,
     PeriodicReviewCancelled,
     PeriodicReviewReminder,
+    ReportGenerated,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -330,6 +331,8 @@ pub struct WorkflowEventBody {
     pub pdf_digest: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub periodic_review: Option<PeriodicReviewEventDetails>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub report: Option<crate::AuditReportEvidence>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -338,11 +341,18 @@ pub struct WorkflowEvent {
     pub event_hash: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum WorkflowVerification {
     Valid,
     TamperedAt(Uuid),
     Missing,
+}
+
+impl WorkflowVerification {
+    pub fn is_valid(&self) -> bool {
+        matches!(self, Self::Valid)
+    }
 }
 
 pub trait GraphClient {
@@ -1278,6 +1288,7 @@ impl Workspace {
                 )));
             }
         }
+        self.validate_workspace_events()?;
         Ok(())
     }
 
@@ -1516,6 +1527,7 @@ impl Workspace {
             content_override: None,
             pdf_digest: details.pdf_digest,
             periodic_review: None,
+            report: None,
         };
         self.append_event(document_id, body)
     }
@@ -1553,6 +1565,7 @@ impl Workspace {
             content_override: None,
             pdf_digest: None,
             periodic_review: None,
+            report: None,
         };
         self.append_event(document_id, body)
     }
@@ -2009,7 +2022,7 @@ fn validate_exported_pdf(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn hash_event_body(body: &WorkflowEventBody) -> Result<String> {
+pub(crate) fn hash_event_body(body: &WorkflowEventBody) -> Result<String> {
     let canonical =
         serde_json::to_vec(body).map_err(|error| DmsError::CanonicalEvent(error.to_string()))?;
     Ok(sha256_bytes(&canonical))

@@ -3,13 +3,13 @@
 | Field | Value |
 | --- | --- |
 | ID | CAP-0012 |
-| Status | not implemented |
+| Status | implemented |
 | Storage | `<edit-root>/.dms/exports/` (operator-chosen) |
-| Tests | none |
+| Tests | `crates/dms-core/tests/audit.rs`; `crates/dms-cli/tests/cli.rs`; `crates/dms-desktop/src/lib.rs`; `crates/dms-desktop/ui/reports.test.mjs` |
 
-## Outcomes (contract — not yet true in runtime)
+## Outcomes
 
-When implemented, the following must hold:
+The following hold:
 
 1. An operator can generate an audit report covering the entire workspace or a
    filtered subset by document, approver, confidentiality type, and date

@@ -11,6 +11,7 @@ persistence.
 | --- | --- |
 | `src/lib.rs` | Versioned workspace store, migration boundary, document-control data, and notes API |
 | `src/assistance.rs` | Optional Claude Desktop policy, released-PDF/source comparison payloads, and assistance evidence |
+| `src/audit.rs` | Filtered deterministic CSV/PDF audit reports, report-file integrity, and workspace report evidence |
 | `src/catalogues.rs` | Document-type catalogue primitives plus shared stable-ID and label validation |
 | `src/library.rs` | Folder/file discovery, membership, search, registration state, reassociation, and permalinks |
 | `src/lifecycle.rs` | Version candidates, Entra/notification/export ports, content conformance, review decisions, release commits, and hash-chained evidence |
@@ -52,6 +53,11 @@ persistence.
 - Workflow evidence is append-only, SHA-256 predecessor-linked, newest-first at
   the public history boundary, and validated whenever workspace metadata opens
   or saves.
+- Audit reports deterministically serialize the selected control, workflow,
+  periodic-review, release, and verification records without embedding source
+  drafts or release PDFs. Report paths remain inside the edit root, never
+  overwrite existing files, and are recorded in a separate canonical
+  workspace-level `report_generated` evidence chain.
 - `Workspace::verify_release` and `Workspace::verify_all_releases` re-read the
   recorded PDF and compare its SHA-256 digest; they never modify, repair, or
   delete release bytes.
@@ -84,6 +90,8 @@ persistence.
 - Schema v6 adds the default-disabled workspace Claude-assistance policy and
   optional candidate/release/workflow assistance evidence, with a
   `v5.json.bak` retained during migration.
+- Schema v7 adds the workspace-level report evidence chain, with a
+  `v6.json.bak` retained during migration.
 
 ## Verification
 

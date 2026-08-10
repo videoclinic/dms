@@ -2,9 +2,10 @@ use std::{error::Error, fs, io, path::PathBuf, process};
 
 use clap::{Parser, Subcommand, ValueEnum};
 use dms_core::{
-    AuthenticatedActor, ControlUpdate, DeliveryReceipt, Document, EntraIdentitySource, EntraPerson,
-    GraphClient, Note, NotificationClient, NotificationMessage, NotificationSettings,
-    PeriodicReviewResult, RoleUpdate, Workspace,
+    AuditReportFilter, AuditReportFormat, AuditReportRequest, AuthenticatedActor, ControlUpdate,
+    DeliveryReceipt, Document, EntraIdentitySource, EntraPerson, GraphClient, Note,
+    NotificationClient, NotificationMessage, NotificationSettings, PeriodicReviewResult,
+    RoleUpdate, Workspace,
 };
 use serde::Serialize;
 use uuid::Uuid;
@@ -45,6 +46,10 @@ enum Command {
     PeriodicReview {
         #[command(subcommand)]
         command: PeriodicReviewCommand,
+    },
+    Report {
+        #[command(subcommand)]
+        command: ReportCommand,
     },
 }
 
@@ -159,6 +164,53 @@ impl From<PeriodicReviewResultArg> for PeriodicReviewResult {
             PeriodicReviewResultArg::Obsolete => Self::Obsolete,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum ReportFormatArg {
+    Csv,
+    Pdf,
+}
+
+impl From<ReportFormatArg> for AuditReportFormat {
+    fn from(value: ReportFormatArg) -> Self {
+        match value {
+            ReportFormatArg::Csv => Self::Csv,
+            ReportFormatArg::Pdf => Self::Pdf,
+        }
+    }
+}
+
+#[derive(Debug, Subcommand)]
+enum ReportCommand {
+    Generate {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long, value_enum)]
+        format: ReportFormatArg,
+        #[arg(long)]
+        output: Option<PathBuf>,
+        #[arg(long)]
+        document: Vec<Uuid>,
+        #[arg(long)]
+        approver: Vec<Uuid>,
+        #[arg(long)]
+        confidentiality: Vec<String>,
+        #[arg(long, value_name = "RFC3339")]
+        from: Option<String>,
+        #[arg(long, value_name = "RFC3339")]
+        through: Option<String>,
+    },
+    List {
+        #[arg(long)]
+        edit_root: PathBuf,
+    },
+    Verify {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long)]
+        event: Uuid,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -389,7 +441,60 @@ fn run(cli: Cli) -> CliResult<()> {
         Command::Policy { command } => run_policy(command, cli.json),
         Command::Library { command } => run_library(command, cli.json),
         Command::PeriodicReview { command } => run_periodic_review(command, cli.json),
+        Command::Report { command } => run_report(command, cli.json),
     }
+}
+
+fn run_report(command: ReportCommand, json: bool) -> CliResult<()> {
+    match command {
+        ReportCommand::Generate {
+            edit_root,
+            format,
+            output,
+            document,
+            approver,
+            confidentiality,
+            from,
+            through,
+        } => {
+            let mut workspace = Workspace::open(&edit_root)?;
+            let report = workspace.generate_audit_report(AuditReportRequest {
+                format: format.into(),
+                relative_path: output,
+                filter: AuditReportFilter {
+                    document_ids: document,
+                    approver_object_ids: approver,
+                    confidentiality_type_ids: confidentiality,
+                    from: parse_report_time(from.as_deref())?,
+                    through: parse_report_time(through.as_deref())?,
+                },
+            })?;
+            let message = format!("generated audit report {}", report.relative_path);
+            print_value(&report, json, message)
+        }
+        ReportCommand::List { edit_root } => {
+            let workspace = Workspace::open(&edit_root)?;
+            let reports = workspace.recent_reports();
+            let count = reports.len();
+            print_value(&reports, json, format!("{count} audit reports"))
+        }
+        ReportCommand::Verify { edit_root, event } => {
+            let workspace = Workspace::open(&edit_root)?;
+            let verification = workspace.verify_report(event)?;
+            let message = format!("audit report verification: {:?}", verification.status);
+            print_value(&verification, json, message)
+        }
+    }
+}
+
+fn parse_report_time(value: Option<&str>) -> CliResult<Option<chrono::DateTime<chrono::Utc>>> {
+    value
+        .map(|value| {
+            chrono::DateTime::parse_from_rfc3339(value)
+                .map(|timestamp| timestamp.with_timezone(&chrono::Utc))
+                .map_err(|error| input_error(&format!("invalid RFC3339 report timestamp: {error}")))
+        })
+        .transpose()
 }
 
 fn run_periodic_review(command: PeriodicReviewCommand, json: bool) -> CliResult<()> {

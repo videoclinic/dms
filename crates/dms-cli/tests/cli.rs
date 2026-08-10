@@ -409,3 +409,115 @@ fn cli_exposes_periodic_review_closure_commands_and_requires_confirmation_first(
         assert!(String::from_utf8_lossy(&output.stderr).contains("requires --confirm"));
     }
 }
+
+#[test]
+fn cli_generates_lists_and_verifies_filtered_audit_reports() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let edit = temp.path().join("edit");
+    let publish = temp.path().join("publish");
+    fs::create_dir_all(edit.join("Policies")).expect("edit root");
+    assert!(dms()
+        .args([
+            "workspace",
+            "init",
+            "--edit-root",
+            edit.to_str().unwrap(),
+            "--publish-root",
+            publish.to_str().unwrap(),
+            "--confirm",
+        ])
+        .status()
+        .unwrap()
+        .success());
+    assert!(dms()
+        .args([
+            "policy",
+            "configure-confidentiality-type",
+            "--edit-root",
+            edit.to_str().unwrap(),
+            "--id",
+            "internal",
+            "--label",
+            "Internal",
+            "--root",
+        ])
+        .status()
+        .unwrap()
+        .success());
+    let source = edit.join("Policies/Handbook.md");
+    fs::write(&source, "# Handbook\n\nPRIVATE SOURCE CONTENT\n").unwrap();
+    let added = dms()
+        .args([
+            "--json",
+            "document",
+            "add",
+            "--edit-root",
+            edit.to_str().unwrap(),
+            "--path",
+            source.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(added.status.success());
+    let document: serde_json::Value = serde_json::from_slice(&added.stdout).unwrap();
+    let document_id = document["id"].as_str().unwrap();
+
+    let generated = dms()
+        .args([
+            "--json",
+            "report",
+            "generate",
+            "--edit-root",
+            edit.to_str().unwrap(),
+            "--format",
+            "csv",
+            "--output",
+            ".dms/exports/handbook.csv",
+            "--document",
+            document_id,
+            "--confidentiality",
+            "internal",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        generated.status.success(),
+        "{}",
+        String::from_utf8_lossy(&generated.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&generated.stdout).unwrap();
+    let event_id = report["event_id"].as_str().unwrap();
+    let bytes = fs::read(edit.join(".dms/exports/handbook.csv")).unwrap();
+    assert!(String::from_utf8_lossy(&bytes).contains("Handbook"));
+    assert!(!String::from_utf8_lossy(&bytes).contains("PRIVATE SOURCE CONTENT"));
+
+    let listed = dms()
+        .args([
+            "--json",
+            "report",
+            "list",
+            "--edit-root",
+            edit.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(listed.status.success());
+    let reports: serde_json::Value = serde_json::from_slice(&listed.stdout).unwrap();
+    assert_eq!(reports.as_array().unwrap().len(), 1);
+
+    let verified = dms()
+        .args([
+            "--json",
+            "report",
+            "verify",
+            "--edit-root",
+            edit.to_str().unwrap(),
+            "--event",
+            event_id,
+        ])
+        .output()
+        .unwrap();
+    assert!(verified.status.success());
+    let verification: serde_json::Value = serde_json::from_slice(&verified.stdout).unwrap();
+    assert_eq!(verification["status"], "match");
+}

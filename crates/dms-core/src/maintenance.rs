@@ -628,6 +628,7 @@ impl Workspace {
                 release_id: review.release_id,
                 result: context.result,
             }),
+            report: None,
         };
         self.append_event(document_id, body)?;
         Ok(())

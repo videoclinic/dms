@@ -16,6 +16,7 @@ macOS.
 | `ui/library.mjs` | Folder-first explorer state, markup, selection rules, search, and sorting |
 | `ui/notes.mjs` | Per-document note activity state, create/edit/delete markup, and confirmation flow |
 | `ui/maintenance.mjs` | Releases, periodic-review, and full-backup panes with read-only verification, paging, and confirmation copy |
+| `ui/reports.mjs` | Audit-report generation filters, recent-report history, verification state, paging, and host actions |
 | `ui/assistance.mjs` | Workspace policy form plus document-scoped payload preview, consent, handoff, and editable response draft |
 | `ui/print/` | Shipped app-local Markdown print shell, stylesheet, and logo |
 | `ui/*.test.mjs` | Framework-free shell and Library interaction tests |
@@ -55,8 +56,10 @@ macOS.
 - The Releases pane lists every recorded release with its verification status,
   filters by document title, and exposes per-release and workspace-wide
   verification actions. It never edits, repairs, or replaces release bytes.
-- The Audit & Reports pane shows periodic-review markers and exposes request,
-  result, comment-required cancellation, and reminder actions. Result,
+- The Audit & Reports pane generates filtered CSV/PDF reports, lists report
+  evidence with filter-before-pagination, and exposes read-only verification and
+  host-mediated Open folder actions. It also shows periodic-review markers and
+  request, result, comment-required cancellation, and reminder actions. Result,
   cancellation, and reminder require explicit confirmation; delivery and
   integrity failures are surfaced in place. Live Entra/notification adapters
   remain phase 9i work.

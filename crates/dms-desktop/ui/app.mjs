@@ -32,6 +32,12 @@ import {
   createAssistanceState,
   updateAssistanceState,
 } from "./assistance.mjs";
+import {
+  applyAuditReportSnapshot,
+  auditReportRequest,
+  auditReportsMarkup,
+  createAuditReportState,
+} from "./reports.mjs";
 
 const DESTINATIONS = [
   ["Library", "▦"],
@@ -88,6 +94,7 @@ export function createInitialState(preferences = defaultPreferences()) {
     assistance_policy: { value: null, error: "" },
     releases: createReleaseState(),
     periodic_reviews: { markers: [], loading: false, error: "", notice: "" },
+    audit_reports: createAuditReportState(),
     maintenance: { outcome: null, error: "" },
     sidebar_overlay: false,
     flyout: null,
@@ -320,7 +327,7 @@ function activityMarkup(state, activity) {
     return releaseMaintenanceMarkup(state.releases);
   }
   if (activity.destination === "Audit & Reports") {
-    return periodicReviewMarkup(state.periodic_reviews);
+    return `${auditReportsMarkup(state.audit_reports)}${periodicReviewMarkup(state.periodic_reviews)}`;
   }
   if (activity.destination === "Maintenance") {
     return workspaceMaintenanceMarkup(state.maintenance);
@@ -383,6 +390,7 @@ function openDestination(destination) {
     void loadReleases();
   } else if (destination === "Audit & Reports") {
     void loadPeriodicReviews();
+    void loadAuditReports();
   } else if (destination === "Configuration") {
     void loadClaudeAssistancePolicy();
   }
@@ -522,6 +530,29 @@ async function loadPeriodicReviews(notice = "") {
     appState = {
       ...appState,
       periodic_reviews: { ...appState.periodic_reviews, loading: false, error: String(error) },
+    };
+  }
+  render(appState);
+}
+
+async function loadAuditReports(notice = "") {
+  appState = {
+    ...appState,
+    audit_reports: { ...appState.audit_reports, loading: true, error: "" },
+  };
+  render(appState);
+  try {
+    const snapshot = await invokeCommand("load_audit_reports", {
+      editRoot: appState.workspace.edit_root,
+    });
+    appState = {
+      ...appState,
+      audit_reports: applyAuditReportSnapshot(appState.audit_reports, snapshot, notice),
+    };
+  } catch (error) {
+    appState = {
+      ...appState,
+      audit_reports: { ...appState.audit_reports, loading: false, error: String(error) },
     };
   }
   render(appState);
@@ -967,6 +998,59 @@ async function handleClick(event) {
   if (await handleAssistanceClick(event)) return;
   if (await handleLibraryClick(event)) return;
 
+  const verifyReport = event.target.closest("[data-report-verify]")?.dataset.reportVerify;
+  if (verifyReport) {
+    appState = {
+      ...appState,
+      audit_reports: { ...appState.audit_reports, loading: true, error: "" },
+    };
+    render(appState);
+    try {
+      const snapshot = await invokeCommand("verify_audit_report", {
+        editRoot: appState.workspace.edit_root,
+        eventId: verifyReport,
+      });
+      appState = {
+        ...appState,
+        audit_reports: applyAuditReportSnapshot(appState.audit_reports, snapshot, "Report verified."),
+      };
+    } catch (error) {
+      appState = {
+        ...appState,
+        audit_reports: { ...appState.audit_reports, loading: false, error: String(error) },
+      };
+    }
+    render(appState);
+    return;
+  }
+  const openReportFolder = event.target.closest("[data-report-open-folder]")?.dataset.reportOpenFolder;
+  if (openReportFolder) {
+    try {
+      await invokeCommand("open_audit_report_folder", {
+        editRoot: appState.workspace.edit_root,
+        eventId: openReportFolder,
+      });
+      appState = { ...appState, audit_reports: { ...appState.audit_reports, error: "" } };
+    } catch (error) {
+      appState = {
+        ...appState,
+        audit_reports: { ...appState.audit_reports, error: String(error) },
+      };
+    }
+    render(appState);
+    return;
+  }
+  const reportPage = event.target.closest("[data-report-page]")?.dataset.reportPage;
+  if (reportPage) {
+    const delta = reportPage === "next" ? 1 : -1;
+    appState = {
+      ...appState,
+      audit_reports: { ...appState.audit_reports, page: Math.max(0, appState.audit_reports.page + delta) },
+    };
+    render(appState);
+    return;
+  }
+
   if (event.target.closest("[data-release-verify-all]")) {
     void loadReleases("verify_all_releases");
     return;
@@ -1024,8 +1108,9 @@ async function handleClick(event) {
       void loadClaudeAssistanceAvailability(activity.document_id);
     } else if (activity?.destination === "Releases" && appState.releases.rows.length === 0) {
       void loadReleases();
-    } else if (activity?.destination === "Audit & Reports" && appState.periodic_reviews.markers.length === 0) {
-      void loadPeriodicReviews();
+    } else if (activity?.destination === "Audit & Reports") {
+      if (appState.audit_reports.rows.length === 0) void loadAuditReports();
+      if (appState.periodic_reviews.markers.length === 0) void loadPeriodicReviews();
     } else if (activity?.destination === "Configuration" && !appState.assistance_policy.value) {
       void loadClaudeAssistancePolicy();
     }
@@ -1068,6 +1153,7 @@ async function handleClick(event) {
         void loadReleases();
       } else if (view.destination === "Audit & Reports") {
         void loadPeriodicReviews();
+        void loadAuditReports();
       } else if (view.destination === "Configuration") {
         void loadClaudeAssistancePolicy();
       }
@@ -1084,6 +1170,47 @@ async function handleClick(event) {
 }
 
 async function handleSubmit(event) {
+  if (event.target.id === "audit-report-generate-form") {
+    event.preventDefault();
+    const request = auditReportRequest(new FormData(event.target));
+    appState = {
+      ...appState,
+      audit_reports: { ...appState.audit_reports, loading: true, error: "", notice: "" },
+    };
+    render(appState);
+    try {
+      const snapshot = await invokeCommand(request.command, {
+        editRoot: appState.workspace.edit_root,
+        ...request.arguments,
+      });
+      const format = request.arguments.request.format.toUpperCase();
+      appState = {
+        ...appState,
+        audit_reports: applyAuditReportSnapshot(
+          appState.audit_reports,
+          snapshot,
+          `${format} audit report generated.`,
+        ),
+      };
+    } catch (error) {
+      appState = {
+        ...appState,
+        audit_reports: { ...appState.audit_reports, loading: false, error: String(error) },
+      };
+    }
+    render(appState);
+    return;
+  }
+  if (event.target.id === "audit-report-filter-form") {
+    event.preventDefault();
+    const query = String(new FormData(event.target).get("query") ?? "");
+    appState = {
+      ...appState,
+      audit_reports: { ...appState.audit_reports, query, page: 0 },
+    };
+    render(appState);
+    return;
+  }
   if (event.target.matches("[data-periodic-review-form]")) {
     event.preventDefault();
     const action = event.submitter?.value;
@@ -1299,6 +1426,18 @@ function handleChange(event) {
     appState = {
       ...appState,
       releases: { ...appState.releases, page_size: Number(event.target.value), page: 0 },
+    };
+    render(appState);
+    return;
+  }
+  if (event.target.matches("[data-report-page-size]")) {
+    appState = {
+      ...appState,
+      audit_reports: {
+        ...appState.audit_reports,
+        page_size: Number(event.target.value),
+        page: 0,
+      },
     };
     render(appState);
     return;

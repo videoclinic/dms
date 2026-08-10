@@ -11,6 +11,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 mod assistance;
+mod audit;
 mod catalogues;
 mod library;
 mod lifecycle;
@@ -18,13 +19,14 @@ mod maintenance;
 mod policies;
 
 pub use assistance::*;
+pub use audit::*;
 pub use catalogues::*;
 pub use library::*;
 pub use lifecycle::*;
 pub use maintenance::*;
 pub use policies::*;
 
-pub const SCHEMA_VERSION: u32 = 6;
+pub const SCHEMA_VERSION: u32 = 7;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 
@@ -196,6 +198,14 @@ pub enum DmsError {
     BackupInputInvalid(PathBuf),
     #[error("backup manifest failed: {0}")]
     BackupManifest(String),
+    #[error("audit report filter is invalid: {0}")]
+    InvalidAuditFilter(String),
+    #[error("audit report path is invalid: {0}")]
+    InvalidReportPath(PathBuf),
+    #[error("audit report path already exists and will not be overwritten: {0}")]
+    ReportPathExists(PathBuf),
+    #[error("audit report event {0} was not found")]
+    ReportNotFound(Uuid),
     #[error("Claude Desktop assistance is disabled for this workspace")]
     ClaudeAssistanceDisabled,
     #[error("Claude Desktop assistance is not permitted for confidentiality type {0:?}")]
@@ -237,6 +247,8 @@ pub struct Workspace {
     pub(crate) default_review_interval_months: u32,
     #[serde(default)]
     pub(crate) claude_assistance: ClaudeAssistancePolicy,
+    #[serde(default)]
+    pub(crate) workspace_events: Vec<WorkflowEvent>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -343,6 +355,7 @@ impl Workspace {
             notification_settings: None,
             default_review_interval_months: default_review_interval_months(),
             claude_assistance: ClaudeAssistancePolicy::default(),
+            workspace_events: Vec::new(),
         };
         workspace.save()?;
         Ok(workspace)
@@ -368,7 +381,7 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = matches!(found, 1..=5);
+        let migrated = matches!(found, 1..=6);
         if found == 1 {
             migrate_v1_catalogues(&mut value)?;
         }
