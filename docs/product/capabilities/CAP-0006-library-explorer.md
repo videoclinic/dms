@@ -4,7 +4,7 @@
 | --- | --- |
 | ID | CAP-0006 |
 | Status | not implemented |
-| Tests | Partial phase-3 evidence: [`dms-core` Library tests](../../../crates/dms-core/tests/library.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [Library frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31359360786) |
+| Tests | Partial phases 3 and 9b.1 evidence: [`dms-core` Library tests](../../../crates/dms-core/tests/library.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [hierarchical Library frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31359360786) |
 
 ## Outcomes (contract — not yet true in runtime)
 
@@ -25,6 +25,11 @@ When implemented, the following must hold:
    - The tree shows every accessible folder below the edit root, including
      empty folders and folders without registered documents. `<edit-root>/.dms`
      is never shown.
+   - The tree is a semantic and visual hierarchy, not a flat list with depth
+     indentation. A folder with children has an explicit expand/collapse
+     control independent from its navigation action. Navigating to a folder
+     expands its ancestor chain and keeps unrelated branch expansion stable for
+     the application session.
    - A current-folder toolbar exposes **Back**, **Forward**, and **Up** controls
      plus a clickable breadcrumb rooted at the workspace/edit-root display
      name. Up is unavailable at the root. Tree selection, breadcrumb, current

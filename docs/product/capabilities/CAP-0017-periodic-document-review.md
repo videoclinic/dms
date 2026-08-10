@@ -5,7 +5,7 @@
 | ID | CAP-0017 |
 | Status | not implemented |
 | Storage | `<edit-root>/.dms/` |
-| Tests | none |
+| Tests | Partial phases 7 and 9b evidence: [core lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [CLI command tests](../../../crates/dms-cli/tests/cli.rs), [desktop adapter tests](../../../crates/dms-desktop/src/lib.rs), and [desktop periodic-review tests](../../../crates/dms-desktop/ui/maintenance.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 

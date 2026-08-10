@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   applyLibrarySnapshot,
   breadcrumbSegments,
+  buildFolderTree,
   createLibraryState,
   entryDocumentId,
   historyTarget,
@@ -14,6 +15,7 @@ import {
   selectedEntries,
   sortLibraryEntries,
   toggleLibrarySelection,
+  toggleTreeFolder,
 } from "./library.mjs";
 
 const file = (name, membership, document = null) => ({
@@ -59,6 +61,42 @@ test("folder history supports push, back, and forward without creating extra lib
   assert.deepEqual(library.back, ["."]);
   assert.deepEqual(library.forward, ["Policies/HR"]);
   assert.equal(historyTarget(library, "forward"), "Policies/HR");
+});
+
+test("folder tree is hierarchical and keeps branch expansion independent from navigation", () => {
+  const folders = [
+    { name: "Edit", relative_path: "." },
+    { name: "Policies", relative_path: "Policies" },
+    { name: "HR", relative_path: "Policies/HR" },
+    { name: "Archive", relative_path: "Policies/HR/Archive" },
+    { name: "IT", relative_path: "Policies/IT" },
+  ];
+  const tree = buildFolderTree(folders);
+  assert.deepEqual(tree.map((node) => node.path), ["."]);
+  assert.deepEqual(tree[0].children.map((node) => node.path), ["Policies"]);
+  assert.deepEqual(tree[0].children[0].children.map((node) => node.path), [
+    "Policies/HR",
+    "Policies/IT",
+  ]);
+
+  let library = { ...createLibraryState(), tree: folders };
+  library = applyLibrarySnapshot(library, {
+    tree: folders,
+    folder: { relative_path: "Policies/HR", parent: "Policies", entries: [] },
+  }, "Policies/HR");
+  assert.deepEqual(library.expanded_folders, [".", "Policies", "Policies/HR"]);
+  library = toggleTreeFolder(library, "Policies");
+  assert.deepEqual(library.expanded_folders, [".", "Policies/HR"]);
+
+  const markup = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies/HR" } },
+    { ...library, expanded_folders: [".", "Policies", "Policies/HR"] },
+  );
+  assert.match(markup, /role="tree"/);
+  assert.match(markup, /role="group"/);
+  assert.match(markup, /data-library-tree-toggle="Policies"[^>]*aria-expanded="true"/);
+  assert.match(markup, /role="treeitem"[^>]*aria-current="page"/);
 });
 
 test("multi-selection exposes homogeneous membership without losing exact identities", () => {

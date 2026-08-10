@@ -351,3 +351,61 @@ fn cli_lists_searches_unregisters_and_reassociates_library_files() {
     assert_eq!(reassociated["id"], document_id);
     assert_eq!(reassociated["relative_path"], "Policies/Staff-Handbook.md");
 }
+
+#[test]
+fn cli_exposes_periodic_review_closure_commands_and_requires_confirmation_first() {
+    let help = dms()
+        .args(["periodic-review", "--help"])
+        .output()
+        .expect("periodic-review help");
+    assert!(help.status.success());
+    let help = String::from_utf8_lossy(&help.stdout);
+    for command in ["list", "start", "result", "cancel", "reminder"] {
+        assert!(help.contains(command), "missing {command} in {help}");
+    }
+
+    let id = "00000000-0000-0000-0000-000000000000";
+    let commands = [
+        vec![
+            "periodic-review",
+            "result",
+            "--edit-root",
+            "missing",
+            "--document",
+            id,
+            "--review",
+            id,
+            "--result",
+            "confirmed-current",
+            "--comment",
+            "Current",
+        ],
+        vec![
+            "periodic-review",
+            "cancel",
+            "--edit-root",
+            "missing",
+            "--document",
+            id,
+            "--review",
+            id,
+            "--comment",
+            "Cancelled",
+        ],
+        vec![
+            "periodic-review",
+            "reminder",
+            "--edit-root",
+            "missing",
+            "--document",
+            id,
+            "--review",
+            id,
+        ],
+    ];
+    for args in commands {
+        let output = dms().args(args).output().expect("periodic-review command");
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("requires --confirm"));
+    }
+}

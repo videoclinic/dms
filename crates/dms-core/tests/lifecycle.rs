@@ -8,10 +8,11 @@ use std::{
 use dms_core::{
     AssistanceEvidence, AuthenticatedActor, CandidateRequest, CandidateStatus, ControlUpdate,
     DeliveryReceipt, DeliveryStatus, DmsError, EntraIdentitySource, EntraPerson, GraphClient,
-    Lifecycle, MarkerStatus, NotificationClient, NotificationMessage, NotificationSettings,
-    NotificationTransport, PdfExporter, PeriodicReviewResult, PeriodicReviewStatus, ReleaseOutcome,
-    ReleaseVerificationStatus, ReviewDecision, RoleUpdate, SmtpSettings, TargetSelection, Version,
-    WorkflowEventType, WorkflowVerification, Workspace, SCHEMA_VERSION,
+    Lifecycle, MarkerStatus, NotificationClient, NotificationKind, NotificationMessage,
+    NotificationSettings, NotificationTransport, PdfExporter, PeriodicReviewResult,
+    PeriodicReviewStatus, ReleaseOutcome, ReleaseVerificationStatus, ReviewDecision, RoleUpdate,
+    SmtpSettings, TargetSelection, Version, WorkflowEventType, WorkflowVerification, Workspace,
+    SCHEMA_VERSION,
 };
 use tempfile::TempDir;
 use uuid::Uuid;
@@ -1041,6 +1042,20 @@ fn periodic_review_binds_release_requires_integrity_and_records_result_transitio
     assert_eq!(review.release_id, outcome.release.id);
     assert_eq!(review.pdf_digest, outcome.release.pdf_digest);
     assert_eq!(review.confidentiality, outcome.release.confidentiality);
+    graph
+        .people
+        .retain(|person| person.object_id != fixture.approver_id);
+    assert!(matches!(
+        fixture.workspace.complete_periodic_review(
+            fixture.document_id,
+            review.id,
+            PeriodicReviewResult::ConfirmedCurrent,
+            "The released content remains current",
+            &mut graph,
+        ),
+        Err(DmsError::DecisionActorMismatch)
+    ));
+    let mut graph = fixture.graph();
     let completed = fixture
         .workspace
         .complete_periodic_review(
@@ -1118,6 +1133,162 @@ fn periodic_review_binds_release_requires_integrity_and_records_result_transitio
             .unwrap()
             .lifecycle,
         Lifecycle::Obsolete
+    );
+}
+
+#[test]
+fn periodic_review_cancellation_requires_comment_and_preserves_release_schedule() {
+    let mut fixture = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    let (_, outcome) = release_first(&mut fixture);
+    let due = fixture
+        .workspace
+        .periodic_review_markers(chrono::Utc::now().date_naive())
+        .unwrap()
+        .into_iter()
+        .find(|marker| marker.document_id == fixture.document_id)
+        .unwrap()
+        .next_review_due;
+    let review = fixture
+        .workspace
+        .start_periodic_review(fixture.document_id)
+        .unwrap();
+
+    assert!(fixture
+        .workspace
+        .cancel_periodic_review(fixture.document_id, review.id, "  ")
+        .is_err());
+    let cancelled = fixture
+        .workspace
+        .cancel_periodic_review(
+            fixture.document_id,
+            review.id,
+            "Review postponed while ownership is reassigned",
+        )
+        .unwrap();
+
+    let document = fixture.workspace.document(fixture.document_id).unwrap();
+    assert_eq!(cancelled.status, PeriodicReviewStatus::Cancelled);
+    assert_eq!(cancelled.result, None);
+    assert_eq!(document.lifecycle, Lifecycle::Released);
+    let marker = fixture
+        .workspace
+        .periodic_review_markers(chrono::Utc::now().date_naive())
+        .unwrap()
+        .into_iter()
+        .find(|marker| marker.document_id == fixture.document_id)
+        .unwrap();
+    assert_eq!(marker.next_review_due, due);
+    assert_eq!(marker.open_review_id, None);
+    assert_eq!(
+        fixture.workspace.releases(fixture.document_id).unwrap()[0].id,
+        outcome.release.id
+    );
+    let history = fixture
+        .workspace
+        .workflow_history(fixture.document_id)
+        .unwrap();
+    let event = history[0];
+    assert_eq!(
+        event.body.event_type,
+        WorkflowEventType::PeriodicReviewCancelled
+    );
+    assert_eq!(
+        event.body.operator_comment.as_deref(),
+        Some("Review postponed while ownership is reassigned")
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .verify_workflow(fixture.document_id)
+            .unwrap(),
+        WorkflowVerification::Valid
+    );
+}
+
+#[test]
+fn periodic_review_reminders_record_every_attempt_without_duplicate_or_lifecycle_change() {
+    let mut fixture = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    release_first(&mut fixture);
+    let review = fixture
+        .workspace
+        .start_periodic_review(fixture.document_id)
+        .unwrap();
+    let permalink = fixture
+        .workspace
+        .review_permalink(fixture.document_id, review.id)
+        .unwrap();
+    let resolved = fixture.workspace.resolve_permalink(&permalink).unwrap();
+    assert_eq!(resolved.document_id, fixture.document_id);
+    assert_eq!(resolved.review_id, Some(review.id));
+    let due = fixture
+        .workspace
+        .periodic_review_markers(chrono::Utc::now().date_naive())
+        .unwrap()
+        .into_iter()
+        .find(|marker| marker.document_id == fixture.document_id)
+        .unwrap()
+        .next_review_due;
+    let mut notifier = FakeNotifier {
+        receipts: [
+            Ok(DeliveryReceipt::accepted(250, "first reminder accepted")),
+            Err("relay unavailable".to_owned()),
+        ]
+        .into_iter()
+        .collect(),
+        messages: Vec::new(),
+    };
+
+    let first = fixture
+        .workspace
+        .remind_periodic_review(fixture.document_id, review.id, &mut notifier)
+        .unwrap();
+    let second = fixture
+        .workspace
+        .remind_periodic_review(fixture.document_id, review.id, &mut notifier)
+        .unwrap();
+
+    assert_eq!(first.kind, NotificationKind::PeriodicReviewReminder);
+    assert_eq!(first.status, DeliveryStatus::Accepted);
+    assert_eq!(second.status, DeliveryStatus::Failed);
+    assert_eq!(notifier.messages.len(), 2);
+    assert!(notifier.messages[0]
+        .subject
+        .contains("Periodic review reminder"));
+    assert!(notifier.messages[0].body.contains(&permalink));
+    let document = fixture.workspace.document(fixture.document_id).unwrap();
+    assert_eq!(document.lifecycle, Lifecycle::Released);
+    let marker = fixture
+        .workspace
+        .periodic_review_markers(chrono::Utc::now().date_naive())
+        .unwrap()
+        .into_iter()
+        .find(|marker| marker.document_id == fixture.document_id)
+        .unwrap();
+    assert_eq!(marker.next_review_due, due);
+    assert_eq!(marker.open_review_id, Some(review.id));
+    let history = fixture
+        .workspace
+        .workflow_history(fixture.document_id)
+        .unwrap();
+    let reminders = history
+        .into_iter()
+        .filter(|event| event.body.event_type == WorkflowEventType::PeriodicReviewReminder)
+        .collect::<Vec<_>>();
+    assert_eq!(reminders.len(), 2);
+    assert_eq!(reminders[0].body.delivery.as_ref(), Some(&second));
+    assert_eq!(reminders[1].body.delivery.as_ref(), Some(&first));
+    assert_eq!(
+        fixture
+            .workspace
+            .verify_workflow(fixture.document_id)
+            .unwrap(),
+        WorkflowVerification::Valid
     );
 }
 

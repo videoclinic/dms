@@ -18,6 +18,8 @@
 | Follow-up request | Direct operator request: clarify how an operator selects a folder for confidentiality policy and exactly which documents that policy classifies. Proceed as recommended. |
 | Follow-up request | Direct operator request: CAP-0019 and CAP-0008 look different but have similar goals: definition of defaults. redesign the ui in same way. do not let the configuration of the confidentiality policies and entra id setup so mutch space because these settings are changes less frequent |
 | Follow-up request | Direct operator request: There are so many configuration pages just now, and I do not see/know how sould the user navigate through all of them |
+| Follow-up request | Direct operator request: the Library folder element must be a real hierarchical tree view, and an unfolded left menu must retain its state when an action or destination is selected |
+| Follow-up request | Direct operator request: on the initial Library/setup page, retain the last 10 opened libraries with per-entry removal; every directory-selection field must offer native directory browsing starting at the OS user's home directory |
 | Affected CAPs | CAP-0001 … CAP-0022 |
 | Decision records | ADR-0001 … ADR-0023 in `docs/design-decisions.md` |
 
@@ -75,7 +77,11 @@ macOS** that:
   **Document defaults**, **Workflow**, and **Notifications** routes. It retains
   one Configuration activity; catalogue administration and Entra identity-source
   setup are contextual secondary surfaces that return to their parent route.
-  Before a workspace is initialized, only **Set up workspace** is available.
+  - Before a workspace is initialized, only **Set up workspace** is available.
+  - The setup page keeps up to ten most recently opened edit roots in per-user app
+    preferences, lets the operator reopen or remove each one, and gives every
+    directory field a native folder picker rooted initially at the OS user's home
+    directory.
 - Before review submission and release, checks the current source draft for
   canonical version and confidentiality markers. A missing, mismatched, or
   ambiguous marker blocks the transition by default; an operator can continue
@@ -143,8 +149,10 @@ macOS** that:
 | 8 | Optional Claude Desktop handoff | done (implementation `99a26b8`, schema v6 migration, local gates, and [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31385257274) pass) | Tests: disabled/missing app never blocks; policy and consent gate payload; accepted suggestion remains editable and cannot mutate lifecycle |
 | 9 | Packaging smoke | done ([Windows/macOS run 31385996931](https://github.com/videoclinic/dms/actions/runs/31385996931) produced NSIS/DMG artifacts and passed workspace, launch, and native Markdown PDF smoke gates) | Windows and macOS jobs build the workspace, launch the desktop, exercise native Markdown PDF export, and produce installable NSIS/DMG artifacts |
 | 9a | Desktop workspace setup | done (explicit dual-root initialization command and setup UI; unconfirmed requests are side-effect-free; focused Rust/frontend tests, full local gates, native form validation, and visual QA pass) | Before a workspace exists, the desktop exposes only Set up workspace; it can open an existing edit root or initialize edit + publish roots only after explicit confirmation; Rust adapter and frontend tests cover refusal, initialization, open, and setup markup; local workspace gates pass |
-| 9b | Periodic-review closure | in-progress | Core tests cover completion, comment-required cancellation with no schedule shift, and reminder attempts with no duplicate request or lifecycle transition; CLI/Tauri commands and desktop controls expose Result, Cancel, and Reminder with explicit confirmation; fake-backed Rust/frontend gates pass |
-| 9c | Audit export | pending | Core + CLI + desktop tests generate deterministic filtered CSV/PDF reports without source/release bytes, include verification verdicts, hash the report, append `ReportGenerated` evidence, and expose recent-report filter/pagination plus verify/open-folder actions |
+| 9b | Periodic-review closure | done (`cargo test --workspace`; `cargo clippy --workspace --all-targets -- -D warnings`; `node --test ui/*.test.mjs`; focused periodic-review lifecycle tests) | Core tests cover completion, comment-required cancellation with no schedule shift, and reminder attempts with no duplicate request or lifecycle transition; CLI/Tauri commands and desktop controls expose Result, Cancel, and Reminder with explicit confirmation; fake-backed Rust/frontend gates pass |
+| 9b.1 | Library tree and sidebar-state correction | done (`node --test ui/app.test.mjs ui/library.test.mjs`; `node --test ui/*.test.mjs`; full Rust format/test/clippy gates; browser visual QA) | Frontend tests prove nested folder branches with explicit expand/collapse controls, current-folder ancestor expansion, and stable unfolded-sidebar state across destination, saved-view, and open-pane actions; visual QA confirms the folder tree reads as a hierarchy |
+| 9b.2 | Recent libraries and native directory browsing | done (`node --test ui/*.test.mjs`; full Rust format/test/clippy gates; Linux desktop launch smoke; browser visual and interaction QA) | Preferences retain at most 10 unique edit roots in most-recent-first order; setup UI can reopen or remove each entry; every directory field exposes a native folder picker that starts at the OS user's home directory; focused Rust/frontend tests, full local gates, and visual QA pass |
+| 9c | Audit export | in-progress | Core + CLI + desktop tests generate deterministic filtered CSV/PDF reports without source/release bytes, include verification verdicts, hash the report, append `ReportGenerated` evidence, and expose recent-report filter/pagination plus verify/open-folder actions |
 | 9d | Workspace integrity and recovery | pending | Advisory lock status/acquire/release/stale takeover and manifest-verified backup restore refuse unsafe paths, symlinks, fresh-lock overwrite, and unconfirmed replacement; core, CLI, desktop, and failure-path tests pass |
 | 9e | Release and library maintenance | pending | Release withdrawal is reasoned and evidenced without deleting history; current release resolution skips withdrawn records; missing/orphan releases remain explicit; the Library can open an existing source draft or latest released PDF through host-mediated commands; Rust/frontend tests pass |
 | 9f | Desktop lifecycle and Configuration surfaces | pending | The desktop invokes implemented core operations for document-control edit, confidentiality override, begin revision, submit/review/decision/release, cancel review, obsolete, evidence history, document defaults, Workflow, Notifications, and Workspace configuration while preserving one routed Configuration activity; adapter/frontend tests prove each operator path |
@@ -153,7 +161,7 @@ macOS** that:
 | 9i | Live Office, Entra, and notification adapters | pending | Production release commands wire installed Office automation on Windows/macOS; administrator-configured Microsoft Graph refresh and interactive approver sign-in use OS credential storage; SMTP and host-mail transports send canonical messages without storing credentials in `.dms`; fake-backed tests and operator smoke instructions pass |
 | 9j | External operator smokes + CAP promotion | pending | Licensed Office release smoke passes on Windows and macOS; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass; every implemented CAP links executable evidence, CHG status is done, and the record is archived |
 
-**Current phase:** phase 9a is complete and synchronized; phase 9b is in progress. Keep only one phase in progress.
+**Current phase:** phase 9b.2 is complete locally; phase 9c is in progress. Keep only one phase in progress.
 
 ## Implementation notes
 
@@ -167,6 +175,8 @@ macOS** that:
   graph, not only meet the top-level Tauri and tauri-build crate declarations.
 - OS user app config holds sidebar preference and saved-view targets. Open
   activity tabs are session-only; neither belongs in `.dms` workflow evidence.
+- OS user app config also holds at most ten most-recently-opened edit roots.
+  Removing a history entry does not remove or modify the workspace.
 - A document activity key is workspace ID + task + stable document ID; its label
   is task + current DMS title + optional document number. Folder activity labels
   use edit-root-relative paths; the Library updates its one session pane in
@@ -207,7 +217,7 @@ macOS** that:
   operator surfaces or transitions, including workspace setup and lifecycle UI,
   host draft opening, live notification and Entra adapters, audit export,
   restore/advisory locking, release withdrawal, permalink scheme registration,
-  periodic-review cancellation/reminders, and assistance excerpt trimming.
+  and assistance excerpt trimming.
 - The Office-on-Windows/macOS and administrator-configured Microsoft 365 Entra
   smokes require licensed host applications, a configured tenant/group, and an
   interactive operator identity. CI fakes and unit tests do not satisfy those
@@ -228,6 +238,17 @@ macOS** that:
   `not implemented`: the full Configuration/lifecycle IPC and required Library
   selection actions are still absent. Their evidence fields must describe the
   proven subset without promoting the whole contract.
+- Phase 9b closes the local periodic-review result, cancellation, and reminder
+  paths. Core evidence refreshes current approver eligibility, preserves the
+  due date on cancellation, and records every reminder delivery attempt without
+  duplicating the request or changing lifecycle state. CLI/Tauri/frontend
+  commands require explicit confirmation; live Entra and notification delivery
+  remain phase 9i prerequisites, so CAP-0017 is not promoted yet.
+- Phase 9b.1 corrects two phase-3/shell gaps reported during phase-9 use. The
+  Library now renders nested branches with independent expand/collapse controls
+  and keeps current-folder ancestors expanded. Navigation clears only a narrow
+  flyout; it no longer folds an already-unfolded left menu. Focused and full
+  frontend gates, workspace Rust gates, and browser visual QA pass.
 
 ## Resume checklist
 

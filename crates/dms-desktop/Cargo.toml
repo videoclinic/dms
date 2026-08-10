@@ -25,6 +25,7 @@ quick-xml.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tauri.workspace = true
+tauri-plugin-dialog.workspace = true
 tempfile.workspace = true
 uuid.workspace = true
 zip.workspace = true

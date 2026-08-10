@@ -23,6 +23,10 @@ executable.
   non-secret display data.
 - Library commands expose filesystem-derived tree/list/search results separately
   from explicit document add, unregister, reassociate, and permalink mutations.
+- Periodic-review commands expose list, start, result, cancellation, and reminder
+  operations. Result, cancellation, and reminder require `--confirm`; result and
+  reminder report the unavailable live Entra/notification adapter explicitly
+  until phase 9i supplies production integrations.
 
 ## Work Guidance
 

@@ -6,7 +6,7 @@
 | Status | not implemented |
 | Framework | Tauri 2 |
 | Supported OS | Windows, macOS (both required) |
-| Tests | Partial phases 1–9a evidence: [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [shell/setup frontend tests](../../../crates/dms-desktop/ui/app.test.mjs), [Windows/macOS startup and packaging smoke](../../../.github/workflows/desktop-platform-smoke.yml) |
+| Tests | Partial phases 1–9b.2 evidence: [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [shell/setup/sidebar-state frontend tests](../../../crates/dms-desktop/ui/app.test.mjs), [Windows/macOS startup and packaging smoke](../../../.github/workflows/desktop-platform-smoke.yml) |
 
 ## Outcomes (contract — not yet true in runtime)
 
@@ -34,9 +34,11 @@ When implemented, the following must hold:
 7. Collapsed/expanded preference persists in the OS user app-config store (not
    in `.dms`) and restores on next launch for that OS user.
 8. When the left menu is **collapsed**, a **hamburger** control in the main
-   header opens the menu (temporary expand or overlay). Choosing a destination
-   or dismissing the menu returns to the collapsed chrome unless the operator
-   pins expanded.
+   header unfolds the menu for the current session. Choosing a destination,
+   saved view, open pane, or in-surface action preserves that unfolded state;
+   only an explicit menu toggle or dismiss action folds it again. The persisted
+   expanded/collapsed preference changes only through an explicit sidebar
+   control, never as a side effect of navigation.
 9. While collapsed, primary destinations remain reachable as icon-only rail
    entries and/or via the hamburger menu; labels are not required on the rail.
 10. **Configuration** is one primary destination with persistent in-surface
@@ -119,6 +121,10 @@ When implemented, the following must hold:
     row. Previous/Next pagination is available only when the filtered result
     exceeds the selected page size. Tables that enumerate a bounded fixed
     product configuration are excluded.
+16. Before a workspace is open, the shell shows the ten most recently opened
+    libraries from per-user preferences. Each entry opens that edit root and
+    has a separate removal control; removal never modifies workspace metadata
+    or files.
 
 ## Non-goals
 

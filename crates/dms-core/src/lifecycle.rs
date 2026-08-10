@@ -135,6 +135,7 @@ pub enum NotificationKind {
     ReviewRequest,
     DecisionOutcome,
     MinorPublication,
+    PeriodicReviewReminder,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -286,6 +287,8 @@ pub enum WorkflowEventType {
     ContentConformanceOverridden,
     PeriodicReviewRequested,
     PeriodicReviewCompleted,
+    PeriodicReviewCancelled,
+    PeriodicReviewReminder,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -457,7 +460,10 @@ impl Workspace {
         Ok(settings)
     }
 
-    pub fn refresh_eligible_people<G: GraphClient>(&mut self, graph: &mut G) -> Result<()> {
+    pub fn refresh_eligible_people<G: GraphClient + ?Sized>(
+        &mut self,
+        graph: &mut G,
+    ) -> Result<()> {
         let source = self
             .identity_source
             .clone()
@@ -1143,6 +1149,10 @@ impl Workspace {
                 .candidates
                 .iter()
                 .any(|candidate| candidate.review_id == Some(review_id))
+                && !document
+                    .periodic_reviews
+                    .iter()
+                    .any(|review| review.id == review_id)
             {
                 return Err(DmsError::ReviewNotFound(review_id));
             }
@@ -1884,7 +1894,7 @@ fn minor_publication_message(
     )
 }
 
-fn notification_message(
+pub(crate) fn notification_message(
     kind: NotificationKind,
     recipient: String,
     subject: String,
@@ -1905,7 +1915,7 @@ fn notification_message(
     }
 }
 
-fn delivery_attempt<N: NotificationClient>(
+pub(crate) fn delivery_attempt<N: NotificationClient + ?Sized>(
     settings: &NotificationSettings,
     message: &NotificationMessage,
     notifier: &mut N,

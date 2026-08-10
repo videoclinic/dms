@@ -6,6 +6,7 @@ import {
   createReleaseState,
   filteredReleaseRows,
   periodicReviewMarkup,
+  periodicReviewRequest,
   releaseMaintenanceMarkup,
   workspaceMaintenanceMarkup,
 } from "./maintenance.mjs";
@@ -53,6 +54,7 @@ test("periodic review shows due markers and blocks duplicate requests", () => {
   const markup = periodicReviewMarkup({
     loading: false,
     error: "",
+    notice: "Reminder accepted.",
     markers: [{
       document_id: "document-1",
       title: "Policy",
@@ -64,8 +66,45 @@ test("periodic review shows due markers and blocks duplicate requests", () => {
     }],
   });
   assert.match(markup, /Overdue/);
-  assert.match(markup, /Review requested/);
+  assert.match(markup, /Reminder accepted/);
+  assert.match(markup, /Record result/);
+  assert.match(markup, /Cancel review/);
+  assert.match(markup, /Send reminder/);
+  assert.match(markup, /name="confirmed" required/);
   assert.doesNotMatch(markup, /data-periodic-review-start/);
+});
+
+test("periodic review actions map explicit confirmation to narrow desktop commands", () => {
+  const values = {
+    documentId: "document-1",
+    reviewId: "review-1",
+    result: "changes_required",
+    comment: "Responsibilities changed",
+    confirmed: true,
+  };
+
+  assert.deepEqual(periodicReviewRequest("result", values), {
+    command: "complete_periodic_review",
+    arguments: {
+      documentId: "document-1",
+      reviewId: "review-1",
+      result: "changes_required",
+      comment: "Responsibilities changed",
+      confirmed: true,
+    },
+  });
+  assert.equal(
+    periodicReviewRequest("cancel", values).command,
+    "cancel_periodic_review",
+  );
+  assert.deepEqual(periodicReviewRequest("reminder", values), {
+    command: "remind_periodic_review",
+    arguments: {
+      documentId: "document-1",
+      reviewId: "review-1",
+      confirmed: true,
+    },
+  });
 });
 
 test("workspace backup reports archive path and manifest digest", () => {

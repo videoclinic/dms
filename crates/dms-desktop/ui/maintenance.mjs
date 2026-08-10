@@ -84,6 +84,65 @@ function reviewStatusLabel(status) {
   }[status] ?? status;
 }
 
+function reviewActionValue(values, name) {
+  return typeof values.get === "function" ? values.get(name) : values[name];
+}
+
+export function periodicReviewRequest(action, values) {
+  const documentId = String(reviewActionValue(values, "documentId") ?? "");
+  const reviewId = String(reviewActionValue(values, "reviewId") ?? "");
+  const confirmation = reviewActionValue(values, "confirmed");
+  const confirmed = confirmation === true || confirmation === "on";
+  const common = { documentId, reviewId };
+  if (action === "result") {
+    return {
+      command: "complete_periodic_review",
+      arguments: {
+        ...common,
+        result: String(reviewActionValue(values, "result") ?? ""),
+        comment: String(reviewActionValue(values, "comment") ?? "").trim(),
+        confirmed,
+      },
+    };
+  }
+  if (action === "cancel") {
+    return {
+      command: "cancel_periodic_review",
+      arguments: {
+        ...common,
+        comment: String(reviewActionValue(values, "comment") ?? "").trim(),
+        confirmed,
+      },
+    };
+  }
+  if (action === "reminder") {
+    return {
+      command: "remind_periodic_review",
+      arguments: { ...common, confirmed },
+    };
+  }
+  throw new Error(`Unknown periodic-review action: ${action}`);
+}
+
+function openReviewActions(row) {
+  const documentId = escapeHtml(row.document_id);
+  const reviewId = escapeHtml(row.open_review_id);
+  return `<div class="periodic-review-actions">
+    <form data-periodic-review-form class="periodic-review-form">
+      <input type="hidden" name="documentId" value="${documentId}"><input type="hidden" name="reviewId" value="${reviewId}">
+      <div class="field"><label>Result <select name="result"><option value="confirmed_current">Confirmed current</option><option value="changes_required">Changes required</option><option value="obsolete">Obsolete</option></select></label></div>
+      <div class="field"><label>Required comment <textarea name="comment" required rows="2"></textarea></label></div>
+      <label class="confirm-field"><input type="checkbox" name="confirmed" required> Confirm this periodic-review action.</label>
+      <div class="release-actions"><button class="button" type="submit" name="action" value="result">Record result</button><button class="button secondary danger-text" type="submit" name="action" value="cancel">Cancel review</button></div>
+    </form>
+    <form data-periodic-review-form class="periodic-review-reminder-form">
+      <input type="hidden" name="documentId" value="${documentId}"><input type="hidden" name="reviewId" value="${reviewId}">
+      <label class="confirm-field"><input type="checkbox" name="confirmed" required> Confirm sending a reminder to the snapshotted approver.</label>
+      <button class="button secondary" type="submit" name="action" value="reminder">Send reminder</button>
+    </form>
+  </div>`;
+}
+
 export function periodicReviewMarkup(state) {
   const rows = state.markers ?? [];
   const body = state.loading
@@ -92,12 +151,12 @@ export function periodicReviewMarkup(state) {
       ? rows.map((row) => {
           const canStart = row.release_id && row.status !== "exempt" && !row.open_review_id;
           const action = row.open_review_id
-            ? '<span class="integrity ok">Review requested</span>'
+            ? openReviewActions(row)
             : `<button class="button secondary" type="button" data-periodic-review-start="${escapeHtml(row.document_id)}" ${canStart ? "" : "disabled"}>Request review</button>`;
           return `<article class="review-row"><div><strong>${escapeHtml(row.title)}</strong><span class="badge">${row.version ? `V${escapeHtml(`${row.version.major}.${row.version.minor}`)}` : "No release"}</span><span class="integrity ${row.status === "overdue" ? "problem" : "ok"}">${escapeHtml(reviewStatusLabel(row.status))}</span></div><div class="release-meta"><span>Next review: ${escapeHtml(row.next_review_due ?? "not scheduled")}</span></div>${action}</article>`;
         }).join("")
       : '<p class="empty-state">No released documents have periodic-review markers.</p>';
-  return `<section class="card maintenance-card"><span class="badge">Audit & reports</span><h2>Periodic document review</h2><p>Review requests bind the current release ID, version, confidentiality snapshot, approver, and PDF digest. A mismatched or missing PDF blocks the request.</p><p class="status" role="alert">${escapeHtml(state.error)}</p><div class="release-list">${body}</div></section>`;
+  return `<section class="card maintenance-card"><span class="badge">Audit & reports</span><h2>Periodic document review</h2><p>Review requests bind the current release ID, version, confidentiality snapshot, approver, and PDF digest. A mismatched or missing PDF blocks the request.</p><p class="status" role="alert">${escapeHtml(state.error)}</p>${state.notice ? `<p class="success-panel">${escapeHtml(state.notice)}</p>` : ""}<div class="release-list">${body}</div></section>`;
 }
 
 export function workspaceMaintenanceMarkup(state) {

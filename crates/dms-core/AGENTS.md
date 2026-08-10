@@ -14,7 +14,7 @@ persistence.
 | `src/catalogues.rs` | Document-type catalogue primitives plus shared stable-ID and label validation |
 | `src/library.rs` | Folder/file discovery, membership, search, registration state, reassociation, and permalinks |
 | `src/lifecycle.rs` | Version candidates, Entra/notification/export ports, content conformance, review decisions, release commits, and hash-chained evidence |
-| `src/maintenance.rs` | Release checksum verification, periodic-review scheduling and result transitions, and full-workspace ZIP backup with SHA-256 manifest |
+| `src/maintenance.rs` | Release checksum verification, periodic-review scheduling, result/cancellation/reminder transitions, and full-workspace ZIP backup with SHA-256 manifest |
 | `src/policies.rs` | Folder-policy tree, confidentiality inheritance, Entra display binding, and workflow-role resolution |
 | `tests/` | Domain, migration-fixture, and persistence behaviour tests |
 
@@ -58,11 +58,16 @@ persistence.
 - `Workspace::start_periodic_review` binds the current release ID, version,
   PDF digest, confidentiality snapshot, and approver; a mismatched or missing
   PDF blocks the request.
-- `Workspace::complete_periodic_review` requires the snapshotted Entra
-  approver, records `PeriodicReviewRequested` and `PeriodicReviewCompleted`
-  events with a `periodic_review` payload, and applies
+- `Workspace::complete_periodic_review` refreshes current Entra eligibility,
+  requires the snapshotted eligible approver, records the result, and applies
   `ConfirmedCurrent` / `ChangesRequired` / `Obsolete` transitions
   deterministically.
+- Periodic-review request, result, comment-required cancellation, and each
+  reminder attempt are separate canonical workflow events. Cancellation leaves
+  the release schedule unchanged; reminders neither duplicate the request nor
+  change lifecycle state.
+- Review permalinks resolve both content-approval requests and periodic-review
+  requests so notification links never point at an unresolvable review ID.
 - `Workspace::backup_workspace` refuses to overwrite an existing archive,
   refuses symlinks and non-regular files, and writes a Zip archive containing
   metadata, every registered draft, every recorded release PDF, and a

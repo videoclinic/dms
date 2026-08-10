@@ -1,7 +1,11 @@
 use std::{error::Error, fs, io, path::PathBuf, process};
 
-use clap::{Parser, Subcommand};
-use dms_core::{ControlUpdate, Document, EntraPerson, Note, RoleUpdate, Workspace};
+use clap::{Parser, Subcommand, ValueEnum};
+use dms_core::{
+    AuthenticatedActor, ControlUpdate, DeliveryReceipt, Document, EntraIdentitySource, EntraPerson,
+    GraphClient, Note, NotificationClient, NotificationMessage, NotificationSettings,
+    PeriodicReviewResult, RoleUpdate, Workspace,
+};
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -37,6 +41,10 @@ enum Command {
     Library {
         #[command(subcommand)]
         command: LibraryCommand,
+    },
+    PeriodicReview {
+        #[command(subcommand)]
+        command: PeriodicReviewCommand,
     },
 }
 
@@ -133,6 +141,76 @@ enum LibraryCommand {
         folder: PathBuf,
         #[arg(long)]
         query: String,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum PeriodicReviewResultArg {
+    ConfirmedCurrent,
+    ChangesRequired,
+    Obsolete,
+}
+
+impl From<PeriodicReviewResultArg> for PeriodicReviewResult {
+    fn from(value: PeriodicReviewResultArg) -> Self {
+        match value {
+            PeriodicReviewResultArg::ConfirmedCurrent => Self::ConfirmedCurrent,
+            PeriodicReviewResultArg::ChangesRequired => Self::ChangesRequired,
+            PeriodicReviewResultArg::Obsolete => Self::Obsolete,
+        }
+    }
+}
+
+#[derive(Debug, Subcommand)]
+enum PeriodicReviewCommand {
+    List {
+        #[arg(long)]
+        edit_root: PathBuf,
+    },
+    Start {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long)]
+        document: Uuid,
+    },
+    Result {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long)]
+        document: Uuid,
+        #[arg(long)]
+        review: Uuid,
+        #[arg(long)]
+        result: PeriodicReviewResultArg,
+        #[arg(long)]
+        comment: String,
+        #[arg(long, help = "Confirm recording the periodic-review result")]
+        confirm: bool,
+    },
+    Cancel {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long)]
+        document: Uuid,
+        #[arg(long)]
+        review: Uuid,
+        #[arg(long)]
+        comment: String,
+        #[arg(
+            long,
+            help = "Confirm cancellation without changing the review schedule"
+        )]
+        confirm: bool,
+    },
+    Reminder {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long)]
+        document: Uuid,
+        #[arg(long)]
+        review: Uuid,
+        #[arg(long, help = "Confirm sending a reminder to the snapshotted approver")]
+        confirm: bool,
     },
 }
 
@@ -265,6 +343,36 @@ struct RemovalResult {
     result: &'static str,
 }
 
+struct UnavailableGraphClient;
+
+impl GraphClient for UnavailableGraphClient {
+    fn direct_user_members(
+        &mut self,
+        _source: &EntraIdentitySource,
+    ) -> std::result::Result<Vec<EntraPerson>, String> {
+        Err("live Microsoft Graph integration is not configured".to_owned())
+    }
+
+    fn authenticated_actor(
+        &mut self,
+        _source: &EntraIdentitySource,
+    ) -> std::result::Result<AuthenticatedActor, String> {
+        Err("live interactive Microsoft Entra sign-in is not configured".to_owned())
+    }
+}
+
+struct UnavailableNotificationClient;
+
+impl NotificationClient for UnavailableNotificationClient {
+    fn send(
+        &mut self,
+        _settings: &NotificationSettings,
+        _message: &NotificationMessage,
+    ) -> std::result::Result<DeliveryReceipt, String> {
+        Err("live notification delivery is not configured".to_owned())
+    }
+}
+
 fn main() {
     let cli = Cli::parse();
     if let Err(error) = run(cli) {
@@ -280,6 +388,94 @@ fn run(cli: Cli) -> CliResult<()> {
         Command::Note { command } => run_note(command, cli.json),
         Command::Policy { command } => run_policy(command, cli.json),
         Command::Library { command } => run_library(command, cli.json),
+        Command::PeriodicReview { command } => run_periodic_review(command, cli.json),
+    }
+}
+
+fn run_periodic_review(command: PeriodicReviewCommand, json: bool) -> CliResult<()> {
+    match command {
+        PeriodicReviewCommand::List { edit_root } => {
+            let workspace = Workspace::open(&edit_root)?;
+            let markers = workspace.periodic_review_markers(chrono::Utc::now().date_naive())?;
+            let count = markers.len();
+            print_value(&markers, json, format!("{count} periodic-review markers"))
+        }
+        PeriodicReviewCommand::Start {
+            edit_root,
+            document,
+        } => {
+            let mut workspace = Workspace::open(&edit_root)?;
+            let review = workspace.start_periodic_review(document)?;
+            print_value(
+                &review,
+                json,
+                format!("started periodic review {}", review.id),
+            )
+        }
+        PeriodicReviewCommand::Result {
+            edit_root,
+            document,
+            review,
+            result,
+            comment,
+            confirm,
+        } => {
+            if !confirm {
+                return Err(input_error("periodic-review result requires --confirm"));
+            }
+            let mut workspace = Workspace::open(&edit_root)?;
+            let mut graph = UnavailableGraphClient;
+            let completed = workspace.complete_periodic_review(
+                document,
+                review,
+                result.into(),
+                &comment,
+                &mut graph,
+            )?;
+            print_value(
+                &completed,
+                json,
+                format!("recorded periodic-review result for {}", completed.id),
+            )
+        }
+        PeriodicReviewCommand::Cancel {
+            edit_root,
+            document,
+            review,
+            comment,
+            confirm,
+        } => {
+            if !confirm {
+                return Err(input_error(
+                    "periodic-review cancellation requires --confirm",
+                ));
+            }
+            let mut workspace = Workspace::open(&edit_root)?;
+            let cancelled = workspace.cancel_periodic_review(document, review, &comment)?;
+            print_value(
+                &cancelled,
+                json,
+                format!("cancelled periodic review {}", cancelled.id),
+            )
+        }
+        PeriodicReviewCommand::Reminder {
+            edit_root,
+            document,
+            review,
+            confirm,
+        } => {
+            if !confirm {
+                return Err(input_error("periodic-review reminder requires --confirm"));
+            }
+            let mut workspace = Workspace::open(&edit_root)?;
+            let mut notifier = UnavailableNotificationClient;
+            let attempt = workspace.remind_periodic_review(document, review, &mut notifier)?;
+            print_value(
+                &attempt,
+                json,
+                format!("periodic-review reminder status: {:?}", attempt.status),
+            )
+        }
     }
 }
 

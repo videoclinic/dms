@@ -10,10 +10,12 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 use zip::{write::SimpleFileOptions, ZipWriter};
 
+use crate::lifecycle::{delivery_attempt, notification_message};
 use crate::{
-    configured_text, default_author, AuthenticatedActor, ConfidentialitySnapshot, DmsError,
-    GraphClient, Lifecycle, PeriodicReviewEventDetails, PersonSnapshot, Result, Version,
-    WorkflowEventBody, WorkflowEventType, Workspace, METADATA_DIRECTORY,
+    configured_text, default_author, AuthenticatedActor, ConfidentialitySnapshot, DeliveryAttempt,
+    DmsError, GraphClient, Lifecycle, NotificationClient, NotificationKind,
+    PeriodicReviewEventDetails, PersonSnapshot, Result, Version, WorkflowEventBody,
+    WorkflowEventType, Workspace, METADATA_DIRECTORY,
 };
 
 pub const DEFAULT_REVIEW_INTERVAL_MONTHS: u32 = 12;
@@ -90,6 +92,14 @@ pub struct PeriodicReviewMarker {
     pub next_review_due: Option<NaiveDate>,
     pub status: PeriodicReviewDueStatus,
     pub open_review_id: Option<Uuid>,
+}
+
+#[derive(Default)]
+struct PeriodicEventContext {
+    actor: Option<AuthenticatedActor>,
+    result: Option<PeriodicReviewResult>,
+    comment: Option<String>,
+    delivery: Option<DeliveryAttempt>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -298,14 +308,13 @@ impl Workspace {
             document_id,
             WorkflowEventType::PeriodicReviewRequested,
             &review,
-            None,
-            None,
+            PeriodicEventContext::default(),
         )?;
         self.save()?;
         Ok(review)
     }
 
-    pub fn complete_periodic_review<G: GraphClient>(
+    pub fn complete_periodic_review<G: GraphClient + ?Sized>(
         &mut self,
         document_id: Uuid,
         review_id: Uuid,
@@ -329,6 +338,7 @@ impl Workspace {
         {
             return Err(DmsError::ReleaseIntegrityRequired(review.release_id));
         }
+        self.refresh_eligible_people(graph)?;
         let source = self
             .identity_source
             .as_ref()
@@ -336,7 +346,10 @@ impl Workspace {
         let actor = graph
             .authenticated_actor(source)
             .map_err(DmsError::InteractiveSignInFailed)?;
-        if actor.tenant_id != source.tenant_id || actor.object_id != review.approver.object_id {
+        if actor.tenant_id != source.tenant_id
+            || actor.object_id != review.approver.object_id
+            || !self.identity_cache.contains_key(&actor.object_id)
+        {
             return Err(DmsError::DecisionActorMismatch);
         }
         let completed_at = Utc::now();
@@ -344,8 +357,12 @@ impl Workspace {
             document_id,
             WorkflowEventType::PeriodicReviewCompleted,
             &review,
-            Some(actor),
-            Some((result, comment.clone())),
+            PeriodicEventContext {
+                actor: Some(actor),
+                result: Some(result),
+                comment: Some(comment.clone()),
+                delivery: None,
+            },
         )?;
         {
             let stored = self
@@ -378,6 +395,97 @@ impl Workspace {
             .find(|candidate| candidate.id == review_id)
             .expect("periodic review retained")
             .clone())
+    }
+
+    pub fn cancel_periodic_review(
+        &mut self,
+        document_id: Uuid,
+        review_id: Uuid,
+        comment: &str,
+    ) -> Result<PeriodicReview> {
+        let comment = configured_text(comment, "periodic review cancellation comment")?;
+        let review = self
+            .document(document_id)?
+            .periodic_reviews
+            .iter()
+            .find(|review| review.id == review_id)
+            .cloned()
+            .ok_or(DmsError::PeriodicReviewNotFound(review_id))?;
+        if review.status != PeriodicReviewStatus::Open {
+            return Err(DmsError::PeriodicReviewNotOpen(review_id));
+        }
+        self.append_periodic_event(
+            document_id,
+            WorkflowEventType::PeriodicReviewCancelled,
+            &review,
+            PeriodicEventContext {
+                comment: Some(comment.clone()),
+                ..PeriodicEventContext::default()
+            },
+        )?;
+        let stored = self
+            .document_mut(document_id)?
+            .periodic_reviews
+            .iter_mut()
+            .find(|candidate| candidate.id == review_id)
+            .expect("periodic review checked above");
+        stored.status = PeriodicReviewStatus::Cancelled;
+        stored.comment = Some(comment);
+        let cancelled = stored.clone();
+        self.save()?;
+        Ok(cancelled)
+    }
+
+    pub fn remind_periodic_review<N: NotificationClient + ?Sized>(
+        &mut self,
+        document_id: Uuid,
+        review_id: Uuid,
+        notifier: &mut N,
+    ) -> Result<DeliveryAttempt> {
+        let settings = self
+            .notification_settings
+            .clone()
+            .ok_or(DmsError::NotificationSettingsRequired)?;
+        let review = self
+            .document(document_id)?
+            .periodic_reviews
+            .iter()
+            .find(|review| review.id == review_id)
+            .cloned()
+            .ok_or(DmsError::PeriodicReviewNotFound(review_id))?;
+        if review.status != PeriodicReviewStatus::Open {
+            return Err(DmsError::PeriodicReviewNotOpen(review_id));
+        }
+        let document = self.document(document_id)?;
+        let subject = format!(
+            "[{}] Periodic review reminder: {} ({})",
+            review.confidentiality.label, document.control.title, review.version
+        );
+        let body = format!(
+            "A periodic review is awaiting your result.\n\nTitle: {}\nCurrent release: {}\nConfidentiality: {}\nAction: record the periodic review result\n\nOpen review detail:\n{}",
+            document.control.title,
+            review.version,
+            review.confidentiality.label,
+            self.review_permalink(document_id, review.id)?
+        );
+        let message = notification_message(
+            NotificationKind::PeriodicReviewReminder,
+            review.approver.email.clone(),
+            subject,
+            body,
+        );
+        let attempt = delivery_attempt(&settings, &message, notifier);
+        self.append_periodic_event(
+            document_id,
+            WorkflowEventType::PeriodicReviewReminder,
+            &review,
+            PeriodicEventContext {
+                delivery: Some(attempt.clone()),
+                ..PeriodicEventContext::default()
+            },
+        )?;
+        self.save()?;
+        Ok(attempt)
     }
 
     pub fn backup_workspace(&self, archive_path: &Path) -> Result<BackupOutcome> {
@@ -487,12 +595,8 @@ impl Workspace {
         document_id: Uuid,
         event_type: WorkflowEventType,
         review: &PeriodicReview,
-        actor: Option<AuthenticatedActor>,
-        outcome: Option<(PeriodicReviewResult, String)>,
+        context: PeriodicEventContext,
     ) -> Result<()> {
-        let (result, comment) = outcome
-            .map(|(result, comment)| (Some(result), Some(comment)))
-            .unwrap_or((None, None));
         let body = WorkflowEventBody {
             event_id: Uuid::new_v4(),
             document_id,
@@ -506,7 +610,7 @@ impl Workspace {
             requester: None,
             editor: None,
             approver: Some(review.approver.clone()),
-            authenticated_actor: actor,
+            authenticated_actor: context.actor,
             local_os_user: default_author(),
             revision_digest: None,
             confidentiality: Some(review.confidentiality.clone()),
@@ -515,14 +619,14 @@ impl Workspace {
             changelog: None,
             assistance: None,
             decision_comment: None,
-            operator_comment: comment,
-            delivery: None,
+            operator_comment: context.comment,
+            delivery: context.delivery,
             content_override: None,
             pdf_digest: Some(review.pdf_digest.clone()),
             periodic_review: Some(PeriodicReviewEventDetails {
                 review_id: review.id,
                 release_id: review.release_id,
-                result,
+                result: context.result,
             }),
         };
         self.append_event(document_id, body)?;

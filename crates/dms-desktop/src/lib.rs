@@ -2,16 +2,20 @@ use std::{
     collections::BTreeSet,
     fs,
     path::{Component, Path, PathBuf},
+    sync::Mutex,
 };
 
 use dms_core::{
-    BackupOutcome, ClaudeAssistancePayload, ClaudeAssistancePolicy, Document, DocumentControl,
-    EffectiveConfidentiality, EffectiveWorkflowRoles, LibraryEntry, LibraryFolder,
-    LibraryFolderNode, Lifecycle, Note, PeriodicReview, PeriodicReviewMarker,
+    AuthenticatedActor, BackupOutcome, ClaudeAssistancePayload, ClaudeAssistancePolicy,
+    DeliveryAttempt, DeliveryReceipt, Document, DocumentControl, EffectiveConfidentiality,
+    EffectiveWorkflowRoles, EntraIdentitySource, EntraPerson, GraphClient, LibraryEntry,
+    LibraryFolder, LibraryFolderNode, Lifecycle, Note, NotificationClient, NotificationMessage,
+    NotificationSettings, PeriodicReview, PeriodicReviewMarker, PeriodicReviewResult,
     ReleaseVerificationStatus, SourceState, Workspace,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
+use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
 
 mod assistance;
@@ -20,12 +24,59 @@ pub mod export;
 use assistance::ClaudeDesktopApp;
 
 const PREFERENCES_FILENAME: &str = "preferences.json";
+const RECENT_LIBRARIES_LIMIT: usize = 10;
+
+struct DesktopIntegrations {
+    graph: Mutex<Box<dyn GraphClient + Send>>,
+    notifier: Mutex<Box<dyn NotificationClient + Send>>,
+}
+
+impl Default for DesktopIntegrations {
+    fn default() -> Self {
+        Self {
+            graph: Mutex::new(Box::new(UnavailableGraphClient)),
+            notifier: Mutex::new(Box::new(UnavailableNotificationClient)),
+        }
+    }
+}
+
+struct UnavailableGraphClient;
+
+impl GraphClient for UnavailableGraphClient {
+    fn direct_user_members(
+        &mut self,
+        _source: &EntraIdentitySource,
+    ) -> std::result::Result<Vec<EntraPerson>, String> {
+        Err("live Microsoft Graph integration is not configured".to_owned())
+    }
+
+    fn authenticated_actor(
+        &mut self,
+        _source: &EntraIdentitySource,
+    ) -> std::result::Result<AuthenticatedActor, String> {
+        Err("live interactive Microsoft Entra sign-in is not configured".to_owned())
+    }
+}
+
+struct UnavailableNotificationClient;
+
+impl NotificationClient for UnavailableNotificationClient {
+    fn send(
+        &mut self,
+        _settings: &NotificationSettings,
+        _message: &NotificationMessage,
+    ) -> std::result::Result<DeliveryReceipt, String> {
+        Err("live notification delivery is not configured".to_owned())
+    }
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct Preferences {
     pub sidebar_expanded: bool,
     pub saved_views: Vec<SavedView>,
+    #[serde(default)]
+    pub recent_libraries: Vec<String>,
 }
 
 impl Default for Preferences {
@@ -33,6 +84,7 @@ impl Default for Preferences {
         Self {
             sidebar_expanded: true,
             saved_views: Vec::new(),
+            recent_libraries: Vec::new(),
         }
     }
 }
@@ -137,6 +189,28 @@ fn save_preferences(app: AppHandle, preferences: Preferences) -> Result<(), Stri
         .map_err(|error| format!("cannot resolve the app-config directory: {error}"))?
         .join(PREFERENCES_FILENAME);
     save_preferences_at(&path, &preferences)
+}
+
+#[tauri::command]
+async fn select_directory(app: AppHandle) -> Result<Option<String>, String> {
+    let home = app
+        .path()
+        .home_dir()
+        .map_err(|error| format!("cannot resolve the OS user's home directory: {error}"))?;
+    let selection = app
+        .dialog()
+        .file()
+        .set_title("Choose directory")
+        .set_directory(home)
+        .blocking_pick_folder();
+
+    match selection {
+        Some(path) => path
+            .as_path()
+            .map(|path| Some(path.to_string_lossy().into_owned()))
+            .ok_or_else(|| "the selected directory is not a local filesystem path".to_owned()),
+        None => Ok(None),
+    }
 }
 
 #[tauri::command]
@@ -273,6 +347,104 @@ fn start_periodic_review(edit_root: String, document_id: Uuid) -> Result<Periodi
     workspace
         .start_periodic_review(document_id)
         .map_err(|error| error.to_string())
+}
+
+fn complete_periodic_review_with<G: GraphClient + ?Sized>(
+    edit_root: &str,
+    document_id: Uuid,
+    review_id: Uuid,
+    result: PeriodicReviewResult,
+    comment: &str,
+    confirmed: bool,
+    graph: &mut G,
+) -> Result<PeriodicReview, String> {
+    if !confirmed {
+        return Err("periodic-review result requires explicit confirmation".to_owned());
+    }
+    let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .complete_periodic_review(document_id, review_id, result, comment, graph)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn complete_periodic_review(
+    edit_root: String,
+    document_id: Uuid,
+    review_id: Uuid,
+    result: PeriodicReviewResult,
+    comment: String,
+    confirmed: bool,
+    integrations: tauri::State<'_, DesktopIntegrations>,
+) -> Result<PeriodicReview, String> {
+    let mut graph = integrations
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration lock is poisoned".to_owned())?;
+    complete_periodic_review_with(
+        &edit_root,
+        document_id,
+        review_id,
+        result,
+        &comment,
+        confirmed,
+        graph.as_mut(),
+    )
+}
+
+#[tauri::command]
+fn cancel_periodic_review(
+    edit_root: String,
+    document_id: Uuid,
+    review_id: Uuid,
+    comment: String,
+    confirmed: bool,
+) -> Result<PeriodicReview, String> {
+    if !confirmed {
+        return Err("periodic-review cancellation requires explicit confirmation".to_owned());
+    }
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .cancel_periodic_review(document_id, review_id, &comment)
+        .map_err(|error| error.to_string())
+}
+
+fn remind_periodic_review_with<N: NotificationClient + ?Sized>(
+    edit_root: &str,
+    document_id: Uuid,
+    review_id: Uuid,
+    confirmed: bool,
+    notifier: &mut N,
+) -> Result<DeliveryAttempt, String> {
+    if !confirmed {
+        return Err("periodic-review reminder requires explicit confirmation".to_owned());
+    }
+    let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .remind_periodic_review(document_id, review_id, notifier)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn remind_periodic_review(
+    edit_root: String,
+    document_id: Uuid,
+    review_id: Uuid,
+    confirmed: bool,
+    integrations: tauri::State<'_, DesktopIntegrations>,
+) -> Result<DeliveryAttempt, String> {
+    let mut notifier = integrations
+        .notifier
+        .lock()
+        .map_err(|_| "notification integration lock is poisoned".to_owned())?;
+    remind_periodic_review_with(
+        &edit_root,
+        document_id,
+        review_id,
+        confirmed,
+        notifier.as_mut(),
+    )
 }
 
 #[tauri::command]
@@ -418,8 +590,9 @@ fn load_preferences_at(path: &Path) -> Result<Preferences, String> {
 
     let content = fs::read_to_string(path)
         .map_err(|error| format!("cannot read preferences at {}: {error}", path.display()))?;
-    serde_json::from_str(&content)
-        .map_err(|error| format!("preferences at {} are invalid: {error}", path.display()))
+    let preferences = serde_json::from_str(&content)
+        .map_err(|error| format!("preferences at {} are invalid: {error}", path.display()))?;
+    Ok(normalize_preferences(preferences))
 }
 
 fn save_preferences_at(path: &Path, preferences: &Preferences) -> Result<(), String> {
@@ -432,10 +605,22 @@ fn save_preferences_at(path: &Path, preferences: &Preferences) -> Result<(), Str
             parent.display()
         )
     })?;
-    let content = serde_json::to_vec_pretty(preferences)
+    let content = serde_json::to_vec_pretty(&normalize_preferences(preferences.clone()))
         .map_err(|error| format!("cannot encode preferences: {error}"))?;
     fs::write(path, content)
         .map_err(|error| format!("cannot write preferences at {}: {error}", path.display()))
+}
+
+fn normalize_preferences(mut preferences: Preferences) -> Preferences {
+    let mut seen = BTreeSet::new();
+    preferences.recent_libraries = preferences
+        .recent_libraries
+        .into_iter()
+        .map(|path| path.trim().to_owned())
+        .filter(|path| !path.is_empty() && seen.insert(path.clone()))
+        .take(RECENT_LIBRARIES_LIMIT)
+        .collect();
+    preferences
 }
 
 fn workspace_summary(edit_root: &Path) -> Result<WorkspaceSummary, String> {
@@ -610,6 +795,8 @@ fn path_text(path: &Path) -> String {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .manage(DesktopIntegrations::default())
         .setup(|app| {
             if std::env::var_os("DMS_DESKTOP_SMOKE").is_some() {
                 app.handle().exit(0);
@@ -631,6 +818,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             load_preferences,
             save_preferences,
+            select_directory,
             initialize_workspace,
             open_workspace,
             load_library,
@@ -645,6 +833,9 @@ pub fn run() {
             verify_all_releases,
             load_periodic_reviews,
             start_periodic_review,
+            complete_periodic_review,
+            cancel_periodic_review,
+            remind_periodic_review,
             backup_workspace,
             load_claude_assistance_policy,
             configure_claude_assistance,
@@ -677,6 +868,7 @@ mod tests {
         let path = directory.path().join("config").join(PREFERENCES_FILENAME);
         let preferences = Preferences {
             sidebar_expanded: false,
+            recent_libraries: vec!["/Users/name/DMS/Edit".into()],
             saved_views: vec![SavedView {
                 id: "ws-1:Library".into(),
                 workspace_id: "ws-1".into(),
@@ -693,6 +885,38 @@ mod tests {
         save_preferences_at(&path, &preferences).unwrap();
 
         assert_eq!(load_preferences_at(&path).unwrap(), preferences);
+    }
+
+    #[test]
+    fn preferences_keep_at_most_ten_unique_recent_libraries() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config").join(PREFERENCES_FILENAME);
+        let mut recent_libraries = vec!["/library/0".to_owned(), "/library/0".to_owned()];
+        recent_libraries.extend((1..=11).map(|index| format!("/library/{index}")));
+        let preferences = Preferences {
+            sidebar_expanded: true,
+            saved_views: Vec::new(),
+            recent_libraries,
+        };
+
+        save_preferences_at(&path, &preferences).unwrap();
+        let loaded = load_preferences_at(&path).unwrap();
+
+        assert_eq!(loaded.recent_libraries.len(), 10);
+        assert_eq!(loaded.recent_libraries[0], "/library/0");
+        assert_eq!(loaded.recent_libraries[9], "/library/9");
+    }
+
+    #[test]
+    fn preferences_without_recent_libraries_remain_readable() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("preferences.json");
+        fs::write(&path, r#"{"sidebar_expanded":false,"saved_views":[]}"#).unwrap();
+
+        let loaded = load_preferences_at(&path).unwrap();
+
+        assert!(!loaded.sidebar_expanded);
+        assert!(loaded.recent_libraries.is_empty());
     }
 
     #[test]
@@ -821,6 +1045,37 @@ mod tests {
         )
         .unwrap_err();
         assert!(error.contains("explicit confirmation"));
+    }
+
+    #[test]
+    fn periodic_review_closure_commands_refuse_unconfirmed_actions_before_workspace_access() {
+        let mut graph = UnavailableGraphClient;
+        let mut notifier = UnavailableNotificationClient;
+        let completion = complete_periodic_review_with(
+            "missing",
+            Uuid::nil(),
+            Uuid::nil(),
+            PeriodicReviewResult::ConfirmedCurrent,
+            "Current",
+            false,
+            &mut graph,
+        )
+        .unwrap_err();
+        let cancellation = cancel_periodic_review(
+            "missing".to_owned(),
+            Uuid::nil(),
+            Uuid::nil(),
+            "Cancelled".to_owned(),
+            false,
+        )
+        .unwrap_err();
+        let reminder =
+            remind_periodic_review_with("missing", Uuid::nil(), Uuid::nil(), false, &mut notifier)
+                .unwrap_err();
+
+        assert!(completion.contains("explicit confirmation"));
+        assert!(cancellation.contains("explicit confirmation"));
+        assert!(reminder.contains("explicit confirmation"));
     }
 
     #[test]

@@ -7,6 +7,8 @@ import {
   createInitialState,
   defaultPreferences,
   openActivity,
+  rememberRecentLibrary,
+  removeRecentLibrary,
   savedViewId,
   setupMarkup,
   toggleSavedView,
@@ -27,13 +29,16 @@ function documentActivity(task) {
 }
 
 test("workspace setup exposes existing-open and confirmed dual-root initialization", () => {
-  const markup = setupMarkup("");
+  const markup = setupMarkup("", ["/Users/name/DMS/Edit"]);
 
   assert.match(markup, /id="open-workspace-form"/);
   assert.match(markup, /id="initialize-workspace-form"/);
   assert.match(markup, /name="editRoot"/);
   assert.match(markup, /name="publishRoot"/);
   assert.match(markup, /name="confirmed"[^>]*required/);
+  assert.equal((markup.match(/data-directory-target=/g) ?? []).length, 3);
+  assert.match(markup, /data-recent-library-open="\/Users\/name\/DMS\/Edit"/);
+  assert.match(markup, /data-recent-library-remove="\/Users\/name\/DMS\/Edit"/);
 });
 
 test("workspace setup maps each form to its explicit desktop command", () => {
@@ -63,7 +68,37 @@ test("preferences start expanded and persist no session activities", () => {
 
   assert.equal(state.preferences.sidebar_expanded, true);
   assert.deepEqual(state.preferences.saved_views, []);
+  assert.deepEqual(state.preferences.recent_libraries, []);
   assert.deepEqual(state.activities, []);
+});
+
+test("recent libraries are unique, most-recent-first, capped at ten, and removable", () => {
+  let preferences = {
+    ...defaultPreferences(),
+    recent_libraries: Array.from({ length: 10 }, (_, index) => `/libraries/${index}`),
+  };
+
+  preferences = rememberRecentLibrary(preferences, "/libraries/5");
+  assert.deepEqual(preferences.recent_libraries, [
+    "/libraries/5",
+    "/libraries/0",
+    "/libraries/1",
+    "/libraries/2",
+    "/libraries/3",
+    "/libraries/4",
+    "/libraries/6",
+    "/libraries/7",
+    "/libraries/8",
+    "/libraries/9",
+  ]);
+
+  preferences = rememberRecentLibrary(preferences, "/libraries/new");
+  assert.equal(preferences.recent_libraries.length, 10);
+  assert.equal(preferences.recent_libraries[0], "/libraries/new");
+
+  preferences = removeRecentLibrary(preferences, "/libraries/5");
+  assert.equal(preferences.recent_libraries.includes("/libraries/5"), false);
+  assert.equal(preferences.sidebar_expanded, true);
 });
 
 test("opening the same document task focuses one stable activity", () => {
@@ -74,6 +109,19 @@ test("opening the same document task focuses one stable activity", () => {
   assert.equal(state.activities.length, 1);
   assert.equal(state.activities[0].label, "Audit · Renamed policy · DOC-014");
   assert.equal(state.current_key, activityKey(documentActivity("Audit")));
+});
+
+test("opening or focusing an activity preserves an unfolded sidebar overlay", () => {
+  let state = {
+    ...createInitialState({ sidebar_expanded: false, saved_views: [] }),
+    sidebar_overlay: true,
+    flyout: "activity",
+  };
+  state = openActivity(state, documentActivity("Audit"));
+
+  assert.equal(state.sidebar_overlay, true);
+  assert.equal(state.preferences.sidebar_expanded, false);
+  assert.equal(state.flyout, null);
 });
 
 test("different document tasks remain separate", () => {

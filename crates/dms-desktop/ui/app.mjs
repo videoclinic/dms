@@ -8,6 +8,7 @@ import {
   normalizeLibraryPath,
   selectedEntries,
   toggleLibrarySelection,
+  toggleTreeFolder,
 } from "./library.mjs";
 import {
   applyDocumentNotes,
@@ -20,6 +21,7 @@ import {
   applyReleaseSnapshot,
   createReleaseState,
   periodicReviewMarkup,
+  periodicReviewRequest,
   releaseMaintenanceMarkup,
   workspaceMaintenanceMarkup,
 } from "./maintenance.mjs";
@@ -38,9 +40,36 @@ const DESTINATIONS = [
   ["Maintenance", "◇"],
   ["Configuration", "⚙"],
 ];
+const RECENT_LIBRARIES_LIMIT = 10;
 
 export function defaultPreferences() {
-  return { sidebar_expanded: true, saved_views: [] };
+  return { sidebar_expanded: true, saved_views: [], recent_libraries: [] };
+}
+
+function normalizedRecentLibraries(paths) {
+  return [...new Set((Array.isArray(paths) ? paths : [])
+    .map((path) => String(path).trim())
+    .filter(Boolean))].slice(0, RECENT_LIBRARIES_LIMIT);
+}
+
+export function rememberRecentLibrary(preferences, editRoot) {
+  const root = String(editRoot ?? "").trim();
+  const existing = normalizedRecentLibraries(preferences.recent_libraries);
+  return {
+    ...preferences,
+    recent_libraries: root
+      ? [root, ...existing.filter((candidate) => candidate !== root)].slice(0, RECENT_LIBRARIES_LIMIT)
+      : existing,
+  };
+}
+
+export function removeRecentLibrary(preferences, editRoot) {
+  const root = String(editRoot ?? "").trim();
+  return {
+    ...preferences,
+    recent_libraries: normalizedRecentLibraries(preferences.recent_libraries)
+      .filter((candidate) => candidate !== root),
+  };
 }
 
 export function createInitialState(preferences = defaultPreferences()) {
@@ -48,6 +77,7 @@ export function createInitialState(preferences = defaultPreferences()) {
     preferences: {
       sidebar_expanded: preferences.sidebar_expanded !== false,
       saved_views: Array.isArray(preferences.saved_views) ? preferences.saved_views : [],
+      recent_libraries: normalizedRecentLibraries(preferences.recent_libraries),
     },
     activities: [],
     current_key: null,
@@ -57,7 +87,7 @@ export function createInitialState(preferences = defaultPreferences()) {
     assistance_documents: {},
     assistance_policy: { value: null, error: "" },
     releases: createReleaseState(),
-    periodic_reviews: { markers: [], loading: false, error: "" },
+    periodic_reviews: { markers: [], loading: false, error: "", notice: "" },
     maintenance: { outcome: null, error: "" },
     sidebar_overlay: false,
     flyout: null,
@@ -101,7 +131,7 @@ export function openActivity(state, activity) {
   } else {
     activities[existing] = next;
   }
-  return { ...state, activities, current_key: key, sidebar_overlay: false, flyout: null };
+  return { ...state, activities, current_key: key, flyout: null };
 }
 
 export function closeActivity(state, key) {
@@ -244,13 +274,34 @@ export function workspaceSetupRequest(formId, values) {
   throw new Error(`Unknown workspace setup form: ${formId}`);
 }
 
-export function setupMarkup(error) {
-  return `<section class="setup-workspace"><header><span class="badge">Local workspace</span><h2>Set up DMS Desktop</h2><p>Open existing metadata or initialize explicit edit and publish roots. No documents are moved or copied during setup.</p></header><div class="setup-grid"><section class="card"><h3>Open an existing workspace</h3><p>Choose an edit root that already contains <code>.dms/workspace.json</code>.</p><form id="open-workspace-form" class="setup-form"><div class="field"><label for="open-edit-root">Edit root</label><input id="open-edit-root" name="editRoot" required autocomplete="off" placeholder="C:\\DMS\\Edit or /Users/name/DMS/Edit"></div><button class="button" type="submit">Open workspace</button></form></section><section class="card"><h3>Initialize a workspace</h3><p>The desktop creates <code>.dms</code> under the edit root and creates the publish root if it does not exist.</p><form id="initialize-workspace-form" class="setup-form"><div class="field"><label for="initialize-edit-root">Edit root</label><input id="initialize-edit-root" name="editRoot" required autocomplete="off" placeholder="C:\\DMS\\Edit or /Users/name/DMS/Edit"></div><div class="field"><label for="publish-root">Publish root</label><input id="publish-root" name="publishRoot" required autocomplete="off" placeholder="C:\\DMS\\Publish or /Users/name/DMS/Publish"></div><label class="confirm-field"><input type="checkbox" name="confirmed" required> Initialize these roots and create workspace metadata.</label><button class="button" type="submit">Initialize workspace</button></form></section></div><p class="status" role="alert">${escapeHtml(error)}</p></section>`;
+function directoryFieldMarkup(id, name, label, placeholder) {
+  return `<div class="field"><label for="${id}">${label}</label><div class="directory-field"><input id="${id}" name="${name}" required autocomplete="off" placeholder="${placeholder}"><button class="button secondary" type="button" data-directory-target="${id}">Browse…</button></div></div>`;
+}
+
+function recentLibraryLabel(editRoot) {
+  const path = String(editRoot).replace(/[\\/]+$/, "");
+  return path.split(/[\\/]/).at(-1) || editRoot;
+}
+
+function recentLibrariesMarkup(recentLibraries) {
+  if (recentLibraries.length === 0) {
+    return '<p class="empty-recent-libraries">No recently opened libraries.</p>';
+  }
+  return recentLibraries.map((editRoot) => {
+    const path = escapeHtml(editRoot);
+    const label = escapeHtml(recentLibraryLabel(editRoot));
+    return `<div class="recent-library-row"><button class="recent-library-open" type="button" data-recent-library-open="${path}" aria-label="Open recent library ${path}" title="${path}"><span aria-hidden="true">▦</span><span><strong>${label}</strong><small>${path}</small></span></button><button class="icon-button" type="button" data-recent-library-remove="${path}" aria-label="Remove ${path} from recent libraries" title="Remove from recent libraries">×</button></div>`;
+  }).join("");
+}
+
+export function setupMarkup(error, recentLibraries = []) {
+  const recent = normalizedRecentLibraries(recentLibraries);
+  return `<section class="setup-workspace"><header><span class="badge">Local workspace</span><h2>Set up DMS Desktop</h2><p>Open existing metadata or initialize explicit edit and publish roots. No documents are moved or copied during setup.</p></header><section class="recent-libraries card" aria-labelledby="recent-libraries-heading"><h3 id="recent-libraries-heading">Recent libraries</h3><div class="recent-libraries-list">${recentLibrariesMarkup(recent)}</div></section><div class="setup-grid"><section class="card"><h3>Open an existing workspace</h3><p>Choose an edit root that already contains <code>.dms/workspace.json</code>.</p><form id="open-workspace-form" class="setup-form">${directoryFieldMarkup("open-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit")}<button class="button" type="submit">Open workspace</button></form></section><section class="card"><h3>Initialize a workspace</h3><p>The desktop creates <code>.dms</code> under the edit root and creates the publish root if it does not exist.</p><form id="initialize-workspace-form" class="setup-form">${directoryFieldMarkup("initialize-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit")}${directoryFieldMarkup("publish-root", "publishRoot", "Publish root", "C:\\DMS\\Publish or /Users/name/DMS/Publish")}<label class="confirm-field"><input type="checkbox" name="confirmed" required> Initialize these roots and create workspace metadata.</label><button class="button" type="submit">Initialize workspace</button></form></section></div><p class="status" role="alert">${escapeHtml(error)}</p></section>`;
 }
 
 function activityMarkup(state, activity) {
   if (!activity) {
-    return setupMarkup(state.error);
+    return setupMarkup(state.error, state.preferences.recent_libraries);
   }
   const workspace = state.workspace;
   if (activity.task === "Notes") {
@@ -292,7 +343,7 @@ function render(state) {
   mainContent.classList.toggle("library-active", activity?.task === "Library");
   mainContent.innerHTML = state.workspace
     ? activityMarkup(state, activity)
-    : setupMarkup(state.error);
+    : setupMarkup(state.error, state.preferences.recent_libraries);
 
   const bookmark = document.querySelector("#bookmark-view");
   const bookmarkTarget = bookmarkActivity(state);
@@ -311,7 +362,7 @@ function render(state) {
 
 function openDestination(destination) {
   if (destination === "Set up workspace") {
-    appState = { ...appState, current_key: null, sidebar_overlay: false, flyout: null };
+    appState = { ...appState, current_key: null, flyout: null };
     render(appState);
     return;
   }
@@ -335,6 +386,18 @@ function openDestination(destination) {
   } else if (destination === "Configuration") {
     void loadClaudeAssistancePolicy();
   }
+}
+
+async function activateWorkspace(workspace) {
+  const preferences = rememberRecentLibrary(appState.preferences, workspace.edit_root);
+  const sidebarOverlay = appState.sidebar_overlay;
+  appState = {
+    ...createInitialState(preferences),
+    workspace,
+    sidebar_overlay: sidebarOverlay,
+  };
+  await persistPreferences(appState);
+  openDestination("Library");
 }
 
 async function loadClaudeAssistancePolicy() {
@@ -441,7 +504,7 @@ async function loadReleases(command = "load_releases", arguments_ = {}) {
   render(appState);
 }
 
-async function loadPeriodicReviews() {
+async function loadPeriodicReviews(notice = "") {
   appState = {
     ...appState,
     periodic_reviews: { ...appState.periodic_reviews, loading: true, error: "" },
@@ -453,7 +516,7 @@ async function loadPeriodicReviews() {
     });
     appState = {
       ...appState,
-      periodic_reviews: { markers, loading: false, error: "" },
+      periodic_reviews: { markers, loading: false, error: "", notice },
     };
   } catch (error) {
     appState = {
@@ -660,6 +723,12 @@ async function refreshWorkspaceAndLibrary() {
 
 async function handleLibraryClick(event) {
   if (currentActivity(appState)?.destination !== "Library") return false;
+  const treeToggle = event.target.closest("[data-library-tree-toggle]")?.dataset.libraryTreeToggle;
+  if (treeToggle) {
+    appState = { ...appState, library: toggleTreeFolder(appState.library, treeToggle) };
+    render(appState);
+    return true;
+  }
   const folder = event.target.closest("[data-library-folder]")?.dataset.libraryFolder;
   if (folder) {
     void loadLibraryFolder(folder);
@@ -853,6 +922,41 @@ async function handleNotesClick(event) {
 }
 
 async function handleClick(event) {
+  const recentRemove = event.target.closest("[data-recent-library-remove]")?.dataset.recentLibraryRemove;
+  if (recentRemove) {
+    appState = {
+      ...appState,
+      preferences: removeRecentLibrary(appState.preferences, recentRemove),
+    };
+    await persistPreferences(appState);
+    render(appState);
+    return;
+  }
+
+  const recentOpen = event.target.closest("[data-recent-library-open]")?.dataset.recentLibraryOpen;
+  if (recentOpen) {
+    try {
+      const workspace = await invokeCommand("open_workspace", { editRoot: recentOpen });
+      await activateWorkspace(workspace);
+    } catch (error) {
+      appState = { ...appState, error: String(error) };
+      render(appState);
+    }
+    return;
+  }
+
+  const directoryTarget = event.target.closest("[data-directory-target]")?.dataset.directoryTarget;
+  if (directoryTarget) {
+    try {
+      const selected = await invokeCommand("select_directory", {});
+      if (selected) document.getElementById(directoryTarget).value = selected;
+    } catch (error) {
+      appState = { ...appState, error: String(error) };
+      render(appState);
+    }
+    return;
+  }
+
   const destination = event.target.closest("[data-destination]")?.dataset.destination;
   if (destination) {
     openDestination(destination);
@@ -980,6 +1084,42 @@ async function handleClick(event) {
 }
 
 async function handleSubmit(event) {
+  if (event.target.matches("[data-periodic-review-form]")) {
+    event.preventDefault();
+    const action = event.submitter?.value;
+    try {
+      const request = periodicReviewRequest(action, new FormData(event.target));
+      const outcome = await invokeCommand(request.command, {
+        editRoot: appState.workspace.edit_root,
+        ...request.arguments,
+      });
+      const notice = action === "result"
+        ? "Periodic-review result recorded."
+        : action === "cancel"
+          ? "Periodic review cancelled; the release schedule was not changed."
+          : outcome.status === "failed"
+            ? ""
+            : `Reminder ${outcome.status}.`;
+      await loadPeriodicReviews(notice);
+      if (action === "reminder" && outcome.status === "failed") {
+        appState = {
+          ...appState,
+          periodic_reviews: {
+            ...appState.periodic_reviews,
+            error: `Reminder failed: ${outcome.detail}`,
+          },
+        };
+        render(appState);
+      }
+    } catch (error) {
+      appState = {
+        ...appState,
+        periodic_reviews: { ...appState.periodic_reviews, error: String(error) },
+      };
+      render(appState);
+    }
+    return;
+  }
   if (event.target.id === "claude-policy-form") {
     event.preventDefault();
     const form = new FormData(event.target);
@@ -1128,8 +1268,7 @@ async function handleSubmit(event) {
   try {
     const request = workspaceSetupRequest(event.target.id, new FormData(event.target));
     const workspace = await invokeCommand(request.command, request.arguments);
-    appState = { ...appState, workspace, error: "" };
-    openDestination("Library");
+    await activateWorkspace(workspace);
   } catch (error) {
     appState = { ...appState, error: String(error) };
     render(appState);

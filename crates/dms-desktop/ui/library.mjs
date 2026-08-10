@@ -17,13 +17,67 @@ export function createLibraryState() {
     page: 0,
     back: [],
     forward: [],
+    expanded_folders: ["."],
     loading: false,
   };
+}
+
+function folderExpansionPath(path) {
+  const normalized = normalizeLibraryPath(path);
+  const expanded = ["."];
+  if (normalized === ".") return expanded;
+  let current = "";
+  for (const component of normalized.split("/")) {
+    current = current ? `${current}/${component}` : component;
+    expanded.push(current);
+  }
+  return expanded;
+}
+
+export function toggleTreeFolder(library, relativePath) {
+  const path = normalizeLibraryPath(relativePath);
+  const expanded = new Set(library.expanded_folders ?? ["."]);
+  if (expanded.has(path)) {
+    expanded.delete(path);
+  } else {
+    expanded.add(path);
+  }
+  return { ...library, expanded_folders: [...expanded] };
+}
+
+export function buildFolderTree(folders) {
+  const nodes = new Map((folders ?? []).map((folder) => {
+    const path = normalizeLibraryPath(folder.relative_path);
+    return [path, { name: folder.name, path, children: [] }];
+  }));
+  const roots = [];
+  for (const node of nodes.values()) {
+    if (node.path === ".") {
+      roots.push(node);
+      continue;
+    }
+    const components = node.path.split("/");
+    const parentPath = components.length === 1 ? "." : components.slice(0, -1).join("/");
+    const parent = nodes.get(parentPath);
+    if (parent) {
+      parent.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+  const sort = (nodes_) => {
+    nodes_.sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base", numeric: true }));
+    nodes_.forEach((node) => sort(node.children));
+  };
+  sort(roots);
+  return roots;
 }
 
 export function applyLibrarySnapshot(library, snapshot, target, historyMode = "push") {
   const current = normalizeLibraryPath(library.folder?.relative_path);
   const next = normalizeLibraryPath(target);
+  const expanded = new Set(library.expanded_folders ?? ["."]);
+  folderExpansionPath(next).forEach((path) => expanded.add(path));
   let back = [...library.back];
   let forward = [...library.forward];
   if (historyMode === "push" && current !== next) {
@@ -47,6 +101,7 @@ export function applyLibrarySnapshot(library, snapshot, target, historyMode = "p
     page: 0,
     back,
     forward,
+    expanded_folders: [...expanded],
     loading: false,
   };
 }
@@ -136,13 +191,22 @@ function membershipLabel(entry) {
   return "Folder";
 }
 
-function treeMarkup(tree, currentPath) {
-  return tree.map((folder) => {
-    const path = normalizeLibraryPath(folder.relative_path);
-    const depth = path === "." ? 0 : path.split("/").length;
-    const current = path === currentPath ? " current" : "";
-    return `<button class="tree-node${current}" type="button" data-library-folder="${escapeHtml(path)}" style="--tree-depth:${depth}"><span aria-hidden="true">▸</span><span>${escapeHtml(folder.name)}</span></button>`;
-  }).join("");
+function treeMarkup(tree, currentPath, expandedFolders) {
+  const expanded = new Set(expandedFolders ?? ["."]);
+  const nodeMarkup = (node, level) => {
+    const hasChildren = node.children.length > 0;
+    const isExpanded = expanded.has(node.path);
+    const current = node.path === currentPath;
+    const branchState = hasChildren ? ` aria-expanded="${isExpanded}"` : "";
+    const toggle = hasChildren
+      ? `<button class="tree-toggle" type="button" data-library-tree-toggle="${escapeHtml(node.path)}" aria-expanded="${isExpanded}" aria-label="${isExpanded ? "Collapse" : "Expand"} ${escapeHtml(node.name)}"><span aria-hidden="true">${isExpanded ? "▾" : "▸"}</span></button>`
+      : '<span class="tree-toggle-spacer" aria-hidden="true"></span>';
+    const children = hasChildren
+      ? `<ul class="tree-group" role="group"${isExpanded ? "" : " hidden"}>${node.children.map((child) => nodeMarkup(child, level + 1)).join("")}</ul>`
+      : "";
+    return `<li class="tree-item${current ? " current" : ""}" role="treeitem" aria-level="${level}"${current ? ' aria-current="page"' : ""}${branchState}><div class="tree-row">${toggle}<button class="tree-label" type="button" data-library-folder="${escapeHtml(node.path)}"><span aria-hidden="true">▰</span><span>${escapeHtml(node.name)}</span></button></div>${children}</li>`;
+  };
+  return `<ul class="tree-root" role="tree">${buildFolderTree(tree).map((node) => nodeMarkup(node, 1)).join("")}</ul>`;
 }
 
 function rowsMarkup(library) {
@@ -200,5 +264,5 @@ export function libraryMarkup(workspace, activity, library, error = "") {
     .map((segment) => `<button type="button" data-library-folder="${escapeHtml(segment.path)}">${escapeHtml(segment.label)}</button>`)
     .join('<span aria-hidden="true">›</span>');
   const searchScope = library.entire_library ? "Entire library" : "Current folder";
-  return `<section class="library-workspace"><div class="library-toolbar"><button class="icon-button" type="button" data-library-history="back" ${library.back.length ? "" : "disabled"} aria-label="Back" title="Back">←</button><button class="icon-button" type="button" data-library-history="forward" ${library.forward.length ? "" : "disabled"} aria-label="Forward" title="Forward">→</button><button class="icon-button" type="button" data-library-up ${folder === "." ? "disabled" : ""} aria-label="Up" title="Up">↑</button><button class="icon-button" type="button" data-library-refresh aria-label="Refresh" title="Refresh">↻</button><nav class="breadcrumbs" aria-label="Current folder">${breadcrumbs}</nav><form id="library-search-form" class="library-search"><input name="query" value="${escapeHtml(library.query)}" aria-label="Search library" placeholder="Search files, paths, titles, numbers"><label><input type="checkbox" name="entireLibrary" ${library.entire_library ? "checked" : ""}> Entire library</label><button class="button secondary" type="submit">Search</button>${library.results ? '<button class="text-button" type="button" data-library-clear-search>Clear</button>' : ""}</form><label class="sort-control">Sort <select data-library-sort><option value="name" ${library.sort === "name" ? "selected" : ""}>Name</option><option value="title" ${library.sort === "title" ? "selected" : ""}>Title</option><option value="number" ${library.sort === "number" ? "selected" : ""}>Document number</option><option value="lifecycle" ${library.sort === "lifecycle" ? "selected" : ""}>Lifecycle</option></select></label></div>${error ? `<p class="library-error" role="alert">${escapeHtml(error)}</p>` : ""}<div class="library-grid"><aside class="folder-tree" aria-label="Library folders"><h2>Folders</h2>${treeMarkup(library.tree, folder)}</aside><section class="folder-contents"><header><div><span class="eyebrow">${library.results ? `Search · ${escapeHtml(searchScope)}` : "Current folder"}</span><h2>${escapeHtml(folder === "." ? "Library" : folder.split("/").at(-1))}</h2></div><span>${(library.results ?? library.folder.entries ?? []).length} entries</span></header><div class="table-scroll"><table><thead><tr><th>Name</th><th>Title</th><th>Membership</th><th>Lifecycle</th><th>Relative path</th></tr></thead><tbody>${rowsMarkup(library)}</tbody></table></div></section><aside class="selection-pane" aria-label="Selection details">${selectionMarkup(library)}</aside></div></section>`;
+  return `<section class="library-workspace"><div class="library-toolbar"><button class="icon-button" type="button" data-library-history="back" ${library.back.length ? "" : "disabled"} aria-label="Back" title="Back">←</button><button class="icon-button" type="button" data-library-history="forward" ${library.forward.length ? "" : "disabled"} aria-label="Forward" title="Forward">→</button><button class="icon-button" type="button" data-library-up ${folder === "." ? "disabled" : ""} aria-label="Up" title="Up">↑</button><button class="icon-button" type="button" data-library-refresh aria-label="Refresh" title="Refresh">↻</button><nav class="breadcrumbs" aria-label="Current folder">${breadcrumbs}</nav><form id="library-search-form" class="library-search"><input name="query" value="${escapeHtml(library.query)}" aria-label="Search library" placeholder="Search files, paths, titles, numbers"><label><input type="checkbox" name="entireLibrary" ${library.entire_library ? "checked" : ""}> Entire library</label><button class="button secondary" type="submit">Search</button>${library.results ? '<button class="text-button" type="button" data-library-clear-search>Clear</button>' : ""}</form><label class="sort-control">Sort <select data-library-sort><option value="name" ${library.sort === "name" ? "selected" : ""}>Name</option><option value="title" ${library.sort === "title" ? "selected" : ""}>Title</option><option value="number" ${library.sort === "number" ? "selected" : ""}>Document number</option><option value="lifecycle" ${library.sort === "lifecycle" ? "selected" : ""}>Lifecycle</option></select></label></div>${error ? `<p class="library-error" role="alert">${escapeHtml(error)}</p>` : ""}<div class="library-grid"><aside class="folder-tree" aria-label="Library folders"><h2>Folders</h2>${treeMarkup(library.tree, folder, library.expanded_folders)}</aside><section class="folder-contents"><header><div><span class="eyebrow">${library.results ? `Search · ${escapeHtml(searchScope)}` : "Current folder"}</span><h2>${escapeHtml(folder === "." ? "Library" : folder.split("/").at(-1))}</h2></div><span>${(library.results ?? library.folder.entries ?? []).length} entries</span></header><div class="table-scroll"><table><thead><tr><th>Name</th><th>Title</th><th>Membership</th><th>Lifecycle</th><th>Relative path</th></tr></thead><tbody>${rowsMarkup(library)}</tbody></table></div></section><aside class="selection-pane" aria-label="Selection details">${selectionMarkup(library)}</aside></div></section>`;
 }

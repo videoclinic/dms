@@ -30,12 +30,23 @@ macOS.
 - Before a workspace exists, expose only Set up workspace. Opening requires an
   existing edit root; initialization requires explicit edit + publish roots and
   confirmation before the adapter may create `.dms` or the publish root.
-- Store sidebar and saved-view preferences in the OS user app-config directory,
-  never under `<edit-root>/.dms`.
+- Store sidebar, saved-view, and recent-library preferences in the OS user
+  app-config directory, never under `<edit-root>/.dms`. Recent libraries are at
+  most ten unique edit roots in most-recent-first order; removing one never
+  touches workspace metadata or files.
+- Change the persisted sidebar preference or current-session unfolded overlay
+  only through an explicit sidebar control. Destination, saved-view, open-pane,
+  and in-surface actions must preserve the current sidebar presentation.
+- Give every directory-selection field a native **Browse…** action through the
+  desktop adapter. Start its picker at the OS user's home directory and leave
+  the field unchanged when selection is cancelled.
 - Keep open activities in frontend session state only.
 - Saved document targets use workspace ID + document ID, never source paths.
 - Library navigation keeps one session activity while saved Library views retain
   edit-root-relative folder, sort, and at most one stable document target.
+- Render the Library folder surface as a nested tree with independent branch
+  toggles. Navigating expands the current folder's ancestor chain without
+  resetting unrelated session branch state.
 - The Library selection pane owns add/unregister/reassociate/permalink controls;
   file rows remain selection-only and preserve exact source names. Its notes
   action opens a document-scoped activity keyed by stable document ID.
@@ -44,9 +55,11 @@ macOS.
 - The Releases pane lists every recorded release with its verification status,
   filters by document title, and exposes per-release and workspace-wide
   verification actions. It never edits, repairs, or replaces release bytes.
-- The Audit & Reports pane shows periodic-review markers and lets a designated
-  approver request a new review; integrity-gated request failures are surfaced
-  in place.
+- The Audit & Reports pane shows periodic-review markers and exposes request,
+  result, comment-required cancellation, and reminder actions. Result,
+  cancellation, and reminder require explicit confirmation; delivery and
+  integrity failures are surfaced in place. Live Entra/notification adapters
+  remain phase 9i work.
 - The Maintenance pane writes a workspace backup archive to a user-supplied
   path and refuses to overwrite an existing archive.
 - Claude Desktop assistance remains unavailable unless workspace policy,
