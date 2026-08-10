@@ -175,6 +175,7 @@ impl Workspace {
             type_id: type_id.to_owned(),
         };
         self.confidentiality_policies.insert(folder, policy.clone());
+        self.invalidate_stale_candidates();
         Ok(policy)
     }
 
@@ -184,6 +185,7 @@ impl Workspace {
             return Err(DmsError::RequiredRootPolicy);
         }
         self.confidentiality_policies.remove(&folder);
+        self.invalidate_stale_candidates();
         Ok(())
     }
 
@@ -200,6 +202,7 @@ impl Workspace {
             .get_mut(&document_id)
             .ok_or(DmsError::DocumentNotFound(document_id))?;
         document.confidentiality_override = type_id.map(str::to_owned);
+        self.invalidate_stale_candidates();
         Ok(())
     }
 
@@ -263,6 +266,7 @@ impl Workspace {
         }
         self.identity_source = Some(source.clone());
         self.identity_cache = cache;
+        self.invalidate_stale_candidates();
         Ok(source)
     }
 
@@ -288,6 +292,7 @@ impl Workspace {
         } else {
             self.workflow_policies.insert(folder, policy);
         }
+        self.invalidate_stale_candidates();
         Ok(policy)
     }
 
@@ -310,6 +315,7 @@ impl Workspace {
             .get_mut(&document_id)
             .expect("document checked above")
             .workflow_overrides = updated;
+        self.invalidate_stale_candidates();
         Ok(updated)
     }
 

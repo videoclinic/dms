@@ -12,13 +12,15 @@ use uuid::Uuid;
 
 mod catalogues;
 mod library;
+mod lifecycle;
 mod policies;
 
 pub use catalogues::*;
 pub use library::*;
+pub use lifecycle::*;
 pub use policies::*;
 
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 4;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 
@@ -112,6 +114,62 @@ pub enum DmsError {
     InvalidLibraryFolder(PathBuf),
     #[error("library entry {0} does not have a supported filesystem name")]
     InvalidLibraryEntry(PathBuf),
+    #[error("SMTP notification transport requires non-secret relay settings")]
+    SmtpConfigurationRequired,
+    #[error("notification transport is not configured")]
+    NotificationSettingsRequired,
+    #[error("Microsoft Graph membership refresh failed: {0}")]
+    GraphRefreshFailed(String),
+    #[error("interactive Microsoft Entra sign-in failed: {0}")]
+    InteractiveSignInFailed(String),
+    #[error("the effective workflow editor or approver is unresolved")]
+    UnresolvedWorkflowRole,
+    #[error("release target version is not valid")]
+    InvalidTargetVersion,
+    #[error("release version {0} is already committed")]
+    VersionAlreadyReleased(String),
+    #[error("document has no active release candidate")]
+    NoActiveCandidate,
+    #[error("release candidate {0} was not found")]
+    CandidateNotFound(Uuid),
+    #[error("review request is missing")]
+    NoActiveReview,
+    #[error("review request {0} was not found")]
+    ReviewNotFound(Uuid),
+    #[error("invalid lifecycle transition: {0}")]
+    InvalidLifecycleTransition(String),
+    #[error(
+        "the authenticated Microsoft Entra actor does not match the eligible snapshotted approver"
+    )]
+    DecisionActorMismatch,
+    #[error("the release candidate was invalidated by changed draft or metadata")]
+    CandidateInvalidated,
+    #[error(
+        "source content does not conform to the candidate version and confidentiality markers"
+    )]
+    ContentConformanceFailed(Box<ContentCheck>),
+    #[error("no visible-content scanner is implemented for {0}")]
+    UnsupportedContentScanner(PathBuf),
+    #[error("DOCX content is invalid: {0}")]
+    InvalidDocx(String),
+    #[error("workflow comment is invalid: {0}")]
+    InvalidWorkflowComment(String),
+    #[error("PDF export failed: {0}")]
+    ExportFailed(String),
+    #[error("release path already exists and will not be overwritten: {0}")]
+    ReleasePathExists(PathBuf),
+    #[error("release path is invalid: {0}")]
+    InvalidReleasePath(PathBuf),
+    #[error("export did not produce a non-empty PDF at {0}")]
+    InvalidExportedPdf(PathBuf),
+    #[error("canonical workflow event could not be encoded: {0}")]
+    CanonicalEvent(String),
+    #[error("permalink is invalid")]
+    InvalidPermalink,
+    #[error("permalink workspace {0} is not this accessible workspace")]
+    PermalinkWorkspaceMismatch(Uuid),
+    #[error("lifecycle evidence is inconsistent: {0}")]
+    LifecycleIntegrity(String),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -134,6 +192,8 @@ pub struct Workspace {
     pub(crate) identity_cache: BTreeMap<Uuid, EntraPerson>,
     #[serde(default)]
     pub(crate) workflow_policies: BTreeMap<String, WorkflowPolicy>,
+    #[serde(default)]
+    pub(crate) notification_settings: Option<NotificationSettings>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -151,15 +211,27 @@ pub struct Document {
     #[serde(default)]
     pub(crate) workflow_overrides: DocumentWorkflowOverrides,
     notes: Vec<Note>,
+    #[serde(default)]
+    pub(crate) candidates: Vec<ReleaseCandidate>,
+    #[serde(default)]
+    pub(crate) active_candidate_id: Option<Uuid>,
+    #[serde(default)]
+    pub(crate) releases: Vec<ReleaseRecord>,
+    #[serde(default)]
+    pub(crate) workflow_events: Vec<WorkflowEvent>,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Lifecycle {
     Draft,
+    InReview,
+    Approved,
+    Released,
+    Obsolete,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct DocumentControl {
     pub title: String,
@@ -217,6 +289,7 @@ impl Workspace {
             identity_source: None,
             identity_cache: BTreeMap::new(),
             workflow_policies: BTreeMap::new(),
+            notification_settings: None,
         };
         workspace.save()?;
         Ok(workspace)
@@ -242,7 +315,7 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = matches!(found, 1 | 2);
+        let migrated = matches!(found, 1..=3);
         if found == 1 {
             migrate_v1_catalogues(&mut value)?;
         }
@@ -367,6 +440,7 @@ impl Workspace {
             }
         }
         self.validate_policies()?;
+        self.validate_lifecycle_records()?;
         Ok(())
     }
 
@@ -417,6 +491,10 @@ impl Workspace {
             confidentiality_override: None,
             workflow_overrides: DocumentWorkflowOverrides::default(),
             notes: Vec::new(),
+            candidates: Vec::new(),
+            active_candidate_id: None,
+            releases: Vec::new(),
+            workflow_events: Vec::new(),
         };
         self.documents.insert(document.id, document.clone());
         Ok(document)
@@ -445,7 +523,9 @@ impl Workspace {
         if let Some(owner) = update.owner {
             document.control.owner = normalized_optional(owner.as_deref());
         }
-        Ok(document.clone())
+        let updated = document.clone();
+        self.invalidate_stale_candidates();
+        Ok(self.document(document_id).cloned().unwrap_or(updated))
     }
 
     pub fn add_note(
@@ -753,7 +833,7 @@ fn normalized_optional(value: Option<&str>) -> Option<String> {
         .map(str::to_owned)
 }
 
-fn default_author() -> String {
+pub(crate) fn default_author() -> String {
     env::var("USER")
         .or_else(|_| env::var("USERNAME"))
         .ok()
