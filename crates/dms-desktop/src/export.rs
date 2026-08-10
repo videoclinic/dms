@@ -527,7 +527,7 @@ fn print_loaded_webview(window: &WebviewWindow, output: &Path) -> Result<(), Str
                 let _ = result_tx.send(result);
             });
             unsafe {
-                webview.createPDFWithConfiguration_completionHandler(None, &*completion);
+                webview.createPDFWithConfiguration_completionHandler(None, &completion);
             }
         })
         .map_err(|error| format!("cannot access WKWebView: {error}"))?;
