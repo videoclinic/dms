@@ -2004,13 +2004,13 @@ fn normalize_whitespace(value: &str) -> String {
 
 fn review_request_message(candidate: &ReleaseCandidate, permalink: String) -> NotificationMessage {
     let subject = format!(
-        "[{}] Review requested: {} ({})",
+        "[{}] DMS review requested — {} — {}",
         candidate.metadata.confidentiality.label,
         candidate.metadata.control.title,
         candidate.version
     );
     let body = format!(
-        "A document review has been requested.\n\nTitle: {}\nSource: {}\nRequested by: {}\nTarget version: {}\nConfidentiality: {}\n\nReview and decide:\n{}",
+        "A review decision is requested.\n\nAction: Review and decide\nTitle: {}\nDocument: {}\nRequested by: {}\nTarget version: {}\nConfidentiality: {}\n\nOpen review task:\n{}",
         candidate.metadata.control.title,
         path_text(&candidate.source_path),
         candidate.requester.display_name,
@@ -2065,13 +2065,13 @@ fn minor_publication_message(
     permalink: String,
 ) -> NotificationMessage {
     let subject = format!(
-        "[{}] Minor release published: {} ({})",
+        "[{}] DMS minor version released — {} — {}",
         candidate.metadata.confidentiality.label,
         candidate.metadata.control.title,
         candidate.version
     );
     let body = format!(
-        "A minor release has been published for a document assigned to you as approver.\n\nTitle: {}\nSource: {}\nReleased by: {}\nReleased version: {}\nConfidentiality: {}\n\nOpen document:\n{}",
+        "A new minor version of your assigned document has been released.\n\nTitle: {}\nDocument: {}\nReleased by: {}\nReleased version: {}\nConfidentiality: {}\n\nOpen document:\n{}",
         candidate.metadata.control.title,
         path_text(&candidate.source_path),
         candidate.requester.display_name,

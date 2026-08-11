@@ -167,10 +167,12 @@ macOS** that:
 | 9f.5.2 | Explicit advisory-lock override | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 56 frontend tests; strict records links; Markdown tables; browser current-lock refusal and explicit-override interaction QA; `git diff --check`) | Setup exposes a clearly warned override-any-lock option; the core rewrites a current or stale lock only after that explicit choice while preserving ordinary refusal and stale-only takeover; focused core, adapter, frontend, and browser gates plus full workspace checks pass |
 | 9g | Permalink OS integration | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; release build; 58 frontend tests; strict records links; Markdown tables; Linux launch smoke; [Windows/macOS launch, native PDF export, and package smoke](https://github.com/videoclinic/dms/actions/runs/31503850761)) | Windows and macOS register `dms://`; inbound document/review/note links resolve workspace + stable document identity, focus or create the correct activity, survive rename/version changes, and fail closed for unavailable targets; platform-specific tests remain warnings-clean and the platform smoke passes |
 | 9h | Operator-selected Claude excerpts | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 59 frontend tests; Linux launch smoke) | Oversized assistance payloads show their size and selectable excerpts; preview retries only with the operator-selected subset, never silently truncates, and still requires digest-bound consent; core, adapter, and frontend tests pass |
-| 9i | Live Office, Entra, notification, and external lifecycle paths | pending (after 9h checkpoint) | Production submit/review/decision/release commands and their desktop operator surfaces wire installed Office automation on Windows/macOS, administrator-configured Microsoft Graph refresh, interactive approver sign-in through OS credential storage, and SMTP/host-mail delivery without storing credentials in `.dms`; fake-backed tests and operator smoke instructions pass |
-| 9j | External operator smokes + CAP promotion | pending | Licensed Office release smoke passes on Windows and macOS; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated Node-runtime action annotations; every implemented CAP links executable evidence, CHG status is done, and the record is archived |
+| 9i | Canonical notification templates and desktop delivery adapters | done (`39db45b`; local Rust format/test/Clippy and 59 frontend tests pass) | Core emits CAP-0010's literal review-request and minor-publication templates; desktop SMTP and host-mail adapters resolve credentials only from OS storage, preserve explicit `mailto:` confirmation, and pass fake-backed delivery tests and operator setup checks |
+| 9j | Live Entra setup, refresh, and approver sign-in | pending (after 9i checkpoint) | Configuration previews and applies administrator-supplied tenant/group bindings through interactive delegated Graph access; OS credential storage holds the delegated-token cache; direct-user filtering, refresh, policy rerouting, and actor verification pass fake-backed tests |
+| 9k | External lifecycle commands and Office export | pending | Production submit/review/decision/release commands and Library operator surfaces compose the 9i delivery and 9j Graph adapters with installed Office automation on Windows/macOS; integration fakes and operator smoke instructions pass |
+| 9l | External operator smokes + CAP promotion | pending | Licensed Office release smoke passes on Windows and macOS; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated Node-runtime action annotations; every implemented CAP links executable evidence, CHG status is done, and the record is archived |
 
-**Current phase:** 9i — Live Office, Entra, notification, and external lifecycle paths (after the 9h checkpoint).
+**Current phase:** 9i — Canonical notification templates and desktop delivery adapters (after the 9h checkpoint).
 
 ## Implementation notes
 
@@ -310,6 +312,13 @@ macOS** that:
   scroll regions. Browser QA at a 720 px viewport measured no document-level
   overflow, a 520 px selection viewport over 1,890 px of detail content, and
   unchanged sidebar/header positions after scrolling the detail pane 500 px.
+- Phase 9i starts with an existing contract mismatch: the core generated
+  abbreviated review-request and minor-publication templates while CAP-0010
+  specifies literal subjects, labels, and field order. This is required current
+  scope because live SMTP and `mailto:` must send the canonical contract, not
+  merely deliver an outdated payload. The phase also wires the existing installed
+  Office adapter, which was implemented but not reachable from a production
+  desktop release command.
 
 ## Resume checklist
 

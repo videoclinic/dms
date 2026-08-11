@@ -20,6 +20,8 @@ tauri-build.workspace = true
 [dependencies]
 chrono.workspace = true
 dms-core = { path = "../dms-core" }
+keyring.workspace = true
+lettre.workspace = true
 pulldown-cmark.workspace = true
 quick-xml.workspace = true
 serde.workspace = true

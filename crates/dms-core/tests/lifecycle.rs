@@ -502,15 +502,17 @@ fn major_review_requires_graph_refresh_transport_success_and_verified_actor() {
     assert_eq!(message.recipient, "approver@example.test");
     assert_eq!(
         message.subject,
-        "[Internal] Review requested: Employee handbook (V1.0)"
+        "[Internal] DMS review requested — Employee handbook — V1.0"
     );
     for expected in [
+        "A review decision is requested.",
+        "Action: Review and decide",
         "Title: Employee handbook",
-        "Source: Policies/Handbook.md",
+        "Document: Policies/Handbook.md",
         "Requested by: Rita Requester",
         "Target version: V1.0",
         "Confidentiality: Internal",
-        "Review and decide:",
+        "Open review task:",
         "dms://open?workspace=",
         "&target=review&review=",
     ] {
@@ -735,11 +737,11 @@ fn minor_release_skips_review_and_notification_failure_does_not_reverse_commit()
     );
     assert_eq!(
         notifier.messages[0].subject,
-        "[Internal] Minor release published: Employee handbook (V1.1)"
+        "[Internal] DMS minor version released — Employee handbook — V1.1"
     );
     assert!(notifier.messages[0]
         .body
-        .contains("Source: Policies/Handbook.md"));
+        .contains("Document: Policies/Handbook.md"));
     assert_eq!(
         fixture
             .workspace

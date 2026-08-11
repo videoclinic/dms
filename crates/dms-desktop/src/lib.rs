@@ -26,6 +26,7 @@ use uuid::Uuid;
 
 mod assistance;
 pub mod export;
+pub mod notify;
 
 use assistance::ClaudeDesktopApp;
 
