@@ -55,6 +55,7 @@ button { cursor: pointer; }
 .button { min-height: 34px; padding: 0 14px; background: #17202a; color: white; font-weight: 650; }
 .button.secondary { color: #17202a; background: white; border-color: #cbd5dd; }
 .button.bookmarked { color: #725600; background: #fff8d7; border-color: #e7cc68; }
+.button:disabled { cursor: default; opacity: .55; }
 
 .primary-navigation, .group-list { display: flex; flex-direction: column; gap: 4px; }
 .nav-button, .list-button {
@@ -374,6 +375,39 @@ button { cursor: pointer; }
 .privacy-notice { padding: 12px 14px; border-left: 4px solid var(--accent); background: #f3f6fb; }
 .subtle { color: var(--muted); font-size: 13px; }
 
+.configuration-workspace { display: grid; max-width: 1120px; gap: 18px; margin: 0 auto; }
+.configuration-nav { display: grid; gap: 14px; padding: 18px 20px; background: white; border: 1px solid #dfe5ea; border-radius: 10px; }
+.configuration-nav h2, .configuration-nav p { margin: 0; }
+.configuration-nav p { margin-top: 4px; color: #61717d; font-size: 13px; }
+.configuration-routes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.configuration-route { display: grid; gap: 3px; min-width: 0; padding: 10px 12px; color: #263743; text-align: left; background: #f7f9fa; border: 1px solid #d8e0e6; border-radius: 8px; }
+.configuration-route.current { color: #173f58; background: #e8f0f5; border-color: #9db6c7; }
+.configuration-route:disabled { cursor: default; opacity: .55; }
+.configuration-route span { overflow: hidden; color: #667783; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.configuration-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.configuration-grid .card, .configuration-card { max-width: none; }
+.configuration-card { display: grid; gap: 14px; }
+.configuration-card h2, .configuration-card h3, .configuration-card p { margin: 0; }
+.configuration-form { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; padding-top: 14px; border-top: 1px solid #edf1f3; }
+.configuration-form label { display: grid; min-width: 220px; flex: 1; gap: 6px; font-size: 13px; font-weight: 700; }
+.configuration-form input, .configuration-form select, .configuration-type-row input { width: 100%; height: 38px; padding: 0 10px; background: white; border: 1px solid #bdc9d2; border-radius: 7px; }
+.configuration-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 14px 18px; background: white; border: 1px solid #dfe5ea; border-radius: 10px; }
+.configuration-summary > div { display: grid; flex: 1; gap: 3px; }
+.configuration-summary span:not(.badge) { color: #5f707c; font-size: 13px; }
+.configuration-defaults-grid { display: grid; grid-template-columns: minmax(240px, .75fr) minmax(360px, 1.25fr); gap: 18px; align-items: start; }
+.configuration-folder-tree { display: grid; gap: 4px; }
+.configuration-folder { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px 8px calc(10px + var(--folder-depth) * 14px); color: #334651; text-align: left; background: transparent; border: 1px solid transparent; border-radius: 7px; }
+.configuration-folder.current { background: #e8f0f5; border-color: #b6c8d4; }
+.configuration-folder > span:last-child { display: grid; min-width: 0; gap: 2px; }
+.configuration-folder small { overflow: hidden; color: #6c7b86; text-overflow: ellipsis; white-space: nowrap; }
+.configuration-card-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+.configuration-card-heading p { margin-top: 4px; color: #61717d; font-size: 13px; }
+.configuration-type-row { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(120px, .6fr) auto auto; align-items: center; gap: 10px; padding-top: 10px; border-top: 1px solid #edf1f3; }
+.configuration-type-row.create { grid-template-columns: minmax(130px, .7fr) minmax(180px, 1fr) auto auto; }
+.configuration-enabled { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 13px; }
+.configuration-enabled input { width: auto; height: auto; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
 @media (max-width: 980px) {
   .app:not(.sidebar-collapsed) { grid-template-columns: 240px minmax(0, 1fr); }
   .main-content { padding: 20px; }
@@ -385,4 +419,7 @@ button { cursor: pointer; }
   .section-heading, .pagination { align-items: stretch; flex-direction: column; }
   .audit-report-form { grid-template-columns: 1fr; }
   .release-withdraw-form { grid-template-columns: 1fr; }
+  .configuration-routes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .configuration-grid, .configuration-defaults-grid { grid-template-columns: 1fr; }
+  .configuration-type-row, .configuration-type-row.create { grid-template-columns: 1fr; }
 }

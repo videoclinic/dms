@@ -219,6 +219,28 @@ test("library navigation updates one session pane in place", () => {
   assert.deepEqual(state.activities[0].route_state, { folder: "policies/HR" });
 });
 
+test("configuration route changes update one stable activity", () => {
+  const workspace = {
+    workspace_id: workspaceId,
+    destination: "Configuration",
+    task: "Configuration",
+    label: "Configuration · Workspace",
+    document_id: null,
+    route_state: { route: "workspace" },
+  };
+  const defaults = {
+    ...workspace,
+    label: "Configuration · Document defaults",
+    route_state: { route: "document-defaults" },
+  };
+
+  const state = openActivity(openActivity(createInitialState(), workspace), defaults);
+
+  assert.equal(activityKey(workspace), activityKey(defaults));
+  assert.equal(state.activities.length, 1);
+  assert.equal(state.activities[0].route_state.route, "document-defaults");
+});
+
 test("closing the current activity keeps the app running with another or no pane", () => {
   let state = createInitialState(defaultPreferences());
   state = openActivity(state, documentActivity("Audit"));

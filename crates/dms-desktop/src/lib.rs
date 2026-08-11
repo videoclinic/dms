@@ -8,14 +8,14 @@ use std::{
 use chrono::NaiveDate;
 use dms_core::{
     AuditReportRecord, AuditReportRequest, AuditReportVerificationStatus, AuthenticatedActor,
-    BackupOutcome, ClaudeAssistancePayload, ClaudeAssistancePolicy, ConfidentialityType,
-    ControlUpdate, DeliveryAttempt, DeliveryReceipt, Document, DocumentControl, DocumentType,
-    EffectiveConfidentiality, EffectiveWorkflowRoles, EntraIdentitySource, EntraPerson,
-    GraphClient, LibraryEntry, LibraryFolder, LibraryFolderNode, Lifecycle, LocalLifecycleActions,
-    Note, NotificationClient, NotificationMessage, NotificationSettings, PeriodicReview,
-    PeriodicReviewMarker, PeriodicReviewResult, ReleaseVerificationStatus, RestoreOutcome,
-    RestoreRequest, SourceState, WorkflowEvent, WorkflowVerification, Workspace, WorkspaceLock,
-    WorkspaceLockStatus,
+    BackupOutcome, ClaudeAssistancePayload, ClaudeAssistancePolicy, ConfidentialityPolicy,
+    ConfidentialityType, ControlUpdate, DeliveryAttempt, DeliveryReceipt, Document,
+    DocumentControl, DocumentType, EffectiveConfidentiality, EffectiveWorkflowRoles,
+    EntraIdentitySource, EntraPerson, GraphClient, LibraryEntry, LibraryFolder, LibraryFolderNode,
+    Lifecycle, LocalLifecycleActions, Note, NotificationClient, NotificationMessage,
+    NotificationSettings, PeriodicReview, PeriodicReviewMarker, PeriodicReviewResult, PolicyFolder,
+    ReleaseVerificationStatus, RestoreOutcome, RestoreRequest, SourceState, WorkflowEvent,
+    WorkflowVerification, Workspace, WorkspaceLock, WorkspaceLockStatus,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
@@ -112,6 +112,16 @@ pub struct WorkspaceSummary {
     pub edit_root: String,
     pub publish_root: String,
     pub document_count: usize,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct WorkspaceConfiguration {
+    pub workspace: WorkspaceSummary,
+    pub default_review_interval_months: u32,
+    pub document_types: Vec<DocumentType>,
+    pub confidentiality_types: Vec<ConfidentialityType>,
+    pub confidentiality_policies: Vec<ConfidentialityPolicy>,
+    pub policy_folders: Vec<PolicyFolder>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -263,6 +273,58 @@ fn initialize_workspace(
     Workspace::init(Path::new(&edit_root), Path::new(&publish_root))
         .map_err(|error| error.to_string())?;
     workspace_summary(Path::new(&edit_root))
+}
+
+#[tauri::command]
+fn load_workspace_configuration(edit_root: String) -> Result<WorkspaceConfiguration, String> {
+    workspace_configuration(Path::new(&edit_root))
+}
+
+#[tauri::command]
+fn configure_default_review_interval(
+    edit_root: String,
+    months: u32,
+) -> Result<WorkspaceConfiguration, String> {
+    mutate_workspace_configuration(Path::new(&edit_root), |workspace| {
+        workspace.configure_default_review_interval(months)
+    })
+}
+
+#[tauri::command]
+fn configure_document_type(
+    edit_root: String,
+    id: String,
+    label: String,
+    enabled: bool,
+) -> Result<WorkspaceConfiguration, String> {
+    mutate_workspace_configuration(Path::new(&edit_root), |workspace| {
+        workspace
+            .configure_document_type(&id, &label, enabled)
+            .map(|_| ())
+    })
+}
+
+#[tauri::command]
+fn set_confidentiality_policy(
+    edit_root: String,
+    folder: String,
+    type_id: String,
+) -> Result<WorkspaceConfiguration, String> {
+    mutate_workspace_configuration(Path::new(&edit_root), |workspace| {
+        workspace
+            .set_confidentiality_policy(&folder, &type_id)
+            .map(|_| ())
+    })
+}
+
+#[tauri::command]
+fn remove_confidentiality_policy(
+    edit_root: String,
+    folder: String,
+) -> Result<WorkspaceConfiguration, String> {
+    mutate_workspace_configuration(Path::new(&edit_root), |workspace| {
+        workspace.remove_confidentiality_policy(&folder)
+    })
 }
 
 #[tauri::command]
@@ -920,12 +982,52 @@ fn normalize_preferences(mut preferences: Preferences) -> Preferences {
 
 fn workspace_summary(edit_root: &Path) -> Result<WorkspaceSummary, String> {
     let workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
-    Ok(WorkspaceSummary {
+    Ok(workspace_summary_from(&workspace))
+}
+
+fn workspace_summary_from(workspace: &Workspace) -> WorkspaceSummary {
+    WorkspaceSummary {
         workspace_id: workspace.workspace_id.to_string(),
         edit_root: workspace.edit_root.to_string_lossy().into_owned(),
         publish_root: workspace.publish_root.to_string_lossy().into_owned(),
         document_count: workspace.documents().len(),
+    }
+}
+
+fn workspace_configuration(edit_root: &Path) -> Result<WorkspaceConfiguration, String> {
+    let workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
+    workspace_configuration_from(&workspace)
+}
+
+fn workspace_configuration_from(workspace: &Workspace) -> Result<WorkspaceConfiguration, String> {
+    Ok(WorkspaceConfiguration {
+        workspace: workspace_summary_from(workspace),
+        default_review_interval_months: workspace.default_review_interval_months(),
+        document_types: workspace.document_types().into_iter().cloned().collect(),
+        confidentiality_types: workspace
+            .confidentiality_types()
+            .into_iter()
+            .cloned()
+            .collect(),
+        confidentiality_policies: workspace
+            .confidentiality_policies()
+            .into_iter()
+            .cloned()
+            .collect(),
+        policy_folders: workspace
+            .policy_folders()
+            .map_err(|error| error.to_string())?,
     })
+}
+
+fn mutate_workspace_configuration(
+    edit_root: &Path,
+    mutation: impl FnOnce(&mut Workspace) -> dms_core::Result<()>,
+) -> Result<WorkspaceConfiguration, String> {
+    let mut workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
+    mutation(&mut workspace).map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
+    workspace_configuration_from(&workspace)
 }
 
 fn library_snapshot(edit_root: &Path, folder: &Path) -> Result<LibrarySnapshot, String> {
@@ -1216,6 +1318,11 @@ pub fn run() {
             select_directory,
             initialize_workspace,
             open_workspace,
+            load_workspace_configuration,
+            configure_default_review_interval,
+            configure_document_type,
+            set_confidentiality_policy,
+            remove_confidentiality_policy,
             load_library,
             search_library,
             add_library_documents,
@@ -1386,6 +1493,54 @@ mod tests {
             summary.publish_root,
             workspace.publish_root.to_string_lossy()
         );
+    }
+
+    #[test]
+    fn desktop_configuration_commands_persist_workspace_and_document_defaults() {
+        let edit_root = tempfile::tempdir().unwrap();
+        let publish_root = tempfile::tempdir().unwrap();
+        fs::create_dir_all(edit_root.path().join("Policies/HR")).unwrap();
+        let mut workspace = Workspace::init(edit_root.path(), publish_root.path()).unwrap();
+        workspace
+            .configure_confidentiality_type("internal", "Internal", true)
+            .unwrap();
+        workspace
+            .configure_confidentiality_type("restricted", "Restricted", true)
+            .unwrap();
+        workspace
+            .set_confidentiality_policy(".", "internal")
+            .unwrap();
+        workspace.save().unwrap();
+        let root = edit_root.path().to_string_lossy().into_owned();
+
+        let initial = load_workspace_configuration(root.clone()).unwrap();
+        assert!(initial.default_review_interval_months > 0);
+        assert!(initial
+            .policy_folders
+            .iter()
+            .any(|folder| folder.relative_path == "Policies/HR"));
+
+        let interval = configure_default_review_interval(root.clone(), 6).unwrap();
+        assert_eq!(interval.default_review_interval_months, 6);
+
+        let catalogue =
+            configure_document_type(root.clone(), "procedure".into(), "Procedure".into(), true)
+                .unwrap();
+        assert_eq!(catalogue.document_types[0].id, "procedure");
+
+        let policy =
+            set_confidentiality_policy(root.clone(), "Policies/HR".into(), "restricted".into())
+                .unwrap();
+        assert!(policy
+            .confidentiality_policies
+            .iter()
+            .any(|entry| entry.folder == "Policies/HR" && entry.type_id == "restricted"));
+
+        let removed = remove_confidentiality_policy(root, "Policies/HR".into()).unwrap();
+        assert!(!removed
+            .confidentiality_policies
+            .iter()
+            .any(|entry| entry.folder == "Policies/HR"));
     }
 
     #[test]

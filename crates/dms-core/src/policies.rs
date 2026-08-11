@@ -133,6 +133,10 @@ impl Workspace {
         self.confidentiality_types.values().collect()
     }
 
+    pub fn confidentiality_policies(&self) -> Vec<&ConfidentialityPolicy> {
+        self.confidentiality_policies.values().collect()
+    }
+
     pub fn configure_confidentiality_type(
         &mut self,
         id: &str,

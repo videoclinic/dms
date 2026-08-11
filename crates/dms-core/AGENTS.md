@@ -16,7 +16,7 @@ persistence.
 | `src/integrity.rs` | Advisory workspace locks, backup-manifest validation, and confirmed root-safe restore |
 | `src/library.rs` | Folder/file discovery, membership, search, registration state, reassociation, and permalinks |
 | `src/lifecycle.rs` | Version candidates, Entra/notification/export ports, content conformance, review decisions, release commits, and hash-chained evidence |
-| `src/maintenance.rs` | Release checksum verification, periodic-review scheduling, result/cancellation/reminder transitions, and full-workspace ZIP backup with SHA-256 manifest |
+| `src/maintenance.rs` | Release checksum verification, workspace review defaults, periodic-review scheduling and transitions, and full-workspace ZIP backup with SHA-256 manifest |
 | `src/policies.rs` | Folder-policy tree, confidentiality inheritance, Entra display binding, and workflow-role resolution |
 | `tests/` | Domain, migration-fixture, and persistence behaviour tests |
 

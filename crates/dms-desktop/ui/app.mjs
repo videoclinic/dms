@@ -35,10 +35,17 @@ import {
 import {
   assistanceDocumentState,
   assistanceMarkup,
-  assistancePolicyMarkup,
   createAssistanceState,
   updateAssistanceState,
 } from "./assistance.mjs";
+import {
+  applyConfigurationSnapshot,
+  configurationMarkup,
+  configurationMutationRequest,
+  createConfigurationState,
+  selectConfigurationFolder,
+  setConfigurationRoute,
+} from "./configuration.mjs";
 import {
   applyAuditReportSnapshot,
   auditReportRequest,
@@ -99,6 +106,7 @@ export function createInitialState(preferences = defaultPreferences()) {
     note_documents: {},
     assistance_documents: {},
     assistance_policy: { value: null, error: "" },
+    configuration: createConfigurationState(),
     releases: createReleaseState(),
     periodic_reviews: { markers: [], loading: false, error: "", notice: "" },
     audit_reports: createAuditReportState(),
@@ -351,7 +359,13 @@ function activityMarkup(state, activity) {
     return workspaceMaintenanceMarkup(state.maintenance);
   }
   if (activity.destination === "Configuration") {
-    return assistancePolicyMarkup(state.assistance_policy);
+    const route = activity.route_state?.route ?? "workspace";
+    return configurationMarkup(
+      route === state.configuration.route
+        ? state.configuration
+        : setConfigurationRoute(state.configuration, route),
+      state.assistance_policy,
+    );
   }
   return `<section class="card"><span class="badge">${escapeHtml(activity.destination)}</span><h2>${escapeHtml(activity.label)}</h2><p>The desktop shell is connected to the shared Rust core. Domain workflows beyond the phase-1 shell remain unavailable until their CHG phases are implemented.</p><dl class="details-grid"><dt>Workspace ID</dt><dd>${escapeHtml(workspace.workspace_id)}</dd><dt>Edit root</dt><dd>${escapeHtml(workspace.edit_root)}</dd><dt>Publish root</dt><dd>${escapeHtml(workspace.publish_root)}</dd><dt>Controlled documents</dt><dd>${escapeHtml(workspace.document_count)}</dd></dl></section>`;
 }
@@ -392,6 +406,7 @@ function openDestination(destination) {
     return;
   }
   const folder = destination === "Library" ? "." : null;
+  const configurationRoute = destination === "Configuration" ? "workspace" : null;
   const label = folder ? "Library · /" : destination;
   appState = openActivity(appState, {
     workspace_id: appState.workspace.workspace_id,
@@ -399,8 +414,14 @@ function openDestination(destination) {
     task: destination,
     label,
     document_id: null,
-    route_state: folder ? { folder } : {},
+    route_state: folder ? { folder } : configurationRoute ? { route: configurationRoute } : {},
   });
+  if (configurationRoute) {
+    appState = {
+      ...appState,
+      configuration: setConfigurationRoute(appState.configuration, configurationRoute),
+    };
+  }
   render(appState);
   if (destination === "Library") {
     void loadLibraryFolder(folder, "replace");
@@ -412,6 +433,7 @@ function openDestination(destination) {
   } else if (destination === "Maintenance") {
     void loadWorkspaceLockStatus();
   } else if (destination === "Configuration") {
+    void loadWorkspaceConfiguration();
     void loadClaudeAssistancePolicy();
   }
 }
@@ -522,6 +544,25 @@ async function loadClaudeAssistancePolicy() {
     appState = {
       ...appState,
       assistance_policy: { ...appState.assistance_policy, error: String(error) },
+    };
+  }
+  render(appState);
+}
+
+async function loadWorkspaceConfiguration(notice = "") {
+  try {
+    const snapshot = await invokeCommand("load_workspace_configuration", {
+      editRoot: appState.workspace.edit_root,
+    });
+    appState = {
+      ...appState,
+      workspace: snapshot.workspace,
+      configuration: applyConfigurationSnapshot(appState.configuration, snapshot, notice),
+    };
+  } catch (error) {
+    appState = {
+      ...appState,
+      configuration: { ...appState.configuration, notice: "", error: String(error) },
     };
   }
   render(appState);
@@ -1148,6 +1189,44 @@ async function handleClick(event) {
     return;
   }
 
+  const configurationRouteButton = event.target.closest("[data-configuration-route]");
+  const configurationRoute = configurationRouteButton?.dataset.configurationRoute;
+  if (configurationRoute) {
+    try {
+      const activity = currentActivity(appState);
+      const configuration = setConfigurationRoute(appState.configuration, configurationRoute);
+      appState = openActivity({ ...appState, configuration }, {
+        ...activity,
+        label: `Configuration · ${configurationRouteButton.querySelector("strong").textContent}`,
+        route_state: { ...activity.route_state, route: configurationRoute },
+      });
+    } catch (error) {
+      appState = {
+        ...appState,
+        configuration: { ...appState.configuration, notice: "", error: String(error) },
+      };
+    }
+    render(appState);
+    return;
+  }
+
+  const configurationFolder = event.target.closest("[data-configuration-folder]")?.dataset.configurationFolder;
+  if (configurationFolder) {
+    try {
+      appState = {
+        ...appState,
+        configuration: selectConfigurationFolder(appState.configuration, configurationFolder),
+      };
+    } catch (error) {
+      appState = {
+        ...appState,
+        configuration: { ...appState.configuration, notice: "", error: String(error) },
+      };
+    }
+    render(appState);
+    return;
+  }
+
   if (await handleNotesClick(event)) return;
   if (await handleAssistanceClick(event)) return;
   if (await handleLibraryClick(event)) return;
@@ -1272,6 +1351,16 @@ async function handleClick(event) {
   const activityKeyValue = event.target.closest("[data-activity-key]")?.dataset.activityKey;
   if (activityKeyValue) {
     appState = { ...appState, current_key: activityKeyValue, flyout: null };
+    const selectedActivity = currentActivity(appState);
+    if (selectedActivity?.destination === "Configuration") {
+      appState = {
+        ...appState,
+        configuration: setConfigurationRoute(
+          appState.configuration,
+          selectedActivity.route_state?.route ?? "workspace",
+        ),
+      };
+    }
     render(appState);
     const activity = currentActivity(appState);
     if (activity?.task === "Notes" && !noteDocumentState(appState.note_documents, activity.document_id).detail) {
@@ -1285,8 +1374,9 @@ async function handleClick(event) {
       if (appState.periodic_reviews.markers.length === 0) void loadPeriodicReviews();
     } else if (activity?.destination === "Maintenance" && !appState.maintenance.lock_status) {
       void loadWorkspaceLockStatus();
-    } else if (activity?.destination === "Configuration" && !appState.assistance_policy.value) {
-      void loadClaudeAssistancePolicy();
+    } else if (activity?.destination === "Configuration") {
+      if (!appState.configuration.snapshot) void loadWorkspaceConfiguration();
+      if (!appState.assistance_policy.value) void loadClaudeAssistancePolicy();
     }
     return;
   }
@@ -1329,6 +1419,14 @@ async function handleClick(event) {
         void loadPeriodicReviews();
         void loadAuditReports();
       } else if (view.destination === "Configuration") {
+        appState = {
+          ...appState,
+          configuration: setConfigurationRoute(
+            appState.configuration,
+            view.route_state?.route ?? "workspace",
+          ),
+        };
+        void loadWorkspaceConfiguration();
         void loadClaudeAssistancePolicy();
       }
     }
@@ -1344,6 +1442,40 @@ async function handleClick(event) {
 }
 
 async function handleSubmit(event) {
+  const configurationMutation = event.target.dataset.configurationForm;
+  if (configurationMutation) {
+    event.preventDefault();
+    try {
+      const request = configurationMutationRequest(
+        configurationMutation,
+        new FormData(event.target),
+        appState.configuration.selected_folder,
+      );
+      const snapshot = await invokeCommand(request.command, {
+        editRoot: appState.workspace.edit_root,
+        ...request.arguments,
+      });
+      const notice = configurationMutation === "review-interval"
+        ? "Default review interval saved."
+        : configurationMutation === "document-type"
+          ? "Document type saved."
+          : configurationMutation === "confidentiality-policy"
+            ? "Folder confidentiality policy saved."
+            : "Folder confidentiality policy removed.";
+      appState = {
+        ...appState,
+        workspace: snapshot.workspace,
+        configuration: applyConfigurationSnapshot(appState.configuration, snapshot, notice),
+      };
+    } catch (error) {
+      appState = {
+        ...appState,
+        configuration: { ...appState.configuration, notice: "", error: String(error) },
+      };
+    }
+    render(appState);
+    return;
+  }
   if (["library-document-control-form", "library-confidentiality-form"].includes(event.target.id)) {
     event.preventDefault();
     try {

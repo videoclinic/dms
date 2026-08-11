@@ -5,7 +5,7 @@
 | ID | CAP-0008 |
 | Status | not implemented |
 | Storage | `<edit-root>/.dms/` |
-| Tests | Partial phases 2 and 9f.1 evidence: [core policy tests](../../../crates/dms-core/tests/policies.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [Library override-form tests](../../../crates/dms-desktop/ui/library.test.mjs) |
+| Tests | Partial phases 2, 9f.1, and 9f.3 evidence: [core policy tests](../../../crates/dms-core/tests/policies.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [Library override-form tests](../../../crates/dms-desktop/ui/library.test.mjs), [Document-defaults policy tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 

@@ -210,6 +210,10 @@ impl Workspace {
         Ok(())
     }
 
+    pub fn default_review_interval_months(&self) -> u32 {
+        self.default_review_interval_months
+    }
+
     pub fn set_document_review_interval(
         &mut self,
         document_id: Uuid,

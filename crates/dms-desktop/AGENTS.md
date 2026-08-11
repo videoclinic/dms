@@ -18,6 +18,7 @@ macOS.
 | `ui/maintenance.mjs` | Releases, periodic-review, advisory-lock status/configuration, full backup, and confirmed restore panes |
 | `ui/reports.mjs` | Audit-report generation filters, recent-report history, verification state, paging, and host actions |
 | `ui/assistance.mjs` | Workspace policy form plus document-scoped payload preview, consent, handoff, and editable response draft |
+| `ui/configuration.mjs` | Routed Workspace and Document defaults state, markup, folder-policy editor, and catalogue mutation requests |
 | `ui/print/` | Shipped app-local Markdown print shell, stylesheet, and logo |
 | `ui/*.test.mjs` | Framework-free shell and Library interaction tests |
 | `capabilities/` | Tauri window permissions |
