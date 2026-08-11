@@ -5,7 +5,7 @@
 | ID | CAP-0015 |
 | Status | not implemented |
 | Storage | `<edit-root>/.dms/` |
-| Tests | none |
+| Tests | Partial phase 9e evidence: [current-release fallback and monotonic-version core test](../../../crates/dms-core/tests/lifecycle.rs), [Library current-release action tests](../../../crates/dms-desktop/ui/library.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 

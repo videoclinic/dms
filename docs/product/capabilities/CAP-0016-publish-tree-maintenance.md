@@ -5,7 +5,7 @@
 | ID | CAP-0016 |
 | Status | not implemented |
 | Storage | Publish root + `<edit-root>/.dms/` release records |
-| Tests | none |
+| Tests | Partial phase 9e evidence: [withdrawal/history/current-release core test](../../../crates/dms-core/tests/lifecycle.rs), [`dms-desktop` maintenance adapter tests](../../../crates/dms-desktop/src/lib.rs), [release-maintenance frontend tests](../../../crates/dms-desktop/ui/maintenance.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 

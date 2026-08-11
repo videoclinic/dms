@@ -112,11 +112,8 @@ impl Workspace {
                 confidentiality.type_id,
             ));
         }
-        let release = document
-            .releases
-            .iter()
-            .rev()
-            .find(|release| !release.withdrawn)
+        let release = self
+            .current_release(document_id)?
             .ok_or(DmsError::NoCurrentRelease)?;
         let verification = self.verify_release(document_id, release.id)?;
         if verification.status != ReleaseVerificationStatus::Match {

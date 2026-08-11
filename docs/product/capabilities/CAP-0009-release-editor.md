@@ -6,7 +6,7 @@
 | Status | not implemented |
 | Primary platform | Windows and macOS (Tauri) |
 | Editor | Host OS-registered Office application or default text editor |
-| Tests | none |
+| Tests | Partial phase 9e evidence: [validated source-path and host-command adapter](../../../crates/dms-desktop/src/lib.rs), [Library host-action frontend tests](../../../crates/dms-desktop/ui/library.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 

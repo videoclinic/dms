@@ -9,6 +9,7 @@ import {
   entryDocumentId,
   historyTarget,
   libraryMarkup,
+  libraryOpenRequest,
   membershipKind,
   normalizeLibraryPath,
   paginateLibraryEntries,
@@ -181,10 +182,18 @@ test("library markup separates source Name from DMS Title and keeps actions in t
       document_id: "doc-1",
       source_name: "Handbook.md",
       relative_path: "Policies/Handbook.md",
+      source_exists: true,
+      source_state: "registered",
       lifecycle: "draft",
       control: { title: "Employee handbook", document_number: "HR-001" },
       effective_confidentiality: null,
       effective_workflow_roles: null,
+      current_release: {
+        release_id: "release-1",
+        version: "1.2",
+        relative_pdf_path: "Policies/Handbook_V1.2_internal.pdf",
+        pdf_exists: true,
+      },
       permalink: "dms://open?workspace=ws-1&document=doc-1",
     },
   };
@@ -197,9 +206,25 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /<th>Name<\/th><th>Title<\/th>/);
   assert.match(markup, /Handbook\.md/);
   assert.match(markup, /Employee handbook/);
+  assert.match(markup, /data-library-open-source/);
+  assert.match(markup, /data-library-open-release/);
+  assert.match(markup, /Current released PDF · V1\.2/);
   assert.match(markup, /data-library-open-notes/);
   assert.match(markup, /data-library-copy-permalink/);
   assert.match(markup, /data-library-unregister/);
   assert.match(markup, /id="library-reassociate-form"/);
   assert.doesNotMatch(markup, /overflow menu|hamburger/i);
+});
+
+test("library file actions map only to host-mediated document commands", () => {
+  const detail = { document_id: "doc-1" };
+  assert.deepEqual(libraryOpenRequest(detail, "source"), {
+    command: "open_document_source",
+    arguments: { documentId: "doc-1" },
+  });
+  assert.deepEqual(libraryOpenRequest(detail, "release"), {
+    command: "open_current_release_pdf",
+    arguments: { documentId: "doc-1" },
+  });
+  assert.throws(() => libraryOpenRequest(detail, "other"));
 });

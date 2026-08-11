@@ -127,6 +127,32 @@ pub struct BackupOutcome {
 }
 
 impl Workspace {
+    pub fn release_pdf_path(&self, document_id: Uuid, release_id: Uuid) -> Result<PathBuf> {
+        let release = self
+            .document(document_id)?
+            .releases
+            .iter()
+            .find(|release| release.id == release_id)
+            .ok_or(DmsError::ReleaseNotFound(release_id))?;
+        let requested_path = self.publish_root.join(&release.relative_pdf_path);
+        let absolute_path = fs::canonicalize(&requested_path).map_err(|source| DmsError::Io {
+            path: requested_path,
+            source,
+        })?;
+        if !absolute_path.is_file() || !absolute_path.starts_with(&self.publish_root) {
+            return Err(DmsError::InvalidReleasePath(absolute_path));
+        }
+        Ok(absolute_path)
+    }
+
+    pub fn current_release_pdf_path(&self, document_id: Uuid) -> Result<PathBuf> {
+        let release_id = self
+            .current_release(document_id)?
+            .map(|release| release.id)
+            .ok_or(DmsError::NoCurrentRelease)?;
+        self.release_pdf_path(document_id, release_id)
+    }
+
     pub fn verify_release(
         &self,
         document_id: Uuid,
@@ -215,11 +241,7 @@ impl Workspace {
     pub fn periodic_review_markers(&self, as_of: NaiveDate) -> Result<Vec<PeriodicReviewMarker>> {
         let mut markers = Vec::new();
         for document in self.documents.values() {
-            let current = document
-                .releases
-                .iter()
-                .rev()
-                .find(|release| !release.withdrawn);
+            let current = self.current_release(document.id)?;
             if current.is_none() && document.review_exemption_reason.is_none() {
                 continue;
             }
@@ -280,11 +302,7 @@ impl Workspace {
             ));
         }
         let release = self
-            .document(document_id)?
-            .releases
-            .iter()
-            .rev()
-            .find(|release| !release.withdrawn)
+            .current_release(document_id)?
             .cloned()
             .ok_or(DmsError::NoCurrentRelease)?;
         if self.verify_release(document_id, release.id)?.status != ReleaseVerificationStatus::Match

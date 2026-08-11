@@ -4,6 +4,7 @@ import {
   entryDocumentId,
   historyTarget,
   libraryMarkup,
+  libraryOpenRequest,
   membershipKind,
   normalizeLibraryPath,
   selectedEntries,
@@ -23,6 +24,7 @@ import {
   periodicReviewMarkup,
   periodicReviewRequest,
   releaseMaintenanceMarkup,
+  releaseWithdrawalRequest,
   workspaceMaintenanceMarkup,
   workspaceRestoreRequest,
 } from "./maintenance.mjs";
@@ -934,6 +936,25 @@ async function handleLibraryClick(event) {
     }
     return true;
   }
+  const openTarget = event.target.closest("[data-library-open-source]")
+    ? "source"
+    : event.target.closest("[data-library-open-release]")
+      ? "release"
+      : null;
+  if (openTarget) {
+    try {
+      const request = libraryOpenRequest(appState.library.detail, openTarget);
+      await invokeCommand(request.command, {
+        editRoot: appState.workspace.edit_root,
+        ...request.arguments,
+      });
+      appState = { ...appState, error: "" };
+    } catch (error) {
+      appState = { ...appState, error: String(error) };
+    }
+    render(appState);
+    return true;
+  }
   if (event.target.closest("[data-library-open-notes]")) {
     openDocumentNotes();
     return true;
@@ -1153,6 +1174,24 @@ async function handleClick(event) {
     void loadReleases("verify_all_releases");
     return;
   }
+  const openRelease = event.target.closest("[data-release-open]");
+  if (openRelease) {
+    try {
+      await invokeCommand("open_release_pdf", {
+        editRoot: appState.workspace.edit_root,
+        documentId: openRelease.dataset.documentId,
+        releaseId: openRelease.dataset.releaseOpen,
+      });
+      appState = { ...appState, releases: { ...appState.releases, error: "" } };
+    } catch (error) {
+      appState = {
+        ...appState,
+        releases: { ...appState.releases, error: String(error) },
+      };
+    }
+    render(appState);
+    return;
+  }
   const verifyRelease = event.target.closest("[data-release-verify]");
   if (verifyRelease) {
     void loadReleases("verify_release", {
@@ -1270,6 +1309,12 @@ async function handleClick(event) {
 }
 
 async function handleSubmit(event) {
+  if (event.target.matches("[data-release-withdraw-form]")) {
+    event.preventDefault();
+    const request = releaseWithdrawalRequest(new FormData(event.target));
+    await loadReleases(request.command, request.arguments);
+    return;
+  }
   if (event.target.id === "audit-report-generate-form") {
     event.preventDefault();
     const request = auditReportRequest(new FormData(event.target));

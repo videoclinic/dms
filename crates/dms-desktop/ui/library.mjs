@@ -137,6 +137,15 @@ export function selectedEntries(library) {
     .filter(Boolean);
 }
 
+export function libraryOpenRequest(detail, target) {
+  const command = {
+    source: "open_document_source",
+    release: "open_current_release_pdf",
+  }[target];
+  if (!command || !detail?.document_id) throw new Error("A document file target is required.");
+  return { command, arguments: { documentId: detail.document_id } };
+}
+
 export function breadcrumbSegments(path, rootLabel = "Library") {
   const normalized = normalizeLibraryPath(path);
   const segments = [{ label: rootLabel, path: "." }];
@@ -255,7 +264,12 @@ function selectionMarkup(library) {
   const confidentiality = detail.effective_confidentiality;
   const roles = detail.effective_workflow_roles;
   const role = (value) => value?.display_name ?? (value?.object_id ? `Unresolved · ${value.object_id}` : "Not configured");
-  return `<div class="selection-header"><span class="badge">In library</span><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><h3>${escapeHtml(detail.control.title)}</h3>${detail.control.document_number ? `<p class="document-number">${escapeHtml(detail.control.document_number)}</p>` : ""}<div class="source-identity"><strong>Source file</strong><span>${escapeHtml(detail.source_name)}</span><small>${escapeHtml(detail.relative_path)}</small></div><details open><summary>Document control data</summary><dl class="selection-details"><dt>Lifecycle</dt><dd>${escapeHtml(detail.lifecycle)}</dd><dt>Document type</dt><dd>${escapeHtml(detail.control.document_type ?? "Not set")}</dd><dt>Owner</dt><dd>${escapeHtml(detail.control.owner ?? "Not set")}</dd><dt>Confidentiality</dt><dd>${escapeHtml(confidentiality?.label ?? "Not configured")}${confidentiality ? ` · ${escapeHtml(confidentiality.document_override ? "override" : `from ${confidentiality.source_folder}`)}` : ""}</dd><dt>Editor</dt><dd>${escapeHtml(role(roles?.editor))}</dd><dt>Approver</dt><dd>${escapeHtml(role(roles?.approver))}</dd></dl></details><details open><summary>Actions</summary><div class="selection-actions"><button class="button" type="button" data-library-open-notes>Open notes</button><button class="button secondary" type="button" data-library-open-assistance>Evaluate changes with Claude</button><button class="button secondary" type="button" data-library-copy-permalink>Copy permalink</button><button class="button danger" type="button" data-library-unregister>Unregister</button></div><form id="library-reassociate-form" class="reassociate-form"><label>Reassociate source<input name="path" required value="${escapeHtml(detail.relative_path)}" aria-label="New edit-root-relative source path"></label><button class="button secondary" type="submit">Reassociate</button></form></details><details><summary>Revision cycle</summary><p>No revision cycle is open.</p></details><details><summary>Releases</summary><p>No released version exists.</p></details>`;
+  const sourceAvailable = detail.source_exists && detail.source_state === "registered";
+  const release = detail.current_release;
+  const currentRelease = release
+    ? `<div class="source-identity"><strong>Current released PDF · V${escapeHtml(release.version)}</strong><span>${escapeHtml(release.relative_pdf_path)}</span><small>${release.pdf_exists ? "Available" : "Missing PDF"}</small></div>`
+    : '<div class="source-identity"><strong>Current released PDF</strong><span>No active release</span></div>';
+  return `<div class="selection-header"><span class="badge">In library</span><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><h3>${escapeHtml(detail.control.title)}</h3>${detail.control.document_number ? `<p class="document-number">${escapeHtml(detail.control.document_number)}</p>` : ""}<div class="source-identity"><strong>Source file</strong><span>${escapeHtml(detail.source_name)}</span><small>${escapeHtml(detail.relative_path)}</small></div>${currentRelease}<details open><summary>Document control data</summary><dl class="selection-details"><dt>Lifecycle</dt><dd>${escapeHtml(detail.lifecycle)}</dd><dt>Document type</dt><dd>${escapeHtml(detail.control.document_type ?? "Not set")}</dd><dt>Owner</dt><dd>${escapeHtml(detail.control.owner ?? "Not set")}</dd><dt>Confidentiality</dt><dd>${escapeHtml(confidentiality?.label ?? "Not configured")}${confidentiality ? ` · ${escapeHtml(confidentiality.document_override ? "override" : `from ${confidentiality.source_folder}`)}` : ""}</dd><dt>Editor</dt><dd>${escapeHtml(role(roles?.editor))}</dd><dt>Approver</dt><dd>${escapeHtml(role(roles?.approver))}</dd></dl></details><details open><summary>Actions</summary><div class="selection-actions"><button class="button" type="button" data-library-open-source ${sourceAvailable ? "" : "disabled"}>Open source draft</button><button class="button" type="button" data-library-open-release ${release?.pdf_exists ? "" : "disabled"}>Open current released PDF</button><button class="button" type="button" data-library-open-notes>Open notes</button><button class="button secondary" type="button" data-library-open-assistance>Evaluate changes with Claude</button><button class="button secondary" type="button" data-library-copy-permalink>Copy permalink</button><button class="button danger" type="button" data-library-unregister>Unregister</button></div><form id="library-reassociate-form" class="reassociate-form"><label>Reassociate source<input name="path" required value="${escapeHtml(detail.relative_path)}" aria-label="New edit-root-relative source path"></label><button class="button secondary" type="submit">Reassociate</button></form></details><details><summary>Revision cycle</summary><p>No revision cycle is open.</p></details><details><summary>Releases</summary><p>Release evidence remains available from the Releases destination.</p></details>`;
 }
 
 export function libraryMarkup(workspace, activity, library, error = "") {

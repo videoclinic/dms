@@ -806,6 +806,7 @@ fn event_type_text(value: WorkflowEventType) -> &'static str {
         WorkflowEventType::ReviewDecisionRejected => "review_decision_rejected",
         WorkflowEventType::ReviewDecisionChangedRequested => "review_decision_changes_requested",
         WorkflowEventType::Release => "release",
+        WorkflowEventType::ReleaseWithdrawn => "release_withdrawn",
         WorkflowEventType::MinorPublicationNotified => "minor_publication_notified",
         WorkflowEventType::ReviewCancelled => "review_cancelled",
         WorkflowEventType::CandidateInvalidated => "candidate_invalidated",

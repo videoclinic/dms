@@ -154,14 +154,14 @@ macOS** that:
 | 9b.2 | Recent libraries and native directory browsing | done (`node --test ui/*.test.mjs`; full Rust format/test/clippy gates; Linux desktop launch smoke; browser visual and interaction QA) | Preferences retain at most 10 unique edit roots in most-recent-first order; setup UI can reopen or remove each entry; every directory field exposes a native folder picker that starts at the OS user's home directory; focused Rust/frontend tests, full local gates, and visual QA pass |
 | 9c | Audit export | done (schema v7 migration; focused core/CLI/desktop tests; `cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 36 frontend tests; Linux launch smoke; browser visual QA) | Deterministic document/approver/confidentiality/date-filtered CSV/PDF reports contain classification, workflow, release, periodic-review, target-mode, delivery, hash, and verification evidence without source/release bytes; paths stay inside the edit root and never overwrite; generation appends canonical `report_generated` evidence; CLI and desktop expose generation/list/verify/open-folder operations; Recent reports filters before pagination and surfaces chain, file, and missing/tampered states |
 | 9d | Workspace integrity and recovery | done (schema v8 migration; core/CLI/Tauri/frontend lock and restore operations; focused failure-path tests; full Rust format/test/Clippy gates; 39 frontend tests; Linux launch smoke) | Advisory lock status/acquire/owner-matched release/stale takeover and manifest-verified backup restore refuse unsafe or cross-platform-colliding paths, symlinks, fresh-lock overwrite, and unconfirmed replacement; restore holds an advisory lock while writing; core, CLI, desktop, and failure-path tests pass |
-| 9e | Release and library maintenance | pending | Release withdrawal is reasoned and evidenced without deleting history; current release resolution skips withdrawn records; missing/orphan releases remain explicit; the Library can open an existing source draft or latest released PDF through host-mediated commands; Rust/frontend tests pass |
+| 9e | Release and library maintenance | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 43 frontend tests) | Release withdrawal requires confirmation and a reason, appends hash-chained evidence, preserves exact history, and cannot drift from canonical evidence; one current-release resolver skips withdrawn records while later target allocation advances beyond all committed versions; missing/orphan releases remain explicit; Library and Releases actions open only validated existing source/PDF paths through host commands |
 | 9f | Desktop lifecycle and Configuration surfaces | pending | The desktop invokes implemented core operations for document-control edit, confidentiality override, begin revision, submit/review/decision/release, cancel review, obsolete, evidence history, document defaults, Workflow, Notifications, and Workspace configuration while preserving one routed Configuration activity; adapter/frontend tests prove each operator path |
 | 9g | Permalink OS integration | pending | Windows and macOS register `dms://`; inbound document/review/note links resolve workspace + stable document identity, focus or create the correct activity, survive rename/version changes, and fail closed for unavailable targets; platform smoke passes |
 | 9h | Operator-selected Claude excerpts | pending | Oversized assistance payloads show their size and selectable excerpts; preview retries only with the operator-selected subset, never silently truncates, and still requires digest-bound consent; core, adapter, and frontend tests pass |
 | 9i | Live Office, Entra, and notification adapters | pending | Production release commands wire installed Office automation on Windows/macOS; administrator-configured Microsoft Graph refresh and interactive approver sign-in use OS credential storage; SMTP and host-mail transports send canonical messages without storing credentials in `.dms`; fake-backed tests and operator smoke instructions pass |
 | 9j | External operator smokes + CAP promotion | pending | Licensed Office release smoke passes on Windows and macOS; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass; every implemented CAP links executable evidence, CHG status is done, and the record is archived |
 
-**Current phase:** no phase is in progress. Phase 9e is next.
+**Current phase:** no phase is in progress. Phase 9f is next after the phase 9e commit checkpoint.
 
 ## Implementation notes
 
@@ -214,10 +214,10 @@ macOS** that:
   passed the workspace, launch, and native Markdown PDF smoke gates.
 - CAP-0003, CAP-0012, and the existing CAP-0022 have complete executable
   evidence. The remaining CAPs retain `not implemented`: their contracts include
-  unresolved operator surfaces or transitions, including workspace setup and lifecycle UI,
-  host draft opening, live notification and Entra adapters,
-  corruption recovery and backup-history surfaces, release withdrawal, permalink scheme registration,
-  and assistance excerpt trimming.
+  unresolved operator surfaces or transitions, including full lifecycle and
+  Configuration UI, live notification and Entra adapters, complete corruption
+  recovery and backup-history surfaces, permalink scheme registration, and
+  assistance excerpt trimming.
 - The Office-on-Windows/macOS and administrator-configured Microsoft 365 Entra
   smokes require licensed host applications, a configured tenant/group, and an
   interactive operator identity. CI fakes and unit tests do not satisfy those
@@ -239,9 +239,9 @@ macOS** that:
   code has no live Graph/notification implementation and does not yet wire the
   installed-Office adapter into a desktop release command.
 - CAP-0005 and CAP-0006 have substantial partial executable evidence but remain
-  `not implemented`: the full Configuration/lifecycle IPC and required Library
-  selection actions are still absent. Their evidence fields must describe the
-  proven subset without promoting the whole contract.
+  `not implemented`: host-mediated source/release opening is present, while the
+  full Configuration and lifecycle IPC surfaces remain absent. Their evidence
+  fields must describe the proven subset without promoting the whole contract.
 - Phase 9b closes the local periodic-review result, cancellation, and reminder
   paths. Core evidence refreshes current approver eligibility, preserves the
   due date on cancellation, and records every reminder delivery attempt without
@@ -261,6 +261,11 @@ macOS** that:
   destination lock while writing. CAP-0014 remains `not implemented` until its
   corruption recovery, missing-root reassignment, and backup-history outcomes
   are delivered.
+- Phase 9e makes withdrawal a confirmed, reasoned, hash-chained state change
+  without deleting release records or PDFs. Active-release consumers share one
+  resolver, version allocation still advances over withdrawn history, missing
+  and orphaned releases remain visible, and validated source/release paths open
+  through narrow host commands.
 
 ## Resume checklist
 

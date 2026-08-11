@@ -541,6 +541,17 @@ impl Workspace {
             .ok_or(DmsError::DocumentNotFound(document_id))
     }
 
+    pub fn registered_source_path(&self, document_id: Uuid) -> Result<PathBuf> {
+        let document = self.document(document_id)?;
+        if document.source_state != SourceState::Registered {
+            return Err(DmsError::InvalidLifecycleTransition(
+                "document source is not registered".to_owned(),
+            ));
+        }
+        self.resolve_source_path(&document.relative_path)
+            .map(|(absolute_path, _)| absolute_path)
+    }
+
     pub(crate) fn document_mut(&mut self, document_id: Uuid) -> Result<&mut Document> {
         self.documents
             .get_mut(&document_id)

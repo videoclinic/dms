@@ -654,6 +654,134 @@ fn minor_release_skips_review_and_notification_failure_does_not_reverse_commit()
 }
 
 #[test]
+fn withdrawal_preserves_history_falls_back_to_prior_release_and_advances_version() {
+    let mut fixture = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    let (mut graph, first) = release_first(&mut fixture);
+    fixture
+        .workspace
+        .begin_revision(fixture.document_id)
+        .unwrap();
+    fs::write(
+        &fixture.source_path,
+        "# Handbook\n\nVersion: 1.1\n\nVertraulichkeitsstufe: Internal\n",
+    )
+    .unwrap();
+    fixture
+        .workspace
+        .submit_candidate(
+            fixture.candidate_request(TargetSelection::NextMinor),
+            &mut graph,
+            &mut FakeNotifier::default(),
+        )
+        .unwrap();
+    let second = fixture
+        .workspace
+        .release_candidate(
+            fixture.document_id,
+            None,
+            &mut graph,
+            &mut FakeNotifier::accepted(),
+            &mut FakeExporter::successful(),
+        )
+        .unwrap();
+
+    assert!(fixture
+        .workspace
+        .withdraw_release(fixture.document_id, second.release.id, "   ")
+        .is_err());
+    let withdrawn = fixture
+        .workspace
+        .withdraw_release(
+            fixture.document_id,
+            second.release.id,
+            "Superseded by a corrected publication",
+        )
+        .unwrap();
+    assert!(withdrawn.withdrawn);
+    assert_eq!(
+        fixture
+            .workspace
+            .releases(fixture.document_id)
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .current_release(fixture.document_id)
+            .unwrap()
+            .unwrap()
+            .id,
+        first.release.id
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .current_release_pdf_path(fixture.document_id)
+            .unwrap(),
+        fs::canonicalize(
+            fixture
+                .workspace
+                .publish_root
+                .join(&first.release.relative_pdf_path)
+        )
+        .unwrap()
+    );
+    let event = fixture
+        .workspace
+        .workflow_history(fixture.document_id)
+        .unwrap()[0];
+    assert_eq!(event.body.event_type, WorkflowEventType::ReleaseWithdrawn);
+    assert_eq!(
+        event.body.target_version,
+        Some(Version { major: 1, minor: 1 })
+    );
+    assert_eq!(event.body.pdf_digest, Some(second.release.pdf_digest));
+    assert_eq!(
+        event.body.operator_comment.as_deref(),
+        Some("Superseded by a corrected publication")
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .verify_workflow(fixture.document_id)
+            .unwrap(),
+        WorkflowVerification::Valid
+    );
+    fixture.workspace.save().unwrap();
+    fixture.workspace = Workspace::open(&fixture.workspace.edit_root).unwrap();
+    assert!(fixture
+        .workspace
+        .releases(fixture.document_id)
+        .unwrap()
+        .iter()
+        .any(|release| release.id == second.release.id && release.withdrawn));
+
+    fixture
+        .workspace
+        .begin_revision(fixture.document_id)
+        .unwrap();
+    fs::write(
+        &fixture.source_path,
+        "# Handbook\n\nVersion: 1.2\n\nVertraulichkeitsstufe: Internal\n",
+    )
+    .unwrap();
+    let next = fixture
+        .workspace
+        .submit_candidate(
+            fixture.candidate_request(TargetSelection::NextMinor),
+            &mut graph,
+            &mut FakeNotifier::default(),
+        )
+        .unwrap();
+    assert_eq!(next.version, Version { major: 1, minor: 2 });
+}
+
+#[test]
 fn approver_policy_change_invalidates_open_review_and_target_remains_reusable() {
     let mut fixture = Fixture::new(
         "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",

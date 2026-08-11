@@ -6,7 +6,7 @@
 | Status | not implemented |
 | Draft formats | Markdown (`.md`) and Microsoft Office originals (e.g. `.docx`, `.xlsx`, `.pptx`) |
 | Released format | Versioned, classified PDF only (`*_VMAJOR.MINOR_<confidentiality-type-id>.pdf`) |
-| Tests | none |
+| Tests | Partial phase 9e evidence: [withdrawal/current-release/version-allocation core test](../../../crates/dms-core/tests/lifecycle.rs) |
 
 ## Outcomes (contract — not yet true in runtime)
 

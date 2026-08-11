@@ -5,7 +5,7 @@
 | ID | CAP-0011 |
 | Status | not implemented |
 | Storage | `<edit-root>/.dms/` (canonical event chain) |
-| Tests | none |
+| Tests | Partial phase 9e evidence: [hash-chained release-withdrawal evidence test](../../../crates/dms-core/tests/lifecycle.rs) |
 
 ## Outcomes (contract — not yet true in runtime)
 

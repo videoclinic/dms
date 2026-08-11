@@ -8,6 +8,7 @@ import {
   periodicReviewMarkup,
   periodicReviewRequest,
   releaseMaintenanceMarkup,
+  releaseWithdrawalRequest,
   workspaceMaintenanceMarkup,
   workspaceRestoreRequest,
 } from "./maintenance.mjs";
@@ -25,6 +26,7 @@ const release = (overrides = {}) => ({
   approval_chain_head: "c".repeat(64),
   released_at: "2026-08-10T10:00:00Z",
   withdrawn: false,
+  orphaned: false,
   verification: "match",
   ...overrides,
 });
@@ -48,7 +50,35 @@ test("release integrity failures are visible and verification is described as re
   });
   const markup = releaseMaintenanceMarkup(state);
   assert.match(markup, /Missing PDF/);
+  assert.match(markup, /data-release-open="release-1"[^>]*disabled/);
   assert.match(markup, /never repairs, replaces, or deletes/);
+});
+
+test("release history keeps withdrawn and orphaned records explicit", () => {
+  const markup = releaseMaintenanceMarkup(applyReleaseSnapshot(createReleaseState(), {
+    rows: [release({ withdrawn: true, orphaned: true })],
+  }));
+  assert.match(markup, /Withdrawn/);
+  assert.match(markup, /Orphaned source record/);
+  assert.match(markup, /Open PDF/);
+  assert.doesNotMatch(markup, /data-release-withdraw-form/);
+});
+
+test("release withdrawal maps reason and explicit confirmation to the narrow command", () => {
+  assert.deepEqual(releaseWithdrawalRequest(new URLSearchParams({
+    documentId: "document-1",
+    releaseId: "release-1",
+    reason: " Corrected publication ",
+    confirmed: "on",
+  })), {
+    command: "withdraw_release",
+    arguments: {
+      documentId: "document-1",
+      releaseId: "release-1",
+      reason: "Corrected publication",
+      confirmed: true,
+    },
+  });
 });
 
 test("periodic review shows due markers and blocks duplicate requests", () => {

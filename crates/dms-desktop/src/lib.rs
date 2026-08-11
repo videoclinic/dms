@@ -130,7 +130,16 @@ pub struct DocumentSelection {
     pub control: DocumentControl,
     pub effective_confidentiality: Option<EffectiveConfidentiality>,
     pub effective_workflow_roles: Option<EffectiveWorkflowRoles>,
+    pub current_release: Option<CurrentReleaseSelection>,
     pub permalink: String,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct CurrentReleaseSelection {
+    pub release_id: Uuid,
+    pub version: String,
+    pub relative_pdf_path: String,
+    pub pdf_exists: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -155,6 +164,7 @@ pub struct ReleaseRow {
     pub approval_chain_head: Option<String>,
     pub released_at: String,
     pub withdrawn: bool,
+    pub orphaned: bool,
     pub verification: ReleaseVerificationStatus,
 }
 
@@ -326,6 +336,53 @@ fn load_releases(edit_root: String) -> Result<ReleaseMaintenance, String> {
 }
 
 #[tauri::command]
+fn withdraw_release(
+    edit_root: String,
+    document_id: Uuid,
+    release_id: Uuid,
+    reason: String,
+    confirmed: bool,
+) -> Result<ReleaseMaintenance, String> {
+    if !confirmed {
+        return Err("release withdrawal requires explicit confirmation".to_owned());
+    }
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .withdraw_release(document_id, release_id, &reason)
+        .map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
+    release_maintenance(&workspace)
+}
+
+#[tauri::command]
+fn open_document_source(edit_root: String, document_id: Uuid) -> Result<(), String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let path = workspace
+        .registered_source_path(document_id)
+        .map_err(|error| error.to_string())?;
+    open_host_path(&path)
+}
+
+#[tauri::command]
+fn open_current_release_pdf(edit_root: String, document_id: Uuid) -> Result<(), String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let path = workspace
+        .current_release_pdf_path(document_id)
+        .map_err(|error| error.to_string())?;
+    open_host_path(&path)
+}
+
+#[tauri::command]
+fn open_release_pdf(edit_root: String, document_id: Uuid, release_id: Uuid) -> Result<(), String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let path = workspace
+        .release_pdf_path(document_id, release_id)
+        .map_err(|error| error.to_string())?;
+    open_host_path(&path)
+}
+
+#[tauri::command]
 fn verify_release(
     edit_root: String,
     document_id: Uuid,
@@ -378,7 +435,7 @@ fn verify_audit_report(edit_root: String, event_id: Uuid) -> Result<AuditReportS
 #[tauri::command]
 fn open_audit_report_folder(edit_root: String, event_id: Uuid) -> Result<(), String> {
     let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
-    open_directory(&audit_report_folder(&workspace, event_id)?)
+    open_host_path(&audit_report_folder(&workspace, event_id)?)
 }
 
 #[tauri::command]
@@ -778,6 +835,15 @@ fn document_selection(edit_root: &Path, document_id: Uuid) -> Result<DocumentSel
         .filter(|parent| !parent.as_os_str().is_empty())
         .map(path_text)
         .unwrap_or_else(|| ".".to_owned());
+    let current_release = workspace
+        .current_release(document_id)
+        .map_err(|error| error.to_string())?
+        .map(|release| CurrentReleaseSelection {
+            release_id: release.id,
+            version: release.version.to_string(),
+            relative_pdf_path: path_text(&release.relative_pdf_path),
+            pdf_exists: workspace.release_pdf_path(document_id, release.id).is_ok(),
+        });
     Ok(DocumentSelection {
         document_id,
         source_name,
@@ -789,6 +855,7 @@ fn document_selection(edit_root: &Path, document_id: Uuid) -> Result<DocumentSel
         control: document.control.clone(),
         effective_confidentiality: workspace.effective_confidentiality(document_id).ok(),
         effective_workflow_roles: workspace.effective_workflow_roles(document_id).ok(),
+        current_release,
         permalink: workspace
             .document_permalink(document_id)
             .map_err(|error| error.to_string())?,
@@ -882,6 +949,7 @@ fn release_maintenance(workspace: &Workspace) -> Result<ReleaseMaintenance, Stri
                 approval_chain_head: release.approval_chain_head.clone(),
                 released_at: release.released_at.to_rfc3339(),
                 withdrawn: release.withdrawn,
+                orphaned: document.source_state != SourceState::Registered,
                 verification: verification.status,
             });
         }
@@ -944,7 +1012,7 @@ fn audit_report_folder(workspace: &Workspace, event_id: Uuid) -> Result<PathBuf,
     Ok(canonical_parent)
 }
 
-fn open_directory(path: &Path) -> Result<(), String> {
+fn open_host_path(path: &Path) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     let mut command = std::process::Command::new("explorer.exe");
     #[cfg(target_os = "macos")]
@@ -956,7 +1024,7 @@ fn open_directory(path: &Path) -> Result<(), String> {
         .arg(path)
         .spawn()
         .map(|_| ())
-        .map_err(|error| format!("cannot open report folder {}: {error}", path.display()))
+        .map_err(|error| format!("cannot open {}: {error}", path.display()))
 }
 
 fn path_text(path: &Path) -> String {
@@ -1007,8 +1075,12 @@ pub fn run() {
             unregister_library_documents,
             reassociate_library_document,
             load_document_selection,
+            open_document_source,
+            open_current_release_pdf,
             load_document_notes,
             load_releases,
+            withdraw_release,
+            open_release_pdf,
             verify_release,
             verify_all_releases,
             load_audit_reports,
@@ -1331,6 +1403,15 @@ mod tests {
         let root = edit_root.to_string_lossy().into_owned();
 
         assert!(load_releases(root.clone()).unwrap().rows.is_empty());
+        assert!(withdraw_release(
+            root.clone(),
+            Uuid::nil(),
+            Uuid::nil(),
+            "Correction".to_owned(),
+            false,
+        )
+        .unwrap_err()
+        .contains("explicit confirmation"));
         assert!(load_periodic_reviews(root.clone()).unwrap().is_empty());
         let archive = directory.path().join("workspace.zip");
         let outcome = backup_workspace(root, archive.to_string_lossy().into_owned()).unwrap();

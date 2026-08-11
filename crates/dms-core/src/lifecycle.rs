@@ -279,6 +279,7 @@ pub enum WorkflowEventType {
     ReviewDecisionRejected,
     ReviewDecisionChangedRequested,
     Release,
+    ReleaseWithdrawn,
     MinorPublicationNotified,
     ReviewCancelled,
     CandidateInvalidated,
@@ -1029,6 +1030,67 @@ impl Workspace {
         Ok(())
     }
 
+    pub fn withdraw_release(
+        &mut self,
+        document_id: Uuid,
+        release_id: Uuid,
+        reason: &str,
+    ) -> Result<ReleaseRecord> {
+        let reason = validate_comment(reason, true)?;
+        let release = self
+            .document(document_id)?
+            .releases
+            .iter()
+            .find(|release| release.id == release_id)
+            .cloned()
+            .ok_or(DmsError::ReleaseNotFound(release_id))?;
+        if release.withdrawn {
+            return Err(DmsError::InvalidLifecycleTransition(
+                "release is already withdrawn".to_owned(),
+            ));
+        }
+        let body = WorkflowEventBody {
+            event_id: Uuid::new_v4(),
+            document_id,
+            event_type: WorkflowEventType::ReleaseWithdrawn,
+            predecessor_hash: self
+                .document(document_id)?
+                .workflow_events
+                .last()
+                .map(|event| event.event_hash.clone()),
+            timestamp: Utc::now(),
+            requester: None,
+            editor: Some(release.editor.clone()),
+            approver: Some(release.approver.clone()),
+            authenticated_actor: None,
+            local_os_user: default_author(),
+            revision_digest: Some(release.source_digest.clone()),
+            confidentiality: Some(release.confidentiality.clone()),
+            target_version: Some(release.version),
+            target_mode: Some(release.mode),
+            changelog: None,
+            assistance: None,
+            decision_comment: None,
+            operator_comment: Some(reason),
+            delivery: None,
+            content_override: None,
+            pdf_digest: Some(release.pdf_digest.clone()),
+            periodic_review: None,
+            report: None,
+        };
+        self.append_event(document_id, body)?;
+        let stored = self
+            .documents
+            .get_mut(&document_id)
+            .expect("document checked above")
+            .releases
+            .iter_mut()
+            .find(|stored| stored.id == release_id)
+            .expect("release checked above");
+        stored.withdrawn = true;
+        Ok(stored.clone())
+    }
+
     pub fn cancel_review(&mut self, document_id: Uuid, reason: &str) -> Result<()> {
         let reason = validate_comment(reason, true)?;
         let candidate_id = self.active_candidate_id(document_id)?;
@@ -1267,6 +1329,21 @@ impl Workspace {
                         release.id
                     )));
                 }
+                let withdrawal_events = document
+                    .workflow_events
+                    .iter()
+                    .filter(|event| {
+                        event.body.event_type == WorkflowEventType::ReleaseWithdrawn
+                            && event.body.target_version == Some(release.version)
+                            && event.body.pdf_digest.as_deref() == Some(&release.pdf_digest)
+                    })
+                    .count();
+                if withdrawal_events != usize::from(release.withdrawn) {
+                    return Err(DmsError::LifecycleIntegrity(format!(
+                        "release {} withdrawal state does not match canonical evidence",
+                        release.id
+                    )));
+                }
             }
             if document
                 .workflow_events
@@ -1312,10 +1389,13 @@ impl Workspace {
         document_id: Uuid,
         selection: TargetSelection,
     ) -> Result<Version> {
-        let current = self
-            .current_release(document_id)?
-            .map(|release| release.version);
-        let target = match (current, selection) {
+        let latest_committed = self
+            .document(document_id)?
+            .releases
+            .iter()
+            .map(|release| release.version)
+            .max();
+        let target = match (latest_committed, selection) {
             (None, TargetSelection::NextMinor | TargetSelection::NextMajor) => Version::V1_0,
             (None, TargetSelection::Manual(version)) if version == Version::V1_0 => version,
             (None, TargetSelection::Manual(_)) => return Err(DmsError::InvalidTargetVersion),
@@ -1347,13 +1427,13 @@ impl Workspace {
         Ok(target)
     }
 
-    fn current_release(&self, document_id: Uuid) -> Result<Option<&ReleaseRecord>> {
+    pub fn current_release(&self, document_id: Uuid) -> Result<Option<&ReleaseRecord>> {
         Ok(self
             .document(document_id)?
             .releases
             .iter()
-            .rev()
-            .find(|release| !release.withdrawn))
+            .filter(|release| !release.withdrawn)
+            .max_by_key(|release| release.version))
     }
 
     fn person_snapshot(&self, object_id: Uuid) -> Result<PersonSnapshot> {
