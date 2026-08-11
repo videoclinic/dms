@@ -39,7 +39,8 @@ macOS.
 - Store sidebar, saved-view, and recent-library preferences in the OS user
   app-config directory, never under `<edit-root>/.dms`. Recent libraries are at
   most ten unique edit roots in most-recent-first order; removing one never
-  touches workspace metadata or files.
+  touches workspace metadata or files. A failed recent-library open reports the
+  error beside that list and retains the edit root in the explicit open form.
 - Change the persisted sidebar preference or current-session unfolded overlay
   only through an explicit sidebar control. Destination, saved-view, open-pane,
   and in-surface actions must preserve the current sidebar presentation.

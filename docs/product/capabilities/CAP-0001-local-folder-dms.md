@@ -6,7 +6,7 @@
 | Status | not implemented |
 | Primary platform | Windows and macOS (Tauri) |
 | Storage | Hidden `.dms/` under the edit root |
-| Tests | Partial phases 9a–9f.3 evidence: [`dms-core` workspace tests](../../../crates/dms-core/tests/workspace.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [setup frontend tests](../../../crates/dms-desktop/ui/app.test.mjs), [Configuration frontend tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
+| Tests | Partial phases 9a–9f.5.1 evidence: [`dms-core` workspace tests](../../../crates/dms-core/tests/workspace.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [setup frontend tests](../../../crates/dms-desktop/ui/app.test.mjs), [Configuration frontend tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 
@@ -44,7 +44,9 @@ When implemented, the following must hold:
 10. The setup page lists at most the ten most recently opened edit roots in
     most-recent-first order. The list is stored in per-user app preferences,
     not `.dms`; reopening promotes the library to the first position, and
-    removing an entry changes only this history.
+    removing an entry changes only this history. A failed reopen reports its
+    error beside the recent list and retains the selected edit root in the
+    explicit open form.
 11. Every field that selects a directory has a native **Browse…** action. The
     picker starts at the OS user's home directory and writes the selected local
     filesystem path into the field; cancelling it leaves the field unchanged.

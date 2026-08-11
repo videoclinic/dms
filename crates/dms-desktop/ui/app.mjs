@@ -121,6 +121,7 @@ export function createInitialState(preferences = defaultPreferences()) {
     },
     sidebar_overlay: false,
     flyout: null,
+    setup_edit_root: "",
     error: "",
   };
 }
@@ -309,8 +310,9 @@ export function workspaceSetupRequest(formId, values) {
   throw new Error(`Unknown workspace setup form: ${formId}`);
 }
 
-function directoryFieldMarkup(id, name, label, placeholder) {
-  return `<div class="field"><label for="${id}">${label}</label><div class="directory-field"><input id="${id}" name="${name}" required autocomplete="off" placeholder="${placeholder}"><button class="button secondary" type="button" data-directory-target="${id}">Browse…</button></div></div>`;
+function directoryFieldMarkup(id, name, label, placeholder, value = "") {
+  const initialValue = value ? ` value="${escapeHtml(value)}"` : "";
+  return `<div class="field"><label for="${id}">${label}</label><div class="directory-field"><input id="${id}" name="${name}" required autocomplete="off" placeholder="${placeholder}"${initialValue}><button class="button secondary" type="button" data-directory-target="${id}">Browse…</button></div></div>`;
 }
 
 function recentLibraryLabel(editRoot) {
@@ -329,14 +331,15 @@ function recentLibrariesMarkup(recentLibraries) {
   }).join("");
 }
 
-export function setupMarkup(error, recentLibraries = []) {
+export function setupMarkup(error, recentLibraries = [], openEditRoot = "") {
   const recent = normalizedRecentLibraries(recentLibraries);
-  return `<section class="setup-workspace"><header><span class="badge">Local workspace</span><h2>Set up DMS Desktop</h2><p>Open existing metadata or initialize explicit edit and publish roots. No documents are moved or copied during setup.</p></header><section class="recent-libraries card" aria-labelledby="recent-libraries-heading"><h3 id="recent-libraries-heading">Recent libraries</h3><div class="recent-libraries-list">${recentLibrariesMarkup(recent)}</div></section><div class="setup-grid"><section class="card"><h3>Open an existing workspace</h3><p>Choose an edit root that already contains <code>.dms/workspace.json</code>. A current advisory lock blocks opening.</p><form id="open-workspace-form" class="setup-form">${directoryFieldMarkup("open-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit")}<label class="confirm-field"><input type="checkbox" name="takeOverStale"> Take over the lock only if it is stale.</label><button class="button" type="submit">Open workspace</button></form></section><section class="card"><h3>Initialize a workspace</h3><p>The desktop creates <code>.dms</code> under the edit root and creates the publish root if it does not exist.</p><form id="initialize-workspace-form" class="setup-form">${directoryFieldMarkup("initialize-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit")}${directoryFieldMarkup("publish-root", "publishRoot", "Publish root", "C:\\DMS\\Publish or /Users/name/DMS/Publish")}<label class="confirm-field"><input type="checkbox" name="confirmed" required> Initialize these roots and create workspace metadata.</label><button class="button" type="submit">Initialize workspace</button></form></section></div><p class="status" role="alert">${escapeHtml(error)}</p></section>`;
+  const status = error ? `<p class="status" role="alert">${escapeHtml(error)}</p>` : "";
+  return `<section class="setup-workspace"><header><span class="badge">Local workspace</span><h2>Set up DMS Desktop</h2><p>Open existing metadata or initialize explicit edit and publish roots. No documents are moved or copied during setup.</p></header><section class="recent-libraries card" aria-labelledby="recent-libraries-heading"><h3 id="recent-libraries-heading">Recent libraries</h3><div class="recent-libraries-list">${recentLibrariesMarkup(recent)}</div>${status}</section><div class="setup-grid"><section class="card"><h3>Open an existing workspace</h3><p>Choose an edit root that already contains <code>.dms/workspace.json</code>. A current advisory lock blocks opening.</p><form id="open-workspace-form" class="setup-form">${directoryFieldMarkup("open-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit", openEditRoot)}<label class="confirm-field"><input type="checkbox" name="takeOverStale"> Take over the lock only if it is stale.</label><button class="button" type="submit">Open workspace</button></form></section><section class="card"><h3>Initialize a workspace</h3><p>The desktop creates <code>.dms</code> under the edit root and creates the publish root if it does not exist.</p><form id="initialize-workspace-form" class="setup-form">${directoryFieldMarkup("initialize-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit")}${directoryFieldMarkup("publish-root", "publishRoot", "Publish root", "C:\\DMS\\Publish or /Users/name/DMS/Publish")}<label class="confirm-field"><input type="checkbox" name="confirmed" required> Initialize these roots and create workspace metadata.</label><button class="button" type="submit">Initialize workspace</button></form></section></div></section>`;
 }
 
 function activityMarkup(state, activity) {
   if (!activity) {
-    return setupMarkup(state.error, state.preferences.recent_libraries);
+    return setupMarkup(state.error, state.preferences.recent_libraries, state.setup_edit_root);
   }
   const workspace = state.workspace;
   if (activity.task === "Notes") {
@@ -384,7 +387,7 @@ function render(state) {
   mainContent.classList.toggle("library-active", activity?.task === "Library");
   mainContent.innerHTML = state.workspace
     ? activityMarkup(state, activity)
-    : setupMarkup(state.error, state.preferences.recent_libraries);
+    : setupMarkup(state.error, state.preferences.recent_libraries, state.setup_edit_root);
 
   const bookmark = document.querySelector("#bookmark-view");
   const bookmarkTarget = bookmarkActivity(state);
@@ -1163,6 +1166,8 @@ async function handleClick(event) {
 
   const recentOpen = event.target.closest("[data-recent-library-open]")?.dataset.recentLibraryOpen;
   if (recentOpen) {
+    appState = { ...appState, setup_edit_root: recentOpen, error: "" };
+    render(appState);
     try {
       const workspace = await invokeCommand("open_workspace", { editRoot: recentOpen });
       await activateWorkspace(workspace);

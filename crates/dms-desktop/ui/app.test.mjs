@@ -45,6 +45,18 @@ test("workspace setup exposes existing-open and confirmed dual-root initializati
   assert.match(markup, /data-recent-library-remove="\/Users\/name\/DMS\/Edit"/);
 });
 
+test("recent-library open failures stay visible and retain the path for lock recovery", () => {
+  const editRoot = "/Users/name/DMS/Edit";
+  const markup = setupMarkup(
+    "workspace lock is stale; explicit take-over is required",
+    [editRoot],
+    editRoot,
+  );
+
+  assert.ok(markup.indexOf('role="alert"') < markup.indexOf('class="setup-grid"'));
+  assert.match(markup, /id="open-edit-root"[^>]*value="\/Users\/name\/DMS\/Edit"/);
+});
+
 test("workspace setup maps each form to its explicit desktop command", () => {
   assert.deepEqual(
     workspaceSetupRequest("open-workspace-form", { editRoot: " C:\\DMS\\Edit " }),
