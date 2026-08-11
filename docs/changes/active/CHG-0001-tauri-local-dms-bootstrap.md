@@ -172,8 +172,8 @@ macOS** that:
 | 9k | External lifecycle commands and Office export | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; release desktop build; 60 frontend tests; strict repository links; Markdown table structure; `git diff --check`) | Production submit/review/decision/release commands and Library operator surfaces compose the 9i delivery and 9j Graph adapters with installed Office automation on Windows/macOS; retryable mailto confirmations cover review, decision-outcome, and minor-publication delivery; integration fakes and operator smoke instructions pass |
 | 9l | External operator smokes + CAP promotion | pending | Licensed Office release smoke passes on Windows and macOS; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated Node-runtime action annotations; every implemented CAP links executable evidence, CHG status is done, and the record is archived |
 
-**Current phase:** 9k — verified; checkpoint commit pending. Phase 9l remains
-pending until that checkpoint is pushed.
+**Current phase:** 9l — pending external operator evidence after Phase 9k
+checkpoint [`7b7402b`](https://github.com/videoclinic/dms/commit/7b7402b).
 
 ## Implementation notes
 
