@@ -278,6 +278,7 @@ pub enum WorkflowEventType {
     ReviewDecisionApproved,
     ReviewDecisionRejected,
     ReviewDecisionChangedRequested,
+    DecisionOutcomeNotified,
     Release,
     ReleaseWithdrawn,
     MinorPublicationNotified,
@@ -812,6 +813,15 @@ impl Workspace {
         self.candidate_mut(document_id, candidate_id)?
             .delivery_attempts
             .push(attempt.clone());
+        self.append_candidate_event(
+            document_id,
+            WorkflowEventType::DecisionOutcomeNotified,
+            &candidate,
+            CandidateEventDetails {
+                delivery: Some(attempt.clone()),
+                ..CandidateEventDetails::default()
+            },
+        )?;
         Ok(DecisionOutcome {
             candidate_id,
             status,
@@ -1050,6 +1060,52 @@ impl Workspace {
         Ok(attempt)
     }
 
+    pub fn retry_decision_notification<N: NotificationClient>(
+        &mut self,
+        document_id: Uuid,
+        candidate_id: Uuid,
+        notifier: &mut N,
+    ) -> Result<DeliveryAttempt> {
+        let settings = self
+            .notification_settings
+            .clone()
+            .ok_or(DmsError::NotificationSettingsRequired)?;
+        let candidate = self.candidate(document_id, candidate_id)?.clone();
+        let decision = match candidate.status {
+            CandidateStatus::Approved => ReviewDecision::Approved,
+            CandidateStatus::Rejected => ReviewDecision::Rejected,
+            CandidateStatus::ChangesRequested => ReviewDecision::ChangesRequested,
+            _ => {
+                return Err(DmsError::InvalidLifecycleTransition(
+                    "only a recorded review decision notification can be retried".to_owned(),
+                ));
+            }
+        };
+        let review_id = candidate
+            .review_id
+            .ok_or(DmsError::ReviewNotFound(candidate_id))?;
+        let message = decision_message(
+            &candidate,
+            decision,
+            self.review_permalink(document_id, review_id)?,
+        );
+        let attempt = delivery_attempt(&settings, &message, notifier);
+        self.candidate_mut(document_id, candidate_id)?
+            .delivery_attempts
+            .push(attempt.clone());
+        self.append_candidate_event(
+            document_id,
+            WorkflowEventType::DecisionOutcomeNotified,
+            &candidate,
+            CandidateEventDetails {
+                delivery: Some(attempt.clone()),
+                ..CandidateEventDetails::default()
+            },
+        )?;
+        self.save()?;
+        Ok(attempt)
+    }
+
     pub fn local_lifecycle_actions(&self, document_id: Uuid) -> Result<LocalLifecycleActions> {
         let document = self.document(document_id)?;
         let availability = |available, reason| LifecycleActionAvailability {
@@ -1210,6 +1266,20 @@ impl Workspace {
         let mut candidates = document.candidates.iter().collect::<Vec<_>>();
         candidates.sort_by_key(|candidate| std::cmp::Reverse(candidate.created_at));
         Ok(candidates)
+    }
+
+    pub fn active_candidate(&self, document_id: Uuid) -> Result<Option<&ReleaseCandidate>> {
+        let document = self.document(document_id)?;
+        document
+            .active_candidate_id
+            .map(|candidate_id| {
+                document
+                    .candidates
+                    .iter()
+                    .find(|candidate| candidate.id == candidate_id)
+                    .ok_or(DmsError::CandidateNotFound(candidate_id))
+            })
+            .transpose()
     }
 
     pub fn releases(&self, document_id: Uuid) -> Result<Vec<&ReleaseRecord>> {

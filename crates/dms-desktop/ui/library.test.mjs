@@ -338,6 +338,56 @@ test("lifecycle actions require reasons and confirmations and map to narrow comm
   assert.throws(() => lifecycleActionRequest("cancel_review", values, detail), /reason/);
 });
 
+test("external lifecycle forms map candidates, decisions, releases, and mail confirmations to narrow commands", () => {
+  const detail = {
+    document_id: "doc-1",
+    retryable_decision_candidate: { id: "candidate-1" },
+    retryable_minor_publication: { release_id: "release-1" },
+  };
+  const submit = new FormData();
+  submit.set("targetMode", "manual");
+  submit.set("manualMajor", "2");
+  submit.set("manualMinor", "4");
+  submit.set("requesterObjectId", "editor-1");
+  submit.set("changelog", " Clarify escalation path ");
+  submit.set("reviewOverrideReason", " Marker retained for review ");
+  assert.deepEqual(lifecycleActionRequest("submit_candidate", submit, detail), {
+    command: "submit_document_candidate",
+    arguments: {
+      input: {
+        documentId: "doc-1",
+        targetMode: "manual",
+        manualMajor: 2,
+        manualMinor: 4,
+        changelog: "Clarify escalation path",
+        requesterObjectId: "editor-1",
+        reviewOverrideReason: "Marker retained for review",
+        mailtoConfirmed: false,
+      },
+    },
+  });
+
+  const decision = new FormData();
+  decision.set("decision", "approved");
+  decision.set("comment", " Ready ");
+  assert.deepEqual(lifecycleActionRequest("decide_review", decision, detail), {
+    command: "decide_document_review",
+    arguments: { documentId: "doc-1", decision: "approved", comment: "Ready", mailtoConfirmed: false },
+  });
+
+  const confirmation = new FormData();
+  assert.throws(() => lifecycleActionRequest("retry_review_notification", confirmation, detail), /host mail/);
+  confirmation.set("mailtoConfirmed", "yes");
+  assert.deepEqual(lifecycleActionRequest("retry_decision_notification", confirmation, detail), {
+    command: "retry_decision_notification",
+    arguments: { documentId: "doc-1", candidateId: "candidate-1", mailtoConfirmed: true },
+  });
+  assert.deepEqual(lifecycleActionRequest("retry_minor_publication_notification", confirmation, detail), {
+    command: "retry_minor_publication_notification",
+    arguments: { documentId: "doc-1", releaseId: "release-1", mailtoConfirmed: true },
+  });
+});
+
 test("updated document selection refreshes the detail and visible row in place", () => {
   const registered = file("Handbook.md", { in_library: { document_id: "doc-1" } }, {
     id: "doc-1",

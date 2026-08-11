@@ -5,7 +5,7 @@
 | ID | CAP-0010 |
 | Status | not implemented |
 | Transports | Configured SMTP relay (ADR-0009) and host default mail handler via `mailto:` (ADR-0012) |
-| Tests | Partial phase 9f.4 configuration evidence: [core lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [notification route tests](../../../crates/dms-desktop/ui/configuration.test.mjs); live delivery remains phase 9i work |
+| Tests | Partial configuration and Phase 9k fake-backed lifecycle evidence: [core lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [notification adapter tests](../../../crates/dms-desktop/src/notify.rs), and [Library request tests](../../../crates/dms-desktop/ui/library.test.mjs); configured external delivery remains Phase 9l work |
 
 ## Outcomes (contract — not yet true in runtime)
 

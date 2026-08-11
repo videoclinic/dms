@@ -520,7 +520,15 @@ fn major_review_requires_graph_refresh_transport_success_and_verified_actor() {
     }
 
     graph.actor.object_id = fixture.editor_id;
-    let mut outcome_notifier = FakeNotifier::accepted();
+    let mut outcome_notifier = FakeNotifier {
+        receipts: [
+            Err("host mail needs explicit confirmation".to_owned()),
+            Ok(DeliveryReceipt::accepted(250, "accepted")),
+        ]
+        .into_iter()
+        .collect(),
+        messages: Vec::new(),
+    };
     assert!(matches!(
         fixture.workspace.decide_review(
             fixture.document_id,
@@ -544,7 +552,43 @@ fn major_review_requires_graph_refresh_transport_success_and_verified_actor() {
         )
         .expect("eligible approver");
     assert_eq!(outcome.status, CandidateStatus::Approved);
-    assert_eq!(outcome.delivery.status, DeliveryStatus::Accepted);
+    assert_eq!(outcome.delivery.status, DeliveryStatus::Failed);
+    let retry = fixture
+        .workspace
+        .retry_decision_notification(
+            fixture.document_id,
+            outcome.candidate_id,
+            &mut outcome_notifier,
+        )
+        .expect("retry decision outcome notification");
+    assert_eq!(retry.status, DeliveryStatus::Accepted);
+    assert_eq!(outcome_notifier.messages.len(), 2);
+    let decision_notifications = fixture
+        .workspace
+        .workflow_history(fixture.document_id)
+        .unwrap()
+        .into_iter()
+        .filter(|event| event.body.event_type == WorkflowEventType::DecisionOutcomeNotified)
+        .collect::<Vec<_>>();
+    assert_eq!(decision_notifications.len(), 2);
+    assert_eq!(
+        decision_notifications[0]
+            .body
+            .delivery
+            .as_ref()
+            .unwrap()
+            .status,
+        DeliveryStatus::Accepted
+    );
+    assert_eq!(
+        decision_notifications[1]
+            .body
+            .delivery
+            .as_ref()
+            .unwrap()
+            .status,
+        DeliveryStatus::Failed
+    );
     assert_eq!(
         fixture
             .workspace

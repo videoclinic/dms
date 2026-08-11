@@ -7,16 +7,17 @@ use std::{
 
 use chrono::NaiveDate;
 use dms_core::{
-    AuditReportRecord, AuditReportRequest, AuditReportVerificationStatus, BackupOutcome,
-    ClaudeAssistancePolicy, ClaudeAssistancePreview, ConfidentialityPolicy, ConfidentialityType,
-    ControlUpdate, DeliveryAttempt, DeliveryReceipt, DmsError, Document, DocumentControl,
-    DocumentType, EffectiveConfidentiality, EffectiveWorkflowRoles, EntraIdentitySource,
-    EntraPerson, GraphClient, LibraryEntry, LibraryFolder, LibraryFolderNode, Lifecycle,
-    LocalLifecycleActions, Note, NotificationClient, NotificationMessage, NotificationSettings,
-    NotificationTransport, PeriodicReview, PeriodicReviewMarker, PeriodicReviewResult,
-    PermalinkTarget, PolicyFolder, ReleaseVerificationStatus, RestoreOutcome, RestoreRequest,
-    RoleUpdate, SmtpSettings, SourceState, WorkflowEvent, WorkflowPolicyAssignment,
-    WorkflowVerification, Workspace, WorkspaceLock, WorkspaceLockStatus,
+    AuditReportRecord, AuditReportRequest, AuditReportVerificationStatus, AuthenticatedActor,
+    BackupOutcome, CandidateRequest, ClaudeAssistancePolicy, ClaudeAssistancePreview,
+    ConfidentialityPolicy, ConfidentialityType, ControlUpdate, DeliveryAttempt, DmsError, Document,
+    DocumentControl, DocumentType, EffectiveConfidentiality, EffectiveWorkflowRoles,
+    EntraIdentitySource, EntraPerson, GraphClient, LibraryEntry, LibraryFolder, LibraryFolderNode,
+    Lifecycle, LocalLifecycleActions, Note, NotificationClient, NotificationSettings,
+    NotificationTransport, PdfExporter, PeriodicReview, PeriodicReviewMarker, PeriodicReviewResult,
+    PermalinkTarget, PolicyFolder, ReleaseCandidate, ReleaseVerificationStatus, RestoreOutcome,
+    RestoreRequest, ReviewDecision, RoleUpdate, SmtpSettings, SourceState, TargetSelection,
+    Version, WorkflowEvent, WorkflowPolicyAssignment, WorkflowVerification, Workspace,
+    WorkspaceLock, WorkspaceLockStatus,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
@@ -36,14 +37,14 @@ const RECENT_LIBRARIES_LIMIT: usize = 10;
 
 struct DesktopIntegrations {
     graph: Mutex<graph::MicrosoftGraphClient>,
-    notifier: Mutex<Box<dyn NotificationClient + Send>>,
+    approver_actor: Mutex<Option<AuthenticatedActor>>,
 }
 
 impl Default for DesktopIntegrations {
     fn default() -> Self {
         Self {
             graph: Mutex::new(graph::MicrosoftGraphClient::production()),
-            notifier: Mutex::new(Box::new(UnavailableNotificationClient)),
+            approver_actor: Mutex::new(None),
         }
     }
 }
@@ -68,15 +69,17 @@ impl GraphClient for UnavailableGraphClient {
     }
 }
 
+#[cfg(test)]
 struct UnavailableNotificationClient;
 
+#[cfg(test)]
 impl NotificationClient for UnavailableNotificationClient {
     fn send(
         &mut self,
         _settings: &NotificationSettings,
-        _message: &NotificationMessage,
-    ) -> std::result::Result<DeliveryReceipt, String> {
-        Err("live notification delivery is not configured".to_owned())
+        _message: &dms_core::NotificationMessage,
+    ) -> std::result::Result<dms_core::DeliveryReceipt, String> {
+        Err("notification delivery must not be reached".to_owned())
     }
 }
 
@@ -167,6 +170,10 @@ pub struct DocumentSelection {
     pub effective_confidentiality: Option<EffectiveConfidentiality>,
     pub effective_workflow_roles: Option<EffectiveWorkflowRoles>,
     pub current_release: Option<CurrentReleaseSelection>,
+    pub active_candidate: Option<ReleaseCandidate>,
+    pub retryable_decision_candidate: Option<ReleaseCandidate>,
+    pub retryable_minor_publication: Option<ReleaseCandidate>,
+    pub eligible_people: Vec<EntraPerson>,
     pub lifecycle_actions: LocalLifecycleActions,
     pub workflow_events: Vec<WorkflowEvent>,
     pub workflow_verification: WorkflowVerification,
@@ -472,11 +479,17 @@ fn complete_approver_sign_in(
     challenge_id: Uuid,
     state: State<'_, DesktopIntegrations>,
 ) -> Result<dms_core::AuthenticatedActor, String> {
-    state
+    let actor = state
         .graph
         .lock()
         .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?
-        .complete_approver_sign_in(challenge_id)
+        .complete_approver_sign_in(challenge_id)?;
+    *state
+        .approver_actor
+        .lock()
+        .map_err(|_| "interactive approver sign-in state is unavailable".to_owned())? =
+        Some(actor.clone());
+    Ok(actor)
 }
 
 #[tauri::command]
@@ -728,6 +741,302 @@ fn mark_document_obsolete(
     document_selection(Path::new(&edit_root), document_id)
 }
 
+struct SignedInActorGraph<'a, G: GraphClient + ?Sized> {
+    graph: &'a mut G,
+    actor: AuthenticatedActor,
+}
+
+impl<G: GraphClient + ?Sized> GraphClient for SignedInActorGraph<'_, G> {
+    fn direct_user_members(
+        &mut self,
+        source: &EntraIdentitySource,
+    ) -> std::result::Result<Vec<EntraPerson>, String> {
+        self.graph.direct_user_members(source)
+    }
+
+    fn authenticated_actor(
+        &mut self,
+        _source: &EntraIdentitySource,
+    ) -> std::result::Result<AuthenticatedActor, String> {
+        Ok(self.actor.clone())
+    }
+}
+
+fn target_selection(
+    target_mode: &str,
+    manual_major: Option<u32>,
+    manual_minor: Option<u32>,
+) -> Result<TargetSelection, String> {
+    match target_mode.trim() {
+        "next_minor" => Ok(TargetSelection::NextMinor),
+        "next_major" => Ok(TargetSelection::NextMajor),
+        "manual" => Ok(TargetSelection::Manual(Version {
+            major: manual_major
+                .ok_or_else(|| "manual target requires a major version".to_owned())?,
+            minor: manual_minor
+                .ok_or_else(|| "manual target requires a minor version".to_owned())?,
+        })),
+        value => Err(format!("unknown target version mode: {value}")),
+    }
+}
+
+fn review_decision(value: &str) -> Result<ReviewDecision, String> {
+    match value.trim() {
+        "approved" => Ok(ReviewDecision::Approved),
+        "rejected" => Ok(ReviewDecision::Rejected),
+        "changes_requested" => Ok(ReviewDecision::ChangesRequested),
+        value => Err(format!("unknown review decision: {value}")),
+    }
+}
+
+fn optional_text(value: &str) -> Option<&str> {
+    (!value.trim().is_empty()).then_some(value)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CandidateSubmissionInput {
+    document_id: Uuid,
+    target_mode: String,
+    manual_major: Option<u32>,
+    manual_minor: Option<u32>,
+    changelog: String,
+    requester_object_id: Uuid,
+    review_override_reason: String,
+    mailto_confirmed: bool,
+}
+
+fn production_notifier(
+    edit_root: &str,
+    mailto_confirmed: bool,
+) -> Result<notify::DesktopNotifier<notify::OsCredentialStore>, String> {
+    let workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    Ok(notify::production_notifier(
+        workspace.workspace_id,
+        mailto_confirmed,
+    ))
+}
+
+fn submit_document_candidate_with<G: GraphClient, N: NotificationClient>(
+    edit_root: &str,
+    input: CandidateSubmissionInput,
+    graph: &mut G,
+    notifier: &mut N,
+) -> Result<DocumentSelection, String> {
+    let selection = target_selection(&input.target_mode, input.manual_major, input.manual_minor)?;
+    let document_id = input.document_id;
+    let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .submit_candidate(
+            CandidateRequest {
+                document_id,
+                selection,
+                changelog: input.changelog,
+                requester_object_id: input.requester_object_id,
+                review_override_reason: optional_text(&input.review_override_reason)
+                    .map(str::to_owned),
+                assistance: None,
+            },
+            graph,
+            notifier,
+        )
+        .map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
+    document_selection(Path::new(edit_root), document_id)
+}
+
+fn retry_review_notification_with<N: NotificationClient>(
+    edit_root: &str,
+    document_id: Uuid,
+    notifier: &mut N,
+) -> Result<DocumentSelection, String> {
+    let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .retry_review_notification(document_id, notifier)
+        .map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
+    document_selection(Path::new(edit_root), document_id)
+}
+
+fn decide_document_review_with<G: GraphClient + ?Sized, N: NotificationClient>(
+    edit_root: &str,
+    document_id: Uuid,
+    decision: ReviewDecision,
+    comment: String,
+    actor: AuthenticatedActor,
+    graph: &mut G,
+    notifier: &mut N,
+) -> Result<DocumentSelection, String> {
+    let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    let mut signed_in_graph = SignedInActorGraph { graph, actor };
+    workspace
+        .decide_review(
+            document_id,
+            decision,
+            optional_text(&comment),
+            &mut signed_in_graph,
+            notifier,
+        )
+        .map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
+    document_selection(Path::new(edit_root), document_id)
+}
+
+fn release_document_candidate_with<G: GraphClient, N: NotificationClient, E: PdfExporter>(
+    edit_root: &str,
+    document_id: Uuid,
+    release_override_reason: String,
+    graph: &mut G,
+    notifier: &mut N,
+    exporter: &mut E,
+) -> Result<DocumentSelection, String> {
+    let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .release_candidate(
+            document_id,
+            optional_text(&release_override_reason),
+            graph,
+            notifier,
+            exporter,
+        )
+        .map_err(|error| error.to_string())?;
+    document_selection(Path::new(edit_root), document_id)
+}
+
+fn retry_decision_notification_with<N: NotificationClient>(
+    edit_root: &str,
+    document_id: Uuid,
+    candidate_id: Uuid,
+    notifier: &mut N,
+) -> Result<DocumentSelection, String> {
+    let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .retry_decision_notification(document_id, candidate_id, notifier)
+        .map_err(|error| error.to_string())?;
+    document_selection(Path::new(edit_root), document_id)
+}
+
+fn retry_minor_publication_notification_with<N: NotificationClient>(
+    edit_root: &str,
+    document_id: Uuid,
+    release_id: Uuid,
+    notifier: &mut N,
+) -> Result<DocumentSelection, String> {
+    let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .retry_minor_publication_notification(document_id, release_id, notifier)
+        .map_err(|error| error.to_string())?;
+    document_selection(Path::new(edit_root), document_id)
+}
+
+#[tauri::command]
+fn submit_document_candidate(
+    edit_root: String,
+    input: CandidateSubmissionInput,
+    state: State<'_, DesktopIntegrations>,
+) -> Result<DocumentSelection, String> {
+    let mut notifier = production_notifier(&edit_root, input.mailto_confirmed)?;
+    let mut graph = state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
+    submit_document_candidate_with(&edit_root, input, &mut *graph, &mut notifier)
+}
+
+#[tauri::command]
+fn retry_review_notification(
+    edit_root: String,
+    document_id: Uuid,
+    mailto_confirmed: bool,
+) -> Result<DocumentSelection, String> {
+    let mut notifier = production_notifier(&edit_root, mailto_confirmed)?;
+    retry_review_notification_with(&edit_root, document_id, &mut notifier)
+}
+
+#[tauri::command]
+fn decide_document_review(
+    edit_root: String,
+    document_id: Uuid,
+    decision: String,
+    comment: String,
+    mailto_confirmed: bool,
+    state: State<'_, DesktopIntegrations>,
+) -> Result<DocumentSelection, String> {
+    let decision = review_decision(&decision)?;
+    let actor = state
+        .approver_actor
+        .lock()
+        .map_err(|_| "interactive approver sign-in state is unavailable".to_owned())?
+        .take()
+        .ok_or_else(|| {
+            "complete interactive approver sign-in before recording a decision".to_owned()
+        })?;
+    let mut notifier = production_notifier(&edit_root, mailto_confirmed)?;
+    let mut graph = state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
+    decide_document_review_with(
+        &edit_root,
+        document_id,
+        decision,
+        comment,
+        actor,
+        &mut *graph,
+        &mut notifier,
+    )
+}
+
+#[tauri::command]
+fn release_document_candidate(
+    app: AppHandle,
+    edit_root: String,
+    document_id: Uuid,
+    release_override_reason: String,
+    mailto_confirmed: bool,
+    state: State<'_, DesktopIntegrations>,
+) -> Result<DocumentSelection, String> {
+    let mut notifier = production_notifier(&edit_root, mailto_confirmed)?;
+    let mut graph = state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
+    let mut exporter = export::LocalPdfExporter::new(
+        export::InstalledOfficeAutomation,
+        export::NativeWebviewPdfPrinter::new(app),
+    );
+    release_document_candidate_with(
+        &edit_root,
+        document_id,
+        release_override_reason,
+        &mut *graph,
+        &mut notifier,
+        &mut exporter,
+    )
+}
+
+#[tauri::command]
+fn retry_decision_notification(
+    edit_root: String,
+    document_id: Uuid,
+    candidate_id: Uuid,
+    mailto_confirmed: bool,
+) -> Result<DocumentSelection, String> {
+    let mut notifier = production_notifier(&edit_root, mailto_confirmed)?;
+    retry_decision_notification_with(&edit_root, document_id, candidate_id, &mut notifier)
+}
+
+#[tauri::command]
+fn retry_minor_publication_notification(
+    edit_root: String,
+    document_id: Uuid,
+    release_id: Uuid,
+    mailto_confirmed: bool,
+) -> Result<DocumentSelection, String> {
+    let mut notifier = production_notifier(&edit_root, mailto_confirmed)?;
+    retry_minor_publication_notification_with(&edit_root, document_id, release_id, &mut notifier)
+}
+
 #[tauri::command]
 fn load_document_notes(edit_root: String, document_id: Uuid) -> Result<DocumentNotes, String> {
     let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
@@ -943,19 +1252,9 @@ fn remind_periodic_review(
     document_id: Uuid,
     review_id: Uuid,
     confirmed: bool,
-    integrations: tauri::State<'_, DesktopIntegrations>,
 ) -> Result<DeliveryAttempt, String> {
-    let mut notifier = integrations
-        .notifier
-        .lock()
-        .map_err(|_| "notification integration lock is poisoned".to_owned())?;
-    remind_periodic_review_with(
-        &edit_root,
-        document_id,
-        review_id,
-        confirmed,
-        notifier.as_mut(),
-    )
+    let mut notifier = production_notifier(&edit_root, false)?;
+    remind_periodic_review_with(&edit_root, document_id, review_id, confirmed, &mut notifier)
 }
 
 #[tauri::command]
@@ -1352,6 +1651,48 @@ fn document_selection(edit_root: &Path, document_id: Uuid) -> Result<DocumentSel
             relative_pdf_path: path_text(&release.relative_pdf_path),
             pdf_exists: workspace.release_pdf_path(document_id, release.id).is_ok(),
         });
+    let active_candidate = workspace
+        .active_candidate(document_id)
+        .map(|candidate| candidate.cloned())
+        .map_err(|error| error.to_string())?;
+    let retryable_decision_candidate = workspace
+        .candidates(document_id)
+        .map_err(|error| error.to_string())?
+        .into_iter()
+        .rev()
+        .find(|candidate| {
+            matches!(
+                candidate.status,
+                dms_core::CandidateStatus::Approved
+                    | dms_core::CandidateStatus::Rejected
+                    | dms_core::CandidateStatus::ChangesRequested
+            ) && candidate.delivery_attempts.last().is_some_and(|attempt| {
+                attempt.kind == dms_core::NotificationKind::DecisionOutcome
+                    && !matches!(
+                        attempt.status,
+                        dms_core::DeliveryStatus::Accepted | dms_core::DeliveryStatus::Confirmed
+                    )
+            })
+        })
+        .cloned();
+    let retryable_minor_publication = workspace
+        .candidates(document_id)
+        .map_err(|error| error.to_string())?
+        .into_iter()
+        .rev()
+        .find(|candidate| {
+            candidate.status == dms_core::CandidateStatus::Released
+                && !candidate.approval_required
+                && candidate.delivery_attempts.last().is_some_and(|attempt| {
+                    attempt.kind == dms_core::NotificationKind::MinorPublication
+                        && !matches!(
+                            attempt.status,
+                            dms_core::DeliveryStatus::Accepted
+                                | dms_core::DeliveryStatus::Confirmed
+                        )
+                })
+        })
+        .cloned();
     let lifecycle_actions = workspace
         .local_lifecycle_actions(document_id)
         .map_err(|error| error.to_string())?;
@@ -1386,6 +1727,10 @@ fn document_selection(edit_root: &Path, document_id: Uuid) -> Result<DocumentSel
         effective_confidentiality: workspace.effective_confidentiality(document_id).ok(),
         effective_workflow_roles: workspace.effective_workflow_roles(document_id).ok(),
         current_release,
+        active_candidate,
+        retryable_decision_candidate,
+        retryable_minor_publication,
+        eligible_people: workspace.eligible_people().into_iter().cloned().collect(),
         lifecycle_actions,
         workflow_events,
         workflow_verification,
@@ -1645,6 +1990,12 @@ pub fn run() {
             begin_document_revision,
             cancel_document_review,
             mark_document_obsolete,
+            submit_document_candidate,
+            retry_review_notification,
+            decide_document_review,
+            release_document_candidate,
+            retry_decision_notification,
+            retry_minor_publication_notification,
             open_document_source,
             open_current_release_pdf,
             load_document_notes,
@@ -2405,5 +2756,173 @@ mod tests {
             audit_report_folder(&Workspace::open(&edit_root).unwrap(), event_id).unwrap(),
             fs::canonicalize(edit_root.join(".dms/exports")).unwrap()
         );
+    }
+
+    #[test]
+    fn production_lifecycle_helpers_compose_graph_delivery_and_pdf_export_with_fakes() {
+        struct TestGraph {
+            people: Vec<EntraPerson>,
+        }
+
+        impl GraphClient for TestGraph {
+            fn direct_user_members(
+                &mut self,
+                _source: &EntraIdentitySource,
+            ) -> std::result::Result<Vec<EntraPerson>, String> {
+                Ok(self.people.clone())
+            }
+
+            fn authenticated_actor(
+                &mut self,
+                _source: &EntraIdentitySource,
+            ) -> std::result::Result<AuthenticatedActor, String> {
+                Err("the signed-in desktop wrapper supplies the actor".to_owned())
+            }
+        }
+
+        struct TestNotifier;
+
+        impl NotificationClient for TestNotifier {
+            fn send(
+                &mut self,
+                _settings: &NotificationSettings,
+                _message: &dms_core::NotificationMessage,
+            ) -> std::result::Result<dms_core::DeliveryReceipt, String> {
+                Ok(dms_core::DeliveryReceipt::accepted(250, "accepted"))
+            }
+        }
+
+        struct TestExporter;
+
+        impl PdfExporter for TestExporter {
+            fn export(
+                &mut self,
+                request: &dms_core::ExportRequest,
+            ) -> std::result::Result<(), String> {
+                fs::write(&request.temporary_pdf_path, b"%PDF-1.7\nfake export")
+                    .map_err(|error| error.to_string())
+            }
+        }
+
+        let edit_root = tempfile::tempdir().unwrap();
+        let publish_root = tempfile::tempdir().unwrap();
+        fs::create_dir_all(edit_root.path().join("Policies")).unwrap();
+        let mut workspace = Workspace::init(edit_root.path(), publish_root.path()).unwrap();
+        workspace
+            .configure_document_type("procedure", "Procedure", true)
+            .unwrap();
+        workspace
+            .configure_confidentiality_type("internal", "Internal", true)
+            .unwrap();
+        workspace
+            .set_confidentiality_policy(".", "internal")
+            .unwrap();
+        let tenant_id = Uuid::new_v4();
+        let editor_id = Uuid::new_v4();
+        let approver_id = Uuid::new_v4();
+        let requester_id = Uuid::new_v4();
+        let people = vec![
+            EntraPerson::eligible(editor_id, "Eva Editor", "editor@example.test"),
+            EntraPerson::eligible(approver_id, "Ada Approver", "approver@example.test"),
+            EntraPerson::eligible(requester_id, "Rita Requester", "requester@example.test"),
+        ];
+        workspace
+            .replace_identity_source(
+                tenant_id,
+                "Example tenant",
+                Uuid::new_v4(),
+                "DMS workflow",
+                people.clone(),
+            )
+            .unwrap();
+        workspace
+            .update_workflow_policy(
+                ".",
+                RoleUpdate::replace(editor_id),
+                RoleUpdate::replace(approver_id),
+            )
+            .unwrap();
+        workspace
+            .configure_notifications(
+                NotificationTransport::Smtp,
+                Some(SmtpSettings {
+                    relay_host: "smtp.example.test".to_owned(),
+                    relay_port: 587,
+                    sender: "dms@example.test".to_owned(),
+                }),
+            )
+            .unwrap();
+        let source = edit_root.path().join("Policies/Handbook.md");
+        fs::write(
+            &source,
+            "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        )
+        .unwrap();
+        let document = workspace.add_document(&source).unwrap();
+        workspace
+            .update_control(
+                document.id,
+                ControlUpdate {
+                    title: Some("Employee handbook".to_owned()),
+                    document_type: Some(Some("procedure".to_owned())),
+                    owner: Some(Some("People team".to_owned())),
+                    ..ControlUpdate::default()
+                },
+            )
+            .unwrap();
+        workspace.save().unwrap();
+        let root = edit_root.path().to_string_lossy().into_owned();
+        let mut graph = TestGraph { people };
+        let mut notifier = TestNotifier;
+
+        let submitted = submit_document_candidate_with(
+            &root,
+            CandidateSubmissionInput {
+                document_id: document.id,
+                target_mode: "next_major".to_owned(),
+                manual_major: None,
+                manual_minor: None,
+                changelog: "Clarify escalation path".to_owned(),
+                requester_object_id: requester_id,
+                review_override_reason: String::new(),
+                mailto_confirmed: false,
+            },
+            &mut graph,
+            &mut notifier,
+        )
+        .unwrap();
+        assert_eq!(
+            submitted.active_candidate.as_ref().unwrap().status,
+            dms_core::CandidateStatus::InReview
+        );
+
+        let approved = decide_document_review_with(
+            &root,
+            document.id,
+            ReviewDecision::Approved,
+            "Ready for release".to_owned(),
+            AuthenticatedActor {
+                tenant_id,
+                object_id: approver_id,
+            },
+            &mut graph,
+            &mut notifier,
+        )
+        .unwrap();
+        assert_eq!(
+            approved.active_candidate.as_ref().unwrap().status,
+            dms_core::CandidateStatus::Approved
+        );
+
+        let released = release_document_candidate_with(
+            &root,
+            document.id,
+            String::new(),
+            &mut graph,
+            &mut notifier,
+            &mut TestExporter,
+        )
+        .unwrap();
+        assert!(released.current_release.unwrap().pdf_exists);
     }
 }

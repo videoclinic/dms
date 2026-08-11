@@ -67,14 +67,16 @@ macOS.
   toggles. Navigating expands the current folder's ancestor chain without
   resetting unrelated session branch state.
 - The Library selection pane owns add/unregister/reassociate/permalink controls,
-  document-control editing, the document confidentiality override, local lifecycle
-  actions, and canonical workflow evidence; file rows remain selection-only and
-  preserve exact source names. The adapter supplies lifecycle availability and
-  precondition explanations rather than duplicating core transitions in the
-  frontend. Cancel review and mark obsolete retain failed reason drafts and require
-  explicit confirmation. Validation failures stay in that selected-document
-  context. Its notes action opens a document-scoped activity keyed by stable
-  document ID.
+  document-control editing, the document confidentiality override, candidate
+  submission, review decision, release, local lifecycle actions, and canonical
+  workflow evidence; file rows remain selection-only and preserve exact source
+  names. The adapter supplies lifecycle availability and precondition explanations
+  rather than duplicating core transitions in the frontend. `mailto:` delivery
+  opens the host handler first and advances only through its explicit confirmation
+  retry; review decisions require a fresh interactive Entra sign-in. Cancel review
+  and mark obsolete retain failed reason drafts and require explicit confirmation.
+  Validation failures stay in that selected-document context. Its notes action
+  opens a document-scoped activity keyed by stable document ID.
 - Note mutations call `dms-core`, save the workspace metadata, retain failed
   form drafts for retry, and clear the composer only after a successful save.
 - The Releases pane lists every recorded release with its verification status,
@@ -85,8 +87,7 @@ macOS.
   host-mediated Open folder actions. It also shows periodic-review markers and
   request, result, comment-required cancellation, and reminder actions. Result,
   cancellation, and reminder require explicit confirmation; delivery and
-  integrity failures are surfaced in place. Live Entra/notification adapters
-  remain phase 9i work.
+  integrity failures are surfaced in place.
 - The Maintenance pane shows advisory-lock status and configures its positive
   staleness threshold. It writes a workspace backup archive to a user-supplied
   path without overwrite and restores only after explicit roots, replacement

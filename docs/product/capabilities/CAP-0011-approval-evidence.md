@@ -5,7 +5,7 @@
 | ID | CAP-0011 |
 | Status | not implemented |
 | Storage | `<edit-root>/.dms/` (canonical event chain) |
-| Tests | Partial phases 9e and 9f.2 evidence: [hash-chained release-withdrawal and local lifecycle evidence tests](../../../crates/dms-core/tests/lifecycle.rs), [newest-first in-app workflow evidence tests](../../../crates/dms-desktop/ui/library.test.mjs) |
+| Tests | Partial phases 9e, 9f.2, and 9k evidence: [hash-chained lifecycle and delivery evidence tests](../../../crates/dms-core/tests/lifecycle.rs), [fake-backed desktop lifecycle composition](../../../crates/dms-desktop/src/lib.rs), and [newest-first in-app workflow evidence tests](../../../crates/dms-desktop/ui/library.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 
@@ -54,6 +54,8 @@ When implemented, the following must hold:
    - `review_decision_approved` — approver approved the current draft
    - `review_decision_rejected` — approver rejected; document returns to `draft`
    - `review_decision_changed_requested` — approver asked for changes; document returns to `draft`
+   - `decision_outcome_notified` — attempted or confirmed notification of a
+     recorded review decision to its snapshotted requester
    - `release` — successful versioned PDF write under the publish root
    - `minor_publication_notified` — attempted or confirmed post-release notice to
      the effective approver snapshotted for a direct minor release

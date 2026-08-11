@@ -1103,6 +1103,46 @@ async function handleLibraryClick(event) {
     render(appState);
     return true;
   }
+  if (event.target.closest("[data-library-approver-sign-in]")) {
+    try {
+      const challenge = await invokeCommand("begin_approver_sign_in", {
+        editRoot: appState.workspace.edit_root,
+      });
+      appState = {
+        ...appState,
+        library: { ...appState.library, approver_sign_in: { challenge } },
+        error: "",
+      };
+    } catch (error) {
+      appState = {
+        ...appState,
+        library: { ...appState.library, detail_error: String(error) },
+      };
+    }
+    render(appState);
+    return true;
+  }
+  const approverSignInCompletion = event.target.closest("[data-library-approver-sign-in-complete]")
+    ?.dataset.libraryApproverSignInComplete;
+  if (approverSignInCompletion) {
+    try {
+      const actor = await invokeCommand("complete_approver_sign_in", {
+        challengeId: approverSignInCompletion,
+      });
+      appState = {
+        ...appState,
+        library: { ...appState.library, approver_sign_in: { actor } },
+        error: "",
+      };
+    } catch (error) {
+      appState = {
+        ...appState,
+        library: { ...appState.library, detail_error: String(error) },
+      };
+    }
+    render(appState);
+    return true;
+  }
   const lifecycleAction = event.target.closest("[data-library-lifecycle-action]")
     ?.dataset.libraryLifecycleAction;
   if (lifecycleAction) {

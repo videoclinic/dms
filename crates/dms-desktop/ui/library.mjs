@@ -205,6 +205,92 @@ export function lifecycleActionRequest(action, values, detail) {
       arguments: { documentId: detail.document_id },
     };
   }
+  if (action === "submit_candidate") {
+    const targetMode = String(values?.get("targetMode") ?? "").trim();
+    const requesterObjectId = String(values?.get("requesterObjectId") ?? "").trim();
+    const changelog = String(values?.get("changelog") ?? "").trim();
+    const manualMajor = String(values?.get("manualMajor") ?? "").trim();
+    const manualMinor = String(values?.get("manualMinor") ?? "").trim();
+    if (!["next_minor", "next_major", "manual"].includes(targetMode)) {
+      throw new Error("Choose a target version.");
+    }
+    if (!requesterObjectId) throw new Error("Choose the requesting editor.");
+    if (!changelog) throw new Error("A release changelog is required.");
+    if (targetMode === "manual" && (!/^\d+$/.test(manualMajor) || !/^\d+$/.test(manualMinor))) {
+      throw new Error("Manual target version needs whole major and minor numbers.");
+    }
+    return {
+      command: "submit_document_candidate",
+      arguments: {
+        input: {
+          documentId: detail.document_id,
+          targetMode,
+          manualMajor: targetMode === "manual" ? Number(manualMajor) : null,
+          manualMinor: targetMode === "manual" ? Number(manualMinor) : null,
+          changelog,
+          requesterObjectId,
+          reviewOverrideReason: String(values?.get("reviewOverrideReason") ?? "").trim(),
+          mailtoConfirmed: false,
+        },
+      },
+    };
+  }
+  if (action === "retry_review_notification") {
+    if (values?.get("mailtoConfirmed") !== "yes") {
+      throw new Error("Confirm that the host mail message was sent.");
+    }
+    return {
+      command: "retry_review_notification",
+      arguments: { documentId: detail.document_id, mailtoConfirmed: true },
+    };
+  }
+  if (action === "decide_review") {
+    const decision = String(values?.get("decision") ?? "").trim();
+    if (!["approved", "rejected", "changes_requested"].includes(decision)) {
+      throw new Error("Choose an approval decision.");
+    }
+    return {
+      command: "decide_document_review",
+      arguments: {
+        documentId: detail.document_id,
+        decision,
+        comment: String(values?.get("comment") ?? "").trim(),
+        mailtoConfirmed: false,
+      },
+    };
+  }
+  if (action === "release_candidate") {
+    return {
+      command: "release_document_candidate",
+      arguments: {
+        documentId: detail.document_id,
+        releaseOverrideReason: String(values?.get("releaseOverrideReason") ?? "").trim(),
+        mailtoConfirmed: false,
+      },
+    };
+  }
+  if (action === "retry_decision_notification") {
+    if (values?.get("mailtoConfirmed") !== "yes") {
+      throw new Error("Confirm that the host mail message was sent.");
+    }
+    const candidateId = detail.retryable_decision_candidate?.id;
+    if (!candidateId) throw new Error("No decision notification is awaiting confirmation.");
+    return {
+      command: "retry_decision_notification",
+      arguments: { documentId: detail.document_id, candidateId, mailtoConfirmed: true },
+    };
+  }
+  if (action === "retry_minor_publication_notification") {
+    if (values?.get("mailtoConfirmed") !== "yes") {
+      throw new Error("Confirm that the host mail message was sent.");
+    }
+    const releaseId = detail.retryable_minor_publication?.release_id;
+    if (!releaseId) throw new Error("No minor-publication notification is awaiting confirmation.");
+    return {
+      command: "retry_minor_publication_notification",
+      arguments: { documentId: detail.document_id, releaseId, mailtoConfirmed: true },
+    };
+  }
   const reason = String(values?.get("reason") ?? "").trim();
   const confirmed = values?.get("confirmed") === "yes";
   if (!reason) throw new Error("A reason is required.");
@@ -349,7 +435,39 @@ function lifecyclePanelMarkup(library, detail) {
     : detail.workflow_verification?.tampered_at
       ? `tampered at ${detail.workflow_verification.tampered_at}`
       : "invalid";
-  return `<section class="lifecycle-panel" aria-labelledby="lifecycle-actions-heading"><h4 id="lifecycle-actions-heading">Lifecycle actions</h4><div class="lifecycle-actions"><div class="lifecycle-action"><strong>Begin revision</strong>${begin.reason ? `<small>${escapeHtml(begin.reason)}</small>` : ""}<button class="button secondary" type="button" data-library-lifecycle-action="begin_revision" ${begin.available ? "" : "disabled"}>Begin revision</button></div>${form("cancel_review", "Cancel review", cancel.available, cancel.reason)}${form("mark_obsolete", "Mark obsolete", obsolete.available, obsolete.reason)}</div><button class="button secondary" type="button" data-library-open-evidence>View workflow evidence</button><details class="workflow-evidence" ${library.evidence_open ? "open" : ""}><summary>Canonical workflow evidence · ${escapeHtml(verification)}</summary>${events}</details></section>`;
+  return `<section class="lifecycle-panel" aria-labelledby="lifecycle-actions-heading"><h4 id="lifecycle-actions-heading">Lifecycle actions</h4><div class="lifecycle-actions"><div class="lifecycle-action"><strong>Begin revision</strong>${begin.reason ? `<small>${escapeHtml(begin.reason)}</small>` : ""}<button class="button secondary" type="button" data-library-lifecycle-action="begin_revision" ${begin.available ? "" : "disabled"}>Begin revision</button></div>${form("cancel_review", "Cancel review", cancel.available, cancel.reason)}${form("mark_obsolete", "Mark obsolete", obsolete.available, obsolete.reason)}${externalLifecycleMarkup(library, detail)}</div><button class="button secondary" type="button" data-library-open-evidence>View workflow evidence</button><details class="workflow-evidence" ${library.evidence_open ? "open" : ""}><summary>Canonical workflow evidence · ${escapeHtml(verification)}</summary>${events}</details></section>`;
+}
+
+function externalLifecycleMarkup(library, detail) {
+  const candidate = detail.active_candidate;
+  const mailConfirmation = (label) => `<label class="confirmation"><input type="checkbox" name="mailtoConfirmed" value="yes"> I confirm the host mail message for ${escapeHtml(label)} was sent.</label>`;
+  const requesterOptions = (detail.eligible_people ?? [])
+    .map((person) => `<option value="${escapeHtml(person.object_id)}">${escapeHtml(person.display_name)} · ${escapeHtml(person.email)}</option>`)
+    .join("");
+  const signIn = library.approver_sign_in?.challenge
+    ? `<p class="source-path">Complete Microsoft sign-in at ${escapeHtml(library.approver_sign_in.challenge.verification_uri)} with code ${escapeHtml(library.approver_sign_in.challenge.user_code)}.</p><button class="button secondary" type="button" data-library-approver-sign-in-complete="${escapeHtml(library.approver_sign_in.challenge.challenge_id)}">Complete approver sign-in</button>`
+    : library.approver_sign_in?.actor
+      ? `<p class="source-path">Approver sign-in ready for ${escapeHtml(library.approver_sign_in.actor.display_name)}.</p>`
+      : '<button class="button secondary" type="button" data-library-approver-sign-in>Sign in as approver</button>';
+  const submit = detail.lifecycle === "draft" && !candidate
+    ? `<form class="lifecycle-action" data-library-lifecycle-form="submit_candidate"><strong>Submit release candidate</strong><label>Target version<select name="targetMode"><option value="next_major">Next major (approval required)</option><option value="next_minor">Next minor</option><option value="manual">Manual target</option></select></label><label>Manual major<input name="manualMajor" inputmode="numeric"></label><label>Manual minor<input name="manualMinor" inputmode="numeric"></label><label>Requesting editor<select name="requesterObjectId" required><option value="">Choose person</option>${requesterOptions}</select></label><label>Changelog<textarea name="changelog" required></textarea></label><label>Review content-check override reason (only when needed)<textarea name="reviewOverrideReason"></textarea></label><button class="button" type="submit">Submit candidate</button></form>`
+    : "";
+  const reviewRetry = candidate?.status === "review_delivery_failed"
+    ? `<form class="lifecycle-action" data-library-lifecycle-form="retry_review_notification"><strong>Confirm review request delivery</strong><small>The host mail handler opened without advancing the review.</small>${mailConfirmation("the review request")}<button class="button" type="submit">Confirm review message sent</button></form>`
+    : "";
+  const decision = candidate?.status === "in_review"
+    ? `<form class="lifecycle-action" data-library-lifecycle-form="decide_review"><strong>Record review decision</strong>${signIn}<label>Decision<select name="decision" required><option value="">Choose decision</option><option value="approved">Approve</option><option value="rejected">Reject</option><option value="changes_requested">Request changes</option></select></label><label>Comment<textarea name="comment"></textarea></label><button class="button" type="submit">Record decision</button></form>`
+    : "";
+  const release = candidate && ((candidate.approval_required && candidate.status === "approved") || (!candidate.approval_required && candidate.status === "draft"))
+    ? `<form class="lifecycle-action" data-library-lifecycle-form="release_candidate"><strong>Export and release ${escapeHtml(`V${candidate.version.major}.${candidate.version.minor}`)}</strong><small>Uses installed Office for .docx or the native print WebView for Markdown.</small><label>Release content-check override reason (only when needed)<textarea name="releaseOverrideReason"></textarea></label><button class="button" type="submit">Export PDF and release</button></form>`
+    : "";
+  const decisionRetry = detail.retryable_decision_candidate
+    ? `<form class="lifecycle-action" data-library-lifecycle-form="retry_decision_notification"><strong>Confirm decision notification delivery</strong>${mailConfirmation("the decision outcome")}<button class="button secondary" type="submit">Confirm decision message sent</button></form>`
+    : "";
+  const minorRetry = detail.retryable_minor_publication
+    ? `<form class="lifecycle-action" data-library-lifecycle-form="retry_minor_publication_notification"><strong>Confirm minor-publication delivery</strong>${mailConfirmation("the minor publication")}<button class="button secondary" type="submit">Confirm publication message sent</button></form>`
+    : "";
+  return `${submit}${reviewRetry}${decision}${release}${decisionRetry}${minorRetry}`;
 }
 
 function selectionMarkup(library) {

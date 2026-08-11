@@ -92,7 +92,9 @@ impl<C: CredentialStore> NotificationClient for DesktopNotifier<C> {
     ) -> Result<DeliveryReceipt, String> {
         match settings.transport {
             NotificationTransport::Mailto => {
-                (self.open_uri)(&message.mailto_uri)?;
+                if !self.mailto_confirmed {
+                    (self.open_uri)(&message.mailto_uri)?;
+                }
                 Ok(DeliveryReceipt {
                     status: if self.mailto_confirmed {
                         DeliveryStatus::Confirmed
@@ -196,6 +198,20 @@ mod tests {
     fn confirmed_mailto_records_confirmed_delivery() {
         let mut notifier =
             DesktopNotifier::new(FakeCredentials, Uuid::new_v4(), true, host_mail_handler);
+
+        let receipt = notifier.send(&mailto_settings(), &message()).unwrap();
+
+        assert_eq!(receipt.status, DeliveryStatus::Confirmed);
+    }
+
+    #[test]
+    fn confirmed_mailto_does_not_open_a_second_compose_window() {
+        fn unexpected_handler(_uri: &str) -> Result<(), String> {
+            Err("the confirmation must not open mail again".to_owned())
+        }
+
+        let mut notifier =
+            DesktopNotifier::new(FakeCredentials, Uuid::new_v4(), true, unexpected_handler);
 
         let receipt = notifier.send(&mailto_settings(), &message()).unwrap();
 

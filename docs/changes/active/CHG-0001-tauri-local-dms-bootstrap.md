@@ -169,10 +169,11 @@ macOS** that:
 | 9h | Operator-selected Claude excerpts | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 59 frontend tests; Linux launch smoke) | Oversized assistance payloads show their size and selectable excerpts; preview retries only with the operator-selected subset, never silently truncates, and still requires digest-bound consent; core, adapter, and frontend tests pass |
 | 9i | Canonical notification templates and desktop delivery adapters | done (`39db45b`; local Rust format/test/Clippy and 59 frontend tests pass) | Core emits CAP-0010's literal review-request and minor-publication templates; desktop SMTP and host-mail adapters resolve credentials only from OS storage, preserve explicit `mailto:` confirmation, and pass fake-backed delivery tests and operator setup checks |
 | 9j | Live Entra setup, refresh, and approver sign-in | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 59 frontend tests; Linux launch smoke; release build) | Schema v10 persists each identity-cache refresh time; Configuration previews and explicitly applies administrator-supplied tenant/group bindings through interactive delegated Graph access; OS credential storage holds the delegated-token cache; direct-user filtering, refresh-before-role-assignment, policy rerouting, and approver actor verification pass fake-backed tests |
-| 9k | External lifecycle commands and Office export | pending | Production submit/review/decision/release commands and Library operator surfaces compose the 9i delivery and 9j Graph adapters with installed Office automation on Windows/macOS; integration fakes and operator smoke instructions pass |
+| 9k | External lifecycle commands and Office export | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; release desktop build; 60 frontend tests; strict repository links; Markdown table structure; `git diff --check`) | Production submit/review/decision/release commands and Library operator surfaces compose the 9i delivery and 9j Graph adapters with installed Office automation on Windows/macOS; retryable mailto confirmations cover review, decision-outcome, and minor-publication delivery; integration fakes and operator smoke instructions pass |
 | 9l | External operator smokes + CAP promotion | pending | Licensed Office release smoke passes on Windows and macOS; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated Node-runtime action annotations; every implemented CAP links executable evidence, CHG status is done, and the record is archived |
 
-**Current phase:** 9k — pending after the Phase 9j checkpoint.
+**Current phase:** 9k — verified; checkpoint commit pending. Phase 9l remains
+pending until that checkpoint is pushed.
 
 ## Implementation notes
 
@@ -233,6 +234,23 @@ macOS** that:
   smokes require licensed host applications, a configured tenant/group, and an
   interactive operator identity. CI fakes and unit tests do not satisfy those
   external gates.
+
+### Phase 9k operator smoke instructions
+
+1. In Configuration, apply the tenant/group binding, refresh its eligible people,
+   and configure either SMTP with its OS-stored credential or `mailto:` delivery.
+2. Add or open a controlled draft, select an eligible requesting editor, submit a
+   major candidate, and confirm that a `mailto:` draft does not advance review
+   until the operator confirms it was sent.
+3. Use the Library review action to complete interactive approver sign-in, record
+   a decision as an eligible approver, and confirm any `mailto:` decision notice.
+4. Release the approved candidate on a licensed Windows or macOS Office host for
+   `.docx`, or release a Markdown candidate through the native WebView print
+   path; verify the versioned PDF and workflow evidence. Exercise a direct minor
+   release and confirm its publication notice the same way.
+5. Use the evidence panel to verify each delivery attempt and retry control. The
+   resulting configured Entra, delivery, and licensed-Office observations are
+   Phase 9l acceptance evidence; never place tenant credentials in the record.
 - Phase 9 was expected to be promotion-only, but the CAP audit found unresolved
   runtime and operator prerequisites across distinct subsystems. Phases 9a–9j
   make those prerequisites independently gated instead of promoting partial
@@ -330,6 +348,13 @@ macOS** that:
   protocol tests inside the desktop adapter boundary; splitting that protocol
   across phase-local files would not make the checkpoint independently usable or
   easier to verify.
+- Phase 9k found that core records a decision-outcome delivery attempt but did
+  not expose a retry path or append a retry attempt to canonical history, even
+  though CAP-0010 requires failed or unconfirmed outcome notifications to be
+  retryable and recorded. This belongs in the current lifecycle composition
+  slice: add the narrow retry operation, canonical attempt evidence, and desktop
+  confirmation surface alongside review and minor-publication delivery rather
+  than leaving a decision state that cannot complete its notification evidence.
 
 ## Resume checklist
 
