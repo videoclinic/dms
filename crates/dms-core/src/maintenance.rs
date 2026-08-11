@@ -649,6 +649,7 @@ impl Workspace {
                 release_id: review.release_id,
                 result: context.result,
             }),
+            control_change: None,
             report: None,
         };
         self.append_event(document_id, body)?;

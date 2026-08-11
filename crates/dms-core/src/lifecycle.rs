@@ -283,6 +283,7 @@ pub enum WorkflowEventType {
     MinorPublicationNotified,
     ReviewCancelled,
     CandidateInvalidated,
+    DocumentControlDataChanged,
     RevisionBegun,
     DocumentObsoleted,
     ContentConformanceOverridden,
@@ -298,6 +299,12 @@ pub struct PeriodicReviewEventDetails {
     pub review_id: Uuid,
     pub release_id: Uuid,
     pub result: Option<PeriodicReviewResult>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DocumentControlChange {
+    pub before: DocumentControl,
+    pub after: DocumentControl,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -332,6 +339,8 @@ pub struct WorkflowEventBody {
     pub pdf_digest: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub periodic_review: Option<PeriodicReviewEventDetails>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub control_change: Option<DocumentControlChange>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub report: Option<crate::AuditReportEvidence>,
 }
@@ -1076,6 +1085,7 @@ impl Workspace {
             content_override: None,
             pdf_digest: Some(release.pdf_digest.clone()),
             periodic_review: None,
+            control_change: None,
             report: None,
         };
         self.append_event(document_id, body)?;
@@ -1607,6 +1617,7 @@ impl Workspace {
             content_override: None,
             pdf_digest: details.pdf_digest,
             periodic_review: None,
+            control_change: None,
             report: None,
         };
         self.append_event(document_id, body)
@@ -1645,6 +1656,46 @@ impl Workspace {
             content_override: None,
             pdf_digest: None,
             periodic_review: None,
+            control_change: None,
+            report: None,
+        };
+        self.append_event(document_id, body)
+    }
+
+    pub(crate) fn append_control_change_event(
+        &mut self,
+        document_id: Uuid,
+        before: DocumentControl,
+        after: DocumentControl,
+    ) -> Result<WorkflowEvent> {
+        let body = WorkflowEventBody {
+            event_id: Uuid::new_v4(),
+            document_id,
+            event_type: WorkflowEventType::DocumentControlDataChanged,
+            predecessor_hash: self
+                .document(document_id)?
+                .workflow_events
+                .last()
+                .map(|event| event.event_hash.clone()),
+            timestamp: Utc::now(),
+            requester: None,
+            editor: None,
+            approver: None,
+            authenticated_actor: None,
+            local_os_user: default_author(),
+            revision_digest: None,
+            confidentiality: None,
+            target_version: None,
+            target_mode: None,
+            changelog: None,
+            assistance: None,
+            decision_comment: None,
+            operator_comment: None,
+            delivery: None,
+            content_override: None,
+            pdf_digest: None,
+            periodic_review: None,
+            control_change: Some(DocumentControlChange { before, after }),
             report: None,
         };
         self.append_event(document_id, body)

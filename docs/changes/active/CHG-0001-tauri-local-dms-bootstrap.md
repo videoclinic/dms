@@ -155,13 +155,16 @@ macOS** that:
 | 9c | Audit export | done (schema v7 migration; focused core/CLI/desktop tests; `cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 36 frontend tests; Linux launch smoke; browser visual QA) | Deterministic document/approver/confidentiality/date-filtered CSV/PDF reports contain classification, workflow, release, periodic-review, target-mode, delivery, hash, and verification evidence without source/release bytes; paths stay inside the edit root and never overwrite; generation appends canonical `report_generated` evidence; CLI and desktop expose generation/list/verify/open-folder operations; Recent reports filters before pagination and surfaces chain, file, and missing/tampered states |
 | 9d | Workspace integrity and recovery | done (schema v8 migration; core/CLI/Tauri/frontend lock and restore operations; focused failure-path tests; full Rust format/test/Clippy gates; 39 frontend tests; Linux launch smoke) | Advisory lock status/acquire/owner-matched release/stale takeover and manifest-verified backup restore refuse unsafe or cross-platform-colliding paths, symlinks, fresh-lock overwrite, and unconfirmed replacement; restore holds an advisory lock while writing; core, CLI, desktop, and failure-path tests pass |
 | 9e | Release and library maintenance | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 43 frontend tests) | Release withdrawal requires confirmation and a reason, appends hash-chained evidence, preserves exact history, and cannot drift from canonical evidence; one current-release resolver skips withdrawn records while later target allocation advances beyond all committed versions; missing/orphan releases remain explicit; Library and Releases actions open only validated existing source/PDF paths through host commands |
-| 9f | Desktop lifecycle and Configuration surfaces | pending | The desktop invokes implemented core operations for document-control edit, confidentiality override, begin revision, submit/review/decision/release, cancel review, obsolete, evidence history, document defaults, Workflow, Notifications, and Workspace configuration while preserving one routed Configuration activity; adapter/frontend tests prove each operator path |
+| 9f.1 | Document control and confidentiality actions | done (schema-v9 migration; canonical before/after control-change evidence; narrow Tauri commands and Library forms; full Rust format/test/Clippy gates; 45 frontend tests; records/link gates) | The Library selection pane edits title, number, type, owner, and effective date through narrow desktop commands; it sets or clears the document confidentiality override from configured types; validation failures remain in the selected document context; adapter/frontend tests pass |
+| 9f.2 | Local lifecycle and evidence actions | pending | The Library selection pane invokes Begin revision, Cancel review with a required reason and confirmation, Mark obsolete with a required reason and confirmation, and opens canonical workflow evidence; unavailable transitions explain their preconditions; adapter/frontend tests pass |
+| 9f.3 | Workspace and Document defaults configuration | pending | One routed Configuration activity provides Workspace and Document defaults routes, persists supported local core settings and catalogue operations, and keeps workspace setup as the only pre-open route; adapter/frontend tests pass |
+| 9f.4 | Workflow and Notifications configuration | pending | The same routed Configuration activity provides Workflow and Notifications routes plus explicit identity-source and confidentiality-catalogue secondary surfaces without creating duplicate activities; adapter/frontend tests pass |
 | 9g | Permalink OS integration | pending | Windows and macOS register `dms://`; inbound document/review/note links resolve workspace + stable document identity, focus or create the correct activity, survive rename/version changes, and fail closed for unavailable targets; platform smoke passes |
 | 9h | Operator-selected Claude excerpts | pending | Oversized assistance payloads show their size and selectable excerpts; preview retries only with the operator-selected subset, never silently truncates, and still requires digest-bound consent; core, adapter, and frontend tests pass |
-| 9i | Live Office, Entra, and notification adapters | pending | Production release commands wire installed Office automation on Windows/macOS; administrator-configured Microsoft Graph refresh and interactive approver sign-in use OS credential storage; SMTP and host-mail transports send canonical messages without storing credentials in `.dms`; fake-backed tests and operator smoke instructions pass |
+| 9i | Live Office, Entra, notification, and external lifecycle paths | pending | Production submit/review/decision/release commands and their desktop operator surfaces wire installed Office automation on Windows/macOS, administrator-configured Microsoft Graph refresh, interactive approver sign-in through OS credential storage, and SMTP/host-mail delivery without storing credentials in `.dms`; fake-backed tests and operator smoke instructions pass |
 | 9j | External operator smokes + CAP promotion | pending | Licensed Office release smoke passes on Windows and macOS; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass; every implemented CAP links executable evidence, CHG status is done, and the record is archived |
 
-**Current phase:** no phase is in progress. Phase 9f is next after the phase 9e commit checkpoint.
+**Current phase:** 9f.2 — Local lifecycle and evidence actions.
 
 ## Implementation notes
 
@@ -266,6 +269,17 @@ macOS** that:
   resolver, version allocation still advances over withdrawn history, missing
   and orphaned releases remain visible, and validated source/release paths open
   through narrow host commands.
+- Phase 9f is split at restart-safe operator boundaries so each local desktop
+  surface remains independently testable. Submit, review, decision, and release
+  stay with phase 9i because their production commands require the live Office,
+  Entra, and notification adapters owned by that phase.
+- Phase 9f.1 introduces schema v9 because the pre-phase document-control model
+  had no effective-date field; schema v8 workspaces migrate that field to unset
+  before desktop editing is exposed. Actual control-data changes append
+  hash-chained `document_control_data_changed` evidence with structured before
+  and after values, then invalidate stale candidates. The Library keeps command
+  validation failures beside the selected document and offers only enabled
+  document/confidentiality types, including explicit override clearing.
 
 ## Resume checklist
 

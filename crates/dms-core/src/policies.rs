@@ -206,6 +206,13 @@ impl Workspace {
         Ok(())
     }
 
+    pub fn document_confidentiality_override(&self, document_id: Uuid) -> Result<Option<&str>> {
+        Ok(self
+            .document(document_id)?
+            .confidentiality_override
+            .as_deref())
+    }
+
     pub fn effective_confidentiality(&self, document_id: Uuid) -> Result<EffectiveConfidentiality> {
         let document = self.document(document_id)?;
         if let Some(type_id) = document.confidentiality_override.as_deref() {

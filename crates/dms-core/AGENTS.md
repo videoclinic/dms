@@ -26,7 +26,9 @@ persistence.
 - Source paths are canonicalized, must resolve under the configured edit root,
   and are stored relative to it with platform-independent `/` separators in
   metadata and machine-readable output.
-- Source filename/path are locator facts; control data is independent metadata.
+- Source filename/path are locator facts; control data, including effective date,
+  is independent metadata. Each actual control-data edit appends canonical
+  before/after workflow evidence before invalidating stale candidates.
 - Folder discovery exposes only edit-root-relative regular files and directories,
   excludes `.dms` and Office temporary sidecars, and never auto-registers or
   auto-reassociates a source.
@@ -103,6 +105,8 @@ persistence.
   `v6.json.bak` retained during migration.
 - Schema v8 adds the positive per-workspace advisory-lock staleness threshold,
   with a `v7.json.bak` retained during migration.
+- Schema v9 adds the optional document-control effective date, with a
+  `v8.json.bak` retained during migration.
 
 ## Verification
 

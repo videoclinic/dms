@@ -958,6 +958,7 @@ fn run_document(command: DocumentCommand, json: bool) -> CliResult<()> {
                     document_number: document_number.map(Some),
                     document_type: document_type.map(Some),
                     owner: owner.map(Some),
+                    effective_date: None,
                 },
             )?;
             workspace.save()?;

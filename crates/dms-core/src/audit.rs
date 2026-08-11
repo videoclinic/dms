@@ -183,6 +183,7 @@ impl Workspace {
             content_override: None,
             pdf_digest: None,
             periodic_review: None,
+            control_change: None,
             report: Some(evidence.clone()),
         };
         let event = WorkflowEvent {
@@ -409,6 +410,15 @@ impl Workspace {
                         review.review_id,
                         review.release_id,
                         review.result.map(periodic_result_text).unwrap_or("pending")
+                    ));
+                }
+                if let Some(change) = &event.body.control_change {
+                    details.push(format!(
+                        "before={} after={}",
+                        serde_json::to_string(&change.before)
+                            .expect("document control serialization is infallible"),
+                        serde_json::to_string(&change.after)
+                            .expect("document control serialization is infallible")
                     ));
                 }
                 rows.push(AuditRow {
@@ -810,6 +820,7 @@ fn event_type_text(value: WorkflowEventType) -> &'static str {
         WorkflowEventType::MinorPublicationNotified => "minor_publication_notified",
         WorkflowEventType::ReviewCancelled => "review_cancelled",
         WorkflowEventType::CandidateInvalidated => "candidate_invalidated",
+        WorkflowEventType::DocumentControlDataChanged => "document_control_data_changed",
         WorkflowEventType::RevisionBegun => "revision_begun",
         WorkflowEventType::DocumentObsoleted => "document_obsoleted",
         WorkflowEventType::ContentConformanceOverridden => "content_conformance_overridden",

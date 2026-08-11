@@ -1,6 +1,9 @@
 import {
+  applyDocumentSelection,
   applyLibrarySnapshot,
+  confidentialityUpdateRequest,
   createLibraryState,
+  documentControlUpdateRequest,
   entryDocumentId,
   historyTarget,
   libraryMarkup,
@@ -1309,6 +1312,31 @@ async function handleClick(event) {
 }
 
 async function handleSubmit(event) {
+  if (["library-document-control-form", "library-confidentiality-form"].includes(event.target.id)) {
+    event.preventDefault();
+    try {
+      const values = new FormData(event.target);
+      const request = event.target.id === "library-document-control-form"
+        ? documentControlUpdateRequest(values, appState.library.detail)
+        : confidentialityUpdateRequest(values, appState.library.detail);
+      const detail = await invokeCommand(request.command, {
+        editRoot: appState.workspace.edit_root,
+        ...request.arguments,
+      });
+      appState = {
+        ...appState,
+        library: applyDocumentSelection(appState.library, detail),
+        error: "",
+      };
+    } catch (error) {
+      appState = {
+        ...appState,
+        library: { ...appState.library, detail_error: String(error) },
+      };
+    }
+    render(appState);
+    return;
+  }
   if (event.target.matches("[data-release-withdraw-form]")) {
     event.preventDefault();
     const request = releaseWithdrawalRequest(new FormData(event.target));

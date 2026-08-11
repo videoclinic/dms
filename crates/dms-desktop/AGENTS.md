@@ -52,9 +52,11 @@ macOS.
 - Render the Library folder surface as a nested tree with independent branch
   toggles. Navigating expands the current folder's ancestor chain without
   resetting unrelated session branch state.
-- The Library selection pane owns add/unregister/reassociate/permalink controls;
-  file rows remain selection-only and preserve exact source names. Its notes
-  action opens a document-scoped activity keyed by stable document ID.
+- The Library selection pane owns add/unregister/reassociate/permalink controls,
+  document-control editing, and the document confidentiality override; file rows
+  remain selection-only and preserve exact source names. Validation failures stay
+  in that selected-document context. Its notes action opens a document-scoped
+  activity keyed by stable document ID.
 - Note mutations call `dms-core`, save the workspace metadata, retain failed
   form drafts for retry, and clear the composer only after a successful save.
 - The Releases pane lists every recorded release with its verification status,

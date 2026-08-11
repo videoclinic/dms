@@ -299,7 +299,10 @@ fn accepted_assistance_is_explicit_evidence_without_granting_lifecycle_authority
         .workspace
         .workflow_history(fixture.document_id)
         .unwrap();
-    let event = history.last().unwrap();
+    let event = history
+        .iter()
+        .find(|event| event.body.assistance.is_some())
+        .expect("assistance evidence event");
     assert_eq!(
         event
             .body

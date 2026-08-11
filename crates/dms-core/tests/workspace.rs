@@ -1,6 +1,9 @@
 use std::{fs, path::PathBuf, thread, time::Duration};
 
-use dms_core::{ControlUpdate, DmsError, Workspace, METADATA_DIRECTORY, METADATA_FILENAME};
+use chrono::NaiveDate;
+use dms_core::{
+    ControlUpdate, DmsError, WorkflowEventType, Workspace, METADATA_DIRECTORY, METADATA_FILENAME,
+};
 use tempfile::TempDir;
 
 fn initialized_workspace() -> (TempDir, TempDir, Workspace) {
@@ -63,6 +66,9 @@ fn document_control_is_persisted_independently_from_source_locator() {
                 document_number: Some(Some("PR-001".to_owned())),
                 document_type: Some(Some("procedure".to_owned())),
                 owner: Some(Some("Quality team".to_owned())),
+                effective_date: Some(Some(
+                    NaiveDate::from_ymd_opt(2026, 8, 11).expect("effective date"),
+                )),
             },
         )
         .expect("update control data");
@@ -82,7 +88,66 @@ fn document_control_is_persisted_independently_from_source_locator() {
     assert_eq!(stored.relative_path, relative_path);
     assert_eq!(stored.control.title, "New hire onboarding");
     assert_eq!(stored.control.document_number.as_deref(), Some("PR-001"));
+    assert_eq!(
+        stored.control.effective_date,
+        NaiveDate::from_ymd_opt(2026, 8, 11)
+    );
     assert_eq!(updated.id, stored.id);
+    let history = workspace
+        .workflow_history(document.id)
+        .expect("document-control evidence");
+    assert_eq!(history.len(), 1);
+    assert_eq!(
+        history[0].body.event_type,
+        WorkflowEventType::DocumentControlDataChanged
+    );
+    let change = history[0]
+        .body
+        .control_change
+        .as_ref()
+        .expect("before/after control data");
+    assert_eq!(change.before.title, "Onboarding");
+    assert_eq!(change.after, stored.control);
+    assert!(workspace.verify_workflow(document.id).unwrap().is_valid());
+}
+
+#[test]
+fn schema_v8_migration_defaults_effective_date_to_unset() {
+    let (edit_root, _publish_root, mut workspace) = initialized_workspace();
+    let document = add_markdown_document(&mut workspace, &edit_root, "Legacy.md");
+    workspace.save().expect("current metadata");
+
+    let metadata_path = edit_root
+        .path()
+        .join(METADATA_DIRECTORY)
+        .join(METADATA_FILENAME);
+    let mut metadata: serde_json::Value =
+        serde_json::from_slice(&fs::read(&metadata_path).expect("metadata"))
+            .expect("metadata JSON");
+    metadata["schema_version"] = serde_json::Value::from(8);
+    metadata["documents"][document.id.to_string()]["control"]
+        .as_object_mut()
+        .expect("document control")
+        .remove("effective_date");
+    fs::write(
+        &metadata_path,
+        serde_json::to_vec_pretty(&metadata).unwrap(),
+    )
+    .unwrap();
+
+    let migrated = Workspace::open(edit_root.path()).expect("schema v8 migration");
+    assert_eq!(
+        migrated
+            .document(document.id)
+            .unwrap()
+            .control
+            .effective_date,
+        None
+    );
+    assert!(edit_root
+        .path()
+        .join(".dms/workspace.v8.json.bak")
+        .is_file());
 }
 
 #[test]

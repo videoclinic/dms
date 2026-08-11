@@ -5,7 +5,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
@@ -28,7 +28,7 @@ pub use lifecycle::*;
 pub use maintenance::*;
 pub use policies::*;
 
-pub const SCHEMA_VERSION: u32 = 8;
+pub const SCHEMA_VERSION: u32 = 9;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 
@@ -329,6 +329,8 @@ pub struct DocumentControl {
     pub document_number: Option<String>,
     pub document_type: Option<String>,
     pub owner: Option<String>,
+    #[serde(default)]
+    pub effective_date: Option<NaiveDate>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -347,6 +349,7 @@ pub struct ControlUpdate {
     pub document_number: Option<Option<String>>,
     pub document_type: Option<Option<String>>,
     pub owner: Option<Option<String>>,
+    pub effective_date: Option<Option<NaiveDate>>,
 }
 
 impl Workspace {
@@ -410,7 +413,7 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = matches!(found, 1..=7);
+        let migrated = matches!(found, 1..=8);
         if found == 1 {
             migrate_v1_catalogues(&mut value)?;
         }
@@ -589,6 +592,7 @@ impl Workspace {
                 document_number: None,
                 document_type: None,
                 owner: None,
+                effective_date: None,
             },
             confidentiality_override: None,
             workflow_overrides: DocumentWorkflowOverrides::default(),
@@ -613,25 +617,32 @@ impl Workspace {
         if let Some(Some(type_id)) = update.document_type.as_ref() {
             self.require_enabled_document_type(type_id)?;
         }
-        let document = self
-            .documents
-            .get_mut(&document_id)
-            .ok_or(DmsError::DocumentNotFound(document_id))?;
+        let before = self.document(document_id)?.control.clone();
+        let mut after = before.clone();
         if let Some(title) = update.title {
-            document.control.title = normalized_required(&title, "title")?;
+            after.title = normalized_required(&title, "title")?;
         }
         if let Some(number) = update.document_number {
-            document.control.document_number = normalized_optional(number.as_deref());
+            after.document_number = normalized_optional(number.as_deref());
         }
         if let Some(document_type) = update.document_type {
-            document.control.document_type = normalized_optional(document_type.as_deref());
+            after.document_type = normalized_optional(document_type.as_deref());
         }
         if let Some(owner) = update.owner {
-            document.control.owner = normalized_optional(owner.as_deref());
+            after.owner = normalized_optional(owner.as_deref());
         }
-        let updated = document.clone();
-        self.invalidate_stale_candidates();
-        Ok(self.document(document_id).cloned().unwrap_or(updated))
+        if let Some(effective_date) = update.effective_date {
+            after.effective_date = effective_date;
+        }
+        if before != after {
+            self.documents
+                .get_mut(&document_id)
+                .expect("document checked above")
+                .control = after.clone();
+            self.append_control_change_event(document_id, before, after)?;
+            self.invalidate_stale_candidates();
+        }
+        self.document(document_id).cloned()
     }
 
     pub fn add_note(

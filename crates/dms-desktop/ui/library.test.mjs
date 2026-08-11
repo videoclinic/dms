@@ -2,10 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  applyDocumentSelection,
   applyLibrarySnapshot,
   breadcrumbSegments,
   buildFolderTree,
   createLibraryState,
+  confidentialityUpdateRequest,
+  documentControlUpdateRequest,
   entryDocumentId,
   historyTarget,
   libraryMarkup,
@@ -185,7 +188,19 @@ test("library markup separates source Name from DMS Title and keeps actions in t
       source_exists: true,
       source_state: "registered",
       lifecycle: "draft",
-      control: { title: "Employee handbook", document_number: "HR-001" },
+      control: {
+        title: "Employee handbook",
+        document_number: "HR-001",
+        document_type: "procedure",
+        owner: "People team",
+        effective_date: "2026-08-11",
+      },
+      document_types: [{ id: "procedure", label: "Procedure", enabled: true }],
+      confidentiality_types: [
+        { id: "internal", label: "Internal", enabled: true },
+        { id: "restricted", label: "Restricted", enabled: true },
+      ],
+      confidentiality_override: "restricted",
       effective_confidentiality: null,
       effective_workflow_roles: null,
       current_release: {
@@ -209,6 +224,11 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /data-library-open-source/);
   assert.match(markup, /data-library-open-release/);
   assert.match(markup, /Current released PDF · V1\.2/);
+  assert.match(markup, /id="library-document-control-form"/);
+  assert.match(markup, /name="effectiveDate" type="date" value="2026-08-11"/);
+  assert.match(markup, /<option value="procedure" selected>Procedure<\/option>/);
+  assert.match(markup, /id="library-confidentiality-form"/);
+  assert.match(markup, /<option value="restricted" selected>Restricted<\/option>/);
   assert.match(markup, /data-library-open-notes/);
   assert.match(markup, /data-library-copy-permalink/);
   assert.match(markup, /data-library-unregister/);
@@ -227,4 +247,58 @@ test("library file actions map only to host-mediated document commands", () => {
     arguments: { documentId: "doc-1" },
   });
   assert.throws(() => libraryOpenRequest(detail, "other"));
+});
+
+test("document control and confidentiality forms map to narrow document commands", () => {
+  const detail = { document_id: "doc-1" };
+  const control = new FormData();
+  control.set("title", " Employee handbook ");
+  control.set("documentNumber", " HR-001 ");
+  control.set("documentType", "procedure");
+  control.set("owner", " People team ");
+  control.set("effectiveDate", "2026-08-11");
+  assert.deepEqual(documentControlUpdateRequest(control, detail), {
+    command: "update_document_control",
+    arguments: {
+      documentId: "doc-1",
+      title: "Employee handbook",
+      documentNumber: "HR-001",
+      documentType: "procedure",
+      owner: "People team",
+      effectiveDate: "2026-08-11",
+    },
+  });
+  control.set("effectiveDate", "2026-02-31");
+  assert.throws(() => documentControlUpdateRequest(control, detail), /YYYY-MM-DD/);
+
+  const confidentiality = new FormData();
+  confidentiality.set("confidentialityTypeId", " restricted ");
+  assert.deepEqual(confidentialityUpdateRequest(confidentiality, detail), {
+    command: "set_document_confidentiality",
+    arguments: { documentId: "doc-1", confidentialityTypeId: "restricted" },
+  });
+});
+
+test("updated document selection refreshes the detail and visible row in place", () => {
+  const registered = file("Handbook.md", { in_library: { document_id: "doc-1" } }, {
+    id: "doc-1",
+    lifecycle: "draft",
+    control: { title: "Handbook" },
+  });
+  const library = {
+    ...createLibraryState(),
+    folder: snapshot("Policies", [registered]).folder,
+    results: [registered],
+    detail_error: "Duplicate document number",
+  };
+  const detail = {
+    document_id: "doc-1",
+    lifecycle: "draft",
+    control: { title: "Employee handbook", document_number: "HR-001" },
+  };
+  const updated = applyDocumentSelection(library, detail);
+  assert.equal(updated.detail, detail);
+  assert.equal(updated.detail_error, "");
+  assert.equal(updated.folder.entries[0].document.control.title, "Employee handbook");
+  assert.equal(updated.results[0].document.control.document_number, "HR-001");
 });

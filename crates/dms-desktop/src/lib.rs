@@ -5,12 +5,14 @@ use std::{
     sync::Mutex,
 };
 
+use chrono::NaiveDate;
 use dms_core::{
     AuditReportRecord, AuditReportRequest, AuditReportVerificationStatus, AuthenticatedActor,
-    BackupOutcome, ClaudeAssistancePayload, ClaudeAssistancePolicy, DeliveryAttempt,
-    DeliveryReceipt, Document, DocumentControl, EffectiveConfidentiality, EffectiveWorkflowRoles,
-    EntraIdentitySource, EntraPerson, GraphClient, LibraryEntry, LibraryFolder, LibraryFolderNode,
-    Lifecycle, Note, NotificationClient, NotificationMessage, NotificationSettings, PeriodicReview,
+    BackupOutcome, ClaudeAssistancePayload, ClaudeAssistancePolicy, ConfidentialityType,
+    ControlUpdate, DeliveryAttempt, DeliveryReceipt, Document, DocumentControl, DocumentType,
+    EffectiveConfidentiality, EffectiveWorkflowRoles, EntraIdentitySource, EntraPerson,
+    GraphClient, LibraryEntry, LibraryFolder, LibraryFolderNode, Lifecycle, Note,
+    NotificationClient, NotificationMessage, NotificationSettings, PeriodicReview,
     PeriodicReviewMarker, PeriodicReviewResult, ReleaseVerificationStatus, RestoreOutcome,
     RestoreRequest, SourceState, WorkflowVerification, Workspace, WorkspaceLock,
     WorkspaceLockStatus,
@@ -128,6 +130,9 @@ pub struct DocumentSelection {
     pub source_state: SourceState,
     pub lifecycle: Lifecycle,
     pub control: DocumentControl,
+    pub document_types: Vec<DocumentType>,
+    pub confidentiality_types: Vec<ConfidentialityType>,
+    pub confidentiality_override: Option<String>,
     pub effective_confidentiality: Option<EffectiveConfidentiality>,
     pub effective_workflow_roles: Option<EffectiveWorkflowRoles>,
     pub current_release: Option<CurrentReleaseSelection>,
@@ -320,6 +325,68 @@ fn load_document_selection(
     edit_root: String,
     document_id: Uuid,
 ) -> Result<DocumentSelection, String> {
+    document_selection(Path::new(&edit_root), document_id)
+}
+
+#[tauri::command]
+fn update_document_control(
+    edit_root: String,
+    document_id: Uuid,
+    title: String,
+    document_number: String,
+    document_type: String,
+    owner: String,
+    effective_date: String,
+) -> Result<DocumentSelection, String> {
+    let effective_date = if effective_date.trim().is_empty() {
+        None
+    } else {
+        Some(
+            NaiveDate::parse_from_str(effective_date.trim(), "%Y-%m-%d")
+                .map_err(|_| "effective date must use YYYY-MM-DD".to_owned())?,
+        )
+    };
+    let optional_text = |value: String| {
+        if value.trim().is_empty() {
+            None
+        } else {
+            Some(value)
+        }
+    };
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .update_control(
+            document_id,
+            ControlUpdate {
+                title: Some(title),
+                document_number: Some(optional_text(document_number)),
+                document_type: Some(optional_text(document_type)),
+                owner: Some(optional_text(owner)),
+                effective_date: Some(effective_date),
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
+    document_selection(Path::new(&edit_root), document_id)
+}
+
+#[tauri::command]
+fn set_document_confidentiality(
+    edit_root: String,
+    document_id: Uuid,
+    confidentiality_type_id: String,
+) -> Result<DocumentSelection, String> {
+    let confidentiality_type_id = confidentiality_type_id.trim();
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .set_document_confidentiality(
+            document_id,
+            (!confidentiality_type_id.is_empty()).then_some(confidentiality_type_id),
+        )
+        .map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
     document_selection(Path::new(&edit_root), document_id)
 }
 
@@ -853,6 +920,16 @@ fn document_selection(edit_root: &Path, document_id: Uuid) -> Result<DocumentSel
         source_state: document.source_state,
         lifecycle: document.lifecycle,
         control: document.control.clone(),
+        document_types: workspace.document_types().into_iter().cloned().collect(),
+        confidentiality_types: workspace
+            .confidentiality_types()
+            .into_iter()
+            .cloned()
+            .collect(),
+        confidentiality_override: workspace
+            .document_confidentiality_override(document_id)
+            .map_err(|error| error.to_string())?
+            .map(str::to_owned),
         effective_confidentiality: workspace.effective_confidentiality(document_id).ok(),
         effective_workflow_roles: workspace.effective_workflow_roles(document_id).ok(),
         current_release,
@@ -1075,6 +1152,8 @@ pub fn run() {
             unregister_library_documents,
             reassociate_library_document,
             load_document_selection,
+            update_document_control,
+            set_document_confidentiality,
             open_document_source,
             open_current_release_pdf,
             load_document_notes,
@@ -1245,6 +1324,18 @@ mod tests {
         let source = edit_root.path().join("Policies/Handbook.md");
         fs::write(&source, "# Handbook").unwrap();
         let document = workspace.add_document(&source).unwrap();
+        workspace
+            .configure_document_type("procedure", "Procedure", true)
+            .unwrap();
+        workspace
+            .configure_confidentiality_type("internal", "Internal", true)
+            .unwrap();
+        workspace
+            .configure_confidentiality_type("restricted", "Restricted", true)
+            .unwrap();
+        workspace
+            .set_confidentiality_policy(".", "internal")
+            .unwrap();
         workspace.save().unwrap();
 
         let snapshot = library_snapshot(edit_root.path(), Path::new("Policies")).unwrap();
@@ -1258,7 +1349,59 @@ mod tests {
         assert_eq!(selection.source_name, "Handbook.md");
         assert_eq!(selection.relative_path, "Policies/Handbook.md");
         assert_eq!(selection.document_id, document.id);
+        assert_eq!(selection.document_types[0].id, "procedure");
+        assert_eq!(selection.confidentiality_types.len(), 2);
         assert!(selection.permalink.ends_with(&document.id.to_string()));
+
+        let root = edit_root.path().to_string_lossy().into_owned();
+        assert!(update_document_control(
+            root.clone(),
+            document.id,
+            "Employee handbook".into(),
+            "HR-001".into(),
+            "procedure".into(),
+            "People team".into(),
+            "11/08/2026".into(),
+        )
+        .unwrap_err()
+        .contains("YYYY-MM-DD"));
+        let updated = update_document_control(
+            root.clone(),
+            document.id,
+            "Employee handbook".into(),
+            "HR-001".into(),
+            "procedure".into(),
+            "People team".into(),
+            "2026-08-11".into(),
+        )
+        .unwrap();
+        assert_eq!(updated.control.title, "Employee handbook");
+        assert_eq!(updated.control.document_number.as_deref(), Some("HR-001"));
+        assert_eq!(updated.control.document_type.as_deref(), Some("procedure"));
+        assert_eq!(updated.control.owner.as_deref(), Some("People team"));
+        assert_eq!(
+            updated.control.effective_date,
+            NaiveDate::from_ymd_opt(2026, 8, 11)
+        );
+
+        let overridden =
+            set_document_confidentiality(root.clone(), document.id, "restricted".into()).unwrap();
+        assert_eq!(
+            overridden.confidentiality_override.as_deref(),
+            Some("restricted")
+        );
+        assert!(
+            overridden
+                .effective_confidentiality
+                .unwrap()
+                .document_override
+        );
+        let inherited = set_document_confidentiality(root, document.id, String::new()).unwrap();
+        assert_eq!(inherited.confidentiality_override, None);
+        assert_eq!(
+            inherited.effective_confidentiality.unwrap().type_id,
+            "internal"
+        );
     }
 
     #[test]
