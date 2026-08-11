@@ -11,10 +11,10 @@ use dms_core::{
     BackupOutcome, ClaudeAssistancePayload, ClaudeAssistancePolicy, ConfidentialityType,
     ControlUpdate, DeliveryAttempt, DeliveryReceipt, Document, DocumentControl, DocumentType,
     EffectiveConfidentiality, EffectiveWorkflowRoles, EntraIdentitySource, EntraPerson,
-    GraphClient, LibraryEntry, LibraryFolder, LibraryFolderNode, Lifecycle, Note,
-    NotificationClient, NotificationMessage, NotificationSettings, PeriodicReview,
+    GraphClient, LibraryEntry, LibraryFolder, LibraryFolderNode, Lifecycle, LocalLifecycleActions,
+    Note, NotificationClient, NotificationMessage, NotificationSettings, PeriodicReview,
     PeriodicReviewMarker, PeriodicReviewResult, ReleaseVerificationStatus, RestoreOutcome,
-    RestoreRequest, SourceState, WorkflowVerification, Workspace, WorkspaceLock,
+    RestoreRequest, SourceState, WorkflowEvent, WorkflowVerification, Workspace, WorkspaceLock,
     WorkspaceLockStatus,
 };
 use serde::{Deserialize, Serialize};
@@ -136,6 +136,9 @@ pub struct DocumentSelection {
     pub effective_confidentiality: Option<EffectiveConfidentiality>,
     pub effective_workflow_roles: Option<EffectiveWorkflowRoles>,
     pub current_release: Option<CurrentReleaseSelection>,
+    pub lifecycle_actions: LocalLifecycleActions,
+    pub workflow_events: Vec<WorkflowEvent>,
+    pub workflow_verification: WorkflowVerification,
     pub permalink: String,
 }
 
@@ -385,6 +388,58 @@ fn set_document_confidentiality(
             document_id,
             (!confidentiality_type_id.is_empty()).then_some(confidentiality_type_id),
         )
+        .map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
+    document_selection(Path::new(&edit_root), document_id)
+}
+
+#[tauri::command]
+fn begin_document_revision(
+    edit_root: String,
+    document_id: Uuid,
+) -> Result<DocumentSelection, String> {
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .begin_revision(document_id)
+        .map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
+    document_selection(Path::new(&edit_root), document_id)
+}
+
+#[tauri::command]
+fn cancel_document_review(
+    edit_root: String,
+    document_id: Uuid,
+    reason: String,
+    confirmed: bool,
+) -> Result<DocumentSelection, String> {
+    if !confirmed {
+        return Err("review cancellation requires explicit confirmation".to_owned());
+    }
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .cancel_review(document_id, &reason)
+        .map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
+    document_selection(Path::new(&edit_root), document_id)
+}
+
+#[tauri::command]
+fn mark_document_obsolete(
+    edit_root: String,
+    document_id: Uuid,
+    reason: String,
+    confirmed: bool,
+) -> Result<DocumentSelection, String> {
+    if !confirmed {
+        return Err("mark obsolete requires explicit confirmation".to_owned());
+    }
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .mark_obsolete(document_id, &reason)
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
     document_selection(Path::new(&edit_root), document_id)
@@ -911,6 +966,18 @@ fn document_selection(edit_root: &Path, document_id: Uuid) -> Result<DocumentSel
             relative_pdf_path: path_text(&release.relative_pdf_path),
             pdf_exists: workspace.release_pdf_path(document_id, release.id).is_ok(),
         });
+    let lifecycle_actions = workspace
+        .local_lifecycle_actions(document_id)
+        .map_err(|error| error.to_string())?;
+    let workflow_events = workspace
+        .workflow_history(document_id)
+        .map_err(|error| error.to_string())?
+        .into_iter()
+        .cloned()
+        .collect();
+    let workflow_verification = workspace
+        .verify_workflow(document_id)
+        .map_err(|error| error.to_string())?;
     Ok(DocumentSelection {
         document_id,
         source_name,
@@ -933,6 +1000,9 @@ fn document_selection(edit_root: &Path, document_id: Uuid) -> Result<DocumentSel
         effective_confidentiality: workspace.effective_confidentiality(document_id).ok(),
         effective_workflow_roles: workspace.effective_workflow_roles(document_id).ok(),
         current_release,
+        lifecycle_actions,
+        workflow_events,
+        workflow_verification,
         permalink: workspace
             .document_permalink(document_id)
             .map_err(|error| error.to_string())?,
@@ -1154,6 +1224,9 @@ pub fn run() {
             load_document_selection,
             update_document_control,
             set_document_confidentiality,
+            begin_document_revision,
+            cancel_document_review,
+            mark_document_obsolete,
             open_document_source,
             open_current_release_pdf,
             load_document_notes,
@@ -1351,6 +1424,17 @@ mod tests {
         assert_eq!(selection.document_id, document.id);
         assert_eq!(selection.document_types[0].id, "procedure");
         assert_eq!(selection.confidentiality_types.len(), 2);
+        assert!(!selection.lifecycle_actions.begin_revision.available);
+        assert!(!selection.lifecycle_actions.cancel_review.available);
+        assert!(selection.lifecycle_actions.mark_obsolete.available);
+        assert_eq!(
+            selection.workflow_verification,
+            WorkflowVerification::Missing
+        );
+        assert_eq!(
+            serde_json::to_value(WorkflowVerification::TamperedAt(document.id)).unwrap(),
+            serde_json::json!({ "tampered_at": document.id })
+        );
         assert!(selection.permalink.ends_with(&document.id.to_string()));
 
         let root = edit_root.path().to_string_lossy().into_owned();
@@ -1383,6 +1467,11 @@ mod tests {
             updated.control.effective_date,
             NaiveDate::from_ymd_opt(2026, 8, 11)
         );
+        assert_eq!(updated.workflow_verification, WorkflowVerification::Valid);
+        assert_eq!(
+            updated.workflow_events[0].body.event_type,
+            dms_core::WorkflowEventType::DocumentControlDataChanged
+        );
 
         let overridden =
             set_document_confidentiality(root.clone(), document.id, "restricted".into()).unwrap();
@@ -1396,12 +1485,44 @@ mod tests {
                 .unwrap()
                 .document_override
         );
-        let inherited = set_document_confidentiality(root, document.id, String::new()).unwrap();
+        let inherited =
+            set_document_confidentiality(root.clone(), document.id, String::new()).unwrap();
         assert_eq!(inherited.confidentiality_override, None);
         assert_eq!(
             inherited.effective_confidentiality.unwrap().type_id,
             "internal"
         );
+
+        assert!(begin_document_revision(root.clone(), document.id)
+            .unwrap_err()
+            .contains("only a released document"));
+        assert!(cancel_document_review(
+            root.clone(),
+            document.id,
+            "Requirements changed".into(),
+            false,
+        )
+        .unwrap_err()
+        .contains("explicit confirmation"));
+        assert!(
+            mark_document_obsolete(root.clone(), document.id, "Superseded".into(), false,)
+                .unwrap_err()
+                .contains("explicit confirmation")
+        );
+        let obsolete = mark_document_obsolete(
+            root,
+            document.id,
+            "Superseded by global policy".into(),
+            true,
+        )
+        .unwrap();
+        assert_eq!(obsolete.lifecycle, Lifecycle::Obsolete);
+        assert!(!obsolete.lifecycle_actions.mark_obsolete.available);
+        assert_eq!(
+            obsolete.workflow_events[0].body.event_type,
+            dms_core::WorkflowEventType::DocumentObsoleted
+        );
+        assert_eq!(obsolete.workflow_verification, WorkflowVerification::Valid);
     }
 
     #[test]

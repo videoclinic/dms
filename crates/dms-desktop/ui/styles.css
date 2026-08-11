@@ -288,6 +288,22 @@ button { cursor: pointer; }
 .document-control-editor .button { justify-self: start; }
 .confidentiality-editor { padding-top: 12px; border-top: 1px solid #e3e8ec; }
 .library-detail-error { margin: 0 !important; padding: 9px; color: #922b21 !important; background: #fff0ed; border-radius: 6px; font-size: 12px; }
+.lifecycle-panel { display: grid; gap: 12px; margin: 16px 0; padding: 13px; border: 1px solid #d9e2e8; border-radius: 8px; background: #fff; }
+.lifecycle-panel h4 { margin: 0; font-size: 14px; }
+.lifecycle-actions { display: grid; gap: 10px; }
+.lifecycle-action { display: grid; gap: 7px; padding: 10px; border: 1px solid #e3e8ec; border-radius: 7px; }
+.lifecycle-action small { color: #687985; }
+.lifecycle-action label { display: grid; gap: 4px; color: #52636f; font-size: 12px; font-weight: 700; }
+.lifecycle-action textarea { min-height: 62px; padding: 7px; resize: vertical; border: 1px solid #bdc9d2; border-radius: 6px; }
+.lifecycle-action .confirmation { display: flex; align-items: center; gap: 7px; }
+.lifecycle-action .button, .lifecycle-panel > .button { justify-self: start; }
+.workflow-evidence { padding-top: 8px; border-top: 1px solid #e3e8ec; }
+.workflow-event { display: grid; gap: 7px; margin-top: 10px; padding: 10px; border-radius: 7px; background: #f6f8fa; }
+.workflow-event header { display: flex; justify-content: space-between; gap: 8px; text-transform: capitalize; }
+.workflow-event time { color: #687985; font-size: 11px; }
+.workflow-event p { margin: 0; }
+.workflow-event dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 8px; margin: 0; font-size: 11px; }
+.workflow-event dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .button.danger { background: #8f2f27; }
 .badge.muted { color: #5d6972; background: #eceff1; }
 .identity-list { padding-left: 20px; color: #4d5c67; font-size: 13px; }

@@ -6,6 +6,7 @@ import {
   documentControlUpdateRequest,
   entryDocumentId,
   historyTarget,
+  lifecycleActionRequest,
   libraryMarkup,
   libraryOpenRequest,
   membershipKind,
@@ -958,6 +959,37 @@ async function handleLibraryClick(event) {
     render(appState);
     return true;
   }
+  if (event.target.closest("[data-library-open-evidence]")) {
+    appState = {
+      ...appState,
+      library: { ...appState.library, evidence_open: true },
+    };
+    render(appState);
+    return true;
+  }
+  const lifecycleAction = event.target.closest("[data-library-lifecycle-action]")
+    ?.dataset.libraryLifecycleAction;
+  if (lifecycleAction) {
+    try {
+      const request = lifecycleActionRequest(lifecycleAction, null, appState.library.detail);
+      const detail = await invokeCommand(request.command, {
+        editRoot: appState.workspace.edit_root,
+        ...request.arguments,
+      });
+      appState = {
+        ...appState,
+        library: applyDocumentSelection(appState.library, detail, true),
+        error: "",
+      };
+    } catch (error) {
+      appState = {
+        ...appState,
+        library: { ...appState.library, detail_error: String(error) },
+      };
+    }
+    render(appState);
+    return true;
+  }
   if (event.target.closest("[data-library-open-notes]")) {
     openDocumentNotes();
     return true;
@@ -1332,6 +1364,41 @@ async function handleSubmit(event) {
       appState = {
         ...appState,
         library: { ...appState.library, detail_error: String(error) },
+      };
+    }
+    render(appState);
+    return;
+  }
+  const lifecycleAction = event.target.dataset.libraryLifecycleForm;
+  if (lifecycleAction) {
+    event.preventDefault();
+    const values = new FormData(event.target);
+    const draft = {
+      reason: String(values.get("reason") ?? ""),
+      confirmed: values.get("confirmed") === "yes",
+    };
+    try {
+      const request = lifecycleActionRequest(lifecycleAction, values, appState.library.detail);
+      const detail = await invokeCommand(request.command, {
+        editRoot: appState.workspace.edit_root,
+        ...request.arguments,
+      });
+      appState = {
+        ...appState,
+        library: applyDocumentSelection(appState.library, detail, true),
+        error: "",
+      };
+    } catch (error) {
+      appState = {
+        ...appState,
+        library: {
+          ...appState.library,
+          detail_error: String(error),
+          lifecycle_drafts: {
+            ...appState.library.lifecycle_drafts,
+            [lifecycleAction]: draft,
+          },
+        },
       };
     }
     render(appState);

@@ -359,6 +359,19 @@ pub enum WorkflowVerification {
     Missing,
 }
 
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct LifecycleActionAvailability {
+    pub available: bool,
+    pub reason: Option<&'static str>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct LocalLifecycleActions {
+    pub begin_revision: LifecycleActionAvailability,
+    pub cancel_review: LifecycleActionAvailability,
+    pub mark_obsolete: LifecycleActionAvailability,
+}
+
 impl WorkflowVerification {
     pub fn is_valid(&self) -> bool {
         matches!(self, Self::Valid)
@@ -1023,6 +1036,28 @@ impl Workspace {
         )?;
         self.save()?;
         Ok(attempt)
+    }
+
+    pub fn local_lifecycle_actions(&self, document_id: Uuid) -> Result<LocalLifecycleActions> {
+        let document = self.document(document_id)?;
+        let availability = |available, reason| LifecycleActionAvailability {
+            available,
+            reason: (!available).then_some(reason),
+        };
+        Ok(LocalLifecycleActions {
+            begin_revision: availability(
+                document.lifecycle == Lifecycle::Released,
+                "Only a released document can begin a revision.",
+            ),
+            cancel_review: availability(
+                document.lifecycle == Lifecycle::InReview,
+                "Available only while a review is open.",
+            ),
+            mark_obsolete: availability(
+                document.lifecycle != Lifecycle::Obsolete,
+                "The document is already obsolete.",
+            ),
+        })
     }
 
     pub fn begin_revision(&mut self, document_id: Uuid) -> Result<()> {

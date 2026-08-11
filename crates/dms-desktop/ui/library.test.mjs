@@ -11,6 +11,7 @@ import {
   documentControlUpdateRequest,
   entryDocumentId,
   historyTarget,
+  lifecycleActionRequest,
   libraryMarkup,
   libraryOpenRequest,
   membershipKind,
@@ -203,6 +204,22 @@ test("library markup separates source Name from DMS Title and keeps actions in t
       confidentiality_override: "restricted",
       effective_confidentiality: null,
       effective_workflow_roles: null,
+      lifecycle_actions: {
+        begin_revision: { available: false, reason: "Only a released document can begin a revision." },
+        cancel_review: { available: false, reason: "Available only while a review is open." },
+        mark_obsolete: { available: true, reason: null },
+      },
+      workflow_events: [{
+        event_hash: "abc123",
+        body: {
+          event_id: "event-1",
+          event_type: "document_control_data_changed",
+          timestamp: "2026-08-11T10:00:00Z",
+          predecessor_hash: null,
+          operator_comment: "Safe <script>alert(1)</script>",
+        },
+      }],
+      workflow_verification: "valid",
       current_release: {
         release_id: "release-1",
         version: "1.2",
@@ -229,6 +246,21 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /<option value="procedure" selected>Procedure<\/option>/);
   assert.match(markup, /id="library-confidentiality-form"/);
   assert.match(markup, /<option value="restricted" selected>Restricted<\/option>/);
+  assert.match(markup, /data-library-lifecycle-action="begin_revision" disabled/);
+  assert.match(markup, /Only a released document can begin a revision/);
+  assert.match(markup, /data-library-lifecycle-form="mark_obsolete"/);
+  assert.match(markup, /Canonical workflow evidence · valid/);
+  assert.match(markup, /document control data changed/);
+  assert.doesNotMatch(markup, /<script>alert/);
+  library.detail.workflow_verification = { tampered_at: "event-1" };
+  assert.match(
+    libraryMarkup(
+      { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+      { route_state: { folder: "Policies" } },
+      library,
+    ),
+    /tampered at event-1/,
+  );
   assert.match(markup, /data-library-open-notes/);
   assert.match(markup, /data-library-copy-permalink/);
   assert.match(markup, /data-library-unregister/);
@@ -279,6 +311,33 @@ test("document control and confidentiality forms map to narrow document commands
   });
 });
 
+test("lifecycle actions require reasons and confirmations and map to narrow commands", () => {
+  const detail = { document_id: "doc-1" };
+  assert.deepEqual(lifecycleActionRequest("begin_revision", null, detail), {
+    command: "begin_document_revision",
+    arguments: { documentId: "doc-1" },
+  });
+
+  const values = new FormData();
+  values.set("reason", " Superseded by the global policy ");
+  assert.throws(() => lifecycleActionRequest("mark_obsolete", values, detail), /confirmation/);
+  values.set("confirmed", "yes");
+  assert.deepEqual(lifecycleActionRequest("mark_obsolete", values, detail), {
+    command: "mark_document_obsolete",
+    arguments: {
+      documentId: "doc-1",
+      reason: "Superseded by the global policy",
+      confirmed: true,
+    },
+  });
+  assert.equal(
+    lifecycleActionRequest("cancel_review", values, detail).command,
+    "cancel_document_review",
+  );
+  values.set("reason", "   ");
+  assert.throws(() => lifecycleActionRequest("cancel_review", values, detail), /reason/);
+});
+
 test("updated document selection refreshes the detail and visible row in place", () => {
   const registered = file("Handbook.md", { in_library: { document_id: "doc-1" } }, {
     id: "doc-1",
@@ -296,9 +355,10 @@ test("updated document selection refreshes the detail and visible row in place",
     lifecycle: "draft",
     control: { title: "Employee handbook", document_number: "HR-001" },
   };
-  const updated = applyDocumentSelection(library, detail);
+  const updated = applyDocumentSelection(library, detail, true);
   assert.equal(updated.detail, detail);
   assert.equal(updated.detail_error, "");
+  assert.equal(updated.evidence_open, true);
   assert.equal(updated.folder.entries[0].document.control.title, "Employee handbook");
   assert.equal(updated.results[0].document.control.document_number, "HR-001");
 });

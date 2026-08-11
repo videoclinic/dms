@@ -53,10 +53,14 @@ macOS.
   toggles. Navigating expands the current folder's ancestor chain without
   resetting unrelated session branch state.
 - The Library selection pane owns add/unregister/reassociate/permalink controls,
-  document-control editing, and the document confidentiality override; file rows
-  remain selection-only and preserve exact source names. Validation failures stay
-  in that selected-document context. Its notes action opens a document-scoped
-  activity keyed by stable document ID.
+  document-control editing, the document confidentiality override, local lifecycle
+  actions, and canonical workflow evidence; file rows remain selection-only and
+  preserve exact source names. The adapter supplies lifecycle availability and
+  precondition explanations rather than duplicating core transitions in the
+  frontend. Cancel review and mark obsolete retain failed reason drafts and require
+  explicit confirmation. Validation failures stay in that selected-document
+  context. Its notes action opens a document-scoped activity keyed by stable
+  document ID.
 - Note mutations call `dms-core`, save the workspace metadata, retain failed
   form drafts for retry, and clear the composer only after a successful save.
 - The Releases pane lists every recorded release with its verification status,

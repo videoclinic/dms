@@ -5,7 +5,7 @@
 | ID | CAP-0015 |
 | Status | not implemented |
 | Storage | `<edit-root>/.dms/` |
-| Tests | Partial phases 9e and 9f.1 evidence: [current-release core tests](../../../crates/dms-core/tests/lifecycle.rs), [schema-v9 effective-date and canonical before/after evidence tests](../../../crates/dms-core/tests/workspace.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [Library document-control and release-action tests](../../../crates/dms-desktop/ui/library.test.mjs) |
+| Tests | Partial phases 9e–9f.2 evidence: [current-release and local lifecycle core tests](../../../crates/dms-core/tests/lifecycle.rs), [schema-v9 effective-date and canonical before/after evidence tests](../../../crates/dms-core/tests/workspace.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [Library document-control, lifecycle, and evidence-action tests](../../../crates/dms-desktop/ui/library.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 

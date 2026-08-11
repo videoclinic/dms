@@ -272,6 +272,130 @@ fn release_first(fixture: &mut Fixture) -> (FakeGraph, ReleaseOutcome) {
 }
 
 #[test]
+fn local_lifecycle_actions_append_canonical_evidence_and_apply_transitions() {
+    let mut fixture = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    let (mut graph, _) = release_first(&mut fixture);
+    assert!(
+        fixture
+            .workspace
+            .local_lifecycle_actions(fixture.document_id)
+            .unwrap()
+            .begin_revision
+            .available
+    );
+
+    fixture
+        .workspace
+        .begin_revision(fixture.document_id)
+        .expect("begin revision");
+    assert_eq!(
+        fixture
+            .workspace
+            .document(fixture.document_id)
+            .unwrap()
+            .lifecycle,
+        Lifecycle::Draft
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .workflow_history(fixture.document_id)
+            .unwrap()[0]
+            .body
+            .event_type,
+        WorkflowEventType::RevisionBegun
+    );
+
+    fs::write(
+        &fixture.source_path,
+        "# Handbook\n\nVersion: 2.0\n\nVertraulichkeitsstufe: Internal\n",
+    )
+    .unwrap();
+    fixture
+        .workspace
+        .submit_candidate(
+            fixture.candidate_request(TargetSelection::NextMajor),
+            &mut graph,
+            &mut FakeNotifier::accepted(),
+        )
+        .expect("open review");
+    assert!(
+        fixture
+            .workspace
+            .local_lifecycle_actions(fixture.document_id)
+            .unwrap()
+            .cancel_review
+            .available
+    );
+    fixture
+        .workspace
+        .cancel_review(fixture.document_id, "Requirements changed")
+        .expect("cancel review");
+    let cancellation = fixture
+        .workspace
+        .workflow_history(fixture.document_id)
+        .unwrap()[0];
+    assert_eq!(
+        cancellation.body.event_type,
+        WorkflowEventType::ReviewCancelled
+    );
+    assert_eq!(
+        cancellation.body.operator_comment.as_deref(),
+        Some("Requirements changed")
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .document(fixture.document_id)
+            .unwrap()
+            .lifecycle,
+        Lifecycle::Draft
+    );
+
+    fixture
+        .workspace
+        .mark_obsolete(fixture.document_id, "Superseded by global policy")
+        .expect("mark obsolete");
+    let obsolescence = fixture
+        .workspace
+        .workflow_history(fixture.document_id)
+        .unwrap()[0];
+    assert_eq!(
+        obsolescence.body.event_type,
+        WorkflowEventType::DocumentObsoleted
+    );
+    assert_eq!(
+        obsolescence.body.operator_comment.as_deref(),
+        Some("Superseded by global policy")
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .document(fixture.document_id)
+            .unwrap()
+            .lifecycle,
+        Lifecycle::Obsolete
+    );
+    let actions = fixture
+        .workspace
+        .local_lifecycle_actions(fixture.document_id)
+        .unwrap();
+    assert!(!actions.begin_revision.available);
+    assert!(!actions.cancel_review.available);
+    assert!(!actions.mark_obsolete.available);
+    assert_eq!(
+        fixture
+            .workspace
+            .verify_workflow(fixture.document_id)
+            .unwrap(),
+        WorkflowVerification::Valid
+    );
+}
+
+#[test]
 fn accepted_assistance_is_explicit_evidence_without_granting_lifecycle_authority() {
     let mut fixture = Fixture::new(
         "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",

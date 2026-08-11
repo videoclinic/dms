@@ -10,6 +10,8 @@ export function createLibraryState() {
     selection: [],
     detail: null,
     detail_error: "",
+    evidence_open: false,
+    lifecycle_drafts: {},
     results: null,
     query: "",
     entire_library: false,
@@ -98,6 +100,8 @@ export function applyLibrarySnapshot(library, snapshot, target, historyMode = "p
     selection: [],
     detail: null,
     detail_error: "",
+    evidence_open: false,
+    lifecycle_drafts: {},
     results: null,
     query: "",
     page: 0,
@@ -129,7 +133,14 @@ export function toggleLibrarySelection(library, relativePath, additive = false) 
   const selection = additive
     ? (selected ? library.selection.filter((candidate) => candidate !== path) : [...library.selection, path])
     : (selected && library.selection.length === 1 ? [] : [path]);
-  return { ...library, selection, detail: null, detail_error: "" };
+  return {
+    ...library,
+    selection,
+    detail: null,
+    detail_error: "",
+    evidence_open: false,
+    lifecycle_drafts: {},
+  };
 }
 
 export function selectedEntries(library) {
@@ -186,7 +197,30 @@ export function confidentialityUpdateRequest(values, detail) {
   };
 }
 
-export function applyDocumentSelection(library, detail) {
+export function lifecycleActionRequest(action, values, detail) {
+  if (!detail?.document_id) throw new Error("A selected document is required.");
+  if (action === "begin_revision") {
+    return {
+      command: "begin_document_revision",
+      arguments: { documentId: detail.document_id },
+    };
+  }
+  const reason = String(values?.get("reason") ?? "").trim();
+  const confirmed = values?.get("confirmed") === "yes";
+  if (!reason) throw new Error("A reason is required.");
+  if (!confirmed) throw new Error("Explicit confirmation is required.");
+  const command = {
+    cancel_review: "cancel_document_review",
+    mark_obsolete: "mark_document_obsolete",
+  }[action];
+  if (!command) throw new Error(`Unsupported lifecycle action: ${action}`);
+  return {
+    command,
+    arguments: { documentId: detail.document_id, reason, confirmed },
+  };
+}
+
+export function applyDocumentSelection(library, detail, openEvidence = false) {
   const updateEntry = (entry) => entryDocumentId(entry) === detail.document_id
     ? { ...entry, document: { ...entry.document, lifecycle: detail.lifecycle, control: detail.control } }
     : entry;
@@ -194,6 +228,8 @@ export function applyDocumentSelection(library, detail) {
     ...library,
     detail,
     detail_error: "",
+    evidence_open: openEvidence,
+    lifecycle_drafts: {},
     folder: { ...library.folder, entries: (library.folder?.entries ?? []).map(updateEntry) },
     results: library.results?.map(updateEntry) ?? null,
   };
@@ -288,6 +324,34 @@ function rowsMarkup(library) {
   return `${rows}<tr class="pagination-row"><td colspan="5"><div><label>Rows per page <select data-library-page-size><option value="10" ${library.page_size === 10 ? "selected" : ""}>10</option><option value="25" ${library.page_size === 25 ? "selected" : ""}>25</option><option value="50" ${library.page_size === 50 ? "selected" : ""}>50</option><option value="100" ${library.page_size === 100 ? "selected" : ""}>100</option></select></label><span>${paging}</span></div></td></tr>`;
 }
 
+function workflowEventMarkup(event) {
+  const body = event.body ?? {};
+  const label = String(body.event_type ?? "workflow_event").replaceAll("_", " ");
+  const comment = body.operator_comment ?? body.decision_comment ?? body.changelog;
+  return `<article class="workflow-event"><header><strong>${escapeHtml(label)}</strong><time>${escapeHtml(new Date(body.timestamp).toLocaleString())}</time></header>${comment ? `<p>${escapeHtml(comment)}</p>` : ""}<dl><dt>Event ID</dt><dd>${escapeHtml(body.event_id)}</dd><dt>Hash</dt><dd><code>${escapeHtml(event.event_hash)}</code></dd><dt>Predecessor</dt><dd><code>${escapeHtml(body.predecessor_hash ?? "Chain start")}</code></dd></dl></article>`;
+}
+
+function lifecyclePanelMarkup(library, detail) {
+  const actions = detail.lifecycle_actions ?? {};
+  const availability = (name, fallback) => actions[name] ?? { available: false, reason: fallback };
+  const begin = availability("begin_revision", "Lifecycle state is unavailable.");
+  const cancel = availability("cancel_review", "Lifecycle state is unavailable.");
+  const obsolete = availability("mark_obsolete", "Lifecycle state is unavailable.");
+  const form = (action, title, available, reason) => {
+    const draft = library.lifecycle_drafts?.[action] ?? {};
+    const disabled = available ? "" : "disabled";
+    return `<form class="lifecycle-action" data-library-lifecycle-form="${action}"><strong>${title}</strong>${reason ? `<small>${escapeHtml(reason)}</small>` : ""}<label>Reason<textarea name="reason" required ${disabled}>${escapeHtml(draft.reason ?? "")}</textarea></label><label class="confirmation"><input type="checkbox" name="confirmed" value="yes" ${draft.confirmed ? "checked" : ""} ${disabled}> I confirm this lifecycle change.</label><button class="button ${action === "mark_obsolete" ? "danger" : "secondary"}" type="submit" ${disabled}>${title}</button></form>`;
+  };
+  const events = (detail.workflow_events ?? []).map(workflowEventMarkup).join("")
+    || '<p class="source-path">No canonical workflow evidence has been recorded.</p>';
+  const verification = typeof detail.workflow_verification === "string"
+    ? detail.workflow_verification.replaceAll("_", " ")
+    : detail.workflow_verification?.tampered_at
+      ? `tampered at ${detail.workflow_verification.tampered_at}`
+      : "invalid";
+  return `<section class="lifecycle-panel" aria-labelledby="lifecycle-actions-heading"><h4 id="lifecycle-actions-heading">Lifecycle actions</h4><div class="lifecycle-actions"><div class="lifecycle-action"><strong>Begin revision</strong>${begin.reason ? `<small>${escapeHtml(begin.reason)}</small>` : ""}<button class="button secondary" type="button" data-library-lifecycle-action="begin_revision" ${begin.available ? "" : "disabled"}>Begin revision</button></div>${form("cancel_review", "Cancel review", cancel.available, cancel.reason)}${form("mark_obsolete", "Mark obsolete", obsolete.available, obsolete.reason)}</div><button class="button secondary" type="button" data-library-open-evidence>View workflow evidence</button><details class="workflow-evidence" ${library.evidence_open ? "open" : ""}><summary>Canonical workflow evidence · ${escapeHtml(verification)}</summary>${events}</details></section>`;
+}
+
 function selectionMarkup(library) {
   const selected = selectedEntries(library);
   if (selected.length === 0) {
@@ -331,7 +395,7 @@ function selectionMarkup(library) {
     .map((type) => `<option value="${escapeHtml(type.id)}" ${type.id === detail.confidentiality_override ? "selected" : ""}>${escapeHtml(type.label)}</option>`)
     .join("");
   const editor = `<section class="document-control-editor" aria-labelledby="document-control-editor-heading"><h4 id="document-control-editor-heading">Edit document control data</h4><p class="source-path">Applies to ${escapeHtml(detail.source_name)} · ${escapeHtml(detail.relative_path)}</p>${library.detail_error ? `<p class="library-detail-error" role="alert">${escapeHtml(library.detail_error)}</p>` : ""}<form id="library-document-control-form"><div class="document-control-fields"><label>Title<input name="title" required value="${escapeHtml(detail.control.title)}"></label><label>Document number<input name="documentNumber" value="${escapeHtml(detail.control.document_number ?? "")}"></label><label>Document type<select name="documentType"><option value="">Not set</option>${documentTypeOptions}</select></label><label>Owner<input name="owner" value="${escapeHtml(detail.control.owner ?? "")}"></label><label>Effective date<input name="effectiveDate" type="date" value="${escapeHtml(detail.control.effective_date ?? "")}"></label></div><button class="button" type="submit">Save document control</button></form><form id="library-confidentiality-form" class="confidentiality-editor"><label>Confidentiality override<select name="confidentialityTypeId"><option value="">Use inherited folder policy</option>${confidentialityOptions}</select></label><button class="button secondary" type="submit">Apply confidentiality</button></form></section>`;
-  const currentRelease = `${currentReleaseIdentity}${editor}`;
+  const currentRelease = `${currentReleaseIdentity}${editor}${lifecyclePanelMarkup(library, detail)}`;
   return `<div class="selection-header"><span class="badge">In library</span><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><h3>${escapeHtml(detail.control.title)}</h3>${detail.control.document_number ? `<p class="document-number">${escapeHtml(detail.control.document_number)}</p>` : ""}<div class="source-identity"><strong>Source file</strong><span>${escapeHtml(detail.source_name)}</span><small>${escapeHtml(detail.relative_path)}</small></div>${currentRelease}<details open><summary>Document control data</summary><dl class="selection-details"><dt>Lifecycle</dt><dd>${escapeHtml(detail.lifecycle)}</dd><dt>Document type</dt><dd>${escapeHtml(detail.control.document_type ?? "Not set")}</dd><dt>Owner</dt><dd>${escapeHtml(detail.control.owner ?? "Not set")}</dd><dt>Confidentiality</dt><dd>${escapeHtml(confidentiality?.label ?? "Not configured")}${confidentiality ? ` · ${escapeHtml(confidentiality.document_override ? "override" : `from ${confidentiality.source_folder}`)}` : ""}</dd><dt>Editor</dt><dd>${escapeHtml(role(roles?.editor))}</dd><dt>Approver</dt><dd>${escapeHtml(role(roles?.approver))}</dd></dl></details><details open><summary>Actions</summary><div class="selection-actions"><button class="button" type="button" data-library-open-source ${sourceAvailable ? "" : "disabled"}>Open source draft</button><button class="button" type="button" data-library-open-release ${release?.pdf_exists ? "" : "disabled"}>Open current released PDF</button><button class="button" type="button" data-library-open-notes>Open notes</button><button class="button secondary" type="button" data-library-open-assistance>Evaluate changes with Claude</button><button class="button secondary" type="button" data-library-copy-permalink>Copy permalink</button><button class="button danger" type="button" data-library-unregister>Unregister</button></div><form id="library-reassociate-form" class="reassociate-form"><label>Reassociate source<input name="path" required value="${escapeHtml(detail.relative_path)}" aria-label="New edit-root-relative source path"></label><button class="button secondary" type="submit">Reassociate</button></form></details><details><summary>Revision cycle</summary><p>No revision cycle is open.</p></details><details><summary>Releases</summary><p>Release evidence remains available from the Releases destination.</p></details>`;
 }
 

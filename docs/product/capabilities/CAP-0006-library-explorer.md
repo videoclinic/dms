@@ -4,7 +4,7 @@
 | --- | --- |
 | ID | CAP-0006 |
 | Status | not implemented |
-| Tests | Partial phases 3, 9b.1, 9e, and 9f.1 evidence: [`dms-core` Library tests](../../../crates/dms-core/tests/library.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [hierarchical Library and document-action frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31359360786) |
+| Tests | Partial phases 3, 9b.1, 9e, 9f.1, and 9f.2 evidence: [`dms-core` Library tests](../../../crates/dms-core/tests/library.rs), [local lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [hierarchical Library, document-action, and workflow-evidence frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31359360786) |
 
 ## Outcomes (contract — not yet true in runtime)
 

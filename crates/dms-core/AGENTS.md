@@ -56,6 +56,9 @@ persistence.
 - Workflow evidence is append-only, SHA-256 predecessor-linked, newest-first at
   the public history boundary, and validated whenever workspace metadata opens
   or saves.
+- Begin revision, cancel review, and mark obsolete use the core lifecycle
+  preconditions and append canonical `revision_begun`, `review_cancelled`, or
+  `document_obsoleted` evidence. Cancellation and obsolescence require reasons.
 - Audit reports deterministically serialize the selected control, workflow,
   periodic-review, release, and verification records without embedding source
   drafts or release PDFs. Report paths remain inside the edit root, never
