@@ -31,7 +31,7 @@ fn fixture() -> (TempDir, Workspace, Uuid) {
 
 #[test]
 fn audit_reports_are_deterministic_filtered_and_never_embed_source_bytes() {
-    let (temp, mut workspace, document_id) = fixture();
+    let (_temp, mut workspace, document_id) = fixture();
     let filter = AuditReportFilter {
         document_ids: vec![document_id],
         confidentiality_type_ids: vec!["internal".to_owned()],
@@ -138,7 +138,7 @@ fn audit_reports_are_deterministic_filtered_and_never_embed_source_bytes() {
     );
     #[cfg(unix)]
     {
-        let outside = temp.path().join("outside.txt");
+        let outside = _temp.path().join("outside.txt");
         fs::write(&outside, b"outside bytes").unwrap();
         std::os::unix::fs::symlink(
             &outside,
