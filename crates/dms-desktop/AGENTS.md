@@ -42,6 +42,13 @@ macOS.
   most ten unique edit roots in most-recent-first order; removing one never
   touches workspace metadata or files. A failed recent-library open reports the
   error beside that list and retains the edit root in the explicit open form.
+- Register the configured `dms://` scheme in Windows and macOS bundles. The
+  single-instance plugin remains the first Tauri plugin so an activation focuses
+  the existing main window and reaches the deep-link listener.
+- Resolve inbound permalinks only through `dms-core` against accessible edit
+  roots in the recent-library registry. Switch through the normal advisory-lock
+  boundary, key activities by stable IDs, and load retained document details by
+  ID even when no current filesystem row can be selected.
 - Change the persisted sidebar preference or current-session unfolded overlay
   only through an explicit sidebar control. Destination, saved-view, open-pane,
   and in-surface actions must preserve the current sidebar presentation.

@@ -83,6 +83,9 @@ persistence.
   change lifecycle state.
 - Review permalinks resolve both content-approval requests and periodic-review
   requests so notification links never point at an unresolvable review ID.
+- Canonical `dms://open` permalinks parse only stable workspace/document UUIDs.
+  The optional `review` and `notes` targets refine navigation without replacing
+  those identity keys; unknown extra parameters do not affect resolution.
 - `Workspace::backup_workspace` refuses to overwrite an existing archive,
   refuses symlinks and non-regular files, and writes a Zip archive containing
   metadata, every registered draft, every recorded release PDF, and a

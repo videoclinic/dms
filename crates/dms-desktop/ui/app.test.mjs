@@ -4,11 +4,13 @@ import { readFileSync } from "node:fs";
 
 import {
   activityKey,
+  applyPermalinkDocumentSelection,
   closeActivity,
   closeWorkspaceSession,
   createInitialState,
   defaultPreferences,
   openActivity,
+  permalinkActivity,
   rememberRecentLibrary,
   removeRecentLibrary,
   savedViewId,
@@ -212,6 +214,52 @@ test("opening the same document task focuses one stable activity", () => {
   assert.equal(state.activities.length, 1);
   assert.equal(state.activities[0].label, "Audit · Renamed policy · DOC-014");
   assert.equal(state.current_key, activityKey(documentActivity("Audit")));
+});
+
+test("permalink targets create stable document, review, and notes activities", () => {
+  const resolution = {
+    workspace: { workspace_id: workspaceId },
+    document_id: "80693979-420b-4766-9a86-2f6603cd52ab",
+    title: "Policy",
+    document_number: "DOC-014",
+    folder: "Policies/HR",
+    target: "document",
+    review_id: null,
+  };
+  const document = permalinkActivity(resolution);
+  const notes = permalinkActivity({ ...resolution, target: "notes" });
+  const review = permalinkActivity({
+    ...resolution,
+    target: "review",
+    review_id: "5a6382c0-3078-4cf9-a64c-d194686bd1f6",
+  });
+
+  assert.equal(activityKey(document), `${workspaceId}:Library`);
+  assert.equal(document.document_id, resolution.document_id);
+  assert.deepEqual(document.route_state, { folder: "Policies/HR" });
+  assert.equal(activityKey(notes), `${workspaceId}:Notes:document:${resolution.document_id}`);
+  assert.equal(activityKey(review), `${workspaceId}:Review:document:${resolution.document_id}`);
+  assert.equal(review.route_state.review, "5a6382c0-3078-4cf9-a64c-d194686bd1f6");
+});
+
+test("permalink document details survive a missing filesystem row", () => {
+  const detail = {
+    document_id: "80693979-420b-4766-9a86-2f6603cd52ab",
+    source_state: "unregistered",
+    control: { title: "Retained policy" },
+  };
+  const library = {
+    folder: { entries: [] },
+    selection: ["Policies/Old.md"],
+    detail: null,
+    detail_error: "stale",
+  };
+
+  const resolved = applyPermalinkDocumentSelection(library, detail);
+
+  assert.deepEqual(resolved.selection, []);
+  assert.equal(resolved.detail, detail);
+  assert.equal(resolved.detail_error, "");
 });
 
 test("opening or focusing an activity preserves an unfolded sidebar overlay", () => {

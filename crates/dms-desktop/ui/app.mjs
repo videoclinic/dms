@@ -165,6 +165,49 @@ export function openActivity(state, activity) {
   return { ...state, activities, current_key: key, flyout: null };
 }
 
+export function permalinkActivity(resolution) {
+  const suffix = resolution.document_number ? ` · ${resolution.document_number}` : "";
+  const shared = {
+    workspace_id: resolution.workspace.workspace_id,
+    destination: "Library",
+    document_id: resolution.document_id,
+  };
+  if (resolution.target === "notes") {
+    return {
+      ...shared,
+      task: "Notes",
+      label: `Notes · ${resolution.title}${suffix}`,
+      route_state: {},
+    };
+  }
+  if (resolution.target === "review") {
+    return {
+      ...shared,
+      task: "Review",
+      label: `Review · ${resolution.title}${suffix}`,
+      route_state: { review: resolution.review_id },
+    };
+  }
+  return {
+    ...shared,
+    task: "Library",
+    label: resolution.folder === "." ? "Library · /" : `Library · ${resolution.folder}`,
+    route_state: { folder: resolution.folder },
+  };
+}
+
+export function applyPermalinkDocumentSelection(library, detail) {
+  const entry = library.folder.entries.find(
+    (candidate) => entryDocumentId(candidate) === detail.document_id,
+  );
+  return {
+    ...library,
+    selection: entry ? [normalizeLibraryPath(entry.relative_path)] : [],
+    detail,
+    detail_error: "",
+  };
+}
+
 export function closeActivity(state, key) {
   const activities = state.activities.filter((activity) => activity.key !== key);
   const current_key = state.current_key === key
@@ -349,6 +392,9 @@ function activityMarkup(state, activity) {
   if (activity.task === "Notes") {
     return documentNotesMarkup(activity, noteDocumentState(state.note_documents, activity.document_id));
   }
+  if (activity.task === "Review") {
+    return `<section class="card"><span class="badge">Review target</span><h2>${escapeHtml(activity.label)}</h2><p>This permalink selected the stable review request for the document.</p><dl class="details-grid"><dt>Document ID</dt><dd>${escapeHtml(activity.document_id)}</dd><dt>Review ID</dt><dd>${escapeHtml(activity.route_state.review)}</dd></dl></section>`;
+  }
   if (activity.task === "Claude assistance") {
     return assistanceMarkup(
       activity,
@@ -488,7 +534,7 @@ export async function switchWorkspaceSession(
   return lockStatus;
 }
 
-async function activateWorkspace(workspace, lockOptions = {}) {
+async function activateWorkspace(workspace, lockOptions = {}, openLibrary = true) {
   const transitioned = await switchWorkspaceSession(
     appState.workspace,
     appState.maintenance.lock_status,
@@ -507,7 +553,36 @@ async function activateWorkspace(workspace, lockOptions = {}) {
     sidebar_overlay: sidebarOverlay,
   };
   await persistPreferences(appState);
-  openDestination("Library");
+  if (openLibrary) openDestination("Library");
+}
+
+async function openPermalink(uri) {
+  const resolution = await invokeCommand("resolve_registered_permalink", { uri });
+  if (appState.workspace?.workspace_id !== resolution.workspace.workspace_id) {
+    await activateWorkspace(resolution.workspace, {}, false);
+  }
+  const activity = permalinkActivity(resolution);
+  appState = openActivity(appState, activity);
+  render(appState);
+  if (resolution.target === "notes") {
+    await loadDocumentNotes(resolution.document_id);
+  } else if (resolution.target === "document") {
+    await loadLibraryFolder(resolution.folder, "replace");
+    try {
+      const detail = await invokeCommand("load_document_selection", {
+        editRoot: appState.workspace.edit_root,
+        documentId: resolution.document_id,
+      });
+      appState = {
+        ...appState,
+        library: applyPermalinkDocumentSelection(appState.library, detail),
+        error: "",
+      };
+    } catch (error) {
+      appState = { ...appState, error: String(error) };
+    }
+    render(appState);
+  }
 }
 
 async function loadWorkspaceLockStatus(notice = "") {
@@ -1979,6 +2054,33 @@ async function registerWindowCloseHandler() {
   });
 }
 
+const handledPermalinks = new Set();
+let permalinkQueue = Promise.resolve();
+
+function queuePermalinks(urls) {
+  for (const value of urls ?? []) {
+    const uri = String(value);
+    if (handledPermalinks.has(uri)) continue;
+    handledPermalinks.add(uri);
+    permalinkQueue = permalinkQueue.then(async () => {
+      try {
+        await openPermalink(uri);
+      } catch (error) {
+        handledPermalinks.delete(uri);
+        appState = { ...appState, error: String(error) };
+        render(appState);
+      }
+    });
+  }
+}
+
+async function registerDeepLinkHandler() {
+  const deepLink = globalThis.__TAURI__?.deepLink;
+  if (!deepLink?.onOpenUrl || !deepLink?.getCurrent) return;
+  await deepLink.onOpenUrl(queuePermalinks);
+  queuePermalinks(await deepLink.getCurrent());
+}
+
 async function start() {
   try {
     const preferences = await invokeCommand("load_preferences", {});
@@ -1993,6 +2095,7 @@ async function start() {
   document.addEventListener("dblclick", handleDoubleClick);
   document.addEventListener("keydown", handleKeyDown);
   await registerWindowCloseHandler();
+  await registerDeepLinkHandler();
   document.querySelector("#collapse-sidebar").addEventListener("click", () => {
     appState = {
       ...appState,

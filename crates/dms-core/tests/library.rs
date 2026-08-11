@@ -1,7 +1,8 @@
 use std::{fs, path::Path};
 
 use dms_core::{
-    ControlUpdate, DmsError, LibraryEntryKind, LibraryMembership, SourceState, Workspace,
+    ControlUpdate, DmsError, LibraryEntryKind, LibraryMembership, PermalinkTarget, SourceState,
+    Workspace,
 };
 
 fn initialized_workspace() -> (tempfile::TempDir, Workspace) {
@@ -132,6 +133,14 @@ fn batch_add_is_atomic_and_unregister_reassociate_preserve_document_identity() {
             workspace.workspace_id, document.id
         )
     );
+    let document_target = workspace.resolve_permalink(&permalink).unwrap();
+    assert_eq!(document_target.target, PermalinkTarget::Document);
+    let notes_target = workspace
+        .resolve_permalink(&format!("{permalink}&target=notes&ignored=value"))
+        .unwrap();
+    assert_eq!(notes_target.document_id, document.id);
+    assert_eq!(notes_target.target, PermalinkTarget::Notes);
+    assert_eq!(notes_target.review_id, None);
 }
 
 #[test]

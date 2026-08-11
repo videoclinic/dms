@@ -9,17 +9,18 @@ use chrono::NaiveDate;
 use dms_core::{
     AuditReportRecord, AuditReportRequest, AuditReportVerificationStatus, AuthenticatedActor,
     BackupOutcome, ClaudeAssistancePayload, ClaudeAssistancePolicy, ConfidentialityPolicy,
-    ConfidentialityType, ControlUpdate, DeliveryAttempt, DeliveryReceipt, Document,
+    ConfidentialityType, ControlUpdate, DeliveryAttempt, DeliveryReceipt, DmsError, Document,
     DocumentControl, DocumentType, EffectiveConfidentiality, EffectiveWorkflowRoles,
     EntraIdentitySource, EntraPerson, GraphClient, LibraryEntry, LibraryFolder, LibraryFolderNode,
     Lifecycle, LocalLifecycleActions, Note, NotificationClient, NotificationMessage,
     NotificationSettings, NotificationTransport, PeriodicReview, PeriodicReviewMarker,
-    PeriodicReviewResult, PolicyFolder, ReleaseVerificationStatus, RestoreOutcome, RestoreRequest,
-    RoleUpdate, SmtpSettings, SourceState, WorkflowEvent, WorkflowPolicyAssignment,
+    PeriodicReviewResult, PermalinkTarget, PolicyFolder, ReleaseVerificationStatus, RestoreOutcome,
+    RestoreRequest, RoleUpdate, SmtpSettings, SourceState, WorkflowEvent, WorkflowPolicyAssignment,
     WorkflowVerification, Workspace, WorkspaceLock, WorkspaceLockStatus,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
+use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
 
@@ -113,6 +114,17 @@ pub struct WorkspaceSummary {
     pub edit_root: String,
     pub publish_root: String,
     pub document_count: usize,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct DesktopPermalinkResolution {
+    pub workspace: WorkspaceSummary,
+    pub document_id: Uuid,
+    pub title: String,
+    pub document_number: Option<String>,
+    pub folder: String,
+    pub target: String,
+    pub review_id: Option<Uuid>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -264,6 +276,20 @@ async fn select_directory(app: AppHandle) -> Result<Option<String>, String> {
 #[tauri::command]
 fn open_workspace(edit_root: String) -> Result<WorkspaceSummary, String> {
     workspace_summary(Path::new(&edit_root))
+}
+
+#[tauri::command]
+fn resolve_registered_permalink(
+    app: AppHandle,
+    uri: String,
+) -> Result<DesktopPermalinkResolution, String> {
+    let path = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| format!("cannot resolve the app-config directory: {error}"))?
+        .join(PREFERENCES_FILENAME);
+    let preferences = load_preferences_at(&path)?;
+    resolve_registered_permalink_from(&preferences, &uri)
 }
 
 #[tauri::command]
@@ -1054,6 +1080,46 @@ fn normalize_preferences(mut preferences: Preferences) -> Preferences {
     preferences
 }
 
+fn resolve_registered_permalink_from(
+    preferences: &Preferences,
+    uri: &str,
+) -> Result<DesktopPermalinkResolution, String> {
+    for edit_root in &preferences.recent_libraries {
+        let Ok(workspace) = Workspace::open(Path::new(edit_root)) else {
+            continue;
+        };
+        let resolved = match workspace.resolve_permalink(uri) {
+            Ok(resolved) => resolved,
+            Err(DmsError::PermalinkWorkspaceMismatch(_)) => continue,
+            Err(error) => return Err(error.to_string()),
+        };
+        let document = workspace
+            .document(resolved.document_id)
+            .map_err(|error| error.to_string())?;
+        let folder = document
+            .relative_path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .map(path_text)
+            .unwrap_or_else(|| ".".to_owned());
+        let target = match resolved.target {
+            PermalinkTarget::Document => "document",
+            PermalinkTarget::Review => "review",
+            PermalinkTarget::Notes => "notes",
+        };
+        return Ok(DesktopPermalinkResolution {
+            workspace: workspace_summary_from(&workspace),
+            document_id: resolved.document_id,
+            title: document.control.title.clone(),
+            document_number: document.control.document_number.clone(),
+            folder,
+            target: target.to_owned(),
+            review_id: resolved.review_id,
+        });
+    }
+    Err("permalink workspace is not registered or accessible".to_owned())
+}
+
 fn configuration_role_update(value: &str) -> Result<RoleUpdate, String> {
     match value.trim() {
         "__inherit" => Ok(RoleUpdate::Clear),
@@ -1377,12 +1443,29 @@ fn path_text(path: &Path) -> String {
         .join("/")
 }
 
+fn focus_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default().plugin(tauri_plugin_single_instance::init(
+        |app, _arguments, _working_directory| {
+            focus_main_window(app);
+        },
+    ));
+    builder
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(DesktopIntegrations::default())
         .setup(|app| {
+            let handle = app.handle().clone();
+            app.deep_link()
+                .on_open_url(move |_event| focus_main_window(&handle));
             if std::env::var_os("DMS_DESKTOP_SMOKE").is_some() {
                 app.handle().exit(0);
             } else if std::env::var_os("DMS_DESKTOP_EXPORT_SMOKE").is_some() {
@@ -1406,6 +1489,7 @@ pub fn run() {
             select_directory,
             initialize_workspace,
             open_workspace,
+            resolve_registered_permalink,
             load_workspace_configuration,
             configure_default_review_interval,
             configure_document_type,
@@ -1471,6 +1555,22 @@ mod tests {
         let preferences = load_preferences_at(&directory.path().join("missing.json")).unwrap();
 
         assert_eq!(preferences, Preferences::default());
+    }
+
+    #[test]
+    fn desktop_bundle_declares_the_dms_scheme_and_guest_permission() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        assert_eq!(
+            config["plugins"]["deep-link"]["desktop"]["schemes"],
+            serde_json::json!(["dms"])
+        );
+        let capability: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json")).unwrap();
+        assert!(capability["permissions"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("deep-link:default")));
     }
 
     #[test]
@@ -1757,6 +1857,31 @@ mod tests {
             serde_json::json!({ "tampered_at": document.id })
         );
         assert!(selection.permalink.ends_with(&document.id.to_string()));
+        let preferences = Preferences {
+            recent_libraries: vec![
+                "/unavailable/workspace".to_owned(),
+                edit_root.path().to_string_lossy().into_owned(),
+            ],
+            ..Preferences::default()
+        };
+        let notes = resolve_registered_permalink_from(
+            &preferences,
+            &format!("{}&target=notes", selection.permalink),
+        )
+        .unwrap();
+        assert_eq!(
+            notes.workspace.workspace_id,
+            workspace.workspace_id.to_string()
+        );
+        assert_eq!(notes.document_id, document.id);
+        assert_eq!(notes.folder, "Policies");
+        assert_eq!(notes.target, "notes");
+        assert_eq!(notes.review_id, None);
+        assert!(
+            resolve_registered_permalink_from(&Preferences::default(), &selection.permalink,)
+                .unwrap_err()
+                .contains("not registered or accessible")
+        );
 
         let root = edit_root.path().to_string_lossy().into_owned();
         assert!(update_document_control(

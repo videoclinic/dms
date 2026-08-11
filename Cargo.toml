@@ -22,7 +22,9 @@ uuid = { version = "1.11", features = ["serde", "v4"] }
 tempfile = "3.14"
 tauri = "2.11.5"
 tauri-build = "2.6.3"
+tauri-plugin-deep-link = "2.4.9"
 tauri-plugin-dialog = "2.7.2"
+tauri-plugin-single-instance = { version = "2.4.3", features = ["deep-link"] }
 zip = { version = "2.4.2", default-features = false, features = ["deflate"] }
 
 [workspace.dependencies.block2]

@@ -10,9 +10,9 @@ use dms_core::{
     DeliveryReceipt, DeliveryStatus, DmsError, EntraIdentitySource, EntraPerson, GraphClient,
     Lifecycle, MarkerStatus, NotificationClient, NotificationKind, NotificationMessage,
     NotificationSettings, NotificationTransport, PdfExporter, PeriodicReviewResult,
-    PeriodicReviewStatus, ReleaseOutcome, ReleaseVerificationStatus, ReviewDecision, RoleUpdate,
-    SmtpSettings, TargetSelection, Version, WorkflowEventType, WorkflowVerification, Workspace,
-    SCHEMA_VERSION,
+    PeriodicReviewStatus, PermalinkTarget, ReleaseOutcome, ReleaseVerificationStatus,
+    ReviewDecision, RoleUpdate, SmtpSettings, TargetSelection, Version, WorkflowEventType,
+    WorkflowVerification, Workspace, SCHEMA_VERSION,
 };
 use tempfile::TempDir;
 use uuid::Uuid;
@@ -1480,6 +1480,7 @@ fn periodic_review_reminders_record_every_attempt_without_duplicate_or_lifecycle
         .unwrap();
     let resolved = fixture.workspace.resolve_permalink(&permalink).unwrap();
     assert_eq!(resolved.document_id, fixture.document_id);
+    assert_eq!(resolved.target, PermalinkTarget::Review);
     assert_eq!(resolved.review_id, Some(review.id));
     let due = fixture
         .workspace

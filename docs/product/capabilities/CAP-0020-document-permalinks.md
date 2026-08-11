@@ -5,7 +5,7 @@
 | ID | CAP-0020 |
 | Status | not implemented |
 | Identity keys | Stable workspace ID + stable document ID (ADR-0015) |
-| Tests | none |
+| Tests | Partial phase 9g evidence: [`dms-core` permalink tests](../../../crates/dms-core/tests/library.rs), [review resolution tests](../../../crates/dms-core/tests/lifecycle.rs), [`dms-desktop` registry/config adapter tests](../../../crates/dms-desktop/src/lib.rs), [activity and retained-detail frontend tests](../../../crates/dms-desktop/ui/app.test.mjs), [Windows/macOS startup and packaging smoke](../../../.github/workflows/desktop-platform-smoke.yml) |
 
 ## Outcomes (contract — not yet true in runtime)
 

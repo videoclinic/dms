@@ -454,7 +454,15 @@ pub struct ReleaseOutcome {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ResolvedPermalink {
     pub document_id: Uuid,
+    pub target: PermalinkTarget,
     pub review_id: Option<Uuid>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PermalinkTarget {
+    Document,
+    Review,
+    Notes,
 }
 
 #[derive(Default)]
@@ -1257,7 +1265,12 @@ impl Workspace {
             .and_then(|value| Uuid::parse_str(value).ok())
             .ok_or(DmsError::InvalidPermalink)?;
         let document = self.document(document_id)?;
-        let review_id = if values.get("target") == Some(&"review") {
+        let target = match values.get("target").copied() {
+            Some("review") => PermalinkTarget::Review,
+            Some("notes") => PermalinkTarget::Notes,
+            _ => PermalinkTarget::Document,
+        };
+        let review_id = if target == PermalinkTarget::Review {
             let review_id = values
                 .get("review")
                 .and_then(|value| Uuid::parse_str(value).ok())
@@ -1279,6 +1292,7 @@ impl Workspace {
         };
         Ok(ResolvedPermalink {
             document_id,
+            target,
             review_id,
         })
     }
