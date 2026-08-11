@@ -94,10 +94,12 @@ macOS.
 - Configuration remains one session activity across Workspace, Document
   defaults, Workflow, and Notifications routes. Confidentiality catalogue and
   identity-source management are in-place secondary surfaces. Folder role
-  pickers use only the core-owned eligible-person cache; the identity surface is
-  read-only until phase 9i supplies live Graph setup, replacement, and refresh.
-  Notification forms persist only non-secret transport settings; credentials
-  never cross the frontend IPC boundary or enter `.dms`.
+  pickers refresh then use the core-owned eligible-person cache. The identity
+  surface accepts administrator-supplied tenant/group IDs, drives delegated
+  device authorization, previews and explicitly applies a binding, and refreshes
+  direct enabled user members through Microsoft Graph. Desktop-only delegated
+  tokens remain in the OS credential store; credentials never cross the frontend
+  IPC boundary or enter `.dms`.
 - Claude Desktop assistance remains unavailable unless workspace policy,
   effective confidentiality, a verified current release, and a supported local
   installation all allow it. An oversized preview shows its measured size and

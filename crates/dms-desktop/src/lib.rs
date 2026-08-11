@@ -7,25 +7,26 @@ use std::{
 
 use chrono::NaiveDate;
 use dms_core::{
-    AuditReportRecord, AuditReportRequest, AuditReportVerificationStatus, AuthenticatedActor,
-    BackupOutcome, ClaudeAssistancePolicy, ClaudeAssistancePreview, ConfidentialityPolicy,
-    ConfidentialityType, ControlUpdate, DeliveryAttempt, DeliveryReceipt, DmsError, Document,
-    DocumentControl, DocumentType, EffectiveConfidentiality, EffectiveWorkflowRoles,
-    EntraIdentitySource, EntraPerson, GraphClient, LibraryEntry, LibraryFolder, LibraryFolderNode,
-    Lifecycle, LocalLifecycleActions, Note, NotificationClient, NotificationMessage,
-    NotificationSettings, NotificationTransport, PeriodicReview, PeriodicReviewMarker,
-    PeriodicReviewResult, PermalinkTarget, PolicyFolder, ReleaseVerificationStatus, RestoreOutcome,
-    RestoreRequest, RoleUpdate, SmtpSettings, SourceState, WorkflowEvent, WorkflowPolicyAssignment,
+    AuditReportRecord, AuditReportRequest, AuditReportVerificationStatus, BackupOutcome,
+    ClaudeAssistancePolicy, ClaudeAssistancePreview, ConfidentialityPolicy, ConfidentialityType,
+    ControlUpdate, DeliveryAttempt, DeliveryReceipt, DmsError, Document, DocumentControl,
+    DocumentType, EffectiveConfidentiality, EffectiveWorkflowRoles, EntraIdentitySource,
+    EntraPerson, GraphClient, LibraryEntry, LibraryFolder, LibraryFolderNode, Lifecycle,
+    LocalLifecycleActions, Note, NotificationClient, NotificationMessage, NotificationSettings,
+    NotificationTransport, PeriodicReview, PeriodicReviewMarker, PeriodicReviewResult,
+    PermalinkTarget, PolicyFolder, ReleaseVerificationStatus, RestoreOutcome, RestoreRequest,
+    RoleUpdate, SmtpSettings, SourceState, WorkflowEvent, WorkflowPolicyAssignment,
     WorkflowVerification, Workspace, WorkspaceLock, WorkspaceLockStatus,
 };
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, State};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
 
 mod assistance;
 pub mod export;
+mod graph;
 pub mod notify;
 
 use assistance::ClaudeDesktopApp;
@@ -34,21 +35,23 @@ const PREFERENCES_FILENAME: &str = "preferences.json";
 const RECENT_LIBRARIES_LIMIT: usize = 10;
 
 struct DesktopIntegrations {
-    graph: Mutex<Box<dyn GraphClient + Send>>,
+    graph: Mutex<graph::MicrosoftGraphClient>,
     notifier: Mutex<Box<dyn NotificationClient + Send>>,
 }
 
 impl Default for DesktopIntegrations {
     fn default() -> Self {
         Self {
-            graph: Mutex::new(Box::new(UnavailableGraphClient)),
+            graph: Mutex::new(graph::MicrosoftGraphClient::production()),
             notifier: Mutex::new(Box::new(UnavailableNotificationClient)),
         }
     }
 }
 
+#[cfg(test)]
 struct UnavailableGraphClient;
 
+#[cfg(test)]
 impl GraphClient for UnavailableGraphClient {
     fn direct_user_members(
         &mut self,
@@ -60,7 +63,7 @@ impl GraphClient for UnavailableGraphClient {
     fn authenticated_actor(
         &mut self,
         _source: &EntraIdentitySource,
-    ) -> std::result::Result<AuthenticatedActor, String> {
+    ) -> std::result::Result<dms_core::AuthenticatedActor, String> {
         Err("live interactive Microsoft Entra sign-in is not configured".to_owned())
     }
 }
@@ -384,14 +387,138 @@ fn set_workflow_policy(
     folder: String,
     editor: String,
     approver: String,
+    state: State<'_, DesktopIntegrations>,
 ) -> Result<WorkspaceConfiguration, String> {
     let editor = configuration_role_update(&editor)?;
     let approver = configuration_role_update(&approver)?;
+    let mut graph = state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
+    set_workflow_policy_with(
+        Path::new(&edit_root),
+        &folder,
+        editor,
+        approver,
+        &mut *graph,
+    )
+}
+
+fn set_workflow_policy_with<G: GraphClient + ?Sized>(
+    edit_root: &Path,
+    folder: &str,
+    editor: RoleUpdate,
+    approver: RoleUpdate,
+    graph: &mut G,
+) -> Result<WorkspaceConfiguration, String> {
+    let mut workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
+    workspace
+        .refresh_eligible_people(graph)
+        .map_err(|error| error.to_string())?;
+    workspace
+        .update_workflow_policy(folder, editor, approver)
+        .map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
+    workspace_configuration_from(&workspace)
+}
+
+#[tauri::command]
+fn begin_identity_source_sign_in(
+    tenant_id: String,
+    group_id: String,
+    state: State<'_, DesktopIntegrations>,
+) -> Result<graph::DeviceLoginChallenge, String> {
+    let tenant_id = Uuid::parse_str(&tenant_id)
+        .map_err(|_| "tenant ID must be a Microsoft Entra directory UUID".to_owned())?;
+    let group_id = Uuid::parse_str(&group_id)
+        .map_err(|_| "group ID must be a Microsoft Entra group UUID".to_owned())?;
+    state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?
+        .begin_identity_source_setup(tenant_id, group_id)
+}
+
+#[tauri::command]
+fn complete_identity_source_sign_in(
+    challenge_id: Uuid,
+    state: State<'_, DesktopIntegrations>,
+) -> Result<graph::IdentitySourcePreview, String> {
+    state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?
+        .complete_identity_source_setup(challenge_id)
+}
+
+#[tauri::command]
+fn begin_approver_sign_in(
+    edit_root: String,
+    state: State<'_, DesktopIntegrations>,
+) -> Result<graph::DeviceLoginChallenge, String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let source = workspace.identity_source().ok_or_else(|| {
+        "configure a Microsoft Entra identity source before signing in for approval".to_owned()
+    })?;
+    state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?
+        .begin_approver_sign_in(source.tenant_id)
+}
+
+#[tauri::command]
+fn complete_approver_sign_in(
+    challenge_id: Uuid,
+    state: State<'_, DesktopIntegrations>,
+) -> Result<dms_core::AuthenticatedActor, String> {
+    state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?
+        .complete_approver_sign_in(challenge_id)
+}
+
+#[tauri::command]
+fn apply_identity_source(
+    edit_root: String,
+    preview_id: Uuid,
+    confirmed: bool,
+    state: State<'_, DesktopIntegrations>,
+) -> Result<WorkspaceConfiguration, String> {
+    if !confirmed {
+        return Err(
+            "applying a Microsoft Entra identity source requires explicit confirmation".to_owned(),
+        );
+    }
+    let (tenant_id, tenant_display, group_id, group_label, people) = state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?
+        .apply_identity_source_preview(preview_id)?;
     mutate_workspace_configuration(Path::new(&edit_root), |workspace| {
         workspace
-            .update_workflow_policy(&folder, editor, approver)
+            .replace_identity_source(tenant_id, &tenant_display, group_id, &group_label, people)
             .map(|_| ())
     })
+}
+
+#[tauri::command]
+fn refresh_identity_source(
+    edit_root: String,
+    state: State<'_, DesktopIntegrations>,
+) -> Result<WorkspaceConfiguration, String> {
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let mut graph = state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
+    workspace
+        .refresh_eligible_people(&mut *graph)
+        .map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
+    workspace_configuration_from(&workspace)
 }
 
 #[tauri::command]
@@ -772,7 +899,7 @@ fn complete_periodic_review(
         result,
         &comment,
         confirmed,
-        graph.as_mut(),
+        &mut *graph,
     )
 }
 
@@ -1500,6 +1627,12 @@ pub fn run() {
             set_confidentiality_policy,
             remove_confidentiality_policy,
             set_workflow_policy,
+            begin_identity_source_sign_in,
+            complete_identity_source_sign_in,
+            begin_approver_sign_in,
+            complete_approver_sign_in,
+            apply_identity_source,
+            refresh_identity_source,
             configure_notifications,
             load_library,
             search_library,
@@ -1739,6 +1872,26 @@ mod tests {
 
     #[test]
     fn desktop_configuration_commands_persist_workflow_and_notifications() {
+        struct RefreshedGraph {
+            people: Vec<EntraPerson>,
+        }
+
+        impl GraphClient for RefreshedGraph {
+            fn direct_user_members(
+                &mut self,
+                _source: &EntraIdentitySource,
+            ) -> Result<Vec<EntraPerson>, String> {
+                Ok(self.people.clone())
+            }
+
+            fn authenticated_actor(
+                &mut self,
+                _source: &EntraIdentitySource,
+            ) -> Result<dms_core::AuthenticatedActor, String> {
+                Err("not used by configuration".to_owned())
+            }
+        }
+
         let edit_root = tempfile::tempdir().unwrap();
         let publish_root = tempfile::tempdir().unwrap();
         fs::create_dir_all(edit_root.path().join("Policies/HR")).unwrap();
@@ -1767,11 +1920,18 @@ mod tests {
         workspace.save().unwrap();
         let root = edit_root.path().to_string_lossy().into_owned();
 
-        let workflow = set_workflow_policy(
-            root.clone(),
-            "Policies/HR".into(),
-            editor_id.to_string(),
-            "__inherit".into(),
+        let mut graph = RefreshedGraph {
+            people: vec![
+                EntraPerson::eligible(editor_id, "Lukas Roth", "lukas@example.test"),
+                EntraPerson::eligible(approver_id, "Anna Berg", "anna@example.test"),
+            ],
+        };
+        let workflow = set_workflow_policy_with(
+            edit_root.path(),
+            "Policies/HR",
+            RoleUpdate::replace(editor_id),
+            RoleUpdate::Unchanged,
+            &mut graph,
         )
         .unwrap();
         assert_eq!(

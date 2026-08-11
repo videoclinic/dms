@@ -45,6 +45,7 @@ const snapshot = {
     tenant_display: "Example tenant",
     group_id: "group-1",
     group_label: "DMS workflow",
+    last_refreshed_at: "2026-08-11T12:00:00Z",
   },
   eligible_people: [
     { object_id: "editor-1", display_name: "Lukas Roth", email: "lukas@example.test", account_enabled: true },
@@ -100,6 +101,7 @@ test("workflow route configures folder roles and opens identity source in place"
 
   assert.match(markup, /People source/);
   assert.match(markup, /DMS workflow/);
+  assert.match(markup, /refreshed 2026-08-11T12:00:00Z/);
   assert.match(markup, /data-configuration-form="workflow-policy"/);
   assert.match(markup, /Lukas Roth/);
   assert.match(markup, /Anna Berg/);
@@ -109,7 +111,8 @@ test("workflow route configures folder roles and opens identity source in place"
   markup = configurationMarkup(state, assistancePolicy);
   assert.match(markup, /Back to Workflow/);
   assert.match(markup, /Eligible people — read only/);
-  assert.match(markup, /Microsoft Graph integration/);
+  assert.match(markup, /identity-source-start/);
+  assert.match(markup, /delegated Microsoft Graph access/);
   assert.equal(closeConfigurationSecondary(state).secondary, null);
 });
 
@@ -194,6 +197,28 @@ test("configuration mutations map forms to narrow desktop commands", () => {
     {
       command: "set_workflow_policy",
       arguments: { folder: "Policies/HR", editor: "editor-1", approver: "__inherit" },
+    },
+  );
+  assert.deepEqual(
+    configurationMutationRequest(
+      "identity-source-start",
+      new Map([["tenantId", " tenant "], ["groupId", " group "]]),
+      ".",
+    ),
+    {
+      command: "begin_identity_source_sign_in",
+      arguments: { tenantId: "tenant", groupId: "group" },
+    },
+  );
+  assert.deepEqual(
+    configurationMutationRequest(
+      "identity-source-apply",
+      new Map([["previewId", " preview "], ["confirmed", "on"]]),
+      ".",
+    ),
+    {
+      command: "apply_identity_source",
+      arguments: { previewId: "preview", confirmed: true },
     },
   );
   assert.deepEqual(

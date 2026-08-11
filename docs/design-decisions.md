@@ -342,9 +342,10 @@ Capability-local rules stay in their CAP files.
   names, and mail addresses in Entra. Copying that directory into `.dms` would
   create stale identities and another access-management process.
 - **Consequences:** The app requests only the delegated Graph permissions needed
-  to list the configured group's members and resolve the signed-in account
-  (`GroupMember.Read.All` plus normal OpenID Connect user sign-in); tenant admin
-  consent is required. It does not read SharePoint site permissions, which need
+  to list the configured group's direct users and resolve the signed-in account
+  (`GroupMember.Read.All` and `User.Read`, plus `openid profile offline_access`
+  for delegated device authorization); tenant admin consent is required for the
+  group-membership permission. It does not read SharePoint site permissions, which need
   `Sites.FullControl.All`, and never treats OneDrive sharing as a roster. The
   app refreshes membership before role assignment, review submission, and a
   decision; a cached name/email is display-only. An unresolved policy blocks new

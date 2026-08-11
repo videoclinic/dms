@@ -3,12 +3,32 @@
 | Field | Value |
 | --- | --- |
 | ID | CAP-0021 |
-| Status | not implemented |
+| Status | partial — Phase 9j live identity-source setup, refresh, and sign-in |
 | Authority | Microsoft Entra ID group |
 | Storage | `<edit-root>/.dms/` binding and display cache; OS credential store token cache |
-| Tests | Partial phases 2 and 9f.4 evidence: [core policy tests](../../../crates/dms-core/tests/policies.rs), [desktop configuration snapshot](../../../crates/dms-desktop/src/lib.rs), [read-only identity-source surface tests](../../../crates/dms-desktop/ui/configuration.test.mjs); live Graph setup, refresh, and sign-in remain phase 9i work |
+| Tests | [Core policy and schema migration tests](../../../crates/dms-core/tests/policies.rs), [desktop Graph and configuration tests](../../../crates/dms-desktop/src/graph.rs), [configuration UI tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
 
-## Outcomes (contract — not yet true in runtime)
+## Implemented subset
+
+1. **Configuration → Workflow → Manage identity source** accepts an
+   administrator-supplied tenant ID and group object ID, starts delegated
+   Microsoft Entra device authorization, previews the resolved tenant/group and
+   eligible direct enabled user members, and applies the binding only after
+   explicit confirmation.
+2. Replacing a binding retains historical evidence, invalidates stale workflow
+   candidates, and leaves existing role references unresolved rather than mapping
+   them to the replacement group.
+3. The desktop adapter refreshes the direct enabled user members from Microsoft
+   Graph before a workflow role assignment; it persists the display cache and
+   refresh timestamp only in `<edit-root>/.dms`.
+4. An approver sign-in command uses delegated device authorization, resolves
+   `/me` to an immutable tenant/object-ID actor, and leaves the actor available
+   to the lifecycle adapter. Approval-decision composition remains phase 9k.
+5. The public-client ID is build configuration. Delegated access and refresh
+   tokens are stored only in the OS credential store; `.dms` retains neither
+   tokens nor client secrets.
+
+## Full capability contract (remaining outcomes are not all present)
 
 When implemented, the following must hold:
 

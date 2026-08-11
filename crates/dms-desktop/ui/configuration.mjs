@@ -24,6 +24,7 @@ export function createConfigurationState() {
     secondary: null,
     selected_folder: ".",
     snapshot: null,
+    identity_setup: null,
     notice: "",
     error: "",
   };
@@ -162,7 +163,7 @@ function workflowMarkup(state) {
   const direct = snapshot.workflow_policies.find((policy) => policy.folder === selected);
   const rootFolder = selected === ".";
   const sourceSummary = source
-    ? `<div><strong>${escapeHtml(source.group_label)}</strong><span>${escapeHtml(source.tenant_display)} · ${snapshot.eligible_people.length} eligible ${snapshot.eligible_people.length === 1 ? "person" : "people"}</span></div>`
+    ? `<div><strong>${escapeHtml(source.group_label)}</strong><span>${escapeHtml(source.tenant_display)} · ${snapshot.eligible_people.length} eligible ${snapshot.eligible_people.length === 1 ? "person" : "people"} · refreshed ${escapeHtml(source.last_refreshed_at ?? "Not yet refreshed")}</span></div>`
     : '<div><strong>Not configured</strong><span>Connect one Microsoft Entra group before assigning roles.</span></div>';
   const editor = roleSelectMarkup(snapshot, direct, "editor", rootFolder);
   const approver = roleSelectMarkup(snapshot, direct, "approver", rootFolder);
@@ -173,13 +174,19 @@ function workflowMarkup(state) {
 function identitySourceMarkup(state) {
   const source = state.snapshot.identity_source;
   const people = state.snapshot.eligible_people;
+  const setup = state.identity_setup;
   const details = source
-    ? `<dl class="details-grid"><dt>Tenant</dt><dd>${escapeHtml(source.tenant_display)}</dd><dt>Tenant ID</dt><dd>${escapeHtml(source.tenant_id)}</dd><dt>Group</dt><dd>${escapeHtml(source.group_label)}</dd><dt>Group ID</dt><dd>${escapeHtml(source.group_id)}</dd></dl>`
+    ? `<dl class="details-grid"><dt>Tenant</dt><dd>${escapeHtml(source.tenant_display)}</dd><dt>Tenant ID</dt><dd>${escapeHtml(source.tenant_id)}</dd><dt>Group</dt><dd>${escapeHtml(source.group_label)}</dd><dt>Group ID</dt><dd>${escapeHtml(source.group_id)}</dd><dt>Last refresh</dt><dd>${escapeHtml(source.last_refreshed_at ?? "Not yet refreshed")}</dd></dl>`
     : '<p class="status">No Microsoft Entra identity source is configured.</p>';
   const rows = people.length === 0
     ? '<p class="subtle">No eligible people are cached.</p>'
     : `<div class="configuration-people">${people.map((person) => `<div><strong>${escapeHtml(person.display_name)}</strong><span>${escapeHtml(person.email)}</span><code>${escapeHtml(person.object_id)}</code></div>`).join("")}</div>`;
-  return `<section class="configuration-secondary"><button class="button secondary" type="button" data-configuration-secondary-close>← Back to Workflow</button><div class="configuration-grid"><section class="card configuration-card"><span class="badge">Secondary configuration</span><h2>Microsoft Entra identity source</h2>${details}<p>Setup, replacement, and refresh use live Microsoft Graph integration with administrator consent. That integration is not available in this build.</p><button class="button" type="button" disabled title="Microsoft Graph integration is not available in this build">${source ? "Replace identity source…" : "Set up identity source…"}</button></section><section class="card configuration-card"><h3>Eligible people — read only</h3><p>Only direct, enabled user members returned by Microsoft Graph can be assigned.</p>${rows}<button class="button secondary" type="button" disabled title="Microsoft Graph integration is not available in this build">Refresh people</button></section></div></section>`;
+  const setupMarkup = setup?.challenge
+    ? `<section class="card configuration-card"><h3>Complete Microsoft Entra sign-in</h3><p>${escapeHtml(setup.challenge.message)}</p><dl class="details-grid"><dt>Code</dt><dd><code>${escapeHtml(setup.challenge.user_code)}</code></dd><dt>Sign-in page</dt><dd><a href="${escapeHtml(setup.challenge.verification_uri)}" target="_blank" rel="noreferrer">${escapeHtml(setup.challenge.verification_uri)}</a></dd></dl><form class="configuration-form" data-configuration-form="identity-source-complete"><input type="hidden" name="challengeId" value="${escapeHtml(setup.challenge.challenge_id)}"><button class="button" type="submit">I have signed in — preview group</button></form></section>`
+    : setup?.preview
+      ? `<section class="card configuration-card"><h3>Preview identity source</h3><dl class="details-grid"><dt>Tenant</dt><dd>${escapeHtml(setup.preview.tenant_display)}</dd><dt>Group</dt><dd>${escapeHtml(setup.preview.group_label)}</dd><dt>Eligible people</dt><dd>${escapeHtml(setup.preview.eligible_people.length)}</dd></dl><p>Applying this binding replaces the current people source and invalidates stale workflow candidates.</p><form class="configuration-form" data-configuration-form="identity-source-apply"><input type="hidden" name="previewId" value="${escapeHtml(setup.preview.preview_id)}"><label class="configuration-enabled"><input type="checkbox" name="confirmed" required> I confirm this group is the workspace’s people source.</label><button class="button" type="submit">Apply identity source</button></form></section>`
+      : `<section class="card configuration-card"><h3>${source ? "Replace identity source" : "Set up identity source"}</h3><p>Enter the administrator-approved tenant and one direct-user group. Sign-in uses delegated Microsoft Graph access.</p><form class="configuration-form" data-configuration-form="identity-source-start"><label>Tenant ID<input name="tenantId" required placeholder="00000000-0000-0000-0000-000000000000"></label><label>Group ID<input name="groupId" required placeholder="00000000-0000-0000-0000-000000000000"></label><button class="button" type="submit">Sign in and preview group</button></form></section>`;
+  return `<section class="configuration-secondary"><button class="button secondary" type="button" data-configuration-secondary-close>← Back to Workflow</button><div class="configuration-grid"><section class="card configuration-card"><span class="badge">Secondary configuration</span><h2>Microsoft Entra identity source</h2>${details}</section>${setupMarkup}<section class="card configuration-card"><h3>Eligible people — read only</h3><p>Only direct, enabled user members returned by Microsoft Graph can be assigned.</p>${rows}<form data-configuration-form="identity-source-refresh"><button class="button secondary" type="submit" ${source ? "" : "disabled"}>Refresh people</button></form></section></div></section>`;
 }
 
 function notificationsMarkup(snapshot) {
@@ -279,6 +286,27 @@ export function configurationMutationRequest(kind, values, selectedFolder) {
         sender: formValue(values, "sender"),
       },
     };
+  }
+  if (kind === "identity-source-start") {
+    return {
+      command: "begin_identity_source_sign_in",
+      arguments: { tenantId: formValue(values, "tenantId"), groupId: formValue(values, "groupId") },
+    };
+  }
+  if (kind === "identity-source-complete") {
+    return {
+      command: "complete_identity_source_sign_in",
+      arguments: { challengeId: formValue(values, "challengeId") },
+    };
+  }
+  if (kind === "identity-source-apply") {
+    return {
+      command: "apply_identity_source",
+      arguments: { previewId: formValue(values, "previewId"), confirmed: values.has("confirmed") },
+    };
+  }
+  if (kind === "identity-source-refresh") {
+    return { command: "refresh_identity_source", arguments: {} };
   }
   if (kind === "confidentiality-type") {
     return {

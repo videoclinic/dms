@@ -362,3 +362,63 @@ fn workflow_roles_inherit_independently_and_binding_replacement_unresolves_live_
     assert!(!metadata.contains("client_secret"));
     assert!(!metadata.contains("access_token"));
 }
+
+#[test]
+fn schema_v9_identity_source_migrates_without_fabricating_a_refresh_time() {
+    let (_temp, mut workspace) = initialized_workspace();
+    let tenant_id = Uuid::new_v4();
+    let group_id = Uuid::new_v4();
+    let editor_id = Uuid::new_v4();
+    let approver_id = Uuid::new_v4();
+    workspace
+        .replace_identity_source(
+            tenant_id,
+            "Example tenant",
+            group_id,
+            "DMS workflow",
+            vec![
+                EntraPerson::eligible(editor_id, "Editor", "editor@example.test"),
+                EntraPerson::eligible(approver_id, "Approver", "approver@example.test"),
+            ],
+        )
+        .expect("identity source");
+    workspace
+        .update_workflow_policy(
+            ".",
+            RoleUpdate::replace(editor_id),
+            RoleUpdate::replace(approver_id),
+        )
+        .expect("root workflow policy");
+    workspace.save().expect("current workspace");
+
+    let metadata_path = workspace.edit_root.join(".dms/workspace.json");
+    let mut metadata: Value = serde_json::from_slice(&fs::read(&metadata_path).expect("metadata"))
+        .expect("metadata JSON");
+    metadata["schema_version"] = Value::from(9);
+    metadata["identity_source"]
+        .as_object_mut()
+        .expect("identity source")
+        .remove("last_refreshed_at");
+    fs::write(
+        &metadata_path,
+        serde_json::to_vec_pretty(&metadata).expect("v9 metadata"),
+    )
+    .expect("v9 workspace");
+
+    let migrated = Workspace::open(&workspace.edit_root).expect("migrated workspace");
+    assert_eq!(migrated.schema_version, SCHEMA_VERSION);
+    assert_eq!(
+        migrated
+            .identity_source()
+            .expect("identity source")
+            .last_refreshed_at,
+        None
+    );
+    let backup: Value = serde_json::from_slice(
+        &fs::read(workspace.edit_root.join(".dms/workspace.v9.json.bak"))
+            .expect("migration backup"),
+    )
+    .expect("backup JSON");
+    assert_eq!(backup["schema_version"], 9);
+    assert!(backup["identity_source"]["last_refreshed_at"].is_null());
+}

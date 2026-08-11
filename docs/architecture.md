@@ -83,6 +83,10 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
   workflow authority is applied. Cached display information is presentation
   data only. A missing, disabled, or no-longer-eligible identity leaves the
   policy unresolved and blocks new review work until rerouted.
+- The desktop public client uses delegated device authorization for identity
+  source setup and approver sign-in. Its Graph access and refresh tokens live
+  only in the OS credential store; the workspace persists no tokens or client
+  secret.
 - Recording an approval decision requires interactive Microsoft Entra sign-in.
   The signed-in tenant/object ID must match the review's snapshotted effective
   approver and still be eligible in the bound group. This verifies the decision

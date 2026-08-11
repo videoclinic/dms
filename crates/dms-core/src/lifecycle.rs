@@ -521,6 +521,10 @@ impl Workspace {
             }
         }
         self.identity_cache = refreshed;
+        self.identity_source
+            .as_mut()
+            .expect("identity source was checked before refresh")
+            .last_refreshed_at = Some(Utc::now());
         self.invalidate_stale_candidates();
         Ok(())
     }

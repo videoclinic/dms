@@ -4,6 +4,7 @@ use std::{
     path::{Component, Path},
 };
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -49,6 +50,8 @@ pub struct EntraIdentitySource {
     pub tenant_display: String,
     pub group_id: Uuid,
     pub group_label: String,
+    #[serde(default)]
+    pub last_refreshed_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -294,6 +297,7 @@ impl Workspace {
             tenant_display: configured_text(tenant_display, "tenant display")?,
             group_id,
             group_label: configured_text(group_label, "group label")?,
+            last_refreshed_at: Some(Utc::now()),
         };
         let mut cache = BTreeMap::new();
         for mut person in people {

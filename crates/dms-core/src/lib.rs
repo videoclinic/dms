@@ -28,7 +28,7 @@ pub use lifecycle::*;
 pub use maintenance::*;
 pub use policies::*;
 
-pub const SCHEMA_VERSION: u32 = 9;
+pub const SCHEMA_VERSION: u32 = 10;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 
@@ -415,7 +415,7 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = matches!(found, 1..=8);
+        let migrated = matches!(found, 1..=9);
         if found == 1 {
             migrate_v1_catalogues(&mut value)?;
         }

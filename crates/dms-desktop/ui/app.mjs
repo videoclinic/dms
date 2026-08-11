@@ -1574,10 +1574,26 @@ async function handleSubmit(event) {
         new FormData(event.target),
         appState.configuration.selected_folder,
       );
-      const snapshot = await invokeCommand(request.command, {
+      const result = await invokeCommand(request.command, {
         editRoot: appState.workspace.edit_root,
         ...request.arguments,
       });
+      if (configurationMutation === "identity-source-start") {
+        appState = {
+          ...appState,
+          configuration: { ...appState.configuration, identity_setup: { challenge: result }, notice: "", error: "" },
+        };
+        render(appState);
+        return;
+      }
+      if (configurationMutation === "identity-source-complete") {
+        appState = {
+          ...appState,
+          configuration: { ...appState.configuration, identity_setup: { preview: result }, notice: "", error: "" },
+        };
+        render(appState);
+        return;
+      }
       const notices = {
         "review-interval": "Default review interval saved.",
         "document-type": "Document type saved.",
@@ -1591,8 +1607,11 @@ async function handleSubmit(event) {
       const notice = notices[configurationMutation] ?? "Configuration saved.";
       appState = {
         ...appState,
-        workspace: snapshot.workspace,
-        configuration: applyConfigurationSnapshot(appState.configuration, snapshot, notice),
+        workspace: result.workspace,
+        configuration: {
+          ...applyConfigurationSnapshot(appState.configuration, result, notice),
+          identity_setup: null,
+        },
       };
     } catch (error) {
       appState = {

@@ -168,11 +168,11 @@ macOS** that:
 | 9g | Permalink OS integration | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; release build; 58 frontend tests; strict records links; Markdown tables; Linux launch smoke; [Windows/macOS launch, native PDF export, and package smoke](https://github.com/videoclinic/dms/actions/runs/31503850761)) | Windows and macOS register `dms://`; inbound document/review/note links resolve workspace + stable document identity, focus or create the correct activity, survive rename/version changes, and fail closed for unavailable targets; platform-specific tests remain warnings-clean and the platform smoke passes |
 | 9h | Operator-selected Claude excerpts | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 59 frontend tests; Linux launch smoke) | Oversized assistance payloads show their size and selectable excerpts; preview retries only with the operator-selected subset, never silently truncates, and still requires digest-bound consent; core, adapter, and frontend tests pass |
 | 9i | Canonical notification templates and desktop delivery adapters | done (`39db45b`; local Rust format/test/Clippy and 59 frontend tests pass) | Core emits CAP-0010's literal review-request and minor-publication templates; desktop SMTP and host-mail adapters resolve credentials only from OS storage, preserve explicit `mailto:` confirmation, and pass fake-backed delivery tests and operator setup checks |
-| 9j | Live Entra setup, refresh, and approver sign-in | pending (after 9i checkpoint) | Configuration previews and applies administrator-supplied tenant/group bindings through interactive delegated Graph access; OS credential storage holds the delegated-token cache; direct-user filtering, refresh, policy rerouting, and actor verification pass fake-backed tests |
+| 9j | Live Entra setup, refresh, and approver sign-in | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 59 frontend tests; Linux launch smoke; release build) | Schema v10 persists each identity-cache refresh time; Configuration previews and explicitly applies administrator-supplied tenant/group bindings through interactive delegated Graph access; OS credential storage holds the delegated-token cache; direct-user filtering, refresh-before-role-assignment, policy rerouting, and approver actor verification pass fake-backed tests |
 | 9k | External lifecycle commands and Office export | pending | Production submit/review/decision/release commands and Library operator surfaces compose the 9i delivery and 9j Graph adapters with installed Office automation on Windows/macOS; integration fakes and operator smoke instructions pass |
 | 9l | External operator smokes + CAP promotion | pending | Licensed Office release smoke passes on Windows and macOS; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated Node-runtime action annotations; every implemented CAP links executable evidence, CHG status is done, and the record is archived |
 
-**Current phase:** 9i — Canonical notification templates and desktop delivery adapters (after the 9h checkpoint).
+**Current phase:** 9k — pending after the Phase 9j checkpoint.
 
 ## Implementation notes
 
@@ -224,11 +224,11 @@ macOS** that:
   produced `windows-x64-nsis` and `darwin-aarch64-dmg` workflow artifacts and
   passed the workspace, launch, and native Markdown PDF smoke gates.
 - CAP-0003, CAP-0012, and the existing CAP-0022 have complete executable
-  evidence. The remaining CAPs retain `not implemented`: their contracts include
-  unresolved operator surfaces or transitions, including full lifecycle and
-  Configuration UI, live notification and Entra adapters, complete corruption
-  recovery and backup-history surfaces, permalink scheme registration, and
-  assistance excerpt trimming.
+  evidence. CAP-0021 now records the verified live identity-source subset. The
+  remaining capability outcomes retain their bounded statuses until their
+  operator surfaces or transitions land, including full lifecycle composition,
+  complete corruption recovery and backup-history surfaces, and external
+  Entra/Office smoke evidence.
 - The Office-on-Windows/macOS and administrator-configured Microsoft 365 Entra
   smokes require licensed host applications, a configured tenant/group, and an
   interactive operator identity. CI fakes and unit tests do not satisfy those
@@ -245,10 +245,10 @@ macOS** that:
   operator surface. External installed-Office and Entra smokes are unrelated to
   this local export capability.
 - CI exercises the real native WebView Markdown PDF path, desktop startup, and
-  NSIS/DMG packaging. It does not exercise installed Office, Microsoft Graph,
-  interactive Entra sign-in, SMTP, or host-mail delivery; current production
-  code has no live Graph/notification implementation and does not yet wire the
-  installed-Office adapter into a desktop release command.
+  NSIS/DMG packaging. It does not exercise installed Office, a configured
+  Microsoft Graph tenant/group, interactive Entra sign-in, SMTP, or host-mail
+  delivery; production code has live delegated Graph and notification adapters,
+  while external service and installed-Office smokes remain phase 9l gates.
 - CAP-0005 and CAP-0006 have substantial partial executable evidence but remain
   `not implemented`: host-mediated source/release opening is present, while the
   full Configuration and lifecycle IPC surfaces remain absent. Their evidence
@@ -319,6 +319,17 @@ macOS** that:
   merely deliver an outdated payload. The phase also wires the existing installed
   Office adapter, which was implemented but not reachable from a production
   desktop release command.
+- Phase 9j found that the cached Entra people had no persisted refresh time,
+  despite CAP-0021 requiring the Workflow summary to show it. Schema v10 adds
+  the optional timestamp with a migration instead of fabricating recency from
+  cached display data. The same review of Microsoft Graph permissions found that
+  `/me` requires delegated `User.Read` in addition to the group-membership scope;
+  the live adapter requests it only to identify the interactive decision actor.
+- Phase 9j is one vertical identity slice. Its 836-line `graph.rs` module keeps
+  device authorization, token persistence, Graph transport, and fake-backed
+  protocol tests inside the desktop adapter boundary; splitting that protocol
+  across phase-local files would not make the checkpoint independently usable or
+  easier to verify.
 
 ## Resume checklist
 
