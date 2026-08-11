@@ -33,9 +33,10 @@ macOS.
   existing edit root; initialization requires explicit edit + publish roots and
   confirmation before the adapter may create `.dms` or the publish root.
 - Opening or switching workspace sessions acquires the destination advisory
-  lock before activation, offers explicit stale takeover from setup, releases
-  the previous lock only after acquisition succeeds, and removes the active
-  lock on a clean window close only when its recorded owner still matches.
+  lock before activation, offers explicit stale takeover and a separately
+  warned override-any-lock option from setup, releases the previous lock only
+  after acquisition succeeds, and removes the active lock on a clean window
+  close only when its recorded owner still matches.
 - Store sidebar, saved-view, and recent-library preferences in the OS user
   app-config directory, never under `<edit-root>/.dms`. Recent libraries are at
   most ten unique edit roots in most-recent-first order; removing one never

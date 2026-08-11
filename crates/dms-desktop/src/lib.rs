@@ -823,9 +823,16 @@ fn workspace_lock_status(edit_root: String) -> Result<WorkspaceLockStatus, Strin
 fn acquire_workspace_lock(
     edit_root: String,
     take_over_stale: bool,
+    override_existing: bool,
 ) -> Result<WorkspaceLockStatus, String> {
     Workspace::open(Path::new(&edit_root))
-        .and_then(|workspace| workspace.acquire_lock(take_over_stale))
+        .and_then(|workspace| {
+            if override_existing {
+                workspace.override_lock()
+            } else {
+                workspace.acquire_lock(take_over_stale)
+            }
+        })
         .map_err(|error| error.to_string())
 }
 
@@ -2012,12 +2019,18 @@ mod tests {
             workspace_lock_status(root.clone()).unwrap().state,
             dms_core::WorkspaceLockState::Unlocked
         );
-        let acquired = acquire_workspace_lock(root.clone(), false).unwrap();
+        let acquired = acquire_workspace_lock(root.clone(), false, false).unwrap();
         assert_eq!(acquired.state, dms_core::WorkspaceLockState::Current);
         let owner = acquired.lock.unwrap();
-        assert!(release_workspace_lock(root.clone(), owner.clone(), false).is_err());
+        assert!(acquire_workspace_lock(root.clone(), false, false).is_err());
+        assert!(acquire_workspace_lock(root.clone(), true, false).is_err());
+        let overridden = acquire_workspace_lock(root.clone(), false, true).unwrap();
+        let replacement_owner = overridden.lock.unwrap();
+        assert_ne!(replacement_owner, owner);
+        assert!(release_workspace_lock(root.clone(), owner, true).is_err());
+        assert!(release_workspace_lock(root.clone(), replacement_owner.clone(), false).is_err());
         assert!(edit_root.join(".dms/lock").is_file());
-        release_workspace_lock(root.clone(), owner, true).unwrap();
+        release_workspace_lock(root.clone(), replacement_owner, true).unwrap();
         assert_eq!(
             configure_workspace_lock_staleness(root.clone(), 12, true)
                 .unwrap()

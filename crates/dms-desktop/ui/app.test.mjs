@@ -40,6 +40,8 @@ test("workspace setup exposes existing-open and confirmed dual-root initializati
   assert.match(markup, /name="publishRoot"/);
   assert.match(markup, /name="confirmed"[^>]*required/);
   assert.match(markup, /name="takeOverStale"/);
+  assert.match(markup, /name="overrideExisting"/);
+  assert.match(markup, /another DMS instance may still be writing/i);
   assert.equal((markup.match(/data-directory-target=/g) ?? []).length, 3);
   assert.match(markup, /data-recent-library-open="\/Users\/name\/DMS\/Edit"/);
   assert.match(markup, /data-recent-library-remove="\/Users\/name\/DMS\/Edit"/);
@@ -63,8 +65,15 @@ test("workspace setup maps each form to its explicit desktop command", () => {
     {
       command: "open_workspace",
       arguments: { editRoot: "C:\\DMS\\Edit" },
-      takeOverStale: false,
+      lockOptions: { takeOverStale: false, overrideExisting: false },
     },
+  );
+  assert.deepEqual(
+    workspaceSetupRequest("open-workspace-form", {
+      editRoot: "/Users/name/DMS/Edit",
+      overrideExisting: "on",
+    }).lockOptions,
+    { takeOverStale: false, overrideExisting: true },
   );
   assert.deepEqual(
     workspaceSetupRequest("initialize-workspace-form", {
@@ -133,7 +142,7 @@ test("opening a workspace acquires its lock and switches only after releasing th
     { edit_root: "/DMS/Old" },
     { state: "current", stale_after_hours: 24, lock: priorOwner },
     { edit_root: "/DMS/New" },
-    true,
+    { takeOverStale: true, overrideExisting: true },
     async (command, arguments_) => {
       calls.push({ command, arguments_ });
       return command === "acquire_workspace_lock" ? status : null;
@@ -144,7 +153,11 @@ test("opening a workspace acquires its lock and switches only after releasing th
   assert.deepEqual(calls, [
     {
       command: "acquire_workspace_lock",
-      arguments_: { editRoot: "/DMS/New", takeOverStale: true },
+      arguments_: {
+        editRoot: "/DMS/New",
+        takeOverStale: true,
+        overrideExisting: true,
+      },
     },
     {
       command: "release_workspace_lock",

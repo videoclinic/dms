@@ -87,9 +87,10 @@ persistence.
   refuses symlinks and non-regular files, and writes a Zip archive containing
   metadata, every registered draft, every recorded release PDF, and a
   SHA-256 manifest entry per file.
-- Advisory `.dms/lock` records contain local owner/process evidence. A current
-  lock blocks acquisition; a stale lock requires explicit takeover against the
-  workspace-configured threshold.
+- Advisory `.dms/lock` records contain local owner/process evidence. Ordinary
+  acquisition refuses a current lock, stale-only takeover uses the
+  workspace-configured threshold, and overriding any existing lock requires a
+  separate explicit core operation.
 - Restore validates the complete archive manifest, entry types, sizes, digests,
   workspace identity, destination lock, and confirmed replacement policy before
   writing only beneath existing operator-selected edit and publish roots. It

@@ -104,6 +104,17 @@ impl Workspace {
             self.lock_stale_after_hours,
             WorkspaceLock::current(),
             take_over_stale,
+            false,
+        )
+    }
+
+    pub fn override_lock(&self) -> Result<WorkspaceLockStatus> {
+        acquire_workspace_lock_at(
+            &self.edit_root,
+            self.lock_stale_after_hours,
+            WorkspaceLock::current(),
+            true,
+            true,
         )
     }
 
@@ -129,6 +140,7 @@ pub fn acquire_workspace_lock(
         stale_after_hours,
         WorkspaceLock::current(),
         take_over_stale,
+        false,
     )
 }
 
@@ -388,19 +400,20 @@ pub(crate) fn acquire_workspace_lock_at(
     stale_after_hours: u32,
     owner: WorkspaceLock,
     take_over_stale: bool,
+    override_existing: bool,
 ) -> Result<WorkspaceLockStatus> {
     let path = lock_path(edit_root);
     let status = workspace_lock_status_at(edit_root, stale_after_hours, owner.acquired_at)?;
     match status.state {
-        WorkspaceLockState::Current => return Err(DmsError::WorkspaceLocked),
+        WorkspaceLockState::Current if !override_existing => return Err(DmsError::WorkspaceLocked),
         WorkspaceLockState::Stale if !take_over_stale => {
             return Err(DmsError::StaleWorkspaceLockTakeoverRequired)
         }
-        WorkspaceLockState::Unlocked | WorkspaceLockState::Stale => {}
+        WorkspaceLockState::Unlocked | WorkspaceLockState::Current | WorkspaceLockState::Stale => {}
     }
     let bytes = serde_json::to_vec_pretty(&owner)
         .map_err(|error| DmsError::InvalidWorkspaceLockData(path.clone(), error.to_string()))?;
-    let displaced = if status.state == WorkspaceLockState::Stale {
+    let displaced = if status.state != WorkspaceLockState::Unlocked {
         let displaced = edit_root
             .join(METADATA_DIRECTORY)
             .join(format!(".workspace-lock-takeover-{}.tmp", Uuid::new_v4()));

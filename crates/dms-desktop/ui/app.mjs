@@ -293,8 +293,12 @@ export function workspaceSetupRequest(formId, values) {
     return {
       command: "open_workspace",
       arguments: { editRoot },
-      takeOverStale: setupValue(values, "takeOverStale") === "on"
-        || setupValue(values, "takeOverStale") === true,
+      lockOptions: {
+        takeOverStale: setupValue(values, "takeOverStale") === "on"
+          || setupValue(values, "takeOverStale") === true,
+        overrideExisting: setupValue(values, "overrideExisting") === "on"
+          || setupValue(values, "overrideExisting") === true,
+      },
     };
   }
   if (formId === "initialize-workspace-form") {
@@ -334,7 +338,7 @@ function recentLibrariesMarkup(recentLibraries) {
 export function setupMarkup(error, recentLibraries = [], openEditRoot = "") {
   const recent = normalizedRecentLibraries(recentLibraries);
   const status = error ? `<p class="status" role="alert">${escapeHtml(error)}</p>` : "";
-  return `<section class="setup-workspace"><header><span class="badge">Local workspace</span><h2>Set up DMS Desktop</h2><p>Open existing metadata or initialize explicit edit and publish roots. No documents are moved or copied during setup.</p></header><section class="recent-libraries card" aria-labelledby="recent-libraries-heading"><h3 id="recent-libraries-heading">Recent libraries</h3><div class="recent-libraries-list">${recentLibrariesMarkup(recent)}</div>${status}</section><div class="setup-grid"><section class="card"><h3>Open an existing workspace</h3><p>Choose an edit root that already contains <code>.dms/workspace.json</code>. A current advisory lock blocks opening.</p><form id="open-workspace-form" class="setup-form">${directoryFieldMarkup("open-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit", openEditRoot)}<label class="confirm-field"><input type="checkbox" name="takeOverStale"> Take over the lock only if it is stale.</label><button class="button" type="submit">Open workspace</button></form></section><section class="card"><h3>Initialize a workspace</h3><p>The desktop creates <code>.dms</code> under the edit root and creates the publish root if it does not exist.</p><form id="initialize-workspace-form" class="setup-form">${directoryFieldMarkup("initialize-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit")}${directoryFieldMarkup("publish-root", "publishRoot", "Publish root", "C:\\DMS\\Publish or /Users/name/DMS/Publish")}<label class="confirm-field"><input type="checkbox" name="confirmed" required> Initialize these roots and create workspace metadata.</label><button class="button" type="submit">Initialize workspace</button></form></section></div></section>`;
+  return `<section class="setup-workspace"><header><span class="badge">Local workspace</span><h2>Set up DMS Desktop</h2><p>Open existing metadata or initialize explicit edit and publish roots. No documents are moved or copied during setup.</p></header><section class="recent-libraries card" aria-labelledby="recent-libraries-heading"><h3 id="recent-libraries-heading">Recent libraries</h3><div class="recent-libraries-list">${recentLibrariesMarkup(recent)}</div>${status}</section><div class="setup-grid"><section class="card"><h3>Open an existing workspace</h3><p>Choose an edit root that already contains <code>.dms/workspace.json</code>. A current advisory lock blocks opening.</p><form id="open-workspace-form" class="setup-form">${directoryFieldMarkup("open-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit", openEditRoot)}<label class="confirm-field"><input type="checkbox" name="takeOverStale"> Take over the lock only if it is stale.</label><label class="confirm-field lock-override"><input type="checkbox" name="overrideExisting"><span><strong>Override any existing lock.</strong> Another DMS instance may still be writing workspace metadata.</span></label><button class="button" type="submit">Open workspace</button></form></section><section class="card"><h3>Initialize a workspace</h3><p>The desktop creates <code>.dms</code> under the edit root and creates the publish root if it does not exist.</p><form id="initialize-workspace-form" class="setup-form">${directoryFieldMarkup("initialize-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit")}${directoryFieldMarkup("publish-root", "publishRoot", "Publish root", "C:\\DMS\\Publish or /Users/name/DMS/Publish")}<label class="confirm-field"><input type="checkbox" name="confirmed" required> Initialize these roots and create workspace metadata.</label><button class="button" type="submit">Initialize workspace</button></form></section></div></section>`;
 }
 
 function activityMarkup(state, activity) {
@@ -447,13 +451,14 @@ export async function switchWorkspaceSession(
   currentWorkspace,
   currentLockStatus,
   workspace,
-  takeOverStale,
+  lockOptions,
   invoke,
 ) {
   if (currentWorkspace?.edit_root === workspace.edit_root) return null;
   const lockStatus = await invoke("acquire_workspace_lock", {
     editRoot: workspace.edit_root,
-    takeOverStale,
+    takeOverStale: lockOptions.takeOverStale ?? false,
+    overrideExisting: lockOptions.overrideExisting ?? false,
   });
   if (currentWorkspace) {
     const currentOwner = currentLockStatus?.lock;
@@ -483,12 +488,12 @@ export async function switchWorkspaceSession(
   return lockStatus;
 }
 
-async function activateWorkspace(workspace, takeOverStale = false) {
+async function activateWorkspace(workspace, lockOptions = {}) {
   const transitioned = await switchWorkspaceSession(
     appState.workspace,
     appState.maintenance.lock_status,
     workspace,
-    takeOverStale,
+    lockOptions,
     invokeCommand,
   );
   const lockStatus = transitioned ?? appState.maintenance.lock_status;
@@ -1864,7 +1869,7 @@ async function handleSubmit(event) {
   try {
     const request = workspaceSetupRequest(event.target.id, new FormData(event.target));
     const workspace = await invokeCommand(request.command, request.arguments);
-    await activateWorkspace(workspace, request.takeOverStale ?? false);
+    await activateWorkspace(workspace, request.lockOptions ?? {});
   } catch (error) {
     appState = { ...appState, error: String(error) };
     render(appState);

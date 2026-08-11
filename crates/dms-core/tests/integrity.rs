@@ -71,6 +71,27 @@ fn advisory_lock_requires_explicit_stale_takeover_and_release() {
 }
 
 #[test]
+fn current_advisory_lock_can_be_explicitly_overridden() {
+    let (edit_root, _publish_root, workspace) = initialized_workspace();
+    let original = workspace.acquire_lock(false).unwrap().lock.unwrap();
+
+    assert!(matches!(
+        workspace.acquire_lock(true),
+        Err(DmsError::WorkspaceLocked)
+    ));
+
+    let replacement = workspace.override_lock().unwrap();
+    assert_eq!(replacement.state, WorkspaceLockState::Current);
+    let replacement_owner = replacement.lock.unwrap();
+    assert_ne!(replacement_owner, original);
+    assert!(matches!(
+        dms_core::release_workspace_lock_owned(edit_root.path(), &original),
+        Err(DmsError::WorkspaceLockOwnershipChanged)
+    ));
+    dms_core::release_workspace_lock_owned(edit_root.path(), &replacement_owner).unwrap();
+}
+
+#[test]
 fn schema_v7_migrates_lock_staleness_and_retains_backup() {
     let (edit_root, _publish_root, workspace) = initialized_workspace();
     let metadata_path = edit_root.path().join(".dms/workspace.json");

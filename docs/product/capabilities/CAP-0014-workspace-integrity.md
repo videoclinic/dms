@@ -5,7 +5,7 @@
 | ID | CAP-0014 |
 | Status | not implemented |
 | Storage | `<edit-root>/.dms/` |
-| Tests | Partial phase 9d evidence: [core integrity tests](../../../crates/dms-core/tests/integrity.rs), [core backup tests](../../../crates/dms-core/tests/lifecycle.rs), [CLI command tests](../../../crates/dms-cli/tests/cli.rs), [desktop adapter tests](../../../crates/dms-desktop/src/lib.rs), and [desktop workspace/maintenance tests](../../../crates/dms-desktop/ui/app.test.mjs) / [maintenance tests](../../../crates/dms-desktop/ui/maintenance.test.mjs) |
+| Tests | Partial phases 9d and 9f.5.2 evidence: [core integrity tests](../../../crates/dms-core/tests/integrity.rs), [core backup tests](../../../crates/dms-core/tests/lifecycle.rs), [CLI command tests](../../../crates/dms-cli/tests/cli.rs), [desktop adapter tests](../../../crates/dms-desktop/src/lib.rs), and [desktop workspace/maintenance tests](../../../crates/dms-desktop/ui/app.test.mjs) / [maintenance tests](../../../crates/dms-desktop/ui/maintenance.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 
@@ -19,7 +19,10 @@ When implemented, the following must hold:
 2. **Lock staleness.** On open, if the lock is older than the staleness
    threshold (default 24 hours, configurable per workspace), the application
    warns the operator and offers to take over. A take-over rewrites the
-   lock with the current operator's data.
+   lock with the current operator's data. Setup also permits an explicit
+   override of any existing lock after warning that another application
+   instance may still be writing; ordinary open and stale-only takeover never
+   overwrite a current lock.
 3. **Atomic metadata write.** Every authoritative `.dms` metadata file is
    written to a sibling temporary file and atomically replaced. A crash before
    replacement leaves the previous valid file intact. Temporary artifacts are
