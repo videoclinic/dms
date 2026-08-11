@@ -5,7 +5,7 @@
 | ID | CAP-0018 |
 | Status | not implemented |
 | Integration | Operator-mediated handoff to installed Claude Desktop |
-| Tests | none |
+| Tests | Partial phase-8/9h evidence: [`dms-core` assistance tests](../../../crates/dms-core/src/assistance.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), and [desktop assistance UI tests](../../../crates/dms-desktop/ui/assistance.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 

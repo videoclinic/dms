@@ -238,6 +238,8 @@ pub enum DmsError {
     ClaudeAssistanceNotPermitted(String),
     #[error("Claude Desktop assistance payload limit must be positive")]
     InvalidClaudePayloadLimit,
+    #[error("selected Claude Desktop assistance excerpt line {0} is not available")]
+    InvalidClaudeExcerptSelection(usize),
     #[error("cannot extract text from released PDF {path}: {detail}")]
     PdfTextExtraction { path: PathBuf, detail: String },
     #[error("Claude Desktop assistance payload has {actual_chars} characters, exceeding the configured limit of {max_chars}; select or trim excerpts explicitly")]

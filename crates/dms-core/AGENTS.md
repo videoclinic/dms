@@ -100,9 +100,11 @@ persistence.
   holds an owner-recorded destination lock throughout file writes and rejects
   cross-platform path aliases before restoration.
 - Claude assistance is disabled by default, permits only configured
-  confidentiality type IDs, verifies the current release before extracting
-  comparison text, refuses oversized payloads without truncation, and records
-  only explicit accepted-use evidence in lifecycle records.
+  confidentiality type IDs, and verifies the current release before extracting
+  comparison text. An oversized preview exposes every exact excerpt and its
+  measured size; only an explicit operator-selected subset that fits the limit
+  yields a digest-bound payload. No payload is silently truncated, and only
+  explicit accepted-use evidence is recorded in lifecycle records.
 
 ## Work Guidance
 

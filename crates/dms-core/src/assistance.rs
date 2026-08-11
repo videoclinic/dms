@@ -70,6 +70,15 @@ pub struct ClaudeAssistancePayload {
     pub payload_digest: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ClaudeAssistancePreview {
+    pub excerpts: Vec<ChangeExcerpt>,
+    pub selected_excerpt_lines: Vec<usize>,
+    pub payload_chars: usize,
+    pub max_payload_chars: usize,
+    pub payload: Option<ClaudeAssistancePayload>,
+}
+
 impl Workspace {
     pub fn claude_assistance_policy(&self) -> &ClaudeAssistancePolicy {
         &self.claude_assistance
@@ -97,7 +106,11 @@ impl Workspace {
         self.save()
     }
 
-    pub fn prepare_claude_assistance(&self, document_id: Uuid) -> Result<ClaudeAssistancePayload> {
+    pub fn preview_claude_assistance(
+        &self,
+        document_id: Uuid,
+        selected_excerpt_lines: Option<&[usize]>,
+    ) -> Result<ClaudeAssistancePreview> {
         if !self.claude_assistance.enabled {
             return Err(DmsError::ClaudeAssistanceDisabled);
         }
@@ -134,7 +147,8 @@ impl Workspace {
                 source,
             })?);
 
-        build_payload(
+        let excerpts = comparison_excerpts(&released_text, &current_text);
+        let payload = build_payload(
             document_id,
             document.control.title.clone(),
             document.control.document_number.clone(),
@@ -148,8 +162,33 @@ impl Workspace {
             release.pdf_digest.clone(),
             &released_text,
             &current_text,
-            self.claude_assistance.max_payload_chars,
-        )
+            selected_excerpt_lines,
+        )?;
+        let payload_chars = payload.prompt.chars().count();
+        let selected_excerpt_lines = payload
+            .excerpts
+            .iter()
+            .map(|excerpt| excerpt.line)
+            .collect();
+        Ok(ClaudeAssistancePreview {
+            excerpts,
+            selected_excerpt_lines,
+            payload_chars,
+            max_payload_chars: self.claude_assistance.max_payload_chars,
+            payload: (payload_chars <= self.claude_assistance.max_payload_chars).then_some(payload),
+        })
+    }
+
+    pub fn prepare_claude_assistance(
+        &self,
+        document_id: Uuid,
+        selected_excerpt_lines: Option<&[usize]>,
+    ) -> Result<ClaudeAssistancePayload> {
+        let preview = self.preview_claude_assistance(document_id, selected_excerpt_lines)?;
+        preview.payload.ok_or(DmsError::ClaudePayloadTooLarge {
+            actual_chars: preview.payload_chars,
+            max_chars: preview.max_payload_chars,
+        })
     }
 }
 
@@ -168,9 +207,12 @@ fn build_payload(
     released_pdf_digest: String,
     released_text: &str,
     current_text: &str,
-    max_payload_chars: usize,
+    selected_excerpt_lines: Option<&[usize]>,
 ) -> Result<ClaudeAssistancePayload> {
-    let excerpts = comparison_excerpts(released_text, current_text);
+    let excerpts = select_excerpts(
+        &comparison_excerpts(released_text, current_text),
+        selected_excerpt_lines,
+    )?;
     let mut prompt = String::new();
     prompt.push_str("Review this operator-previewed document change comparison.\n");
     prompt
@@ -205,13 +247,6 @@ fn build_payload(
         "The operator, not you, chooses the target and edits any accepted changelog text.\n",
     );
 
-    let actual_chars = prompt.chars().count();
-    if actual_chars > max_payload_chars {
-        return Err(DmsError::ClaudePayloadTooLarge {
-            actual_chars,
-            max_chars: max_payload_chars,
-        });
-    }
     let payload_digest = digest_bytes(prompt.as_bytes());
     Ok(ClaudeAssistancePayload {
         document_id,
@@ -229,6 +264,25 @@ fn build_payload(
         prompt,
         payload_digest,
     })
+}
+
+fn select_excerpts(
+    excerpts: &[ChangeExcerpt],
+    selected_excerpt_lines: Option<&[usize]>,
+) -> Result<Vec<ChangeExcerpt>> {
+    let Some(selected_excerpt_lines) = selected_excerpt_lines else {
+        return Ok(excerpts.to_vec());
+    };
+    selected_excerpt_lines
+        .iter()
+        .map(|line| {
+            excerpts
+                .iter()
+                .find(|excerpt| excerpt.line == *line)
+                .cloned()
+                .ok_or(DmsError::InvalidClaudeExcerptSelection(*line))
+        })
+        .collect()
 }
 
 fn comparison_excerpts(released_text: &str, current_text: &str) -> Vec<ChangeExcerpt> {
@@ -257,7 +311,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn prompt_is_deterministic_bounded_and_contains_only_selected_metadata_and_excerpts() {
+    fn prompt_is_deterministic_and_contains_only_selected_metadata_and_excerpts() {
         let id = Uuid::nil();
         let payload = build_payload(
             id,
@@ -273,7 +327,7 @@ mod tests {
             "pdf".to_owned(),
             "old line\nunchanged",
             "new line\nunchanged",
-            10_000,
+            None,
         )
         .unwrap();
         assert_eq!(payload.excerpts.len(), 1);
@@ -282,25 +336,30 @@ mod tests {
         assert!(!payload.prompt.contains("approver"));
         assert!(!payload.prompt.contains("/"));
         assert_eq!(payload.payload_digest.len(), 64);
+    }
 
+    #[test]
+    fn selected_excerpts_are_exact_and_reject_unknown_lines() {
+        let excerpts = vec![
+            ChangeExcerpt {
+                line: 2,
+                released: Some("old".to_owned()),
+                current: Some("new".to_owned()),
+            },
+            ChangeExcerpt {
+                line: 5,
+                released: None,
+                current: Some("added".to_owned()),
+            },
+        ];
+
+        assert_eq!(
+            select_excerpts(&excerpts, Some(&[5])).unwrap(),
+            vec![excerpts[1].clone()]
+        );
         assert!(matches!(
-            build_payload(
-                id,
-                "Handbook".to_owned(),
-                None,
-                None,
-                "internal".to_owned(),
-                "Internal".to_owned(),
-                id,
-                Version::V1_0,
-                "old".to_owned(),
-                "new".to_owned(),
-                "pdf".to_owned(),
-                "old",
-                "new",
-                10,
-            ),
-            Err(DmsError::ClaudePayloadTooLarge { .. })
+            select_excerpts(&excerpts, Some(&[3])),
+            Err(DmsError::InvalidClaudeExcerptSelection(3))
         ));
     }
 }

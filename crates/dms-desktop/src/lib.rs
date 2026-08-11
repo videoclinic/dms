@@ -8,7 +8,7 @@ use std::{
 use chrono::NaiveDate;
 use dms_core::{
     AuditReportRecord, AuditReportRequest, AuditReportVerificationStatus, AuthenticatedActor,
-    BackupOutcome, ClaudeAssistancePayload, ClaudeAssistancePolicy, ConfidentialityPolicy,
+    BackupOutcome, ClaudeAssistancePolicy, ClaudeAssistancePreview, ConfidentialityPolicy,
     ConfidentialityType, ControlUpdate, DeliveryAttempt, DeliveryReceipt, DmsError, Document,
     DocumentControl, DocumentType, EffectiveConfidentiality, EffectiveWorkflowRoles,
     EntraIdentitySource, EntraPerson, GraphClient, LibraryEntry, LibraryFolder, LibraryFolderNode,
@@ -952,7 +952,8 @@ fn claude_assistance_availability(
 fn preview_claude_assistance(
     edit_root: String,
     document_id: Uuid,
-) -> Result<ClaudeAssistancePayload, String> {
+    selected_excerpt_lines: Option<Vec<usize>>,
+) -> Result<ClaudeAssistancePreview, String> {
     let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
     let availability = assistance_availability(
         &workspace,
@@ -963,7 +964,7 @@ fn preview_claude_assistance(
         return Err(availability.reason);
     }
     workspace
-        .prepare_claude_assistance(document_id)
+        .preview_claude_assistance(document_id, selected_excerpt_lines.as_deref())
         .map_err(|error| error.to_string())
 }
 
@@ -972,6 +973,7 @@ fn launch_claude_assistance(
     edit_root: String,
     document_id: Uuid,
     payload_digest: String,
+    selected_excerpt_lines: Option<Vec<usize>>,
     confirmed: bool,
 ) -> Result<(), String> {
     if !confirmed {
@@ -981,7 +983,7 @@ fn launch_claude_assistance(
     }
     let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
     let payload = workspace
-        .prepare_claude_assistance(document_id)
+        .prepare_claude_assistance(document_id, selected_excerpt_lines.as_deref())
         .map_err(|error| error.to_string())?;
     if payload.payload_digest != payload_digest {
         return Err(
@@ -2012,6 +2014,7 @@ mod tests {
             "missing".to_owned(),
             Uuid::nil(),
             "digest".to_owned(),
+            None,
             false,
         )
         .unwrap_err();

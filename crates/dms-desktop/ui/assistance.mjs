@@ -10,7 +10,7 @@ function escapeHtml(value) {
 export function createAssistanceState() {
   return {
     availability: null,
-    payload: null,
+    preview: null,
     response: "",
     accepted_changelog: "",
     loading: false,
@@ -30,11 +30,21 @@ export function updateAssistanceState(states, documentId, patch) {
   };
 }
 
-function payloadMarkup(payload, state) {
-  if (!payload) {
+function excerptSelectionMarkup(preview) {
+  const selected = new Set(preview.selected_excerpt_lines ?? []);
+  const excerpts = (preview.excerpts ?? []).map((excerpt) => `<label class="consent-row"><input type="checkbox" data-assistance-excerpt value="${escapeHtml(excerpt.line)}" ${selected.has(excerpt.line) ? "checked" : ""}> <strong>Line ${escapeHtml(excerpt.line)}</strong><br><small>Released: ${escapeHtml(excerpt.released ?? "<no line>")}</small><br><small>Current: ${escapeHtml(excerpt.current ?? "<no line>")}</small></label>`).join("");
+  return `<section class="assistance-preview"><h3>Select exact change excerpts</h3><p class="status" role="alert">The selected payload is ${escapeHtml(preview.payload_chars)} characters; this workspace allows ${escapeHtml(preview.max_payload_chars)}. Nothing will be sent until selected excerpts fit the limit.</p><p>Select or clear the exact excerpts to provide. The app will not silently truncate them.</p><div class="assistance-excerpts">${excerpts || "<p>No extracted text differences are available.</p>"}</div><button class="button" type="button" data-assistance-preview>Preview selected excerpts</button></section>`;
+}
+
+function payloadMarkup(preview, state) {
+  if (!preview) {
     return '<button class="button" type="button" data-assistance-preview>Preview exact payload</button>';
   }
-  return `<section class="assistance-preview"><h3>Exact payload preview</h3><dl class="selection-details"><dt>Release</dt><dd>${escapeHtml(payload.release_version)}</dd><dt>Source digest</dt><dd><code>${escapeHtml(payload.current_source_digest)}</code></dd><dt>Released PDF digest</dt><dd><code>${escapeHtml(payload.released_pdf_digest)}</code></dd><dt>Payload digest</dt><dd><code>${escapeHtml(payload.payload_digest)}</code></dd></dl><label>Prompt copied to Claude Desktop<textarea readonly rows="16" data-assistance-prompt>${escapeHtml(payload.prompt)}</textarea></label><label class="consent-row"><input type="checkbox" data-assistance-consent> I reviewed this exact payload and consent to sending it for Anthropic model processing.</label><button class="button" type="button" data-assistance-handoff>Copy prompt and open Claude Desktop</button>${state.launched ? '<p class="status success">Prompt copied. Paste it into Claude Desktop, then paste the response below.</p>' : ""}</section>`;
+  if (!preview.payload) {
+    return excerptSelectionMarkup(preview);
+  }
+  const payload = preview.payload;
+  return `<section class="assistance-preview"><h3>Exact payload preview</h3><dl class="selection-details"><dt>Release</dt><dd>${escapeHtml(payload.release_version)}</dd><dt>Source digest</dt><dd><code>${escapeHtml(payload.current_source_digest)}</code></dd><dt>Released PDF digest</dt><dd><code>${escapeHtml(payload.released_pdf_digest)}</code></dd><dt>Payload size</dt><dd>${escapeHtml(preview.payload_chars)} of ${escapeHtml(preview.max_payload_chars)} characters</dd><dt>Payload digest</dt><dd><code>${escapeHtml(payload.payload_digest)}</code></dd></dl><label>Prompt copied to Claude Desktop<textarea readonly rows="16" data-assistance-prompt>${escapeHtml(payload.prompt)}</textarea></label><label class="consent-row"><input type="checkbox" data-assistance-consent> I reviewed this exact payload and consent to sending it for Anthropic model processing.</label><button class="button" type="button" data-assistance-handoff>Copy prompt and open Claude Desktop</button>${state.launched ? '<p class="status success">Prompt copied. Paste it into Claude Desktop, then paste the response below.</p>' : ""}</section>`;
 }
 
 export function assistanceMarkup(activity, state) {
@@ -48,7 +58,7 @@ export function assistanceMarkup(activity, state) {
   if (!availability.available) {
     return `<section class="card assistance-workspace"><span class="badge muted">Unavailable</span><h2>${escapeHtml(activity.label)}</h2><p>${escapeHtml(availability.reason)}</p><p class="privacy-notice">${escapeHtml(availability.privacy_notice)}</p>${state.error ? `<p class="status" role="alert">${escapeHtml(state.error)}</p>` : ""}</section>`;
   }
-  return `<section class="card assistance-workspace"><span class="badge">Advisory only</span><h2>${escapeHtml(activity.label)}</h2><p class="privacy-notice">${escapeHtml(availability.privacy_notice)}</p>${state.error ? `<p class="status" role="alert">${escapeHtml(state.error)}</p>` : ""}${payloadMarkup(state.payload, state)}<section class="assistance-response"><h3>Review Claude's response</h3><label>Untrusted response<textarea rows="10" data-assistance-response placeholder="Paste the response from Claude Desktop">${escapeHtml(state.response)}</textarea></label><button class="button secondary" type="button" data-assistance-accept ${state.response.trim() ? "" : "disabled"}>Copy response into editable changelog draft</button><label>Editable changelog draft<textarea rows="6" data-assistance-changelog placeholder="Nothing is written to lifecycle state">${escapeHtml(state.accepted_changelog)}</textarea></label><p class="subtle">This draft remains local to this open activity. It cannot select a version, approve, release, or write workspace lifecycle state.</p></section></section>`;
+  return `<section class="card assistance-workspace"><span class="badge">Advisory only</span><h2>${escapeHtml(activity.label)}</h2><p class="privacy-notice">${escapeHtml(availability.privacy_notice)}</p>${state.error ? `<p class="status" role="alert">${escapeHtml(state.error)}</p>` : ""}${payloadMarkup(state.preview, state)}<section class="assistance-response"><h3>Review Claude's response</h3><label>Untrusted response<textarea rows="10" data-assistance-response placeholder="Paste the response from Claude Desktop">${escapeHtml(state.response)}</textarea></label><button class="button secondary" type="button" data-assistance-accept ${state.response.trim() ? "" : "disabled"}>Copy response into editable changelog draft</button><label>Editable changelog draft<textarea rows="6" data-assistance-changelog placeholder="Nothing is written to lifecycle state">${escapeHtml(state.accepted_changelog)}</textarea></label><p class="subtle">This draft remains local to this open activity. It cannot select a version, approve, release, or write workspace lifecycle state.</p></section></section>`;
 }
 
 export function assistancePolicyMarkup(state) {

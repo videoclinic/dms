@@ -28,6 +28,14 @@ const payload = {
   prompt: "Review <only> this exact payload",
 };
 
+const preview = {
+  excerpts: [{ line: 7, released: "Old <text>", current: "New <text>" }],
+  selected_excerpt_lines: [7],
+  payload_chars: 120,
+  max_payload_chars: 24000,
+  payload,
+};
+
 test("assistance state is isolated by stable document ID", () => {
   const states = updateAssistanceState({}, "doc-1", { response: "Suggestion" });
   assert.equal(assistanceDocumentState(states, "doc-1").response, "Suggestion");
@@ -48,19 +56,38 @@ test("payload requires explicit consent and escapes prompt content", () => {
   const markup = assistanceMarkup(activity, {
     ...createAssistanceState(),
     availability,
-    payload,
+    preview,
   });
   assert.match(markup, /data-assistance-consent/);
   assert.match(markup, /data-assistance-handoff/);
   assert.match(markup, /Review &lt;only&gt; this exact payload/);
+  assert.match(markup, /120 of 24000 characters/);
   assert.match(markup, /may send the displayed payload to Anthropic/);
+});
+
+test("oversized payload previews selectable excerpts without a handoff", () => {
+  const markup = assistanceMarkup(activity, {
+    ...createAssistanceState(),
+    availability,
+    preview: {
+      ...preview,
+      payload_chars: 25000,
+      payload: null,
+    },
+  });
+  assert.match(markup, /25000 characters; this workspace allows 24000/);
+  assert.match(markup, /data-assistance-excerpt/);
+  assert.match(markup, /Old &lt;text&gt;/);
+  assert.match(markup, /New &lt;text&gt;/);
+  assert.match(markup, /will not silently truncate/);
+  assert.doesNotMatch(markup, /data-assistance-handoff/);
 });
 
 test("accepted response remains an editable activity draft with no lifecycle action", () => {
   const markup = assistanceMarkup(activity, {
     ...createAssistanceState(),
     availability,
-    payload,
+    preview,
     response: "Suggested changelog",
     accepted_changelog: "Editor revised changelog",
   });

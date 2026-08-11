@@ -100,8 +100,9 @@ macOS.
   never cross the frontend IPC boundary or enter `.dms`.
 - Claude Desktop assistance remains unavailable unless workspace policy,
   effective confidentiality, a verified current release, and a supported local
-  installation all allow it. Every handoff previews the exact payload and
-  requires fresh consent bound to its digest.
+  installation all allow it. An oversized preview shows its measured size and
+  selectable exact excerpts; the adapter re-previews only the selected subset.
+  Every handoff requires fresh consent and recomputes that subset's digest.
 - Claude responses remain untrusted session state. Copying one into an editable
   changelog draft cannot select a target, approve, release, or mutate lifecycle
   metadata.

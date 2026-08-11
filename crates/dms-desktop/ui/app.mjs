@@ -907,14 +907,21 @@ async function handleAssistanceClick(event) {
   const documentId = activity.document_id;
   if (event.target.closest("[data-assistance-preview]")) {
     try {
-      const payload = await invokeCommand("preview_claude_assistance", {
+      const state = assistanceDocumentState(appState.assistance_documents, documentId);
+      const selectedExcerptLines = state.preview
+        ? [...document.querySelectorAll("[data-assistance-excerpt]:checked")]
+          .map((input) => Number(input.value))
+          .filter(Number.isSafeInteger)
+        : null;
+      const preview = await invokeCommand("preview_claude_assistance", {
         editRoot: appState.workspace.edit_root,
         documentId,
+        selectedExcerptLines,
       });
       appState = {
         ...appState,
         assistance_documents: updateAssistanceState(appState.assistance_documents, documentId, {
-          payload,
+          preview,
           error: "",
           launched: false,
         }),
@@ -935,12 +942,15 @@ async function handleAssistanceClick(event) {
     const state = assistanceDocumentState(appState.assistance_documents, documentId);
     try {
       if (!consent) throw new Error("Review the exact payload and confirm external processing first.");
+      const payload = state.preview?.payload;
+      if (!payload) throw new Error("Select excerpts and preview a payload within the configured limit first.");
       if (!navigator.clipboard) throw new Error("Clipboard access is unavailable.");
-      await navigator.clipboard.writeText(state.payload.prompt);
+      await navigator.clipboard.writeText(payload.prompt);
       await invokeCommand("launch_claude_assistance", {
         editRoot: appState.workspace.edit_root,
         documentId,
-        payloadDigest: state.payload.payload_digest,
+        payloadDigest: payload.payload_digest,
+        selectedExcerptLines: state.preview.selected_excerpt_lines,
         confirmed: true,
       });
       appState = {
