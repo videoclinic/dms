@@ -98,6 +98,20 @@ test("main window permits the forced close used after advisory-lock release", ()
   assert.ok(capability.permissions.includes("core:window:allow-destroy"));
 });
 
+test("shell and Library panes contain scrolling without moving navigation", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(styles, /body\s*\{[^}]*overflow:\s*hidden/);
+  assert.match(styles, /\.app\s*\{[^}]*height:\s*100vh[^}]*overflow:\s*hidden/);
+  assert.match(styles, /\.workspace-shell\s*\{[^}]*min-height:\s*0[^}]*overflow:\s*hidden/);
+  assert.match(styles, /\.main-content\s*\{[^}]*min-height:\s*0[^}]*overflow:\s*auto/);
+  assert.match(styles, /#expanded-groups\s*\{[^}]*overflow-y:\s*auto/);
+  assert.match(styles, /\.library-grid\s*\{[^}]*overflow:\s*hidden/);
+  for (const selector of ["folder-tree", "table-scroll", "selection-pane"]) {
+    assert.match(styles, new RegExp(`\\.${selector}\\s*\\{[^}]*overflow:\\s*auto`));
+  }
+});
+
 test("opening a workspace acquires its lock and switches only after releasing the prior lock", async () => {
   const calls = [];
   const priorOwner = { process_id: 16 };

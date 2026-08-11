@@ -226,13 +226,25 @@ tr:last-child td { border-bottom: 0; }
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Persistent folder tree + Explorer-like path controls + exact source file names. DMS-managed document data stays visibly separate in the list and selection pane.</p>
+      <p class="subtitle">Persistent folder tree + Explorer-like path controls + exact source file names. The toolbar stays fixed while tree, list, and selection details scroll independently.</p>
       
       <style>
-        .app[data-cap="CAP-0006"] .list-card th,
-        .app[data-cap="CAP-0006"] .list-card td { padding: 0.55rem 0.45rem; font-size: 0.75rem; }
-      </style>
-      <section class="card" style="padding:0.75rem 0.9rem">
+    html, body { height: 100%; }
+    body { overflow: hidden; }
+    .app[data-cap="CAP-0006"] { height: 100vh; min-height: 0; overflow: hidden; }
+    .app[data-cap="CAP-0006"] .sidebar { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+    .app[data-cap="CAP-0006"] .main { min-height: 0; overflow: hidden; }
+    .app[data-cap="CAP-0006"] .header { flex: 0 0 auto; }
+    .app[data-cap="CAP-0006"] .content { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+    .app[data-cap="CAP-0006"] .list-card th,
+    .app[data-cap="CAP-0006"] .list-card td { padding: 0.55rem 0.45rem; font-size: 0.75rem; }
+    .app[data-cap="CAP-0006"] .explorer-toolbar { position: sticky; z-index: 4; top: 0; }
+    .app[data-cap="CAP-0006"] .explorer-panes { height: min(36rem, calc(100vh - 14rem)); min-height: 24rem; align-items: stretch; }
+    .app[data-cap="CAP-0006"] .explorer-panes > .card { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+    .app[data-cap="CAP-0006"] .explorer-panes .list-card { display: flex; flex-direction: column; }
+    .app[data-cap="CAP-0006"] .explorer-panes .table-wrap { min-height: 0; flex: 1; }
+  </style>
+      <section class="card explorer-toolbar" style="padding:0.75rem 0.9rem">
         <div class="row gap-2">
           <button class="icon-btn" title="Back">←</button>
           <button class="icon-btn" title="Forward">→</button>
@@ -243,9 +255,9 @@ tr:last-child td { border-bottom: 0; }
           </div>
           <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Search <input aria-label="Search current folder and descendants" placeholder="HR and subfolders" style="height:2rem;width:16rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.7rem;font:inherit;color:var(--foreground);background:var(--background)"/></label>
         </div>
-        <p class="hint" style="margin-top:0.45rem">Back / Forward / Up and clickable breadcrumbs stay synchronized with the tree and current-folder contents.</p>
+        <p class="hint" style="margin-top:0.45rem">Back / Forward / Up and clickable breadcrumbs stay synchronized and remain available while any pane scrolls.</p>
       </section>
-      <div class="grid-explorer-detail" style="grid-template-columns:17.5rem minmax(0,1fr) 18.5rem;align-items:stretch">
+      <div class="grid-explorer-detail explorer-panes" style="grid-template-columns:17.5rem minmax(0,1fr) 18.5rem;align-items:stretch">
         <aside class="card tree">
           <div class="row between mb">
             <h3 class="card-title" style="margin:0">Folders</h3>

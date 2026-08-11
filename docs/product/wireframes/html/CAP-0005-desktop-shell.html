@@ -226,8 +226,18 @@ tr:last-child td { border-bottom: 0; }
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Tauri 2 shell on Windows and macOS. Foldable left menu, icon-rail flyouts for saved views and open panes, session-only activities, and explicit per-user saved views.</p>
+      <p class="subtitle">Tauri 2 shell on Windows and macOS. Foldable left menu, icon-rail flyouts, session-only activities, explicit saved views, and viewport-contained activity scrolling.</p>
       
+      <style>
+    html, body { height: 100%; }
+    body { overflow: hidden; }
+    .app[data-cap="CAP-0005"] { height: 100vh; min-height: 0; overflow: hidden; }
+    .app[data-cap="CAP-0005"] .sidebar { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+    .app[data-cap="CAP-0005"] .main { min-height: 0; overflow: hidden; }
+    .app[data-cap="CAP-0005"] .header { flex: 0 0 auto; }
+    .app[data-cap="CAP-0005"] .content { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+
+  </style>
       <section class="card">
         <h3 class="card-title">Chrome contract</h3>
         <div class="stack">
@@ -236,6 +246,7 @@ tr:last-child td { border-bottom: 0; }
           <div class="layer"><strong>Collapsed group flyouts</strong><p class="muted">Star and pane icons in the collapsed rail open only their Saved views or Open panes flyout; they do not expand the full left menu. Each flyout retains full labels plus open/remove or focus/close actions.</p></div>
           <div class="layer"><strong>Open activity panes/tabs</strong><p class="muted">Automatic, session-only quicklinks. Labels state task + target: Audit · HR Data Privacy Policy · DOC-014 for a document or Library · policies/HR for a folder. Opening the same task + document focuses its existing pane; × closes that activity only.</p></div>
           <div class="layer"><strong>Saved views</strong><p class="muted">Use ☆ Bookmark this view in the header. ★ Bookmarked is an explicit, per-user shortcut restored after relaunch; it is not a .dms workflow record.</p></div>
+          <div class="layer"><strong>Viewport-contained scrolling</strong><p class="muted">The sidebar and activity header stay available. Normal activities scroll inside main content; multi-pane workspaces give navigation, lists, and exhaustive details separate scroll regions.</p></div>
           <div class="layer"><strong>Permalink handler</strong><p class="muted">OS-registered dms:// URI resolves workspace + document IDs (CAP-0020); opens/focuses matching activity tab.</p></div>
         </div>
       </section>

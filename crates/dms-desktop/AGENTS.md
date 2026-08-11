@@ -43,6 +43,10 @@ macOS.
 - Change the persisted sidebar preference or current-session unfolded overlay
   only through an explicit sidebar control. Destination, saved-view, open-pane,
   and in-surface actions must preserve the current sidebar presentation.
+- Contain the shell to the window viewport. Keep the sidebar and activity header
+  outside activity scrolling; ordinary activities scroll in main content. In the
+  Library, keep the path toolbar fixed and let the folder tree, file table, and
+  selection details scroll independently.
 - Give every directory-selection field a native **Browse…** action through the
   desktop adapter. Start its picker at the OS user's home directory and leave
   the field unchanged when selection is cancelled.

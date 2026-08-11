@@ -5,7 +5,7 @@
 | ID | CAP-0015 |
 | Status | not implemented |
 | Storage | `<edit-root>/.dms/` |
-| Tests | Partial phases 9e–9f.3 evidence: [current-release and local lifecycle core tests](../../../crates/dms-core/tests/lifecycle.rs), [schema-v9 effective-date and canonical before/after evidence tests](../../../crates/dms-core/tests/workspace.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [Library document-control, lifecycle, and evidence-action tests](../../../crates/dms-desktop/ui/library.test.mjs), [document-type catalogue tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
+| Tests | Partial phases 9e–9f.5 evidence: [current-release and local lifecycle core tests](../../../crates/dms-core/tests/lifecycle.rs), [schema-v9 effective-date and canonical before/after evidence tests](../../../crates/dms-core/tests/workspace.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [shell and independent-pane scrolling tests](../../../crates/dms-desktop/ui/app.test.mjs), [Library document-control, lifecycle, and evidence-action tests](../../../crates/dms-desktop/ui/library.test.mjs), [document-type catalogue tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 
@@ -85,7 +85,10 @@ When implemented, the following must hold:
     is folded. Document actions sit in the same pane under the document control
     data block. When a current released version exists, **Open latest released PDF**
     opens only that release record's recorded PDF; it is unavailable for a
-    never-released document or when the current release file is missing.
+    never-released document or when the current release file is missing. When
+    these sections exceed the available window height, the selection pane
+    scrolls independently under CAP-0006; its scroll never moves Library or
+    application navigation.
 12. Title, document type, and owner are required before review submission.
     Document number, when set, is trimmed and case-insensitively unique across
     active, unregistered, and obsolete records; a historical number is not

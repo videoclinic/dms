@@ -113,7 +113,15 @@ When implemented, the following must hold:
 14. The left menu foot shows the current workspace identity (display name or
     workspace ID) and root path summary when expanded; the foot is hidden
     when the menu is collapsed to keep the rail narrow.
-15. Every operator-facing data table whose result set can grow as workspace
+15. The application shell is contained to the current window viewport. The
+    sidebar brand, primary destinations, workspace foot, and main activity
+    header do not move when activity content scrolls. Ordinary activities
+    scroll inside the main-content region. A multi-pane workspace may give its
+    navigation, list, and detail panes independent scroll regions; scrolling
+    one region never shifts the shell chrome or sibling navigation. When Saved
+    views and Open panes exceed the sidebar height, those lists scroll without
+    moving the primary destinations or workspace foot.
+16. Every operator-facing data table whose result set can grow as workspace
     content or durable records accumulate provides a case-insensitive,
     surface-appropriate text filter and a **Rows per page** choice of 10, 25,
     50, or 100. Filtering applies before pagination; clearing the filter,
@@ -121,7 +129,7 @@ When implemented, the following must hold:
     row. Previous/Next pagination is available only when the filtered result
     exceeds the selected page size. Tables that enumerate a bounded fixed
     product configuration are excluded.
-16. Before a workspace is open, the shell shows the ten most recently opened
+17. Before a workspace is open, the shell shows the ten most recently opened
     libraries from per-user preferences. Each entry opens that edit root and
     has a separate removal control; removal never modifies workspace metadata
     or files.

@@ -4,7 +4,7 @@
 | --- | --- |
 | ID | CAP-0006 |
 | Status | not implemented |
-| Tests | Partial phases 3, 9b.1, 9e, 9f.1, and 9f.2 evidence: [`dms-core` Library tests](../../../crates/dms-core/tests/library.rs), [local lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [hierarchical Library, document-action, and workflow-evidence frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31359360786) |
+| Tests | Partial phases 3, 9b.1, 9e, 9f.1, 9f.2, and 9f.5 evidence: [`dms-core` Library tests](../../../crates/dms-core/tests/library.rs), [local lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [shell and independent-pane scrolling tests](../../../crates/dms-desktop/ui/app.test.mjs), [hierarchical Library, document-action, and workflow-evidence frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31359360786) |
 
 ## Outcomes (contract — not yet true in runtime)
 
@@ -34,6 +34,12 @@ When implemented, the following must hold:
      plus a clickable breadcrumb rooted at the workspace/edit-root display
      name. Up is unavailable at the root. Tree selection, breadcrumb, current
      folder heading, and centre contents stay synchronized.
+   - The current-folder toolbar stays available while pane content scrolls.
+     The folder tree, centre contents, and right selection/details pane are
+     separate vertical scroll regions. Exhaustive document control data,
+     lifecycle forms, release history, or workflow evidence in the right pane
+     never moves the toolbar, folder tree, centre contents, main activity
+     header, or application sidebar.
    - A Windows Explorer-like **Refresh** icon in the path toolbar, immediately
      before the breadcrumb, re-enumerates the edit-root structure after external
      filesystem changes. It never adds a file to the library or changes a

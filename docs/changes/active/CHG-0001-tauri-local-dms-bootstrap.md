@@ -20,6 +20,7 @@
 | Follow-up request | Direct operator request: There are so many configuration pages just now, and I do not see/know how sould the user navigate through all of them |
 | Follow-up request | Direct operator request: the Library folder element must be a real hierarchical tree view, and an unfolded left menu must retain its state when an action or destination is selected |
 | Follow-up request | Direct operator request: on the initial Library/setup page, retain the last 10 opened libraries with per-entry removal; every directory-selection field must offer native directory browsing starting at the OS user's home directory |
+| Follow-up request | Direct operator request: The UI concept should be adapted for scrolling, so the areas where navigation happens are not affected by scrolling in areas like document control data that can be very exchaustive and long |
 | Affected CAPs | CAP-0001 … CAP-0022 |
 | Decision records | ADR-0001 … ADR-0023 in `docs/design-decisions.md` |
 
@@ -159,6 +160,7 @@ macOS** that:
 | 9f.2 | Local lifecycle and evidence actions | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 46 frontend tests; records/link gates) | The Library selection pane invokes Begin revision, Cancel review with a required reason and confirmation, Mark obsolete with a required reason and confirmation, and opens canonical workflow evidence; unavailable transitions explain their preconditions; adapter/frontend tests pass |
 | 9f.3 | Workspace and Document defaults configuration | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 51 frontend tests; release build; Linux launch smoke; records/link and browser visual QA) | One routed Configuration activity provides Workspace and Document defaults routes, persists supported local core settings and catalogue operations, and keeps workspace setup as the only pre-open route; adapter/frontend tests pass |
 | 9f.4 | Workflow and Notifications configuration | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 54 frontend tests; release build; Linux launch smoke; records/link gates; browser visual QA) | The same routed Configuration activity provides Workflow and Notifications routes plus explicit identity-source and confidentiality-catalogue secondary surfaces without creating duplicate activities; adapter/frontend tests pass |
+| 9f.5 | Viewport-scoped shell and independent workspace scrolling | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; release build; 55 frontend tests; regenerated wireframes; browser computed-layout and visual QA; `git diff --check`) | The sidebar and main activity header remain available while ordinary activity content scrolls inside the viewport; the Library path toolbar remains fixed while its folder tree, current-folder table, and exhaustive selection details scroll independently; frontend layout tests pass |
 | 9g | Permalink OS integration | pending | Windows and macOS register `dms://`; inbound document/review/note links resolve workspace + stable document identity, focus or create the correct activity, survive rename/version changes, and fail closed for unavailable targets; platform smoke passes |
 | 9h | Operator-selected Claude excerpts | pending | Oversized assistance payloads show their size and selectable excerpts; preview retries only with the operator-selected subset, never silently truncates, and still requires digest-bound consent; core, adapter, and frontend tests pass |
 | 9i | Live Office, Entra, notification, and external lifecycle paths | pending | Production submit/review/decision/release commands and their desktop operator surfaces wire installed Office automation on Windows/macOS, administrator-configured Microsoft Graph refresh, interactive approver sign-in through OS credential storage, and SMTP/host-mail delivery without storing credentials in `.dms`; fake-backed tests and operator smoke instructions pass |
@@ -296,6 +298,14 @@ macOS** that:
   commands are required phase work. Workflow, Notifications, Microsoft Entra
   identity setup, and confidentiality catalogue administration remain phase
   9f.4 scope.
+- Phase 9f.5 corrects viewport containment rather than adding another navigation
+  model. The pane-level overflow rules existed, but the outer shell could still
+  grow with exhaustive document details and move the sidebar or activity header.
+  The shell now owns the window viewport, ordinary activities own the main
+  content scroll, and Library navigation, contents, and details keep separate
+  scroll regions. Browser QA at a 720 px viewport measured no document-level
+  overflow, a 520 px selection viewport over 1,890 px of detail content, and
+  unchanged sidebar/header positions after scrolling the detail pane 500 px.
 
 ## Resume checklist
 

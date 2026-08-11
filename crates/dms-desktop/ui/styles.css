@@ -6,14 +6,17 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 900px; min-height: 600px; }
+html { height: 100%; }
+body { height: 100%; margin: 0; min-width: 900px; min-height: 600px; overflow: hidden; }
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
 
 .app {
   display: grid;
   grid-template-columns: 272px minmax(0, 1fr);
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 600px;
+  overflow: hidden;
 }
 
 .app.sidebar-collapsed { grid-template-columns: 64px minmax(0, 1fr); }
@@ -22,7 +25,9 @@ button { cursor: pointer; }
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: 0;
   min-width: 0;
+  overflow: hidden;
   padding: 12px;
   color: #15212c;
   background: #eef2f5;
@@ -82,6 +87,7 @@ button { cursor: pointer; }
   text-transform: uppercase;
 }
 .empty-group { margin: 4px 8px; color: #6c7b87; font-size: 13px; }
+#expanded-groups { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 
 .collapsed-only { display: none; }
 .sidebar-collapsed .expanded-only { display: none !important; }
@@ -120,9 +126,10 @@ button { cursor: pointer; }
   overflow-wrap: anywhere;
 }
 
-.workspace-shell { display: flex; min-width: 0; flex-direction: column; }
+.workspace-shell { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; }
 .main-header {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 12px;
   min-height: 60px;
@@ -132,7 +139,7 @@ button { cursor: pointer; }
 }
 .main-header h1 { margin: 0; font-size: 16px; }
 .header-spacer { flex: 1; }
-.main-content { flex: 1; padding: 28px; }
+.main-content { min-height: 0; flex: 1; padding: 28px; overflow: auto; overscroll-behavior: contain; }
 
 .card {
   max-width: 860px;
@@ -194,6 +201,7 @@ button { cursor: pointer; }
 .library-workspace { display: flex; min-height: 0; height: 100%; flex-direction: column; background: white; }
 .library-toolbar {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 7px;
   min-height: 58px;
@@ -216,14 +224,17 @@ button { cursor: pointer; }
 .sort-control { display: flex; align-items: center; gap: 5px; white-space: nowrap; color: #596a78; font-size: 12px; }
 .sort-control select { height: 32px; border: 1px solid #bdc9d2; border-radius: 6px; background: white; }
 .library-error { margin: 0; padding: 7px 16px; color: #922b21; background: #fff0ed; border-bottom: 1px solid #f0c8c1; font-size: 13px; }
-.library-grid { display: flex; min-height: 0; flex: 1; }
+.library-grid { display: flex; min-height: 0; flex: 1; overflow: hidden; }
 .folder-tree {
   width: 230px;
   min-width: 170px;
   max-width: 420px;
   flex: 0 0 auto;
+  min-height: 0;
   padding: 14px 8px;
   overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   resize: horizontal;
   background: #f7f9fa;
   border-right: 1px solid #dfe5ea;
@@ -245,7 +256,7 @@ button { cursor: pointer; }
 .folder-contents h2 { margin: 3px 0 0; font-size: 19px; }
 .folder-contents header > span { color: #6b7b87; font-size: 12px; }
 .eyebrow { color: #6b7b87; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
-.table-scroll { min-height: 0; flex: 1; overflow: auto; }
+.table-scroll { min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .table-scroll table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .table-scroll th { position: sticky; z-index: 1; top: 0; padding: 8px 10px; color: #5f6f7b; background: #f8fafb; border-bottom: 1px solid #dfe5ea; text-align: left; white-space: nowrap; }
 .table-scroll td { max-width: 280px; padding: 9px 10px; border-bottom: 1px solid #edf0f2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -261,7 +272,7 @@ button { cursor: pointer; }
 .pagination-row select { height: 29px; border: 1px solid #bdc9d2; border-radius: 5px; background: white; }
 .pagination-row .text-button:disabled { opacity: .4; }
 .pagination-row .button:disabled { cursor: default; opacity: .4; }
-.selection-pane { width: 315px; min-width: 260px; flex: 0 0 auto; padding: 18px; overflow: auto; border-left: 1px solid #dfe5ea; background: #fbfcfd; }
+.selection-pane { width: 315px; min-width: 260px; min-height: 0; flex: 0 0 auto; padding: 18px; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; border-left: 1px solid #dfe5ea; background: #fbfcfd; }
 .selection-pane h3 { margin: 8px 0 4px; font-size: 18px; overflow-wrap: anywhere; }
 .selection-pane p { color: #61717d; line-height: 1.45; }
 .selection-empty { margin-top: 26px; text-align: center; }

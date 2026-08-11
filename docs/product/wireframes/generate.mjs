@@ -184,8 +184,9 @@ const CAPS = [
     nav: "library",
     activity: "shell",
     bookmarked: true,
-    subtitle: "Tauri 2 shell on Windows and macOS. Foldable left menu, icon-rail flyouts for saved views and open panes, session-only activities, and explicit per-user saved views.",
+    subtitle: "Tauri 2 shell on Windows and macOS. Foldable left menu, icon-rail flyouts, session-only activities, explicit saved views, and viewport-contained activity scrolling.",
     body: `
+      ${viewportScrollStyles("CAP-0005")}
       <section class="card">
         <h3 class="card-title">Chrome contract</h3>
         <div class="stack">
@@ -194,6 +195,7 @@ const CAPS = [
           ${layer("Collapsed group flyouts", "Star and pane icons in the collapsed rail open only their Saved views or Open panes flyout; they do not expand the full left menu. Each flyout retains full labels plus open/remove or focus/close actions.")}
           ${layer("Open activity panes/tabs", "Automatic, session-only quicklinks. Labels state task + target: Audit · HR Data Privacy Policy · DOC-014 for a document or Library · policies/HR for a folder. Opening the same task + document focuses its existing pane; × closes that activity only.")}
           ${layer("Saved views", "Use ☆ Bookmark this view in the header. ★ Bookmarked is an explicit, per-user shortcut restored after relaunch; it is not a .dms workflow record.")}
+          ${layer("Viewport-contained scrolling", "The sidebar and activity header stay available. Normal activities scroll inside main content; multi-pane workspaces give navigation, lists, and exhaustive details separate scroll regions.")}
           ${layer("Permalink handler", "OS-registered dms:// URI resolves workspace + document IDs (CAP-0020); opens/focuses matching activity tab.")}
         </div>
       </section>
@@ -267,14 +269,19 @@ const CAPS = [
     file: "CAP-0006-library-explorer",
     title: "Folder-first library explorer",
     nav: "library",
-    subtitle: "Persistent folder tree + Explorer-like path controls + exact source file names. DMS-managed document data stays visibly separate in the list and selection pane.",
+    subtitle: "Persistent folder tree + Explorer-like path controls + exact source file names. The toolbar stays fixed while tree, list, and selection details scroll independently.",
     actions: [],
     body: `
-      <style>
+      ${viewportScrollStyles("CAP-0006", `
         .app[data-cap="CAP-0006"] .list-card th,
         .app[data-cap="CAP-0006"] .list-card td { padding: 0.55rem 0.45rem; font-size: 0.75rem; }
-      </style>
-      <section class="card" style="padding:0.75rem 0.9rem">
+        .app[data-cap="CAP-0006"] .explorer-toolbar { position: sticky; z-index: 4; top: 0; }
+        .app[data-cap="CAP-0006"] .explorer-panes { height: min(36rem, calc(100vh - 14rem)); min-height: 24rem; align-items: stretch; }
+        .app[data-cap="CAP-0006"] .explorer-panes > .card { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+        .app[data-cap="CAP-0006"] .explorer-panes .list-card { display: flex; flex-direction: column; }
+        .app[data-cap="CAP-0006"] .explorer-panes .table-wrap { min-height: 0; flex: 1; }
+      `)}
+      <section class="card explorer-toolbar" style="padding:0.75rem 0.9rem">
         <div class="row gap-2">
           <button class="icon-btn" title="Back">←</button>
           <button class="icon-btn" title="Forward">→</button>
@@ -285,9 +292,9 @@ const CAPS = [
           </div>
           <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Search <input aria-label="Search current folder and descendants" placeholder="HR and subfolders" style="height:2rem;width:16rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.7rem;font:inherit;color:var(--foreground);background:var(--background)"/></label>
         </div>
-        <p class="hint" style="margin-top:0.45rem">Back / Forward / Up and clickable breadcrumbs stay synchronized with the tree and current-folder contents.</p>
+        <p class="hint" style="margin-top:0.45rem">Back / Forward / Up and clickable breadcrumbs stay synchronized and remain available while any pane scrolls.</p>
       </section>
-      <div class="grid-explorer-detail" style="grid-template-columns:17.5rem minmax(0,1fr) 18.5rem;align-items:stretch">
+      <div class="grid-explorer-detail explorer-panes" style="grid-template-columns:17.5rem minmax(0,1fr) 18.5rem;align-items:stretch">
         <aside class="card tree">
           <div class="row between mb">
             <h3 class="card-title" style="margin:0">Folders</h3>
@@ -730,10 +737,15 @@ const CAPS = [
     title: "Document control data",
     nav: "library",
     activity: "document-home-doc-77a12bce",
-    subtitle: "Source file facts come from the filesystem. Document control data is managed by DMS Desktop under .dms, never synchronized from Office properties. All sections are expanded here for review.",
+    subtitle: "Source file facts come from the filesystem. Exhaustive DMS-managed control data scrolls in the right pane without moving Library or application navigation.",
     actions: [],
     body: `
-      <div class="grid-explorer-detail">
+      ${viewportScrollStyles("CAP-0015", `
+        .app[data-cap="CAP-0015"] .content { overflow: hidden; }
+        .app[data-cap="CAP-0015"] .document-control-panes { min-height: 0; flex: 1; align-items: stretch; }
+        .app[data-cap="CAP-0015"] .document-control-panes > .card { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+      `)}
+      <div class="grid-explorer-detail document-control-panes">
         <aside class="card tree">
           <h3 class="card-title">Folders</h3>
           <ul class="tree-root">
@@ -1120,7 +1132,7 @@ function configurationNavigation(cap) {
 }
 function documentControlDataSelectionPane() {
   // CAP-0015 owns this shared selection-pane content; CAP-0006 owns its placement.
-  return `<aside class="card detail-pane">
+  return `<aside class="card detail-pane" aria-label="Scrollable document selection details">
     <div class="row between mb">
       <h3 class="card-title" style="margin:0">HR Data Privacy Policy</h3>
       ${badge("in_review", "info")}
@@ -1227,6 +1239,20 @@ function defaultsFirstStyles() {
     .defaults-editor { min-width: 0; }
     .default-state { padding: 0.65rem 0.75rem; border-radius: calc(var(--radius) - 2px); background: var(--muted); font-size: 0.8rem; }
     .default-state strong { display: block; margin-bottom: 0.2rem; font-size: 0.82rem; }
+  </style>`;
+}
+
+function viewportScrollStyles(capId, extra = "") {
+  const extraRules = extra.trim().split("\n").map((line) => line.trim()).join("\n    ");
+  return `<style>
+    html, body { height: 100%; }
+    body { overflow: hidden; }
+    .app[data-cap="${capId}"] { height: 100vh; min-height: 0; overflow: hidden; }
+    .app[data-cap="${capId}"] .sidebar { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+    .app[data-cap="${capId}"] .main { min-height: 0; overflow: hidden; }
+    .app[data-cap="${capId}"] .header { flex: 0 0 auto; }
+    .app[data-cap="${capId}"] .content { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+${extraRules ? `    ${extraRules}` : ""}
   </style>`;
 }
 

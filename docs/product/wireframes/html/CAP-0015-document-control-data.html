@@ -226,9 +226,21 @@ tr:last-child td { border-bottom: 0; }
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Source file facts come from the filesystem. Document control data is managed by DMS Desktop under .dms, never synchronized from Office properties. All sections are expanded here for review.</p>
+      <p class="subtitle">Source file facts come from the filesystem. Exhaustive DMS-managed control data scrolls in the right pane without moving Library or application navigation.</p>
       
-      <div class="grid-explorer-detail">
+      <style>
+    html, body { height: 100%; }
+    body { overflow: hidden; }
+    .app[data-cap="CAP-0015"] { height: 100vh; min-height: 0; overflow: hidden; }
+    .app[data-cap="CAP-0015"] .sidebar { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+    .app[data-cap="CAP-0015"] .main { min-height: 0; overflow: hidden; }
+    .app[data-cap="CAP-0015"] .header { flex: 0 0 auto; }
+    .app[data-cap="CAP-0015"] .content { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+    .app[data-cap="CAP-0015"] .content { overflow: hidden; }
+    .app[data-cap="CAP-0015"] .document-control-panes { min-height: 0; flex: 1; align-items: stretch; }
+    .app[data-cap="CAP-0015"] .document-control-panes > .card { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+  </style>
+      <div class="grid-explorer-detail document-control-panes">
         <aside class="card tree">
           <h3 class="card-title">Folders</h3>
           <ul class="tree-root">
@@ -282,7 +294,7 @@ tr:last-child td { border-bottom: 0; }
     <div class="row gap-2"><span class="muted">1–2 of 2</span><button class="btn outline" disabled>Previous</button><button class="btn outline" disabled>Next</button></div>
   </div>
         </section>
-        <aside class="card detail-pane">
+        <aside class="card detail-pane" aria-label="Scrollable document selection details">
     <div class="row between mb">
       <h3 class="card-title" style="margin:0">HR Data Privacy Policy</h3>
       <span class="badge info">in_review</span>
