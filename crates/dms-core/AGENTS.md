@@ -43,6 +43,9 @@ persistence.
   `.dms`, and retain non-removable root defaults once configured.
 - Microsoft Entra workspace metadata contains tenant/group identifiers and a
   read-only person display cache, never credentials or tokens.
+- Configuration queries expose only enabled cached people for role pickers and
+  return folder workflow assignments with their binding-qualified references;
+  workflow inheritance and notification validation remain core-owned rules.
 - Lifecycle candidates snapshot the requesting person, effective editor,
   effective approver, control data, confidentiality, source digest, target, and
   changelog. Only committed releases occupy versions.

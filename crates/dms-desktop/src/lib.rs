@@ -13,8 +13,9 @@ use dms_core::{
     DocumentControl, DocumentType, EffectiveConfidentiality, EffectiveWorkflowRoles,
     EntraIdentitySource, EntraPerson, GraphClient, LibraryEntry, LibraryFolder, LibraryFolderNode,
     Lifecycle, LocalLifecycleActions, Note, NotificationClient, NotificationMessage,
-    NotificationSettings, PeriodicReview, PeriodicReviewMarker, PeriodicReviewResult, PolicyFolder,
-    ReleaseVerificationStatus, RestoreOutcome, RestoreRequest, SourceState, WorkflowEvent,
+    NotificationSettings, NotificationTransport, PeriodicReview, PeriodicReviewMarker,
+    PeriodicReviewResult, PolicyFolder, ReleaseVerificationStatus, RestoreOutcome, RestoreRequest,
+    RoleUpdate, SmtpSettings, SourceState, WorkflowEvent, WorkflowPolicyAssignment,
     WorkflowVerification, Workspace, WorkspaceLock, WorkspaceLockStatus,
 };
 use serde::{Deserialize, Serialize};
@@ -122,6 +123,10 @@ pub struct WorkspaceConfiguration {
     pub confidentiality_types: Vec<ConfidentialityType>,
     pub confidentiality_policies: Vec<ConfidentialityPolicy>,
     pub policy_folders: Vec<PolicyFolder>,
+    pub identity_source: Option<EntraIdentitySource>,
+    pub eligible_people: Vec<EntraPerson>,
+    pub workflow_policies: Vec<WorkflowPolicyAssignment>,
+    pub notification_settings: Option<NotificationSettings>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -305,6 +310,25 @@ fn configure_document_type(
 }
 
 #[tauri::command]
+fn configure_confidentiality_type(
+    edit_root: String,
+    id: String,
+    label: String,
+    enabled: bool,
+    workspace_default: bool,
+) -> Result<WorkspaceConfiguration, String> {
+    mutate_workspace_configuration(Path::new(&edit_root), |workspace| {
+        workspace
+            .configure_confidentiality_type(&id, &label, enabled)
+            .map(|_| ())?;
+        if workspace_default {
+            workspace.set_confidentiality_policy(".", &id).map(|_| ())?;
+        }
+        Ok(())
+    })
+}
+
+#[tauri::command]
 fn set_confidentiality_policy(
     edit_root: String,
     folder: String,
@@ -324,6 +348,49 @@ fn remove_confidentiality_policy(
 ) -> Result<WorkspaceConfiguration, String> {
     mutate_workspace_configuration(Path::new(&edit_root), |workspace| {
         workspace.remove_confidentiality_policy(&folder)
+    })
+}
+
+#[tauri::command]
+fn set_workflow_policy(
+    edit_root: String,
+    folder: String,
+    editor: String,
+    approver: String,
+) -> Result<WorkspaceConfiguration, String> {
+    let editor = configuration_role_update(&editor)?;
+    let approver = configuration_role_update(&approver)?;
+    mutate_workspace_configuration(Path::new(&edit_root), |workspace| {
+        workspace
+            .update_workflow_policy(&folder, editor, approver)
+            .map(|_| ())
+    })
+}
+
+#[tauri::command]
+fn configure_notifications(
+    edit_root: String,
+    transport: String,
+    relay_host: String,
+    relay_port: u16,
+    sender: String,
+) -> Result<WorkspaceConfiguration, String> {
+    let (transport, smtp) = match transport.trim() {
+        "smtp" => (
+            NotificationTransport::Smtp,
+            Some(SmtpSettings {
+                relay_host,
+                relay_port,
+                sender,
+            }),
+        ),
+        "mailto" => (NotificationTransport::Mailto, None),
+        value => return Err(format!("unknown notification transport: {value}")),
+    };
+    mutate_workspace_configuration(Path::new(&edit_root), |workspace| {
+        workspace
+            .configure_notifications(transport, smtp)
+            .map(|_| ())
     })
 }
 
@@ -980,6 +1047,16 @@ fn normalize_preferences(mut preferences: Preferences) -> Preferences {
     preferences
 }
 
+fn configuration_role_update(value: &str) -> Result<RoleUpdate, String> {
+    match value.trim() {
+        "__inherit" => Ok(RoleUpdate::Clear),
+        "__unchanged" => Ok(RoleUpdate::Unchanged),
+        value => Uuid::parse_str(value)
+            .map(RoleUpdate::replace)
+            .map_err(|_| format!("workflow role must be a Microsoft Entra object ID: {value}")),
+    }
+}
+
 fn workspace_summary(edit_root: &Path) -> Result<WorkspaceSummary, String> {
     let workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
     Ok(workspace_summary_from(&workspace))
@@ -1017,6 +1094,10 @@ fn workspace_configuration_from(workspace: &Workspace) -> Result<WorkspaceConfig
         policy_folders: workspace
             .policy_folders()
             .map_err(|error| error.to_string())?,
+        identity_source: workspace.identity_source().cloned(),
+        eligible_people: workspace.eligible_people().into_iter().cloned().collect(),
+        workflow_policies: workspace.workflow_policies(),
+        notification_settings: workspace.notification_settings().cloned(),
     })
 }
 
@@ -1321,8 +1402,11 @@ pub fn run() {
             load_workspace_configuration,
             configure_default_review_interval,
             configure_document_type,
+            configure_confidentiality_type,
             set_confidentiality_policy,
             remove_confidentiality_policy,
+            set_workflow_policy,
+            configure_notifications,
             load_library,
             search_library,
             add_library_documents,
@@ -1541,6 +1625,81 @@ mod tests {
             .confidentiality_policies
             .iter()
             .any(|entry| entry.folder == "Policies/HR"));
+    }
+
+    #[test]
+    fn desktop_configuration_commands_persist_workflow_and_notifications() {
+        let edit_root = tempfile::tempdir().unwrap();
+        let publish_root = tempfile::tempdir().unwrap();
+        fs::create_dir_all(edit_root.path().join("Policies/HR")).unwrap();
+        let mut workspace = Workspace::init(edit_root.path(), publish_root.path()).unwrap();
+        let editor_id = Uuid::new_v4();
+        let approver_id = Uuid::new_v4();
+        workspace
+            .replace_identity_source(
+                Uuid::new_v4(),
+                "Example tenant",
+                Uuid::new_v4(),
+                "DMS workflow",
+                vec![
+                    EntraPerson::eligible(editor_id, "Lukas Roth", "lukas@example.test"),
+                    EntraPerson::eligible(approver_id, "Anna Berg", "anna@example.test"),
+                ],
+            )
+            .unwrap();
+        workspace
+            .update_workflow_policy(
+                ".",
+                RoleUpdate::replace(editor_id),
+                RoleUpdate::replace(approver_id),
+            )
+            .unwrap();
+        workspace.save().unwrap();
+        let root = edit_root.path().to_string_lossy().into_owned();
+
+        let workflow = set_workflow_policy(
+            root.clone(),
+            "Policies/HR".into(),
+            editor_id.to_string(),
+            "__inherit".into(),
+        )
+        .unwrap();
+        assert_eq!(
+            workflow.identity_source.unwrap().group_label,
+            "DMS workflow"
+        );
+        assert_eq!(workflow.eligible_people.len(), 2);
+        assert!(workflow.workflow_policies.iter().any(|policy| {
+            policy.folder == "Policies/HR" && policy.editor.is_some() && policy.approver.is_none()
+        }));
+
+        let notifications = configure_notifications(
+            root.clone(),
+            "smtp".into(),
+            "smtp.example.test".into(),
+            587,
+            "dms@example.test".into(),
+        )
+        .unwrap();
+        assert_eq!(
+            notifications
+                .notification_settings
+                .unwrap()
+                .smtp
+                .unwrap()
+                .relay_host,
+            "smtp.example.test"
+        );
+
+        let catalogue = configure_confidentiality_type(
+            root,
+            "restricted".into(),
+            "Restricted".into(),
+            true,
+            true,
+        )
+        .unwrap();
+        assert_eq!(catalogue.confidentiality_types[0].id, "restricted");
     }
 
     #[test]

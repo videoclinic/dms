@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 
 import {
   applyConfigurationSnapshot,
+  closeConfigurationSecondary,
   configurationMarkup,
   configurationMutationRequest,
   createConfigurationState,
+  openConfigurationSecondary,
   selectConfigurationFolder,
   setConfigurationRoute,
 } from "./configuration.mjs";
@@ -37,6 +39,24 @@ const snapshot = {
     { relative_path: "Policies" },
     { relative_path: "Policies/HR" },
   ],
+  identity_source: {
+    binding_id: "binding-1",
+    tenant_id: "tenant-1",
+    tenant_display: "Example tenant",
+    group_id: "group-1",
+    group_label: "DMS workflow",
+  },
+  eligible_people: [
+    { object_id: "editor-1", display_name: "Lukas Roth", email: "lukas@example.test", account_enabled: true },
+    { object_id: "approver-1", display_name: "Anna Berg", email: "anna@example.test", account_enabled: true },
+  ],
+  workflow_policies: [
+    { folder: ".", editor: { binding_id: "binding-1", object_id: "editor-1" }, approver: { binding_id: "binding-1", object_id: "approver-1" } },
+  ],
+  notification_settings: {
+    transport: "smtp",
+    smtp: { relay_host: "smtp.example.test", relay_port: 587, sender: "dms@example.test" },
+  },
 };
 
 const assistancePolicy = {
@@ -65,12 +85,54 @@ test("workspace route shows the persistent route navigation and supported local 
 
   assert.match(markup, /data-configuration-route="workspace"[^>]*aria-current="page"/);
   assert.match(markup, /data-configuration-route="document-defaults"/);
-  assert.match(markup, /data-configuration-route="workflow"[^>]*disabled/);
-  assert.match(markup, /data-configuration-route="notifications"[^>]*disabled/);
+  assert.doesNotMatch(markup, /data-configuration-route="workflow"[^>]*disabled/);
+  assert.doesNotMatch(markup, /data-configuration-route="notifications"[^>]*disabled/);
   assert.match(markup, /\/DMS\/Edit/);
   assert.match(markup, /\/DMS\/Publish/);
   assert.match(markup, /data-configuration-form="review-interval"/);
   assert.match(markup, /Claude Desktop assistance policy/);
+});
+
+test("workflow route configures folder roles and opens identity source in place", () => {
+  let state = applyConfigurationSnapshot(createConfigurationState(), snapshot);
+  state = setConfigurationRoute(state, "workflow");
+  let markup = configurationMarkup(state, assistancePolicy);
+
+  assert.match(markup, /People source/);
+  assert.match(markup, /DMS workflow/);
+  assert.match(markup, /data-configuration-form="workflow-policy"/);
+  assert.match(markup, /Lukas Roth/);
+  assert.match(markup, /Anna Berg/);
+  assert.match(markup, /data-configuration-secondary="identity-source"/);
+
+  state = openConfigurationSecondary(state, "identity-source");
+  markup = configurationMarkup(state, assistancePolicy);
+  assert.match(markup, /Back to Workflow/);
+  assert.match(markup, /Eligible people — read only/);
+  assert.match(markup, /Microsoft Graph integration/);
+  assert.equal(closeConfigurationSecondary(state).secondary, null);
+});
+
+test("notifications route edits only non-secret transport settings", () => {
+  let state = applyConfigurationSnapshot(createConfigurationState(), snapshot);
+  state = setConfigurationRoute(state, "notifications");
+  const markup = configurationMarkup(state, assistancePolicy);
+
+  assert.match(markup, /data-configuration-form="notifications"/);
+  assert.match(markup, /smtp\.example\.test/);
+  assert.match(markup, /OS credential store/);
+  assert.doesNotMatch(markup, /name="password"/);
+});
+
+test("confidentiality catalogue is a secondary surface that returns to document defaults", () => {
+  let state = applyConfigurationSnapshot(createConfigurationState(), snapshot);
+  state = setConfigurationRoute(state, "document-defaults");
+  state = openConfigurationSecondary(state, "confidentiality-types");
+  const markup = configurationMarkup(state, assistancePolicy);
+
+  assert.match(markup, /Back to Document defaults/);
+  assert.match(markup, /data-configuration-form="confidentiality-type"/);
+  assert.match(markup, /Create confidentiality type/);
 });
 
 test("document defaults route exposes folder policy and document-type catalogue mutations", () => {
@@ -121,6 +183,54 @@ test("configuration mutations map forms to narrow desktop commands", () => {
     {
       command: "remove_confidentiality_policy",
       arguments: { folder: "Policies/HR" },
+    },
+  );
+  assert.deepEqual(
+    configurationMutationRequest(
+      "workflow-policy",
+      new Map([["editor", "editor-1"], ["approver", "__inherit"]]),
+      "Policies/HR",
+    ),
+    {
+      command: "set_workflow_policy",
+      arguments: { folder: "Policies/HR", editor: "editor-1", approver: "__inherit" },
+    },
+  );
+  assert.deepEqual(
+    configurationMutationRequest(
+      "notifications",
+      new Map([
+        ["transport", "smtp"],
+        ["relayHost", " smtp.example.test "],
+        ["relayPort", "587"],
+        ["sender", " dms@example.test "],
+      ]),
+      ".",
+    ),
+    {
+      command: "configure_notifications",
+      arguments: {
+        transport: "smtp",
+        relayHost: "smtp.example.test",
+        relayPort: 587,
+        sender: "dms@example.test",
+      },
+    },
+  );
+  assert.deepEqual(
+    configurationMutationRequest(
+      "confidentiality-type",
+      new Map([["id", " restricted "], ["label", " Restricted "], ["enabled", "on"]]),
+      ".",
+    ),
+    {
+      command: "configure_confidentiality_type",
+      arguments: {
+        id: "restricted",
+        label: "Restricted",
+        enabled: true,
+        workspaceDefault: false,
+      },
     },
   );
 });

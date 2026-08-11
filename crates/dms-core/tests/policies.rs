@@ -271,10 +271,17 @@ fn workflow_roles_inherit_independently_and_binding_replacement_unresolves_live_
     let editor_id = Uuid::new_v4();
     let approver_id = Uuid::new_v4();
     let replacement_approver_id = Uuid::new_v4();
+    let disabled_id = Uuid::new_v4();
     let people = vec![
         EntraPerson::eligible(editor_id, "Lukas Roth", "lukas@example.test"),
         EntraPerson::eligible(approver_id, "Anna Berg", "anna@example.test"),
         EntraPerson::eligible(replacement_approver_id, "Mara Klein", "mara@example.test"),
+        EntraPerson {
+            object_id: disabled_id,
+            display_name: "Disabled person".to_owned(),
+            email: "disabled@example.test".to_owned(),
+            account_enabled: false,
+        },
     ];
     workspace
         .replace_identity_source(
@@ -303,6 +310,10 @@ fn workflow_roles_inherit_independently_and_binding_replacement_unresolves_live_
             RoleUpdate::Unchanged,
         )
         .expect("folder editor");
+    assert_eq!(workspace.eligible_people().len(), 3);
+    assert!(workspace.workflow_policies().iter().any(|policy| {
+        policy.folder == "policies/IT" && policy.editor.is_some() && policy.approver.is_none()
+    }));
     workspace
         .set_document_workflow_roles(
             document.id,

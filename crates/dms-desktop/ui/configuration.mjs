@@ -6,7 +6,8 @@ const ROUTES = [
   ["workflow", "Workflow", "People and role routing"],
   ["notifications", "Notifications", "Review and release email"],
 ];
-const AVAILABLE_ROUTES = new Set(["workspace", "document-defaults"]);
+const AVAILABLE_ROUTES = new Set(ROUTES.map(([id]) => id));
+const SECONDARY_SURFACES = new Set(["identity-source", "confidentiality-types"]);
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -20,6 +21,7 @@ function escapeHtml(value) {
 export function createConfigurationState() {
   return {
     route: "workspace",
+    secondary: null,
     selected_folder: ".",
     snapshot: null,
     notice: "",
@@ -43,7 +45,18 @@ export function setConfigurationRoute(state, route) {
   if (!ROUTES.some(([id]) => id === route)) {
     throw new Error(`Unknown configuration route: ${route}`);
   }
-  return { ...state, route, notice: "", error: "" };
+  return { ...state, route, secondary: null, notice: "", error: "" };
+}
+
+export function openConfigurationSecondary(state, secondary) {
+  if (!SECONDARY_SURFACES.has(secondary)) {
+    throw new Error(`Unknown configuration surface: ${secondary}`);
+  }
+  return { ...state, secondary, notice: "", error: "" };
+}
+
+export function closeConfigurationSecondary(state) {
+  return { ...state, secondary: null, notice: "", error: "" };
 }
 
 export function selectConfigurationFolder(state, folder) {
@@ -100,7 +113,7 @@ function documentTypesMarkup(snapshot) {
   const rows = snapshot.document_types.length === 0
     ? '<p class="subtle">No document types configured.</p>'
     : snapshot.document_types.map((type) => `<form class="configuration-type-row" data-configuration-form="document-type"><input type="hidden" name="id" value="${escapeHtml(type.id)}"><label><span class="visually-hidden">Label for ${escapeHtml(type.id)}</span><input name="label" required value="${escapeHtml(type.label)}"></label><code>${escapeHtml(type.id)}</code><label class="configuration-enabled"><input type="checkbox" name="enabled" ${type.enabled ? "checked" : ""}> Enabled</label><button class="button secondary" type="submit">Save</button></form>`).join("");
-  return `<section class="card configuration-card configuration-catalogue"><div class="configuration-card-heading"><div><h3>Document types</h3><p>Add, rename, or disable workspace document types.</p></div><button class="button secondary" type="button" disabled title="Not available in this build">Manage confidentiality types…</button></div>${rows}<form class="configuration-type-row create" data-configuration-form="document-type"><label><span class="visually-hidden">New document type ID</span><input name="id" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="type-id"></label><label><span class="visually-hidden">New document type label</span><input name="label" required placeholder="Display label"></label><label class="configuration-enabled"><input type="checkbox" name="enabled" checked> Enabled</label><button class="button" type="submit">Create document type</button></form></section>`;
+  return `<section class="card configuration-card configuration-catalogue"><div class="configuration-card-heading"><div><h3>Document types</h3><p>Add, rename, or disable workspace document types.</p></div><button class="button secondary" type="button" data-configuration-secondary="confidentiality-types">Manage confidentiality types…</button></div>${rows}<form class="configuration-type-row create" data-configuration-form="document-type"><label><span class="visually-hidden">New document type ID</span><input name="id" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="type-id"></label><label><span class="visually-hidden">New document type label</span><input name="label" required placeholder="Display label"></label><label class="configuration-enabled"><input type="checkbox" name="enabled" checked> Enabled</label><button class="button" type="submit">Create document type</button></form></section>`;
 }
 
 function documentDefaultsMarkup(state) {
@@ -109,6 +122,71 @@ function documentDefaultsMarkup(state) {
   const rootType = snapshot.confidentiality_types.find((type) => type.id === root?.type_id);
   const enabledCount = snapshot.confidentiality_types.filter((type) => type.enabled).length;
   return `<section class="configuration-summary"><div><strong>Workspace default</strong><span>${escapeHtml(rootType?.label ?? "Not configured")}</span></div><span class="badge">${enabledCount} enabled confidentiality ${enabledCount === 1 ? "type" : "types"}</span></section><div class="configuration-defaults-grid">${folderTreeMarkup(state)}${selectedPolicyMarkup(state)}</div>${documentTypesMarkup(snapshot)}`;
+}
+
+function confidentialityTypesMarkup(state) {
+  const snapshot = state.snapshot;
+  const rootTypeId = snapshot.confidentiality_policies.find((policy) => policy.folder === ".")?.type_id;
+  const rows = snapshot.confidentiality_types.length === 0
+    ? '<p class="subtle">No confidentiality types configured.</p>'
+    : snapshot.confidentiality_types.map((type) => `<form class="configuration-type-row confidentiality" data-configuration-form="confidentiality-type"><input type="hidden" name="id" value="${escapeHtml(type.id)}"><label><span class="visually-hidden">Label for ${escapeHtml(type.id)}</span><input name="label" required value="${escapeHtml(type.label)}"></label><code>${escapeHtml(type.id)}</code><label class="configuration-enabled"><input type="checkbox" name="enabled" ${type.enabled ? "checked" : ""}> Enabled</label><label class="configuration-enabled"><input type="checkbox" name="workspaceDefault" ${type.id === rootTypeId ? "checked" : ""}> Workspace default</label><button class="button secondary" type="submit">Save</button></form>`).join("");
+  const firstType = snapshot.confidentiality_types.length === 0;
+  const firstDefault = firstType
+    ? '<input type="hidden" name="workspaceDefault" value="on"><label class="configuration-enabled"><input type="checkbox" checked disabled> Workspace default</label>'
+    : '<label class="configuration-enabled"><input type="checkbox" name="workspaceDefault"> Workspace default</label>';
+  return `<section class="configuration-secondary"><button class="button secondary" type="button" data-configuration-secondary-close>← Back to Document defaults</button><section class="card configuration-card configuration-catalogue"><span class="badge">Secondary configuration</span><h2>Confidentiality types</h2><p>IDs are stable metadata keys. Labels can change; types in use cannot be disabled.</p>${rows}<form class="configuration-type-row confidentiality create" data-configuration-form="confidentiality-type"><label><span class="visually-hidden">New confidentiality type ID</span><input name="id" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="type-id"></label><label><span class="visually-hidden">New confidentiality type label</span><input name="label" required placeholder="Display label"></label><label class="configuration-enabled"><input type="checkbox" name="enabled" checked> Enabled</label>${firstDefault}<button class="button" type="submit">Create confidentiality type</button></form></section></section>`;
+}
+
+function roleSelectMarkup(snapshot, policy, roleName, rootFolder) {
+  const role = policy?.[roleName];
+  const source = snapshot.identity_source;
+  const person = snapshot.eligible_people.find((candidate) => candidate.object_id === role?.object_id);
+  const resolved = Boolean(person && source?.binding_id === role?.binding_id);
+  const options = [];
+  if (!rootFolder) {
+    options.push(`<option value="__inherit" ${role ? "" : "selected"}>Inherit from parent</option>`);
+  } else if (!role) {
+    options.push('<option value="" selected disabled>Choose a person</option>');
+  }
+  if (role && !resolved) {
+    options.push(`<option value="__unchanged" selected>Unresolved assignment — keep unchanged</option>`);
+  }
+  options.push(...snapshot.eligible_people.map((candidate) => `<option value="${escapeHtml(candidate.object_id)}" ${resolved && candidate.object_id === role.object_id ? "selected" : ""}>${escapeHtml(candidate.display_name)} — ${escapeHtml(candidate.email)}</option>`));
+  return `<label>${roleName === "editor" ? "Editor" : "Approver"}<select name="${roleName}" required ${source && snapshot.eligible_people.length > 0 ? "" : "disabled"}>${options.join("")}</select></label>`;
+}
+
+function workflowMarkup(state) {
+  const snapshot = state.snapshot;
+  const source = snapshot.identity_source;
+  const selected = state.selected_folder;
+  const direct = snapshot.workflow_policies.find((policy) => policy.folder === selected);
+  const rootFolder = selected === ".";
+  const sourceSummary = source
+    ? `<div><strong>${escapeHtml(source.group_label)}</strong><span>${escapeHtml(source.tenant_display)} · ${snapshot.eligible_people.length} eligible ${snapshot.eligible_people.length === 1 ? "person" : "people"}</span></div>`
+    : '<div><strong>Not configured</strong><span>Connect one Microsoft Entra group before assigning roles.</span></div>';
+  const editor = roleSelectMarkup(snapshot, direct, "editor", rootFolder);
+  const approver = roleSelectMarkup(snapshot, direct, "approver", rootFolder);
+  const canSave = Boolean(source && snapshot.eligible_people.length > 0);
+  return `<section class="configuration-summary"><div><strong>People source</strong><span>One direct-user Microsoft Entra group</span></div>${sourceSummary}<button class="button secondary" type="button" data-configuration-secondary="identity-source">Manage identity source…</button></section><div class="configuration-defaults-grid">${folderTreeMarkup(state)}<section class="card configuration-card"><span class="badge">Selected folder</span><h3>${escapeHtml(rootFolder ? "Edit root" : selected)}</h3><p>${direct ? "Direct workflow role assignment." : rootFolder ? "Root roles are required after an identity source is connected." : "Editor and approver inherit independently from the nearest parent assignment."}</p><form class="configuration-form" data-configuration-form="workflow-policy">${editor}${approver}<button class="button" type="submit" ${canSave ? "" : "disabled"}>Save workflow roles</button></form>${!rootFolder && direct ? '<form data-configuration-form="remove-workflow-policy"><button class="button secondary" type="submit">Remove folder exception</button></form>' : ""}</section></div>`;
+}
+
+function identitySourceMarkup(state) {
+  const source = state.snapshot.identity_source;
+  const people = state.snapshot.eligible_people;
+  const details = source
+    ? `<dl class="details-grid"><dt>Tenant</dt><dd>${escapeHtml(source.tenant_display)}</dd><dt>Tenant ID</dt><dd>${escapeHtml(source.tenant_id)}</dd><dt>Group</dt><dd>${escapeHtml(source.group_label)}</dd><dt>Group ID</dt><dd>${escapeHtml(source.group_id)}</dd></dl>`
+    : '<p class="status">No Microsoft Entra identity source is configured.</p>';
+  const rows = people.length === 0
+    ? '<p class="subtle">No eligible people are cached.</p>'
+    : `<div class="configuration-people">${people.map((person) => `<div><strong>${escapeHtml(person.display_name)}</strong><span>${escapeHtml(person.email)}</span><code>${escapeHtml(person.object_id)}</code></div>`).join("")}</div>`;
+  return `<section class="configuration-secondary"><button class="button secondary" type="button" data-configuration-secondary-close>← Back to Workflow</button><div class="configuration-grid"><section class="card configuration-card"><span class="badge">Secondary configuration</span><h2>Microsoft Entra identity source</h2>${details}<p>Setup, replacement, and refresh use live Microsoft Graph integration with administrator consent. That integration is not available in this build.</p><button class="button" type="button" disabled title="Microsoft Graph integration is not available in this build">${source ? "Replace identity source…" : "Set up identity source…"}</button></section><section class="card configuration-card"><h3>Eligible people — read only</h3><p>Only direct, enabled user members returned by Microsoft Graph can be assigned.</p>${rows}<button class="button secondary" type="button" disabled title="Microsoft Graph integration is not available in this build">Refresh people</button></section></div></section>`;
+}
+
+function notificationsMarkup(snapshot) {
+  const settings = snapshot.notification_settings;
+  const transport = settings?.transport ?? "mailto";
+  const smtp = settings?.smtp;
+  return `<section class="card configuration-card configuration-notifications"><span class="badge">Workspace notification transport</span><h2>Review and release email</h2><p>Choose one transport for workflow notices. Delivery credentials stay in the OS credential store and are never written to <code>.dms</code>.</p><form class="configuration-form configuration-notification-form" data-configuration-form="notifications"><label>Transport<select name="transport" required><option value="smtp" ${transport === "smtp" ? "selected" : ""}>SMTP relay</option><option value="mailto" ${transport === "mailto" ? "selected" : ""}>Host mail app (mailto)</option></select></label><div class="configuration-grid"><label>SMTP relay host<input name="relayHost" value="${escapeHtml(smtp?.relay_host ?? "")}" placeholder="smtp.example.com"></label><label>SMTP relay port<input name="relayPort" type="number" min="1" max="65535" value="${escapeHtml(smtp?.relay_port ?? 587)}"></label><label>Sender address<input name="sender" type="email" value="${escapeHtml(smtp?.sender ?? "")}" placeholder="dms@example.com"></label></div><p class="subtle">SMTP relay credentials are configured through the OS credential store when live delivery is enabled.</p><button class="button" type="submit">Save notification transport</button></form></section>`;
 }
 
 function unavailableRouteMarkup(route) {
@@ -126,11 +204,19 @@ export function configurationMarkup(state, assistancePolicy) {
     : state.notice
       ? `<p class="status success">${escapeHtml(state.notice)}</p>`
       : "";
-  const body = state.route === "workspace"
-    ? workspaceMarkup(state.snapshot, assistancePolicy)
-    : state.route === "document-defaults"
-      ? documentDefaultsMarkup(state)
-      : unavailableRouteMarkup(state.route);
+  const body = state.secondary === "identity-source"
+    ? identitySourceMarkup(state)
+    : state.secondary === "confidentiality-types"
+      ? confidentialityTypesMarkup(state)
+      : state.route === "workspace"
+        ? workspaceMarkup(state.snapshot, assistancePolicy)
+        : state.route === "document-defaults"
+          ? documentDefaultsMarkup(state)
+          : state.route === "workflow"
+            ? workflowMarkup(state)
+            : state.route === "notifications"
+              ? notificationsMarkup(state.snapshot)
+              : unavailableRouteMarkup(state.route);
   return `<section class="configuration-workspace">${navigation}${status}${body}</section>`;
 }
 
@@ -165,6 +251,44 @@ export function configurationMutationRequest(kind, values, selectedFolder) {
     return {
       command: "remove_confidentiality_policy",
       arguments: { folder: selectedFolder },
+    };
+  }
+  if (kind === "workflow-policy") {
+    return {
+      command: "set_workflow_policy",
+      arguments: {
+        folder: selectedFolder,
+        editor: formValue(values, "editor"),
+        approver: formValue(values, "approver"),
+      },
+    };
+  }
+  if (kind === "remove-workflow-policy") {
+    return {
+      command: "set_workflow_policy",
+      arguments: { folder: selectedFolder, editor: "__inherit", approver: "__inherit" },
+    };
+  }
+  if (kind === "notifications") {
+    return {
+      command: "configure_notifications",
+      arguments: {
+        transport: formValue(values, "transport"),
+        relayHost: formValue(values, "relayHost"),
+        relayPort: Number(formValue(values, "relayPort")),
+        sender: formValue(values, "sender"),
+      },
+    };
+  }
+  if (kind === "confidentiality-type") {
+    return {
+      command: "configure_confidentiality_type",
+      arguments: {
+        id: formValue(values, "id"),
+        label: formValue(values, "label"),
+        enabled: values.has("enabled"),
+        workspaceDefault: values.has("workspaceDefault"),
+      },
     };
   }
   throw new Error(`Unknown configuration mutation: ${kind}`);

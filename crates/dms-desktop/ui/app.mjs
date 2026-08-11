@@ -40,9 +40,11 @@ import {
 } from "./assistance.mjs";
 import {
   applyConfigurationSnapshot,
+  closeConfigurationSecondary,
   configurationMarkup,
   configurationMutationRequest,
   createConfigurationState,
+  openConfigurationSecondary,
   selectConfigurationFolder,
   setConfigurationRoute,
 } from "./configuration.mjs";
@@ -1210,6 +1212,32 @@ async function handleClick(event) {
     return;
   }
 
+  const configurationSecondary = event.target.closest("[data-configuration-secondary]")?.dataset.configurationSecondary;
+  if (configurationSecondary) {
+    try {
+      appState = {
+        ...appState,
+        configuration: openConfigurationSecondary(appState.configuration, configurationSecondary),
+      };
+    } catch (error) {
+      appState = {
+        ...appState,
+        configuration: { ...appState.configuration, notice: "", error: String(error) },
+      };
+    }
+    render(appState);
+    return;
+  }
+
+  if (event.target.closest("[data-configuration-secondary-close]")) {
+    appState = {
+      ...appState,
+      configuration: closeConfigurationSecondary(appState.configuration),
+    };
+    render(appState);
+    return;
+  }
+
   const configurationFolder = event.target.closest("[data-configuration-folder]")?.dataset.configurationFolder;
   if (configurationFolder) {
     try {
@@ -1455,13 +1483,17 @@ async function handleSubmit(event) {
         editRoot: appState.workspace.edit_root,
         ...request.arguments,
       });
-      const notice = configurationMutation === "review-interval"
-        ? "Default review interval saved."
-        : configurationMutation === "document-type"
-          ? "Document type saved."
-          : configurationMutation === "confidentiality-policy"
-            ? "Folder confidentiality policy saved."
-            : "Folder confidentiality policy removed.";
+      const notices = {
+        "review-interval": "Default review interval saved.",
+        "document-type": "Document type saved.",
+        "confidentiality-type": "Confidentiality type saved.",
+        "confidentiality-policy": "Folder confidentiality policy saved.",
+        "remove-confidentiality-policy": "Folder confidentiality policy removed.",
+        "workflow-policy": "Workflow roles saved.",
+        "remove-workflow-policy": "Folder workflow exception removed.",
+        notifications: "Notification transport saved.",
+      };
+      const notice = notices[configurationMutation] ?? "Configuration saved.";
       appState = {
         ...appState,
         workspace: snapshot.workspace,

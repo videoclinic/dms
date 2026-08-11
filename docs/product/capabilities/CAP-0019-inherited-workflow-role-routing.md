@@ -6,7 +6,7 @@
 | Status | not implemented |
 | Identity source | Microsoft Entra workspace group (CAP-0021) |
 | Storage | `<edit-root>/.dms/` routing policies and identity references |
-| Tests | none |
+| Tests | Partial phases 2 and 9f.4 evidence: [core policy tests](../../../crates/dms-core/tests/policies.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [workflow route tests](../../../crates/dms-desktop/ui/configuration.test.mjs); live identity refresh remains phase 9i work |
 
 ## Outcomes (contract — not yet true in runtime)
 

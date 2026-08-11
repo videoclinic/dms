@@ -85,6 +85,14 @@ pub struct WorkflowPolicy {
     pub approver: Option<WorkflowRoleRef>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowPolicyAssignment {
+    pub folder: String,
+    pub editor: Option<WorkflowRoleRef>,
+    pub approver: Option<WorkflowRoleRef>,
+}
+
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct DocumentWorkflowOverrides {
@@ -252,6 +260,24 @@ impl Workspace {
 
     pub fn identity_source(&self) -> Option<&EntraIdentitySource> {
         self.identity_source.as_ref()
+    }
+
+    pub fn eligible_people(&self) -> Vec<&EntraPerson> {
+        self.identity_cache
+            .values()
+            .filter(|person| person.account_enabled)
+            .collect()
+    }
+
+    pub fn workflow_policies(&self) -> Vec<WorkflowPolicyAssignment> {
+        self.workflow_policies
+            .iter()
+            .map(|(folder, policy)| WorkflowPolicyAssignment {
+                folder: folder.clone(),
+                editor: policy.editor,
+                approver: policy.approver,
+            })
+            .collect()
     }
 
     pub fn replace_identity_source(

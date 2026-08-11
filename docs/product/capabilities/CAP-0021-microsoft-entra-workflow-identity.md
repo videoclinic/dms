@@ -6,7 +6,7 @@
 | Status | not implemented |
 | Authority | Microsoft Entra ID group |
 | Storage | `<edit-root>/.dms/` binding and display cache; OS credential store token cache |
-| Tests | none |
+| Tests | Partial phases 2 and 9f.4 evidence: [core policy tests](../../../crates/dms-core/tests/policies.rs), [desktop configuration snapshot](../../../crates/dms-desktop/src/lib.rs), [read-only identity-source surface tests](../../../crates/dms-desktop/ui/configuration.test.mjs); live Graph setup, refresh, and sign-in remain phase 9i work |
 
 ## Outcomes (contract — not yet true in runtime)
 

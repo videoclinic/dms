@@ -18,7 +18,7 @@ macOS.
 | `ui/maintenance.mjs` | Releases, periodic-review, advisory-lock status/configuration, full backup, and confirmed restore panes |
 | `ui/reports.mjs` | Audit-report generation filters, recent-report history, verification state, paging, and host actions |
 | `ui/assistance.mjs` | Workspace policy form plus document-scoped payload preview, consent, handoff, and editable response draft |
-| `ui/configuration.mjs` | Routed Workspace and Document defaults state, markup, folder-policy editor, and catalogue mutation requests |
+| `ui/configuration.mjs` | Routed workspace/default/workflow/notification state, secondary catalogue/identity surfaces, and mutation requests |
 | `ui/print/` | Shipped app-local Markdown print shell, stylesheet, and logo |
 | `ui/*.test.mjs` | Framework-free shell and Library interaction tests |
 | `capabilities/` | Tauri window permissions |
@@ -78,6 +78,13 @@ macOS.
   staleness threshold. It writes a workspace backup archive to a user-supplied
   path without overwrite and restores only after explicit roots, replacement
   policy, lock takeover, and confirmation are supplied to `dms-core`.
+- Configuration remains one session activity across Workspace, Document
+  defaults, Workflow, and Notifications routes. Confidentiality catalogue and
+  identity-source management are in-place secondary surfaces. Folder role
+  pickers use only the core-owned eligible-person cache; the identity surface is
+  read-only until phase 9i supplies live Graph setup, replacement, and refresh.
+  Notification forms persist only non-secret transport settings; credentials
+  never cross the frontend IPC boundary or enter `.dms`.
 - Claude Desktop assistance remains unavailable unless workspace policy,
   effective confidentiality, a verified current release, and a supported local
   installation all allow it. Every handoff previews the exact payload and

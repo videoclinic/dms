@@ -233,12 +233,22 @@ test("configuration route changes update one stable activity", () => {
     label: "Configuration · Document defaults",
     route_state: { route: "document-defaults" },
   };
+  const workflow = {
+    ...workspace,
+    label: "Configuration · Workflow",
+    route_state: { route: "workflow" },
+  };
+  const notifications = {
+    ...workspace,
+    label: "Configuration · Notifications",
+    route_state: { route: "notifications" },
+  };
 
-  const state = openActivity(openActivity(createInitialState(), workspace), defaults);
+  const state = [workspace, defaults, workflow, notifications].reduce(openActivity, createInitialState());
 
   assert.equal(activityKey(workspace), activityKey(defaults));
   assert.equal(state.activities.length, 1);
-  assert.equal(state.activities[0].route_state.route, "document-defaults");
+  assert.equal(state.activities[0].route_state.route, "notifications");
 });
 
 test("closing the current activity keeps the app running with another or no pane", () => {
