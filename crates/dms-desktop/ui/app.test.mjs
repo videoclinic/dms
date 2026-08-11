@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import {
   activityKey,
@@ -89,6 +90,12 @@ test("clean desktop close releases the active workspace lock before destroying t
     arguments_: { editRoot: "/DMS/Edit", owner, confirmed: true },
   }]);
   assert.equal(destroyed, true);
+});
+
+test("main window permits the forced close used after advisory-lock release", () => {
+  const capability = JSON.parse(readFileSync(new URL("../capabilities/default.json", import.meta.url)));
+
+  assert.ok(capability.permissions.includes("core:window:allow-destroy"));
 });
 
 test("opening a workspace acquires its lock and switches only after releasing the prior lock", async () => {
