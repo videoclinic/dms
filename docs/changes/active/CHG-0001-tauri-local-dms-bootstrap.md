@@ -170,10 +170,10 @@ macOS** that:
 | 9i | Canonical notification templates and desktop delivery adapters | done (`39db45b`; local Rust format/test/Clippy and 59 frontend tests pass) | Core emits CAP-0010's literal review-request and minor-publication templates; desktop SMTP and host-mail adapters resolve credentials only from OS storage, preserve explicit `mailto:` confirmation, and pass fake-backed delivery tests and operator setup checks |
 | 9j | Live Entra setup, refresh, and approver sign-in | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 59 frontend tests; Linux launch smoke; release build) | Schema v10 persists each identity-cache refresh time; Configuration previews and explicitly applies administrator-supplied tenant/group bindings through interactive delegated Graph access; OS credential storage holds the delegated-token cache; direct-user filtering, refresh-before-role-assignment, policy rerouting, and approver actor verification pass fake-backed tests |
 | 9k | External lifecycle commands and Office export | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; release desktop build; 60 frontend tests; strict repository links; Markdown table structure; `git diff --check`) | Production submit/review/decision/release commands and Library operator surfaces compose the 9i delivery and 9j Graph adapters with installed Office automation on Windows/macOS; retryable mailto confirmations cover review, decision-outcome, and minor-publication delivery; integration fakes and operator smoke instructions pass |
-| 9l | External operator smokes + CAP promotion | pending | Licensed Office release smoke passes on Windows and macOS; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated Node-runtime action annotations; every implemented CAP links executable evidence, CHG status is done, and the record is archived |
+| 9l | External operator smokes + CAP promotion | pending — start only after the Phase 9l entry pre-checks pass | Licensed Office release smoke passes on Windows and macOS; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated Node-runtime action annotations; every implemented CAP links executable evidence, CHG status is done, and the record is archived |
 
-**Current phase:** 9l — pending external operator evidence after Phase 9k
-checkpoint [`7b7402b`](https://github.com/videoclinic/dms/commit/7b7402b).
+**Current phase:** 9l — pending until every entry pre-check passes on the target
+operator hosts after Phase 9k checkpoint [`7b7402b`](https://github.com/videoclinic/dms/commit/7b7402b).
 
 ## Implementation notes
 
@@ -251,6 +251,29 @@ checkpoint [`7b7402b`](https://github.com/videoclinic/dms/commit/7b7402b).
 5. Use the evidence panel to verify each delivery attempt and retry control. The
    resulting configured Entra, delivery, and licensed-Office observations are
    Phase 9l acceptance evidence; never place tenant credentials in the record.
+
+### Phase 9l entry pre-checks
+
+Run and record these checks before changing Phase 9l from pending to in-progress.
+If any check fails, leave Phase 9l pending; do not promote a CAP or run a partial
+external smoke as phase evidence.
+
+1. A Windows host and a macOS host are each available outside WSL, each has the
+   Phase 9k checkpoint or a later `main` checkout, and each has an activated,
+   licensed Office installation that can export a controlled `.docx` to PDF.
+2. Each host has a disposable DMS workspace with explicit edit and publish roots,
+   a controlled `.docx` draft, and permission to inspect and remove its generated
+   PDF evidence.
+3. An Entra administrator can apply the intended tenant/group binding, and two
+   direct enabled group members can complete delegated sign-in: one requester and
+   one eligible approver. The interactive actor must be able to record a decision.
+4. The chosen notification transport is usable end-to-end: either an approved
+   SMTP relay with its credential already in OS credential storage, or a registered
+   host mail handler that can compose and manually confirm delivery. Use only
+   controlled test recipients.
+5. The operator can retain non-secret evidence for each host: exported PDF path
+   and checksum, workflow-history delivery outcomes, Entra actor verification, and
+   command/test output. Never record tokens, relay credentials, or tenant secrets.
 - Phase 9 was expected to be promotion-only, but the CAP audit found unresolved
   runtime and operator prerequisites across distinct subsystems. Phases 9a–9j
   make those prerequisites independently gated instead of promoting partial
