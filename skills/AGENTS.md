@@ -16,11 +16,13 @@ Own optional, versioned agent playbooks that help contributors apply this reposi
 - Durable policy lives in root `AGENTS.md` and `docs/` contracts. Skills link to those sources instead of restating them.
 - Skills follow the Agent Skills `SKILL.md` format and remain safe to read without a Hermes installation.
 - Do not add credentials, profile-local paths, or agent-private state to repository skills.
+- `software-development/application-records*` skills name `phased-plan-execution` as the only phase-sequencing engine for CHG-driven work; the `P`-prefixed slot, `Execution slot`, and `Depends on` discipline is enforced by that engine, not by this skill tree.
 
 ## Work Guidance
 
 - Add a skill only when it provides a reusable, checkable procedure beyond the repository contracts.
-- Keep repository-specific detail here; keep generic planning mechanics in shared profile skills such as `phased-plan-*`.
+- Keep repository-specific detail here; keep generic planning mechanics in shared profile skills such as `phased-plan-execution` and `phased-plan-overview`. Repository skills decide **what** each phase produces (CAP delta, CHG row update, behaviour-test evidence); the engine decides **when** a phase advances and commits.
+- When a CHG closes, control returns to `phased-plan-overview`; do not let a repository skill route directly to the next CHG or a sibling file.
 - When adding a skill category directory, give it an AGENTS.md if it has its own purpose or workflow; otherwise keep ownership at this level.
 
 ## Verification

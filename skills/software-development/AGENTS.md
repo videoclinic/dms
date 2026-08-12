@@ -15,7 +15,9 @@ Own optional agent workflows for maintaining and migrating this repository's pro
 
 - Both skills defer to `docs/product/README.md` for current-behaviour records and `docs/changes/README.md` for progress records.
 - `application-records-migration` never treats legacy documentation, a plan checkbox, or tracker state as proof of implemented behaviour.
-- Generic phase sequencing remains owned by shared `phased-plan-*` skills; these repository skills decide which records a material change must maintain.
+- `phased-plan-execution` is the only phase-sequencing engine for CHG-driven work. `application-records` and `application-records-migration` decide which records a material change must maintain and what each phase must produce; they do not redefine ordering, gating, scope staging, or commit discipline.
+- The CHG phase table is the engine's status surface. Prose outside it, profile-private plans, and `/tmp` notes do not schedule work; route any parallel scope through `phased-plan-refactoring`.
+- When an active CHG closes, control returns to `phased-plan-overview`; do not jump directly to the next file or CHG.
 - Leaf skill directories contain only `SKILL.md`; no nested AGENTS.md under each skill folder.
 
 ## Work Guidance
@@ -27,7 +29,7 @@ Own optional agent workflows for maintaining and migrating this repository's pro
 
 - Read changed SKILL frontmatter and completion criteria.
 - Validate Markdown links that target paths present in the tree.
-- When `pnpm records:check` or an equivalent records gate exists at the repository root, run it after skill or record changes. No records gate exists yet.
+- When `pnpm records:check` or an equivalent records gate exists at the repository root, run it after skill or record changes inside the `phased-plan-execution` phase gate, not as a post-commit pass. No records gate exists yet.
 
 ## Child DOX Index
 

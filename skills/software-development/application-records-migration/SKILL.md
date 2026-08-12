@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [migration, product, capability, change-records, documentation]
-    related_skills: []
+    related_skills: [application-records, phased-plan-execution]
 ---
 
 # Application Records Migration
@@ -81,6 +81,28 @@ results:
    their existing evidence contract. Link them from a CAP or CHG only where they
    directly prove the current claim or phase gate.
 
+## Phase Sequencing During Migration
+
+Migration is itself a material change: it produces CHGs and updates CAPs. Hand
+the migration CHG to `phased-plan-execution` as its plan path; that skill
+remains the only phase-sequencing engine.
+
+- One conversion phase is `in-progress` at a time and mirrored in `todo`,
+  with a separate commit-checkpoint todo. A migration phase may span multiple
+  legacy plans only when they share a verification gate; otherwise split via
+  `phased-plan-refactoring` and chain the CHGs.
+- Phase evidence must name the inventory rows consumed, the CAPs amended, and
+  the `pnpm records:check` plus targeted-test results. Evidence of "moved the
+  file" is not a phase gate.
+- After the last conversion phase, the integration gate (records check,
+  targeted tests for every migrated CAP, repository workspace gate) runs
+  inside the engine's final phase before the migration CHG is set `done` and
+  archived. The migration CHG is an implementation receipt, not a feature
+  specification. Control then returns to `phased-plan-overview`; do not jump
+  directly to a sibling CHG or unrelated plan.
+- Resuming migration in a fresh session reads the migration CHG phase table,
+  not the latest commit message or the most recently touched file.
+
 ## Procedure
 
 1. **Inventory without mutation.** Produce a table with legacy path, current
@@ -112,19 +134,32 @@ results:
    from a historical plan. Classify first.
 2. **Status laundering.** Never turn a legacy "implemented" cell into a CAP
    without confirming source and executable evidence.
-3. **Duplicate authorities.** Do not retain an old active plan and a new CHG with
-   independent phase statuses. Select one progress authority and archive or
-   clearly retire the other after links are repaired.
-4. **Architecture flattening.** CAPs are concise behaviour indexes, not a place
+4. **Duplicate authorities.** Do not retain an old active plan and a new CHG with
+   independent phase statuses. Select one progress authority — the new CHG,
+   sequenced by `phased-plan-execution` — and archive or clearly retire the
+   other after links are repaired.
+5. **Architecture flattening.** CAPs are concise behaviour indexes, not a place
    to copy whole architecture or runbook chapters.
-5. **History deletion.** Git carries historical rationale. Do not delete dated
+6. **History deletion.** Git carries historical rationale. Do not delete dated
    plans or evidence merely to make the new structure look tidy.
+7. **Migration without a phase engine.** Running conversion steps ad hoc,
+   outside `phased-plan-execution`, leaves the migration CHG out of sync with
+   Git history and breaks session resume. Always route migration phases
+   through the engine and update the CHG row before the commit.
+8. **Inventory drift.** A migration map recorded only in the agent's scratch
+   notes is lost on session restart. Promote the map into a CAP or the
+   migration CHG's accepted evidence so it survives the change.
 
 ## Verification Checklist
 
-- [ ] Every legacy artifact appears once in the migration map.
+- [ ] Every legacy artifact appears once in the migration map, persisted in a
+      CAP or migration CHG accepted evidence (not profile-private notes).
 - [ ] Each implemented CAP is grounded in source and an executable test.
-- [ ] Active CHGs have one mutable status authority and valid dependencies.
-- [ ] Architecture, operational, decision, and evidence documents retain clear owners.
+- [ ] Active CHGs have one mutable status authority and valid dependencies,
+      sequenced by `phased-plan-execution`.
+- [ ] Architecture, operational, decision, and evidence documents retain clear
+      owners.
 - [ ] Inbound Markdown links resolve after moves.
-- [ ] Record checks, targeted tests, and target workspace gates pass.
+- [ ] The migration CHG's last phase ran `pnpm records:check`, targeted tests
+      for every migrated CAP, and the target workspace gate before archive.
+- [ ] No legacy `Pnnnn-*` active plan remains as a parallel progress authority.
