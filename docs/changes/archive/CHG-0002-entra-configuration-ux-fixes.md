@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | CHG-0002 |
-| Status | in-progress |
+| Status | done |
 | External request | Direct operator request: (1) Clicking "Save application configuration" the view is left and started with the Library view. I would expect to see a confirmation that the settings are set. (2) Clicking the "Sign-in page" link/url does not open the standard browser -- my assumption is that Tauri is a "browser" itself the "Sign-in page" is not opned. (3) Tried to use the device id and failed; I'm missing a regeneration of a new device code because the "previous" one is not accepted by Entra ID anymore. (4) Windows Credential Manager rejects a delegated Entra token when its UTF-16 password representation exceeds 2,560 characters. (5) Microsoft Graph returns a group user object ID without a display name. |
 | Affected CAPs | CAP-0021 |
 | Decision records | (none — UX corrections to phase 9k.1, no cross-cutting fork) |
@@ -154,10 +154,10 @@ and continues to own the Office/release evidence gate.
 | 4 | Persist oversized delegated Entra tokens within the OS credential store | done (Windows-native RED reproduced `TooLong("password encoded as UTF-16", 2560)` at 2,048 units; GREEN native ASCII and supplementary-plane write/read/delete passed at 1,024 UTF-16 units; the production credential adapter rejects larger fragments before `keyring`; oversized round-trip, legacy-load, and Unicode-boundary regressions passed; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace` — 43 desktop tests; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs` — 63 passed) | A Windows-native synthetic credential write accepts ASCII and supplementary-plane passwords at the shared 1,024-UTF-16-unit chunk limit and deletes them afterward; the OS credential adapter rejects larger fragments; an oversized delegated token round-trips through chunked credentials; legacy single-entry JSON still loads; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings` |
 | 5 | Request permission to read direct users' profile and enabled state | done (focused RED reproduced the absent `User.Read.All` scope and the false display-name error; GREEN scope and ID-only limited-information regressions passed; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace` — 42 desktop tests and all workspace suites passed; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs` — 63 passed; `DMS_DESKTOP_SMOKE=1 CARGO_INCREMENTAL=0 cargo run -p dms-desktop` — exit 0 with the known Chromium class-unregister cleanup warning; operator guide, ADR-0021, and CAP-0021 updated) | Focused RED/GREEN tests prove `GRAPH_SCOPE` contains `User.Read.All` and an ID-only Graph member response reports the required delegated permission/admin-consent recovery; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; operator setup, ADR-0021, and CAP-0021 name the permission contract |
 | 6 | Allow regenerating an expired or failed device-code challenge | done (focused frontend RED/GREEN tests prove failed Configuration and Library challenges expose same-surface **Sign in again** controls while active challenges do not; focused Rust RED/GREEN proves beginning sign-in discards expired pending challenges; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace` — 44 desktop tests and all workspace suites passed; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs` — 65 passed; `DMS_DESKTOP_SMOKE=1 CARGO_INCREMENTAL=0 cargo run -p dms-desktop` — exit 0 with the known Chromium class-unregister cleanup warning) | Failed Configuration sign-in renders an `identity-source-start` restart form with the transient last group ID; failed Library approver sign-in reuses `data-library-approver-sign-in`; neither appears for an active challenge; no new mutation kind or IPC command exists; issuing a challenge sweeps expired pending entries; full Rust, Clippy, frontend, formatting, and desktop smoke gates pass |
-| 7 | CAP-0021 amendment + DOX closeout | pending | CAP-0021 `Implemented subset` lists four present-tense bullets for in-place save confirmation, host-browser opener, OS credential-store token chunking, and expired-challenge regenerate control; `docs/changes/README.md` still lists both CHG-0001 and CHG-0002 as active; `docs/changes/active/` contains both files; `crates/dms-desktop/AGENTS.md` Configuration contract unchanged (the fix conforms to it); `git diff --check` clean; conventional commit lands with explicit verification evidence |
+| 7 | CAP-0021 amendment + DOX closeout | done (CAP-0021 states the four implemented Entra UX behaviours; the changes index and filesystem list CHG-0001 as active and CHG-0002 as archived; the existing desktop Configuration contract remains accurate, so no AGENTS.md edit is required; `git diff --check` clean) | CAP-0021 states current behaviour and links the active and archived progress records; CHG-0002 is `done` under `docs/changes/archive/`; the changes index matches the filesystem; no records-check script exists; the documentation-only checkpoint lands locally without pushing |
 
-**Current phase:** 7 — CAP-0021 amendment and DOX closeout. Each phase below carries the steps,
-verification gate, and recovery path the executor must follow.
+All phases are complete. Each phase below carries its steps, verification gate,
+and recovery path.
 
 Mark a phase `in-progress` only while it is being executed, `done
 (<evidence>)` only after its gate passes, and `pending` otherwise.
@@ -496,30 +496,28 @@ operator-visible behaviour; the DOX chain stays consistent.
    - An expired or failed Microsoft Entra device-flow challenge surfaces an explicit **Sign in again** control on the same surface that re-issues a fresh challenge with the operator's last group ID; the previous pending challenge is discarded by the Graph adapter.
    ```
 3. Replace the `## Links → ## Progress` line at the bottom of CAP-0021 so it
-   lists both CHG-0001 (phase 9k.1 / 9l context) and CHG-0002 (the
-   operator-visible UX corrections).
-4. Confirm `docs/changes/README.md` `## Active` table still lists exactly two
-   active CHGs (CHG-0001 and CHG-0002). The `## Rules` section permits this:
-   "Exactly one active CHG progress authority per material request" — each
-   CHG is the sole authority for its own request.
+   links active CHG-0001 (phase 9k.1 / 9l context) and archived CHG-0002 (the
+   completed operator-visible UX corrections).
+4. Follow `docs/changes/AGENTS.md` closeout: set this CHG's status to `done`,
+   move it to `docs/changes/archive/`, and update `docs/changes/README.md` so
+   only CHG-0001 remains active and CHG-0002 appears in the archive.
 5. Re-read `crates/dms-desktop/AGENTS.md` lines 95-103 — the fix conforms to
    the Configuration contract; no AGENTS.md edit required.
 6. Run `git diff --check` and any records-link validator if one exists
    (`pnpm records:check` or equivalent — `docs/AGENTS.md:42-44` states none
    exists yet).
-7. Stage the diff and commit with a conventional commit message generated
-   via `github/dev-git-commit-message`: scope `dms-desktop`, summary
-   `fix(configuration): confirm Entra save, open device flow in host browser, persist oversized delegated tokens, regenerate expired challenge`.
-   The commit must include this CHG file, the README update, the CAP-0021
-   amendment, the code changes, and the new tests. It lands locally; pushing
-   requires separate explicit operator authorization.
+7. Stage the CAP-0021 amendment and this CHG closeout update, then commit the
+   documentation-only phase checkpoint with a conventional `docs(entra)`
+   message generated via `github/dev-git-commit-message`. Phases 1–6 already
+   landed as reviewed local checkpoints; do not rewrite or recombine them.
+   Pushing requires separate explicit operator authorization.
 
 **Verification gate:** `git diff --check` clean; every CHG-0002 phase row
 carries `done (<evidence>)`; CAP-0021 `Implemented subset` contains the four
-new bullets; `docs/changes/README.md` still lists exactly two active CHGs and
-zero archived CHGs; commit message follows conventional format; the engine
-(this CHG's eventual executor) confirms the commit lands locally without
-pushing.
+new bullets; `docs/changes/README.md` and the filesystem list exactly CHG-0001
+as active and CHG-0002 as archived; relative record links resolve; the commit
+message follows conventional format; the engine confirms the commit lands
+locally without pushing.
 
 ## Risk call-out
 
@@ -570,6 +568,6 @@ pushing.
 
 ## Links
 
-- Capability contract: [`../product/capabilities/CAP-0021-microsoft-entra-workflow-identity.md`](../product/capabilities/CAP-0021-microsoft-entra-workflow-identity.md)
-- Related CHG: [`CHG-0001`](CHG-0001-tauri-local-dms-bootstrap.md) phase 9k.1 (runtime Entra configuration) and phase 9l (Windows external smokes, pending)
-- AGENTS contract: [`../../crates/dms-desktop/AGENTS.md`](../../crates/dms-desktop/AGENTS.md) Configuration route (lines 95-103)
+- Capability contract: [`../../product/capabilities/CAP-0021-microsoft-entra-workflow-identity.md`](../../product/capabilities/CAP-0021-microsoft-entra-workflow-identity.md)
+- Related CHG: [`CHG-0001`](../active/CHG-0001-tauri-local-dms-bootstrap.md) phase 9k.1 (runtime Entra configuration) and phase 9l (Windows external smokes, pending)
+- AGENTS contract: [`../../../crates/dms-desktop/AGENTS.md`](../../../crates/dms-desktop/AGENTS.md) Configuration route (lines 95-103)

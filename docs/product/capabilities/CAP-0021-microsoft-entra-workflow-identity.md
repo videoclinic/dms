@@ -16,6 +16,23 @@
    Microsoft Entra device authorization, previews the resolved tenant/group and
    eligible direct enabled user members, and applies the binding only after
    explicit confirmation.
+- The **Application Entra configuration** card confirms a successful save with
+  an in-place status notice and remains on the same Configuration secondary
+  surface; saving global Entra configuration never changes the active
+  Configuration activity.
+- The device-flow sign-in page opens in the host's default browser through a
+  Tauri shell opener that accepts only `https:` URLs, plus
+  `http://localhost` and `http://127.0.0.1` for local development; the in-app
+  WebView never navigates to the verification URI.
+- Delegated Microsoft Entra tokens remain exclusively in the OS credential
+  store. When their serialized UTF-16 representation exceeds the Windows
+  Credential Manager per-password limit, DMS writes UTF-16-safe fragments
+  under a versioned manifest and continues to read the previous single-entry
+  cache format.
+- An expired or failed Microsoft Entra device-flow challenge surfaces an
+  explicit **Sign in again** control on the same surface. It reissues a fresh
+  challenge with the operator's transient last group ID, and the Graph adapter
+  discards expired pending challenges.
 2. Replacing a binding retains historical evidence, invalidates stale workflow
    candidates, and leaves existing role references unresolved rather than mapping
    them to the replacement group.
@@ -115,4 +132,7 @@ When implemented, the following must hold:
 - Architecture: [`../../architecture.md`](../../architecture.md)
 - Privacy: [`../../privacy.md`](../../privacy.md)
 - ADR-0021, ADR-0024: [`../../design-decisions.md`](../../design-decisions.md)
-- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
+- Progress: [`CHG-0001`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
+  owns the broader Tauri bootstrap and remaining phase 9l integration evidence;
+  archived [`CHG-0002`](../../changes/archive/CHG-0002-entra-configuration-ux-fixes.md)
+  records the completed Entra configuration UX corrections.
