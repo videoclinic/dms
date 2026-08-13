@@ -12,10 +12,15 @@ use uuid::Uuid;
 
 const KEYRING_SERVICE: &str = "dms-desktop";
 const ENTRA_TOKEN_PURPOSE: &str = "entra-delegated-token";
-const TOKEN_CHUNK_UTF16_LIMIT: usize = 2_048;
+// Windows Credential Manager caps the UTF-16 password blob at 2,560 bytes.
+const TOKEN_CHUNK_UTF16_LIMIT: usize = 1_024;
 const MAX_TOKEN_CHUNKS: usize = 128;
-const GRAPH_SCOPE: &str = "openid profile offline_access User.Read GroupMember.Read.All";
+const GRAPH_SCOPE: &str = "openid profile offline_access User.Read.All GroupMember.Read.All";
 const GRAPH_API: &str = "https://graph.microsoft.com/v1.0";
+const GRAPH_LIMITED_USER_INFORMATION_ERROR: &str =
+    "Microsoft Graph returned limited information for a direct user member; verify delegated User.Read.All tenant-admin consent and the signed-in user's permission to read group members, then sign in again";
+const OVERSIZED_CREDENTIAL_FRAGMENT_ERROR: &str =
+    "cannot save the delegated Microsoft Entra token in the OS credential store: credential fragment exceeds the supported UTF-16 size limit";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct RuntimeEntraConfiguration {
@@ -171,6 +176,7 @@ impl TokenCredentials for OsTokenCredentials {
     }
 
     fn set(&self, account: &str, password: &str) -> Result<(), String> {
+        validate_os_credential_password(password)?;
         credential_entry(account)?.set_password(password).map_err(|error| {
             format!("cannot save the delegated Microsoft Entra token in the OS credential store: {error}")
         })
@@ -213,6 +219,13 @@ fn delegated_token_chunk_account(tenant_id: Uuid, generation: Uuid, index: usize
         "{}/{generation}/{index}",
         delegated_token_account(tenant_id)
     )
+}
+
+fn validate_os_credential_password(password: &str) -> Result<(), String> {
+    if password.encode_utf16().count() > TOKEN_CHUNK_UTF16_LIMIT {
+        return Err(OVERSIZED_CREDENTIAL_FRAGMENT_ERROR.to_owned());
+    }
+    Ok(())
 }
 
 fn load_delegated_token_with_credentials<C: TokenCredentials>(
@@ -684,6 +697,13 @@ where
                 let object_id = Uuid::parse_str(&user.id).map_err(|_| {
                     "Microsoft Graph returned a user without a valid object ID".to_owned()
                 })?;
+                if user.display_name.is_none()
+                    && user.mail.is_none()
+                    && user.user_principal_name.is_none()
+                    && user.account_enabled.is_none()
+                {
+                    return Err(GRAPH_LIMITED_USER_INFORMATION_ERROR.to_owned());
+                }
                 let display_name = user
                     .display_name
                     .filter(|value| !value.trim().is_empty())
@@ -928,7 +948,7 @@ mod tests {
         let token = parse_success::<OAuthTokenResponse>(
             response(
                 200,
-                r#"{"token_type":"Bearer","scope":"openid profile offline_access User.Read GroupMember.Read.All","expires_in":3600,"access_token":"access","id_token":"identity","refresh_token":"refresh"}"#,
+                r#"{"token_type":"Bearer","scope":"openid profile offline_access User.Read.All GroupMember.Read.All","expires_in":3600,"access_token":"access","id_token":"identity","refresh_token":"refresh"}"#,
             ),
             "complete Microsoft Entra sign-in",
         )
@@ -937,6 +957,13 @@ mod tests {
         assert_eq!(token.access_token, "access");
         assert_eq!(token.refresh_token.as_deref(), Some("refresh"));
         assert_eq!(token.expires_in, 3600);
+    }
+
+    #[test]
+    fn delegated_scope_requests_user_directory_read_access() {
+        assert!(GRAPH_SCOPE
+            .split_ascii_whitespace()
+            .any(|scope| scope == "User.Read.All"));
     }
 
     #[test]
@@ -999,6 +1026,38 @@ mod tests {
     }
 
     #[test]
+    fn os_credential_password_rejects_values_above_the_chunk_limit() {
+        let error =
+            validate_os_credential_password(&"x".repeat(TOKEN_CHUNK_UTF16_LIMIT + 1)).unwrap_err();
+
+        assert_eq!(
+            error,
+            "cannot save the delegated Microsoft Entra token in the OS credential store: credential fragment exceeds the supported UTF-16 size limit"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_credential_store_accepts_a_password_at_the_chunk_limit() {
+        for password in [
+            "x".repeat(TOKEN_CHUNK_UTF16_LIMIT),
+            "😀".repeat(TOKEN_CHUNK_UTF16_LIMIT / 2),
+        ] {
+            let entry = Entry::new(
+                KEYRING_SERVICE,
+                &format!("test/{ENTRA_TOKEN_PURPOSE}/{}", Uuid::new_v4()),
+            )
+            .unwrap();
+
+            entry.set_password(&password).unwrap();
+            let stored_password = entry.get_password().unwrap();
+            entry.delete_credential().unwrap();
+
+            assert_eq!(stored_password, password);
+        }
+    }
+
+    #[test]
     fn setup_previews_direct_enabled_users_and_keeps_tokens_out_of_the_preview() {
         let tenant_id = Uuid::new_v4();
         let group_id = Uuid::new_v4();
@@ -1043,6 +1102,32 @@ mod tests {
         assert_eq!(preview.eligible_people.len(), 1);
         assert_eq!(preview.eligible_people[0].object_id, enabled_user);
         assert!(!serde_json::to_string(&preview).unwrap().contains("access"));
+    }
+
+    #[test]
+    fn limited_group_member_info_reports_required_user_permission() {
+        let tenant_id = Uuid::new_v4();
+        let group_id = Uuid::new_v4();
+        let user_id = Uuid::new_v4();
+        let http = FakeHttp::with_responses(vec![response(
+            200,
+            &format!(r#"{{"value":[{{"id":"{user_id}"}}]}}"#),
+        )]);
+        let mut graph = MicrosoftGraphClient::with_parts(
+            "client",
+            tenant_id,
+            http,
+            MemoryTokenStore::default(),
+        );
+
+        let error = graph
+            .direct_user_members_with_token(group_id, "synthetic-access")
+            .unwrap_err();
+
+        assert_eq!(
+            error,
+            "Microsoft Graph returned limited information for a direct user member; verify delegated User.Read.All tenant-admin consent and the signed-in user's permission to read group members, then sign in again"
+        );
     }
 
     #[test]

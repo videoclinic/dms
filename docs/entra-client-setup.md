@@ -17,7 +17,7 @@ service identity, SharePoint, OneDrive, or document-content access.
   existing Microsoft 365 group is acceptable only when its membership exactly
   matches the workflow population.
 - A person who can grant tenant-wide admin consent for Microsoft Graph
-  `GroupMember.Read.All`.
+  `User.Read.All` and `GroupMember.Read.All`.
 - The group's **Object ID**. This is the value entered later as the library
   group ID, not the group display name.
 
@@ -58,16 +58,16 @@ under **Microsoft Graph**:
 
 | Permission | Why DMS needs it | Consent |
 | --- | --- | --- |
-| `User.Read` | Resolve the signed-in approver through Microsoft Graph `/me`. This basic delegated sign-in/profile permission is normally present on a new registration. | User consent is allowed; tenant-wide consent is optional. [4] |
+| `User.Read.All` | Read each direct user member's display name, email address, and `accountEnabled` state, and resolve the signed-in approver through Microsoft Graph `/me`. `User.ReadBasic.All` is insufficient because DMS must exclude disabled accounts. | **Tenant admin consent required.** [4] |
 | `GroupMember.Read.All` | Read the configured group's basic properties and direct membership to preview/refresh eligible people. | **Tenant admin consent required.** [4] |
 
 Then:
 
 1. Select **Add a permission → Microsoft Graph → Delegated permissions**.
-2. Add `GroupMember.Read.All` if it is not already listed.
-3. Confirm that it is **Delegated**, not **Application**.
+2. Add `User.Read.All` and `GroupMember.Read.All` if they are not already listed.
+3. Confirm that both are **Delegated**, not **Application**.
 4. Select **Grant admin consent for _<tenant>_** and confirm.
-5. Refresh the page and verify that `GroupMember.Read.All` shows **Granted for
+5. Refresh the page and verify that both permissions show **Granted for
    _<tenant>_**.[1][4]
 
 DMS requests `openid`, `profile`, and `offline_access` during sign-in in
@@ -76,7 +76,7 @@ extra Microsoft Graph data permissions. `offline_access` permits Entra to issue
 a refresh token; DMS stores its delegated token cache in the operating system's
 credential store.[5]
 
-Do **not** add `Directory.Read.All`, `Group.Read.All`, `User.Read.All`,
+Do **not** add `Directory.Read.All`, `Group.Read.All`, `User.ReadWrite.All`,
 `Sites.*`, `Files.*`, or any write permission for DMS. They are unnecessary for
 the implemented DMS Graph calls. In particular, `Group.Read.All` also permits
 access to group content such as conversations and files, while
@@ -119,9 +119,9 @@ than silently falling back to saved settings.
 
 ## Verification checklist
 
-- **API permissions** lists only delegated `User.Read` and
+- **API permissions** lists only delegated `User.Read.All` and
   `GroupMember.Read.All` for DMS's Microsoft Graph use.
-- `GroupMember.Read.All` displays **Granted for _<tenant>_**.
+- Both Graph permissions display **Granted for _<tenant>_**.
 - **Authentication** has **Allow public client flows** set to **Yes**.
 - DMS can complete device sign-in and preview the intended tenant and group.
 - The preview lists the expected direct, enabled users and excludes nested-group
@@ -133,7 +133,7 @@ than silently falling back to saved settings.
 
 | Symptom | Check |
 | --- | --- |
-| Consent fails or DMS receives HTTP 403 from Graph | Confirm `GroupMember.Read.All` is a **delegated** permission and shows tenant-wide admin consent. The signed-in person must also be authorized to read the group membership; delegated access is constrained by both the app permission and the user's own access. [3][4] |
+| Consent fails, DMS receives HTTP 403, or Graph returns a user ID without profile/account-status fields | Confirm `User.Read.All` and `GroupMember.Read.All` are **delegated** permissions and both show tenant-wide admin consent. Sign in again after consent is granted so the token contains the new scope. The signed-in person must also be authorized to read the group membership; delegated access is constrained by both the app permission and the user's own access. [3][4] |
 | Group preview is empty or misses people | Confirm the group contains direct, enabled user members. DMS intentionally ignores nested groups and non-user directory objects. |
 | DMS says the client or tenant ID is missing or invalid | Recopy the IDs from the app registration **Overview**; use the Application (client) ID and Directory (tenant) ID, not object IDs. Check environment overrides first. |
 | DMS says a token cache is invalid or sign-in is required | Restart the device sign-in flow. DMS does not put tokens in `.dms`; it uses the OS credential store. |

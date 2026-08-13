@@ -4,13 +4,13 @@
 | --- | --- |
 | ID | CHG-0002 |
 | Status | in-progress |
-| External request | Direct operator request: (1) Clicking "Save application configuration" the view is left and started with the Library view. I would expect to see a confirmation that the settings are set. (2) Clicking the "Sign-in page" link/url does not open the standard browser -- my assumption is that Tauri is a "browser" itself the "Sign-in page" is not opned. (3) Tried to use the device id and failed; I'm missing a regeneration of a new device code because the "previous" one is not accepted by Entra ID anymore. (4) Windows Credential Manager rejects a delegated Entra token when its UTF-16 password representation exceeds 2,560 characters. |
+| External request | Direct operator request: (1) Clicking "Save application configuration" the view is left and started with the Library view. I would expect to see a confirmation that the settings are set. (2) Clicking the "Sign-in page" link/url does not open the standard browser -- my assumption is that Tauri is a "browser" itself the "Sign-in page" is not opned. (3) Tried to use the device id and failed; I'm missing a regeneration of a new device code because the "previous" one is not accepted by Entra ID anymore. (4) Windows Credential Manager rejects a delegated Entra token when its UTF-16 password representation exceeds 2,560 characters. (5) Microsoft Graph returns a group user object ID without a display name. |
 | Affected CAPs | CAP-0021 |
 | Decision records | (none — UX corrections to phase 9k.1, no cross-cutting fork) |
 
 ## Goal
 
-Eliminate four operator-facing defects introduced by phase 9k.1 so the Entra
+Eliminate five operator-facing defects introduced by phase 9k.1 so the Entra
 configuration flow matches the operator contract in
 `crates/dms-desktop/AGENTS.md` lines 95-103:
 
@@ -25,7 +25,10 @@ configuration flow matches the operator contract in
    same surface without leaving the workflow.
 4. A valid delegated Microsoft Entra token must persist in the OS credential
    store even when its serialized value exceeds the Windows Credential Manager
-   2,560 UTF-16-character password limit.
+   2,560-byte UTF-16 password-blob limit.
+5. DMS must request permission to read each direct user's profile and enabled
+   state; Graph's limited-information response must report the missing
+   `User.Read.All` consent rather than misdiagnose a missing display name.
 
 ## Current state
 
@@ -45,11 +48,20 @@ configuration flow matches the operator contract in
   the stale challenge (kept in `state.configuration.identity_setup.challenge`)
   with no regeneration affordance — `configuration.mjs:185-189` only renders the
   input form when no challenge is present.
-- `crates/dms-desktop/src/graph.rs:161-167` serializes an entire delegated
-  access token, refresh token, and expiry into one `keyring::Entry` password.
-  Windows Credential Manager rejects that aggregate when its UTF-16 encoding is
-  longer than 2,560 characters. The Entra response is valid; the failure is at
-  the desktop credential-store boundary.
+- `crates/dms-desktop/src/graph.rs:249-300` splits the serialized delegated
+  token, but its 2,048-unit chunk limit is not safe for the installed
+  `windows-native-keyring-store` backend. That backend encodes passwords as
+  UTF-16 and enforces Windows' 2,560-**byte** credential-blob limit, so a
+  2,048-unit ASCII fragment becomes a 4,096-byte blob. The Entra response is
+  valid; the failure is at the desktop credential-store boundary.
+- `crates/dms-desktop/src/graph.rs:673-720` requests display name, mail,
+  principal name, and `accountEnabled` for direct user members, but the delegated
+  scope previously contained only `User.Read` and `GroupMember.Read.All`.
+  Microsoft Graph's directory-object relationship contract therefore returns
+  inaccessible user objects with limited information (ID and object type while
+  profile fields are null). `User.ReadBasic.All` would expose basic profile data
+  but not the `accountEnabled` state DMS uses to exclude disabled accounts;
+  delegated `User.Read.All` with tenant-admin consent is required.
 - No shell-opener dependency is registered. `tauri = "2.11.5"` is in
   `Cargo.toml:25`; Tauri 2 exposes `AppHandle::shell().open(...)` without an
   additional plugin. The closest precedent in this workspace is
@@ -124,9 +136,11 @@ runtime Entra configuration shipped in phase 9k.1 of CHG-0001:
 
 The slice is an Entra configuration UX correction plus required Graph-adapter
 remediations discovered during live device-flow sign-in: accept documented
-optional fields in a successful token response and keep oversized delegated
-tokens in OS-credential-store-only chunk entries. It does not change the runtime
-Entra configuration shape, scopes, privacy posture, or Office export pipeline.
+optional fields in a successful token response, keep oversized delegated tokens
+in OS-credential-store-only chunk entries, and request the delegated
+`User.Read.All` permission required to read direct members' profile and
+`accountEnabled` fields. It does not change the runtime Entra configuration
+shape, privacy posture, or Office export pipeline.
 CHG-0001 phase 9l (Windows external smokes + CAP promotion) remains untouched
 and continues to own the Office/release evidence gate.
 
@@ -137,11 +151,12 @@ and continues to own the Office/release evidence gate.
 | 1 | Fix global-entra save to stay on the configuration screen | done (`node --test crates/dms-desktop/ui/*.test.mjs` — 61 passed; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`) | `node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0 with a new test asserting the success notice equals `"Application Entra configuration saved."` and that the `GlobalEntraConfiguration` payload is never fed to `applyConfigurationSnapshot`; all existing configuration tests still pass |
 | 2 | Accept documented optional fields in a successful device-flow token response | done (`CARGO_INCREMENTAL=0 cargo test -p dms-desktop device_flow_token_response_accepts_documented_optional_fields`; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs` — 61 passed) | `CARGO_INCREMENTAL=0 cargo test -p dms-desktop device_flow_token_response_accepts_documented_optional_fields` exits 0 after a RED run where the current strict response parser rejects `token_type`, `scope`, and `id_token`; `CARGO_INCREMENTAL=0 cargo test --workspace`, `cargo fmt --all -- --check`, and `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings` exit 0 |
 | 3 | Open device-flow verification_uri in the host browser (Configuration + Library) | done (`CARGO_INCREMENTAL=0 cargo test -p dms-desktop external_url_validation_allows_only_browser_safe_urls`; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs` — 63 passed; `DMS_DESKTOP_SMOKE=1 CARGO_INCREMENTAL=0 cargo run -p dms-desktop`) | `cargo fmt --all -- --check`; `cargo test --workspace`; `cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs`; a new Rust unit test for `validate_external_url` covering `https://example.com` → `Ok`, `file:///etc/passwd` → `Err`, `javascript:alert(1)` → `Err`, empty → `Err`, `http://localhost:1234` → `Ok`, `http://example.com` → `Err`; frontend markup emits `data-open-external="https://…"` and never `target="_blank"` for the device-flow URI |
-| 4 | Persist oversized delegated Entra tokens within the OS credential store | done (`CARGO_INCREMENTAL=0 cargo test -p dms-desktop oversized_delegated_token_round_trips_through_chunked_credentials`; `CARGO_INCREMENTAL=0 cargo test -p dms-desktop delegated_token_loads_legacy_single_credential`; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs` — 63 passed; `DMS_DESKTOP_SMOKE=1 CARGO_INCREMENTAL=0 cargo run -p dms-desktop`) | `CARGO_INCREMENTAL=0 cargo test -p dms-desktop oversized_delegated_token_round_trips_through_chunked_credentials` completes a synthetic token whose serialized value exceeds 2,560 UTF-16 code units; every stored password is below the conservative 2,048-code-unit chunk limit; the loaded token equals the input; legacy single-entry JSON still loads; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings` |
-| 5 | Allow regenerating an expired or failed device-code challenge | pending | `cargo test --workspace`; `node --test crates/dms-desktop/ui/*.test.mjs`; `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets -- -D warnings`; frontend test asserts that `state.configuration.identity_setup.challenge` plus a non-empty `state.configuration.error` renders a `data-configuration-form="identity-source-restart"` button (and is absent on a fresh challenge); Library test asserts the matching `data-library-approver-sign-in-restart` control; the restart path re-uses the existing `begin_identity_source_sign_in` / `begin_approver_sign_in` commands — no new IPC, no new Graph state |
-| 6 | CAP-0021 amendment + DOX closeout | pending | CAP-0021 `Implemented subset` lists four present-tense bullets for in-place save confirmation, host-browser opener, OS credential-store token chunking, and expired-challenge regenerate control; `docs/changes/README.md` still lists both CHG-0001 and CHG-0002 as active; `docs/changes/active/` contains both files; `crates/dms-desktop/AGENTS.md` Configuration contract unchanged (the fix conforms to it); `git diff --check` clean; conventional commit lands with explicit verification evidence |
+| 4 | Persist oversized delegated Entra tokens within the OS credential store | done (Windows-native RED reproduced `TooLong("password encoded as UTF-16", 2560)` at 2,048 units; GREEN native ASCII and supplementary-plane write/read/delete passed at 1,024 UTF-16 units; the production credential adapter rejects larger fragments before `keyring`; oversized round-trip, legacy-load, and Unicode-boundary regressions passed; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace` — 43 desktop tests; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs` — 63 passed) | A Windows-native synthetic credential write accepts ASCII and supplementary-plane passwords at the shared 1,024-UTF-16-unit chunk limit and deletes them afterward; the OS credential adapter rejects larger fragments; an oversized delegated token round-trips through chunked credentials; legacy single-entry JSON still loads; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings` |
+| 5 | Request permission to read direct users' profile and enabled state | done (focused RED reproduced the absent `User.Read.All` scope and the false display-name error; GREEN scope and ID-only limited-information regressions passed; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace` — 42 desktop tests and all workspace suites passed; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs` — 63 passed; `DMS_DESKTOP_SMOKE=1 CARGO_INCREMENTAL=0 cargo run -p dms-desktop` — exit 0 with the known Chromium class-unregister cleanup warning; operator guide, ADR-0021, and CAP-0021 updated) | Focused RED/GREEN tests prove `GRAPH_SCOPE` contains `User.Read.All` and an ID-only Graph member response reports the required delegated permission/admin-consent recovery; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; operator setup, ADR-0021, and CAP-0021 name the permission contract |
+| 6 | Allow regenerating an expired or failed device-code challenge | pending | `cargo test --workspace`; `node --test crates/dms-desktop/ui/*.test.mjs`; `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets -- -D warnings`; frontend test asserts that `state.configuration.identity_setup.challenge` plus a non-empty `state.configuration.error` renders a `data-configuration-form="identity-source-restart"` button (and is absent on a fresh challenge); Library test asserts the matching `data-library-approver-sign-in-restart` control; the restart path re-uses the existing `begin_identity_source_sign_in` / `begin_approver_sign_in` commands — no new IPC, no new Graph state |
+| 7 | CAP-0021 amendment + DOX closeout | pending | CAP-0021 `Implemented subset` lists four present-tense bullets for in-place save confirmation, host-browser opener, OS credential-store token chunking, and expired-challenge regenerate control; `docs/changes/README.md` still lists both CHG-0001 and CHG-0002 as active; `docs/changes/active/` contains both files; `crates/dms-desktop/AGENTS.md` Configuration contract unchanged (the fix conforms to it); `git diff --check` clean; conventional commit lands with explicit verification evidence |
 
-**Current phase:** 5 — expired or failed device-code challenge regeneration. Each phase below carries the steps,
+**Current phase:** 6 — expired/failed device-code challenge regeneration. Each phase below carries the steps,
 verification gate, and recovery path the executor must follow.
 
 Mark a phase `in-progress` only while it is being executed, `done
@@ -311,9 +326,10 @@ or a local file.
    `OsTokenStore` behind a small private credential-entry interface so unit tests
    can use an in-memory map and production alone calls `keyring::Entry`.
 2. Serialize `DelegatedToken` exactly as today, but split the resulting string
-   only at Unicode scalar boundaries. Each fragment must contain at most 2,048
-   UTF-16 code units, leaving operational margin below Windows' 2,560-unit
-   limit. Do not split by byte index or Rust `String` length.
+   only at Unicode scalar boundaries. Each fragment must contain at most 1,024
+   UTF-16 code units. Windows Credential Manager limits the UTF-16 password
+   blob to 2,560 bytes, not 2,560 code units; 1,024 units leaves margin below
+   that byte limit. Do not split by byte index or Rust `String` length.
 3. Store fragments under a UUID generation beneath the existing tenant/purpose
    namespace. Write all new fragments first, then replace the primary entry with
    a versioned manifest containing only the generation and fragment count. This
@@ -329,24 +345,68 @@ or a local file.
    cleanup for their own prior generation.
 6. Add `oversized_delegated_token_round_trips_through_chunked_credentials` in
    `graph.rs` with a synthetic oversized token. Assert the serialized input
-   exceeds 2,560 UTF-16 units, every test-backend password is at most 2,048
+   exceeds 2,560 UTF-16 units, every test-backend password is at most 1,024
    units, and the loaded value equals the input. Add a separate legacy
-   single-entry load regression.
-7. Run the focused test RED before production implementation, then run it GREEN
+   single-entry load regression. Add a Windows-only native credential-store test
+   that writes and reads a synthetic password at the shared fragment limit, then
+   deletes the temporary entry. It must exercise `keyring::Entry`, not the
+   in-memory credential backend.
+7. Run the native focused test RED before reducing the limit, then run it GREEN
    and the phase gate.
 
 **Verification gate:** `CARGO_INCREMENTAL=0 cargo test -p dms-desktop
-oversized_delegated_token_round_trips_through_chunked_credentials` and the
-legacy-load regression pass; `cargo fmt --all -- --check`,
+oversized_delegated_token_round_trips_through_chunked_credentials`, the
+legacy-load regression, and the Windows-native fragment write regression pass;
+`cargo fmt --all -- --check`,
 `CARGO_INCREMENTAL=0 cargo test --workspace`, and
 `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`
 all exit 0.
 
-**Recovery path:** If a platform rejects a 2,048 UTF-16-unit fragment, reduce
-the shared fragment limit and re-run the synthetic regression. Do not bypass the
-OS credential store with filesystem, registry, `.dms`, or frontend persistence.
+**Recovery path:** If a Windows-native write rejects a 1,024-UTF-16-unit
+fragment, reduce the shared fragment limit and re-run the native and synthetic
+regressions. Do not bypass the OS credential store with filesystem, registry,
+`.dms`, or frontend persistence.
 
-### Phase 5 — Allow regenerating an expired or failed device-code challenge
+### Phase 5 — Request permission to read direct users' profile and enabled state
+
+**Goal:** Device authorization and token refresh request delegated
+`User.Read.All`, which is required for the direct-member query's profile and
+`accountEnabled` fields. A token lacking this permission produces an actionable
+admin-consent/sign-in-again error when Graph returns an ID-only limited user
+object; DMS does not fabricate a name or treat unknown account state as enabled.
+
+**Steps:**
+
+1. Add a focused test proving `GRAPH_SCOPE` contains `User.Read.All`.
+2. Add a fake-backed Graph regression whose direct-user page contains only an
+   object ID and assert the result names delegated `User.Read.All`, tenant-admin
+   consent, and a fresh sign-in as the recovery path.
+3. Run both tests RED against the prior scope and display-name validation.
+4. Replace delegated `User.Read` with `User.Read.All` in `GRAPH_SCOPE`; retain
+   `GroupMember.Read.All` and the OpenID/offline scopes.
+5. Detect only the all-null limited-information shape before field-specific
+   validation. Report both permission checks documented by Microsoft Graph:
+   delegated `User.Read.All` tenant-admin consent and the signed-in user's
+   authorization to read group members. Preserve the existing display-name,
+   email, and account-status errors for partially populated malformed objects.
+6. Update `docs/entra-client-setup.md`, ADR-0021 in
+   `docs/design-decisions.md`, and CAP-0021 with the two delegated Graph
+   permissions and why `User.ReadBasic.All` is insufficient.
+
+**Verification gate:** focused scope and limited-information regressions pass;
+`cargo fmt --all -- --check`, `CARGO_INCREMENTAL=0 cargo test --workspace`, and
+`CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`
+exit 0; the operator guide, ADR-0021, and CAP-0021 consistently require
+delegated `User.Read.All` and `GroupMember.Read.All` with tenant-admin consent.
+The limited-information error also names the signed-in user's group-member-read
+authorization check; it does not claim that app consent is the only cause.
+
+**Recovery path:** if Microsoft documents a narrower delegated permission that
+exposes `accountEnabled` for other group members, replace `User.Read.All` with
+that permission and rerun the focused tests. Do not weaken the enabled-account
+eligibility contract or substitute object IDs for human identity fields.
+
+### Phase 6 — Allow regenerating an expired or failed device-code challenge
 
 **Goal:** When `state.configuration.identity_setup.challenge` exists and
 either has expired server-side or was just failed by
@@ -424,7 +484,7 @@ inside `begin_delegated_sign_in` (`graph.rs:292-322`) in the same change —
 do not split into a separate CHG phase, and document the sweep in the CHG
 row's evidence line.
 
-### Phase 6 — CAP-0021 amendment + DOX closeout
+### Phase 7 — CAP-0021 amendment + DOX closeout
 
 **Goal:** The active CHG records this slice; CAP-0021 reflects the new
 operator-visible behaviour; the DOX chain stays consistent.
@@ -460,13 +520,15 @@ operator-visible behaviour; the DOX chain stays consistent.
    via `github/dev-git-commit-message`: scope `dms-desktop`, summary
    `fix(configuration): confirm Entra save, open device flow in host browser, persist oversized delegated tokens, regenerate expired challenge`.
    The commit must include this CHG file, the README update, the CAP-0021
-   amendment, the code changes, and the new tests.
+   amendment, the code changes, and the new tests. It lands locally; pushing
+   requires separate explicit operator authorization.
 
 **Verification gate:** `git diff --check` clean; every CHG-0002 phase row
 carries `done (<evidence>)`; CAP-0021 `Implemented subset` contains the four
 new bullets; `docs/changes/README.md` still lists exactly two active CHGs and
 zero archived CHGs; commit message follows conventional format; the engine
-(this CHG's eventual executor) confirms the commit lands and is pushed.
+(this CHG's eventual executor) confirms the commit lands locally without
+pushing.
 
 ## Risk call-out
 

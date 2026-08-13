@@ -66,7 +66,9 @@ When implemented, the following must hold:
    directory object types and nested groups as ineligible. The people picker is
    read-only: it can refresh, search, and select an eligible person for a DMS
    routing policy, but cannot add, edit, disable, or delete a user or group
-   membership.
+   membership. The delegated app registration has tenant-admin consent for
+   `GroupMember.Read.All` and `User.Read.All`; the latter is required to read
+   profile fields and `accountEnabled`, so `User.ReadBasic.All` is insufficient.
 6. The application refreshes membership before a person is assigned to a role,
    before a review request is submitted, and before a review decision is
    recorded. It stores a person’s immutable Entra object ID in a role policy and
