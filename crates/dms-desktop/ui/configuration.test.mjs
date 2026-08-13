@@ -175,6 +175,37 @@ test("identity-source challenge opens the host browser without WebView navigatio
   assert.doesNotMatch(markup, /target="_blank"/);
 });
 
+test("failed identity-source challenge offers a same-surface restart with the last group", () => {
+  let state = applyConfigurationSnapshot(createConfigurationState(), snapshot);
+  state = openConfigurationSecondary(state, "identity-source");
+  state = {
+    ...state,
+    error: "Microsoft Entra sign-in challenge is no longer available; start again",
+    identity_setup: {
+      challenge: {
+        challenge_id: "challenge-1",
+        message: "Use the supplied code to sign in.",
+        user_code: "ABCD-EFGH",
+        verification_uri: "https://microsoft.com/devicelogin",
+      },
+      last_group_id: "00000000-0000-0000-0000-000000000000",
+    },
+  };
+
+  const failedMarkup = configurationMarkup(state, assistancePolicy);
+  assert.match(failedMarkup, /Previous sign-in failed/);
+  assert.match(failedMarkup, /data-configuration-form="identity-source-start"/);
+  assert.match(failedMarkup, /name="groupId" value="00000000-0000-0000-0000-000000000000"/);
+  assert.match(failedMarkup, /Sign in again/);
+  assert.doesNotMatch(failedMarkup, /I have signed in — preview group/);
+  assert.doesNotMatch(failedMarkup, /data-configuration-form="identity-source-complete"/);
+  assert.doesNotMatch(failedMarkup, /ABCD-EFGH/);
+
+  const activeMarkup = configurationMarkup({ ...state, error: "" }, assistancePolicy);
+  assert.doesNotMatch(activeMarkup, /Sign in again/);
+  assert.doesNotMatch(activeMarkup, /Previous sign-in failed/);
+});
+
 test("notifications route submits a write-only SMTP app password without rendering it", () => {
   let state = applyConfigurationSnapshot(createConfigurationState(), snapshot);
   state = setConfigurationRoute(state, "notifications");

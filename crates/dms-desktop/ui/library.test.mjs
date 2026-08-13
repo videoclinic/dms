@@ -323,6 +323,60 @@ test("approver sign-in challenge opens the host browser without WebView navigati
   assert.doesNotMatch(markup, /target="_blank"/);
 });
 
+test("failed approver challenge offers a same-surface restart", () => {
+  const registered = file("Handbook.md", { in_library: { document_id: "doc-1" } }, {
+    id: "doc-1",
+    lifecycle: "draft",
+    control: { title: "Employee handbook", document_number: null },
+  });
+  const library = {
+    ...createLibraryState(),
+    tree: snapshot("Policies").tree,
+    folder: snapshot("Policies", [registered]).folder,
+    selection: ["Policies/Handbook.md"],
+    detail_error: "Microsoft Entra sign-in challenge is no longer available; start again",
+    approver_sign_in: {
+      challenge: {
+        challenge_id: "challenge-1",
+        user_code: "ABCD-EFGH",
+        verification_uri: "https://microsoft.com/devicelogin",
+      },
+    },
+    detail: {
+      document_id: "doc-1",
+      lifecycle: "draft",
+      control: { title: "Employee handbook", document_number: null },
+      active_candidate: { status: "in_review", approval_required: true },
+      eligible_people: [],
+      lifecycle_actions: {},
+      workflow_events: [],
+      workflow_verification: "valid",
+      document_types: [],
+      confidentiality_types: [],
+    },
+  };
+
+  const failedMarkup = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies" } },
+    library,
+  );
+  assert.match(failedMarkup, /Previous sign-in failed/);
+  assert.match(failedMarkup, /data-library-approver-sign-in/);
+  assert.match(failedMarkup, /Sign in again/);
+  assert.doesNotMatch(failedMarkup, /Complete approver sign-in/);
+  assert.doesNotMatch(failedMarkup, /data-library-approver-sign-in-complete/);
+  assert.doesNotMatch(failedMarkup, /ABCD-EFGH/);
+
+  const activeMarkup = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies" } },
+    { ...library, detail_error: "" },
+  );
+  assert.doesNotMatch(activeMarkup, /Sign in again/);
+  assert.doesNotMatch(activeMarkup, /Previous sign-in failed/);
+});
+
 test("document control and confidentiality forms map to narrow document commands", () => {
   const detail = { document_id: "doc-1" };
   const control = new FormData();

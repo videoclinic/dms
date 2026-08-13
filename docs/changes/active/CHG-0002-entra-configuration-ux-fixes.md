@@ -153,10 +153,10 @@ and continues to own the Office/release evidence gate.
 | 3 | Open device-flow verification_uri in the host browser (Configuration + Library) | done (`CARGO_INCREMENTAL=0 cargo test -p dms-desktop external_url_validation_allows_only_browser_safe_urls`; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs` — 63 passed; `DMS_DESKTOP_SMOKE=1 CARGO_INCREMENTAL=0 cargo run -p dms-desktop`) | `cargo fmt --all -- --check`; `cargo test --workspace`; `cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs`; a new Rust unit test for `validate_external_url` covering `https://example.com` → `Ok`, `file:///etc/passwd` → `Err`, `javascript:alert(1)` → `Err`, empty → `Err`, `http://localhost:1234` → `Ok`, `http://example.com` → `Err`; frontend markup emits `data-open-external="https://…"` and never `target="_blank"` for the device-flow URI |
 | 4 | Persist oversized delegated Entra tokens within the OS credential store | done (Windows-native RED reproduced `TooLong("password encoded as UTF-16", 2560)` at 2,048 units; GREEN native ASCII and supplementary-plane write/read/delete passed at 1,024 UTF-16 units; the production credential adapter rejects larger fragments before `keyring`; oversized round-trip, legacy-load, and Unicode-boundary regressions passed; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace` — 43 desktop tests; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs` — 63 passed) | A Windows-native synthetic credential write accepts ASCII and supplementary-plane passwords at the shared 1,024-UTF-16-unit chunk limit and deletes them afterward; the OS credential adapter rejects larger fragments; an oversized delegated token round-trips through chunked credentials; legacy single-entry JSON still loads; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings` |
 | 5 | Request permission to read direct users' profile and enabled state | done (focused RED reproduced the absent `User.Read.All` scope and the false display-name error; GREEN scope and ID-only limited-information regressions passed; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace` — 42 desktop tests and all workspace suites passed; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs` — 63 passed; `DMS_DESKTOP_SMOKE=1 CARGO_INCREMENTAL=0 cargo run -p dms-desktop` — exit 0 with the known Chromium class-unregister cleanup warning; operator guide, ADR-0021, and CAP-0021 updated) | Focused RED/GREEN tests prove `GRAPH_SCOPE` contains `User.Read.All` and an ID-only Graph member response reports the required delegated permission/admin-consent recovery; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; operator setup, ADR-0021, and CAP-0021 name the permission contract |
-| 6 | Allow regenerating an expired or failed device-code challenge | pending | `cargo test --workspace`; `node --test crates/dms-desktop/ui/*.test.mjs`; `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets -- -D warnings`; frontend test asserts that `state.configuration.identity_setup.challenge` plus a non-empty `state.configuration.error` renders a `data-configuration-form="identity-source-restart"` button (and is absent on a fresh challenge); Library test asserts the matching `data-library-approver-sign-in-restart` control; the restart path re-uses the existing `begin_identity_source_sign_in` / `begin_approver_sign_in` commands — no new IPC, no new Graph state |
+| 6 | Allow regenerating an expired or failed device-code challenge | done (focused frontend RED/GREEN tests prove failed Configuration and Library challenges expose same-surface **Sign in again** controls while active challenges do not; focused Rust RED/GREEN proves beginning sign-in discards expired pending challenges; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace` — 44 desktop tests and all workspace suites passed; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs` — 65 passed; `DMS_DESKTOP_SMOKE=1 CARGO_INCREMENTAL=0 cargo run -p dms-desktop` — exit 0 with the known Chromium class-unregister cleanup warning) | Failed Configuration sign-in renders an `identity-source-start` restart form with the transient last group ID; failed Library approver sign-in reuses `data-library-approver-sign-in`; neither appears for an active challenge; no new mutation kind or IPC command exists; issuing a challenge sweeps expired pending entries; full Rust, Clippy, frontend, formatting, and desktop smoke gates pass |
 | 7 | CAP-0021 amendment + DOX closeout | pending | CAP-0021 `Implemented subset` lists four present-tense bullets for in-place save confirmation, host-browser opener, OS credential-store token chunking, and expired-challenge regenerate control; `docs/changes/README.md` still lists both CHG-0001 and CHG-0002 as active; `docs/changes/active/` contains both files; `crates/dms-desktop/AGENTS.md` Configuration contract unchanged (the fix conforms to it); `git diff --check` clean; conventional commit lands with explicit verification evidence |
 
-**Current phase:** 6 — expired/failed device-code challenge regeneration. Each phase below carries the steps,
+**Current phase:** 7 — CAP-0021 amendment and DOX closeout. Each phase below carries the steps,
 verification gate, and recovery path the executor must follow.
 
 Mark a phase `in-progress` only while it is being executed, `done
@@ -416,37 +416,28 @@ The same affordance exists for the Library approver sign-in path.
 
 **Steps:**
 
-1. In `crates/dms-desktop/src/graph.rs:278-283`, no code change required:
-   re-calling `begin_identity_source_setup` already allocates a new
-   `challenge_id` (line 304) and inserts a fresh `PendingDeviceLogin` into the
-   `pending` map. The old expired entry simply rots and can be GC'd by the
-   existing pending-cleanup logic (verify by re-reading `graph.rs:380-450`;
-   if no cleanup exists, add a one-line comment to the CHG row and skip the
-   cleanup in this slice — the `pending` map is small and bounded by sign-in
-   attempts).
+1. Re-calling `begin_identity_source_setup` already allocates a new
+   `challenge_id`, but the Graph adapter has no pending cleanup. Before issuing
+   a replacement challenge, retain only pending entries whose expiry is still
+   in the future. Add a focused Rust regression proving an expired entry is
+   discarded while the newly issued challenge remains pending.
 2. In `crates/dms-desktop/ui/configuration.mjs`:
    - capture the `groupId` from the most recent `identity-source-start`
      submission into `state.configuration.identity_setup.last_group_id` (a
      transient field, not persisted — it is the operator's last intent),
-   - when `setup.challenge` is present, render an additional
-     `data-configuration-form="identity-source-restart"` form below the
-     existing Complete form:
+   - when `setup.challenge` and `state.error` are present, render an additional
+     `data-configuration-form="identity-source-start"` form above the existing
+     Complete form, with the transient `last_group_id` in a hidden field:
      `<button class="button secondary" type="submit">Sign in again</button>`,
-   - when `setup.challenge` is present **and** `state.error` is non-empty,
-     render the restart form **prominently** (above the stale Complete form)
-     and prefix the existing `Complete …` heading with
+   - prefix the existing `Complete …` heading with
      `"Previous sign-in failed — "`.
-3. In `crates/dms-desktop/ui/app.mjs:handleSubmit`, add a
-   `configurationMutation === "identity-source-restart"` branch that:
-   - clears `state.configuration.error`,
-   - reads `state.configuration.identity_setup.last_group_id`,
-   - re-invokes `begin_identity_source_sign_in` with that `groupId`,
-   - replaces `state.configuration.identity_setup` with `{ challenge: result }`,
-   - re-renders.
-4. In `crates/dms-desktop/ui/configuration.mjs:configurationMutationRequest`,
-   add the `"identity-source-restart"` branch that maps to
-   `{ command: "begin_identity_source_sign_in", arguments: { groupId: state.configuration.identity_setup.last_group_id } }`.
-   (This is the only new mutation kind in this phase.)
+3. In `crates/dms-desktop/ui/app.mjs:handleSubmit`, keep using the existing
+   `identity-source-start` branch for both initial and replacement challenges.
+   Capture the submitted group ID into the replacement `identity_setup` as
+   `{ challenge: result, last_group_id: request.arguments.groupId }`; a
+   successful replacement clears the existing configuration error.
+4. Do not add a new configuration mutation kind or IPC command. The restart
+   form maps through the existing `identity-source-start` request.
 5. Mirror the same affordance for the Library approver sign-in path
    (`crates/dms-desktop/ui/app.mjs:1106-1145` and
    `crates/dms-desktop/ui/library.mjs:447-451`):
@@ -574,9 +565,6 @@ pushing.
   dependency surface unchanged; revisit only if a future slice needs richer
   open-with semantics.
 - Persisting `last_group_id` in `<edit-root>/.dms` or `global-settings.json`.
-- A pending-challenge cleanup sweep in
-  `crates/dms-desktop/src/graph.rs`. Recorded as a recovery path in Phase 3
-  only — not part of the operator-visible contract change.
 - Re-issuing any CHG-0001 phase's evidence line. This slice does not
   retroactively re-prove 9j / 9k / 9k.1 — only its own phases.
 

@@ -461,6 +461,8 @@ where
         tenant_id: Uuid,
         group_id: Option<Uuid>,
     ) -> Result<DeviceLoginChallenge, String> {
+        let now = Instant::now();
+        self.pending.retain(|_, pending| pending.expires_at > now);
         let client_id = self.client_id()?.to_owned();
         let response = self.http.post_form(
             &oauth_endpoint(tenant_id, "devicecode"),
@@ -957,6 +959,39 @@ mod tests {
         assert_eq!(token.access_token, "access");
         assert_eq!(token.refresh_token.as_deref(), Some("refresh"));
         assert_eq!(token.expires_in, 3600);
+    }
+
+    #[test]
+    fn beginning_sign_in_discards_expired_pending_challenges() {
+        let tenant_id = Uuid::new_v4();
+        let group_id = Uuid::new_v4();
+        let expired_id = Uuid::new_v4();
+        let http = FakeHttp::with_responses(vec![response(
+            200,
+            r#"{"device_code":"new-device","user_code":"ABCD-EFGH","verification_uri":"https://microsoft.com/devicelogin","expires_in":900,"interval":1,"message":"Sign in"}"#,
+        )]);
+        let mut graph = MicrosoftGraphClient::with_parts(
+            "client",
+            tenant_id,
+            http,
+            MemoryTokenStore::default(),
+        );
+        graph.pending.insert(
+            expired_id,
+            PendingDeviceLogin {
+                tenant_id,
+                group_id: Some(group_id),
+                device_code: "expired-device".to_owned(),
+                expires_at: Instant::now() - Duration::from_secs(1),
+                poll_interval: Duration::from_secs(1),
+            },
+        );
+
+        let fresh = graph.begin_identity_source_setup(group_id).unwrap();
+
+        assert!(!graph.pending.contains_key(&expired_id));
+        assert!(graph.pending.contains_key(&fresh.challenge_id));
+        assert_eq!(graph.pending.len(), 1);
     }
 
     #[test]

@@ -1110,7 +1110,7 @@ async function handleLibraryClick(event) {
       });
       appState = {
         ...appState,
-        library: { ...appState.library, approver_sign_in: { challenge } },
+        library: { ...appState.library, approver_sign_in: { challenge }, detail_error: "" },
         error: "",
       };
     } catch (error) {
@@ -1643,7 +1643,12 @@ async function handleSubmit(event) {
       if (configurationMutation === "identity-source-start") {
         appState = {
           ...appState,
-          configuration: { ...appState.configuration, identity_setup: { challenge: result }, notice: "", error: "" },
+          configuration: {
+            ...appState.configuration,
+            identity_setup: { challenge: result, last_group_id: request.arguments.groupId },
+            notice: "",
+            error: "",
+          },
         };
         render(appState);
         return;
