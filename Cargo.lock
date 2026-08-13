@@ -1095,6 +1095,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tempfile",
  "ureq",
+ "url",
  "uuid",
  "webview2-com",
  "windows",

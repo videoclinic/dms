@@ -154,6 +154,27 @@ test("workflow route configures folder roles and opens identity source in place"
   assert.equal(closeConfigurationSecondary(state).secondary, null);
 });
 
+test("identity-source challenge opens the host browser without WebView navigation", () => {
+  let state = applyConfigurationSnapshot(createConfigurationState(), snapshot);
+  state = openConfigurationSecondary(state, "identity-source");
+  state = {
+    ...state,
+    identity_setup: {
+      challenge: {
+        challenge_id: "challenge-1",
+        message: "Use the supplied code to sign in.",
+        user_code: "ABCD-EFGH",
+        verification_uri: "https://microsoft.com/devicelogin",
+      },
+    },
+  };
+
+  const markup = configurationMarkup(state, assistancePolicy);
+  assert.match(markup, /data-open-external="https:\/\/microsoft\.com\/devicelogin"/);
+  assert.match(markup, /Open sign-in page/);
+  assert.doesNotMatch(markup, /target="_blank"/);
+});
+
 test("notifications route submits a write-only SMTP app password without rendering it", () => {
   let state = applyConfigurationSnapshot(createConfigurationState(), snapshot);
   state = setConfigurationRoute(state, "notifications");

@@ -445,7 +445,7 @@ function externalLifecycleMarkup(library, detail) {
     .map((person) => `<option value="${escapeHtml(person.object_id)}">${escapeHtml(person.display_name)} · ${escapeHtml(person.email)}</option>`)
     .join("");
   const signIn = library.approver_sign_in?.challenge
-    ? `<p class="source-path">Complete Microsoft sign-in at ${escapeHtml(library.approver_sign_in.challenge.verification_uri)} with code ${escapeHtml(library.approver_sign_in.challenge.user_code)}.</p><button class="button secondary" type="button" data-library-approver-sign-in-complete="${escapeHtml(library.approver_sign_in.challenge.challenge_id)}">Complete approver sign-in</button>`
+    ? `<p class="source-path">Complete Microsoft sign-in with code ${escapeHtml(library.approver_sign_in.challenge.user_code)}.</p><button class="button secondary" type="button" data-open-external="${escapeHtml(library.approver_sign_in.challenge.verification_uri)}">Open sign-in page</button><button class="button secondary" type="button" data-library-approver-sign-in-complete="${escapeHtml(library.approver_sign_in.challenge.challenge_id)}">Complete approver sign-in</button>`
     : library.approver_sign_in?.actor
       ? `<p class="source-path">Approver sign-in ready for ${escapeHtml(library.approver_sign_in.actor.display_name)}.</p>`
       : '<button class="button secondary" type="button" data-library-approver-sign-in>Sign in as approver</button>';

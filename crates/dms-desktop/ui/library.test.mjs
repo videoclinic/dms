@@ -281,6 +281,48 @@ test("library file actions map only to host-mediated document commands", () => {
   assert.throws(() => libraryOpenRequest(detail, "other"));
 });
 
+test("approver sign-in challenge opens the host browser without WebView navigation", () => {
+  const registered = file("Handbook.md", { in_library: { document_id: "doc-1" } }, {
+    id: "doc-1",
+    lifecycle: "draft",
+    control: { title: "Employee handbook", document_number: null },
+  });
+  const library = {
+    ...createLibraryState(),
+    tree: snapshot("Policies").tree,
+    folder: snapshot("Policies", [registered]).folder,
+    selection: ["Policies/Handbook.md"],
+    approver_sign_in: {
+      challenge: {
+        challenge_id: "challenge-1",
+        user_code: "ABCD-EFGH",
+        verification_uri: "https://microsoft.com/devicelogin",
+      },
+    },
+    detail: {
+      document_id: "doc-1",
+      lifecycle: "draft",
+      control: { title: "Employee handbook", document_number: null },
+      active_candidate: { status: "in_review", approval_required: true },
+      eligible_people: [],
+      lifecycle_actions: {},
+      workflow_events: [],
+      workflow_verification: "valid",
+      document_types: [],
+      confidentiality_types: [],
+    },
+  };
+
+  const markup = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies" } },
+    library,
+  );
+  assert.match(markup, /data-open-external="https:\/\/microsoft\.com\/devicelogin"/);
+  assert.match(markup, /Open sign-in page/);
+  assert.doesNotMatch(markup, /target="_blank"/);
+});
+
 test("document control and confidentiality forms map to narrow document commands", () => {
   const detail = { document_id: "doc-1" };
   const control = new FormData();

@@ -1283,6 +1283,28 @@ async function handleNotesClick(event) {
 }
 
 async function handleClick(event) {
+  const externalUrl = event.target.closest("[data-open-external]")?.dataset.openExternal;
+  if (externalUrl) {
+    try {
+      await invokeCommand("open_external_url", { url: externalUrl });
+      appState = { ...appState, error: "" };
+    } catch (error) {
+      if (currentActivity(appState)?.destination === "Library") {
+        appState = {
+          ...appState,
+          library: { ...appState.library, detail_error: String(error) },
+        };
+      } else {
+        appState = {
+          ...appState,
+          configuration: { ...appState.configuration, notice: "", error: String(error) },
+        };
+      }
+    }
+    render(appState);
+    return;
+  }
+
   const recentRemove = event.target.closest("[data-recent-library-remove]")?.dataset.recentLibraryRemove;
   if (recentRemove) {
     appState = {

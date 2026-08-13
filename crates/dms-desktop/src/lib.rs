@@ -1177,6 +1177,12 @@ fn open_document_source(edit_root: String, document_id: Uuid) -> Result<(), Stri
 }
 
 #[tauri::command]
+fn open_external_url(url: String) -> Result<(), String> {
+    let url = validate_external_url(&url)?;
+    open_host_url(url.as_str())
+}
+
+#[tauri::command]
 fn open_current_release_pdf(edit_root: String, document_id: Uuid) -> Result<(), String> {
     let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
     let path = workspace
@@ -2134,6 +2140,37 @@ fn open_host_path(path: &Path) -> Result<(), String> {
         .map_err(|error| format!("cannot open {}: {error}", path.display()))
 }
 
+fn validate_external_url(value: &str) -> Result<url::Url, String> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Err("external URL is required".to_owned());
+    }
+    let url = url::Url::parse(value).map_err(|error| format!("invalid external URL: {error}"))?;
+    let host = url
+        .host_str()
+        .ok_or_else(|| "external URL must include a host".to_owned())?;
+    match url.scheme() {
+        "https" => Ok(url),
+        "http" if matches!(host, "localhost" | "127.0.0.1") => Ok(url),
+        scheme => Err(format!("external URL scheme {scheme:?} is not allowed")),
+    }
+}
+
+fn open_host_url(url: &str) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    let mut command = std::process::Command::new("explorer.exe");
+    #[cfg(target_os = "macos")]
+    let mut command = std::process::Command::new("open");
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut command = std::process::Command::new("xdg-open");
+
+    command
+        .arg(url)
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| format!("cannot open external URL: {error}"))
+}
+
 fn path_text(path: &Path) -> String {
     if path == Path::new(".") {
         return ".".to_owned();
@@ -2205,6 +2242,7 @@ pub fn run() {
             resolve_registered_permalink,
             load_workspace_configuration,
             configure_global_entra,
+            open_external_url,
             configure_default_review_interval,
             configure_document_type,
             configure_confidentiality_type,
@@ -2297,6 +2335,17 @@ mod tests {
             .as_array()
             .unwrap()
             .contains(&serde_json::json!("deep-link:default")));
+    }
+
+    #[test]
+    fn external_url_validation_allows_only_browser_safe_urls() {
+        assert!(validate_external_url("https://example.com/sign-in").is_ok());
+        assert!(validate_external_url("http://localhost:1234/callback").is_ok());
+        assert!(validate_external_url("http://127.0.0.1:3000/callback").is_ok());
+        assert!(validate_external_url("file:///etc/passwd").is_err());
+        assert!(validate_external_url("javascript:alert(1)").is_err());
+        assert!(validate_external_url("").is_err());
+        assert!(validate_external_url("http://example.com").is_err());
     }
 
     #[test]

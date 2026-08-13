@@ -100,7 +100,7 @@ runtime Entra configuration shipped in phase 9k.1 of CHG-0001:
    `crates/dms-desktop/src/lib.rs:351-375`).
 2. The device-flow sign-in page produced by Microsoft Entra (`verification_uri`
    on the `DeviceLoginChallenge`) opens in the host's default browser through a
-   new Tauri shell-opener IPC, not by navigating the in-app WebView. Today the
+   validated native host-launcher IPC, not by navigating the in-app WebView. Today the
    same URL is rendered as `<a target="_blank" rel="noreferrer">` in
    `crates/dms-desktop/ui/configuration.mjs:186` and
    `crates/dms-desktop/ui/library.mjs:448`; Tauri 2 WebView does not forward
@@ -128,11 +128,11 @@ Office/release evidence gate.
 | --- | --- | --- | --- |
 | 1 | Fix global-entra save to stay on the configuration screen | done (`node --test crates/dms-desktop/ui/*.test.mjs` — 61 passed; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`) | `node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0 with a new test asserting the success notice equals `"Application Entra configuration saved."` and that the `GlobalEntraConfiguration` payload is never fed to `applyConfigurationSnapshot`; all existing configuration tests still pass |
 | 2 | Accept documented optional fields in a successful device-flow token response | done (`CARGO_INCREMENTAL=0 cargo test -p dms-desktop device_flow_token_response_accepts_documented_optional_fields`; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs` — 61 passed) | `CARGO_INCREMENTAL=0 cargo test -p dms-desktop device_flow_token_response_accepts_documented_optional_fields` exits 0 after a RED run where the current strict response parser rejects `token_type`, `scope`, and `id_token`; `CARGO_INCREMENTAL=0 cargo test --workspace`, `cargo fmt --all -- --check`, and `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings` exit 0 |
-| 3 | Open device-flow verification_uri in the host browser (Configuration + Library) | pending | `cargo fmt --all -- --check`; `cargo test --workspace`; `cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs`; a new Rust unit test for `validate_external_url` covering `https://example.com` → `Ok`, `file:///etc/passwd` → `Err`, `javascript:alert(1)` → `Err`, empty → `Err`, `http://localhost:1234` → `Ok`, `http://example.com` → `Err`; frontend markup emits `data-open-external="https://…"` and never `target="_blank"` for the device-flow URI |
+| 3 | Open device-flow verification_uri in the host browser (Configuration + Library) | done (`CARGO_INCREMENTAL=0 cargo test -p dms-desktop external_url_validation_allows_only_browser_safe_urls`; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs` — 63 passed; `DMS_DESKTOP_SMOKE=1 CARGO_INCREMENTAL=0 cargo run -p dms-desktop`) | `cargo fmt --all -- --check`; `cargo test --workspace`; `cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs`; a new Rust unit test for `validate_external_url` covering `https://example.com` → `Ok`, `file:///etc/passwd` → `Err`, `javascript:alert(1)` → `Err`, empty → `Err`, `http://localhost:1234` → `Ok`, `http://example.com` → `Err`; frontend markup emits `data-open-external="https://…"` and never `target="_blank"` for the device-flow URI |
 | 4 | Allow regenerating an expired or failed device-code challenge | pending | `cargo test --workspace`; `node --test crates/dms-desktop/ui/*.test.mjs`; `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets -- -D warnings`; frontend test asserts that `state.configuration.identity_setup.challenge` plus a non-empty `state.configuration.error` renders a `data-configuration-form="identity-source-restart"` button (and is absent on a fresh challenge); Library test asserts the matching `data-library-approver-sign-in-restart` control; the restart path re-uses the existing `begin_identity_source_sign_in` / `begin_approver_sign_in` commands — no new IPC, no new Graph state |
 | 5 | CAP-0021 amendment + DOX closeout | pending | CAP-0021 `Implemented subset` lists three present-tense bullets for in-place save confirmation, host-browser opener, and expired-challenge regenerate control; `docs/changes/README.md` still lists both CHG-0001 and CHG-0002 as active; `docs/changes/active/` contains both files; `crates/dms-desktop/AGENTS.md` Configuration contract unchanged (the fix conforms to it); `git diff --check` clean; conventional commit lands with explicit verification evidence |
 
-**Current phase:** 3 — pending until the Phase 2 checkpoint is committed. Each phase below carries the steps,
+**Current phase:** 4 — pending until the Phase 3 checkpoint is committed. Each phase below carries the steps,
 verification gate, and recovery path the executor must follow.
 
 Mark a phase `in-progress` only while it is being executed, `done
@@ -216,7 +216,10 @@ all exit 0.
 ### Phase 3 — Open device-flow verification_uri in the host browser (Configuration + Library)
 
 **Goal:** The device-flow verification URL opens the host's default browser
-through Tauri shell opener. The stale `<a target="_blank">` markup is gone.
+through DMS's existing platform-native launcher. The stale
+`<a target="_blank">` markup is gone. DMS does not add Tauri shell/opener
+plugins for this: the pinned dependency graph contains neither plugin, while
+`open_host_path` already owns the native Windows/macOS/Linux launch boundary.
 
 **Steps:**
 
@@ -230,9 +233,9 @@ through Tauri shell opener. The stale `<a target="_blank">` markup is gone.
    - rejects schemes other than `https` (allow `http` only when the host is
      `localhost` or `127.0.0.1`, for local-dev convenience — emit an error
      string that names the rejected scheme so the frontend can surface it),
-   - calls `app.shell().open(url, None)` (Tauri 2 API; verify the exact
-     signature in the docs for `tauri = "2.11.5"` — `None` for the open-with
-     arg is correct on Windows and macOS),
+   - calls a small `open_host_url(&url)` helper that starts `explorer.exe` on
+     Windows, `open` on macOS, or `xdg-open` on other Unix hosts, matching the
+     established `open_host_path` platform boundary,
    - returns `Ok(())` on success or a descriptive `Err(String)` on validation
      / open failure.
 2. Register the new command in the existing `invoke_handler` builder near
@@ -279,9 +282,10 @@ passes; `cargo fmt --all -- --check`, `cargo test --workspace`,
 `cargo clippy --workspace --all-targets -- -D warnings`, and
 `node --test crates/dms-desktop/ui/*.test.mjs` all exit 0.
 
-**Recovery path:** if `url::Url::parse` proves unavailable without a new dep,
-switch to `reqwest::Url` (already a transitive dep) and document the
-rationale in the commit; do not silently fall back to substring checks.
+**Recovery path:** add the existing locked `url` crate as an explicit workspace
+dependency if direct use proves unavailable; do not silently fall back to
+substring checks. Do not add Tauri shell/opener plugins for this URL-only use
+case.
 
 ### Phase 4 — Allow regenerating an expired or failed device-code challenge
 
