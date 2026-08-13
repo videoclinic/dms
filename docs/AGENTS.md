@@ -12,6 +12,7 @@ privacy, and design decisions for this repository.
 | `architecture.md` | Runtime shape, trust boundary, out-of-scope platform choices |
 | `privacy.md` | Data classes and local-processing principles |
 | `design-decisions.md` | Cross-cutting ADRs |
+| `entra-client-setup.md` | Operator setup for the DMS Entra public-client registration and delegated Graph consent |
 | `product/` | CAP index, capability contracts, wireframe references |
 | `changes/` | CHG lifecycle (active/archive) |
 

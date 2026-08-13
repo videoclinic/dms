@@ -71,6 +71,9 @@ source-file access-control boundary.
   and non-goals.
 - [Design decisions](docs/design-decisions.md) — durable implementation choices.
 - [Privacy](docs/privacy.md) — data classes and local-processing constraints.
+- [Microsoft Entra application setup](docs/entra-client-setup.md) — create the
+  DMS public-client registration, grant delegated Graph consent, and configure
+  DMS with its client, tenant, and group IDs.
 - [Product capabilities](docs/product/README.md) — current capability contracts
   and wireframe index.
 - [Active change record](docs/changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
