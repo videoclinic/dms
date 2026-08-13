@@ -567,16 +567,15 @@ const CAPS = [
     body: `
       <div class="grid-2">
         <section class="card">
-          <div class="row gap-2 mb"><h3 class="card-title">SMTP relay</h3>${badge("active", "ok")}</div>
+          <div class="row gap-2 mb"><h3 class="card-title">SMTP relay</h3>${badge("credential configured", "ok")}</div>
           ${kv([
             ["Host", "smtp.videoclinic.de"],
             ["Port", "587 (STARTTLS)"],
-            ["Username", "dms@videoclinic.de"],
-            ["Password", "•••••••• (OS credential store)"],
-            ["From", "dms@videoclinic.de"],
+            ["Sender / authentication user", "dms@videoclinic.de"],
+            ["Microsoft 365 app password", "Write-only input · stored in OS credential store"],
             ["Minor-publication recipient", "anna@videoclinic.de (effective approver snapshot)"],
           ])}
-          <p class="hint">Major review requests use a review-target permalink containing only workspace, document, and review IDs; it survives rename and version bump.</p>
+          <p class="hint">A blank password input retains the existing OS credential. SMTP cannot be saved or used without one; changing to <code>mailto:</code> removes the workspace-scoped credential. No password is returned or written to <code>.dms</code>.</p>
         </section>
         <section class="card">
           <div class="row gap-2 mb"><h3 class="card-title">Minor-publication notice</h3>${badge("released V1.4", "ok")}</div>
@@ -1010,10 +1009,19 @@ const CAPS = [
     nav: "config",
     configSection: "workflow",
     configSecondary: "Identity source",
-    subtitle: "Keep the bound group visible as a compact, read-only source; open setup or replacement only when the workspace source changes.",
+    subtitle: "Configure the Entra public client and tenant once for this OS user; each library retains only its bound group and display cache.",
     body: `${defaultsFirstStyles()}
+      <section class="card">
+        <h3 class="card-title">Application Entra configuration</h3>
+        ${kv([
+          ["Public client ID", "3e7f…c2a1 <span class=\"muted\">(environment-managed, read only)</span>"],
+          ["Tenant ID", "8d29…0bf3 <span class=\"muted\">(environment-managed, read only)</span>"],
+          ["Storage", "Per-OS-user app configuration; never written to a library .dms store"],
+        ])}
+        <p class="hint">A non-empty <code>DMS_ENTRA_CLIENT_ID</code> or <code>DMS_ENTRA_TENANT_ID</code> overrides the stored value for this process. Invalid values block use rather than falling back.</p>
+      </section>
       <section class="config-summary">
-        <div class="summary-copy"><strong>Current identity source ${badge("connected", "ok")}</strong><span>videoclinic.de · VC DMS Workflow Users · 9c14…bf72 · 3 eligible people · refreshed 2025-08-05 09:16 UTC</span></div>
+        <div class="summary-copy"><strong>Current library group ${badge("connected", "ok")}</strong><span>VC DMS Workflow Users · 9c14…bf72 · 3 eligible people · refreshed 2025-08-05 09:16 UTC</span></div>
         <button class="btn outline">Refresh people</button>
         <button class="btn outline">Replace identity source…</button>
       </section>

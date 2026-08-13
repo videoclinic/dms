@@ -357,7 +357,6 @@ fn cli_configures_catalogues_folder_policies_and_identity_routing() {
     assert!(!remove_root.status.success());
     assert!(String::from_utf8_lossy(&remove_root.stderr).contains("required"));
 
-    let tenant_id = Uuid::new_v4();
     let group_id = Uuid::new_v4();
     let editor_id = Uuid::new_v4();
     let approver_id = Uuid::new_v4();
@@ -375,8 +374,6 @@ fn cli_configures_catalogues_folder_policies_and_identity_routing() {
         .arg("--json")
         .args(["policy", "replace-identity-source", "--edit-root"])
         .arg(edit_root.path())
-        .args(["--tenant-id", &tenant_id.to_string()])
-        .args(["--tenant-display", "Example tenant"])
         .args(["--group-id", &group_id.to_string()])
         .args(["--group-label", "DMS workflow"])
         .args([
@@ -394,7 +391,9 @@ fn cli_configures_catalogues_folder_policies_and_identity_routing() {
     );
     let metadata =
         fs::read_to_string(edit_root.path().join(".dms/workspace.json")).expect("metadata");
-    assert!(metadata.contains(&tenant_id.to_string()));
+    assert!(metadata.contains(&group_id.to_string()));
+    assert!(!metadata.contains("tenant_id"));
+    assert!(!metadata.contains("tenant_display"));
     assert!(!metadata.contains("client_secret"));
     assert!(!metadata.contains("access_token"));
 }

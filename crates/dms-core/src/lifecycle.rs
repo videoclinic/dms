@@ -380,6 +380,8 @@ impl WorkflowVerification {
 }
 
 pub trait GraphClient {
+    fn tenant_id(&self) -> std::result::Result<Uuid, String>;
+
     fn direct_user_members(
         &mut self,
         source: &EntraIdentitySource,
@@ -506,6 +508,7 @@ impl Workspace {
         &mut self,
         graph: &mut G,
     ) -> Result<()> {
+        graph.tenant_id().map_err(DmsError::GraphRefreshFailed)?;
         let source = self
             .identity_source
             .clone()
@@ -536,6 +539,7 @@ impl Workspace {
         graph: &mut G,
         notifier: &mut N,
     ) -> Result<CandidateSubmission> {
+        let tenant_id = graph.tenant_id().map_err(DmsError::GraphRefreshFailed)?;
         self.refresh_eligible_people(graph)?;
         let settings = self
             .notification_settings
@@ -557,8 +561,8 @@ impl Workspace {
         let changelog = configured_text(&request.changelog, "release changelog")?;
         let source_path = self.edit_root.join(&document.relative_path);
         let source_digest = sha256_file(&source_path)?;
-        let requester = self.person_snapshot(request.requester_object_id)?;
-        let metadata = self.candidate_metadata(request.document_id)?;
+        let requester = self.person_snapshot(request.requester_object_id, tenant_id)?;
+        let metadata = self.candidate_metadata(request.document_id, tenant_id)?;
         let review_id = approval_required.then(Uuid::new_v4);
         let mut candidate = ReleaseCandidate {
             id: Uuid::new_v4(),
@@ -720,6 +724,7 @@ impl Workspace {
     ) -> Result<DecisionOutcome> {
         let candidate_id = self.active_candidate_id(document_id)?;
         let candidate = self.candidate(document_id, candidate_id)?.clone();
+        let tenant_id = graph.tenant_id().map_err(DmsError::GraphRefreshFailed)?;
         self.refresh_eligible_people(graph)?;
         if self.document(document_id)?.active_candidate_id != Some(candidate_id) {
             self.save()?;
@@ -737,7 +742,7 @@ impl Workspace {
             ));
         }
         if self
-            .ensure_candidate_current(document_id, &candidate)
+            .ensure_candidate_current(document_id, &candidate, tenant_id)
             .is_err()
         {
             self.invalidate_candidate(document_id, candidate_id, "draft or metadata changed")?;
@@ -837,6 +842,7 @@ impl Workspace {
         notifier: &mut N,
         exporter: &mut E,
     ) -> Result<ReleaseOutcome> {
+        let tenant_id = graph.tenant_id().map_err(DmsError::GraphRefreshFailed)?;
         let candidate_id = self.active_candidate_id(document_id)?;
         let mut candidate = self.candidate(document_id, candidate_id)?.clone();
         let expected_status = if candidate.approval_required {
@@ -855,13 +861,13 @@ impl Workspace {
                 self.save()?;
                 return Err(DmsError::CandidateInvalidated);
             }
-            let refreshed = self.candidate_metadata(document_id)?;
+            let refreshed = self.candidate_metadata(document_id, tenant_id)?;
             candidate.metadata.editor = refreshed.editor;
             candidate.metadata.approver = refreshed.approver;
             self.candidate_mut(document_id, candidate_id)?.metadata = candidate.metadata.clone();
         }
         if self
-            .ensure_candidate_current(document_id, &candidate)
+            .ensure_candidate_current(document_id, &candidate, tenant_id)
             .is_err()
         {
             self.invalidate_candidate(document_id, candidate_id, "draft or metadata changed")?;
@@ -1384,7 +1390,11 @@ impl Workspace {
             let stale = self
                 .candidate(document_id, candidate_id)
                 .and_then(|candidate| {
-                    self.ensure_candidate_metadata_current(document_id, candidate)
+                    self.ensure_candidate_metadata_current(
+                        document_id,
+                        candidate,
+                        candidate.metadata.approver.tenant_id,
+                    )
                 })
                 .is_err();
             if stale {
@@ -1569,33 +1579,37 @@ impl Workspace {
             .max_by_key(|release| release.version))
     }
 
-    fn person_snapshot(&self, object_id: Uuid) -> Result<PersonSnapshot> {
-        let source = self
-            .identity_source
-            .as_ref()
-            .ok_or(DmsError::IdentitySourceRequired)?;
+    fn person_snapshot(&self, object_id: Uuid, tenant_id: Uuid) -> Result<PersonSnapshot> {
         let person = self
             .identity_cache
             .get(&object_id)
             .filter(|person| person.account_enabled)
             .ok_or(DmsError::IneligibleEntraPerson(object_id))?;
         Ok(PersonSnapshot {
-            tenant_id: source.tenant_id,
+            tenant_id,
             object_id,
             display_name: person.display_name.clone(),
             email: person.email.clone(),
         })
     }
 
-    fn role_snapshot(&self, role: Option<EffectiveWorkflowRole>) -> Result<PersonSnapshot> {
+    fn role_snapshot(
+        &self,
+        role: Option<EffectiveWorkflowRole>,
+        tenant_id: Uuid,
+    ) -> Result<PersonSnapshot> {
         let role = role.ok_or(DmsError::UnresolvedWorkflowRole)?;
         if role.state != ResolutionState::Resolved {
             return Err(DmsError::UnresolvedWorkflowRole);
         }
-        self.person_snapshot(role.object_id)
+        self.person_snapshot(role.object_id, tenant_id)
     }
 
-    fn candidate_metadata(&self, document_id: Uuid) -> Result<CandidateMetadataSnapshot> {
+    fn candidate_metadata(
+        &self,
+        document_id: Uuid,
+        tenant_id: Uuid,
+    ) -> Result<CandidateMetadataSnapshot> {
         let document = self.document(document_id)?;
         let confidentiality = self.effective_confidentiality(document_id)?;
         let roles = self.effective_workflow_roles(document_id)?;
@@ -1605,8 +1619,8 @@ impl Workspace {
                 type_id: confidentiality.type_id,
                 label: confidentiality.label,
             },
-            editor: self.role_snapshot(roles.editor)?,
-            approver: self.role_snapshot(roles.approver)?,
+            editor: self.role_snapshot(roles.editor, tenant_id)?,
+            approver: self.role_snapshot(roles.approver, tenant_id)?,
         })
     }
 
@@ -1642,8 +1656,9 @@ impl Workspace {
         &self,
         document_id: Uuid,
         candidate: &ReleaseCandidate,
+        tenant_id: Uuid,
     ) -> Result<()> {
-        if self.candidate_metadata(document_id)? != candidate.metadata {
+        if self.candidate_metadata(document_id, tenant_id)? != candidate.metadata {
             return Err(DmsError::CandidateInvalidated);
         }
         Ok(())
@@ -1653,8 +1668,9 @@ impl Workspace {
         &self,
         document_id: Uuid,
         candidate: &ReleaseCandidate,
+        tenant_id: Uuid,
     ) -> Result<()> {
-        self.ensure_candidate_metadata_current(document_id, candidate)?;
+        self.ensure_candidate_metadata_current(document_id, candidate, tenant_id)?;
         let source_path = self
             .edit_root
             .join(&self.document(document_id)?.relative_path);

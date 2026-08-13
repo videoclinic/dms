@@ -163,7 +163,7 @@ function workflowMarkup(state) {
   const direct = snapshot.workflow_policies.find((policy) => policy.folder === selected);
   const rootFolder = selected === ".";
   const sourceSummary = source
-    ? `<div><strong>${escapeHtml(source.group_label)}</strong><span>${escapeHtml(source.tenant_display)} · ${snapshot.eligible_people.length} eligible ${snapshot.eligible_people.length === 1 ? "person" : "people"} · refreshed ${escapeHtml(source.last_refreshed_at ?? "Not yet refreshed")}</span></div>`
+    ? `<div><strong>${escapeHtml(source.group_label)}</strong><span>${snapshot.eligible_people.length} eligible ${snapshot.eligible_people.length === 1 ? "person" : "people"} · refreshed ${escapeHtml(source.last_refreshed_at ?? "Not yet refreshed")}</span></div>`
     : '<div><strong>Not configured</strong><span>Connect one Microsoft Entra group before assigning roles.</span></div>';
   const editor = roleSelectMarkup(snapshot, direct, "editor", rootFolder);
   const approver = roleSelectMarkup(snapshot, direct, "approver", rootFolder);
@@ -175,8 +175,9 @@ function identitySourceMarkup(state) {
   const source = state.snapshot.identity_source;
   const people = state.snapshot.eligible_people;
   const setup = state.identity_setup;
+  const global = state.snapshot.global_entra_configuration;
   const details = source
-    ? `<dl class="details-grid"><dt>Tenant</dt><dd>${escapeHtml(source.tenant_display)}</dd><dt>Tenant ID</dt><dd>${escapeHtml(source.tenant_id)}</dd><dt>Group</dt><dd>${escapeHtml(source.group_label)}</dd><dt>Group ID</dt><dd>${escapeHtml(source.group_id)}</dd><dt>Last refresh</dt><dd>${escapeHtml(source.last_refreshed_at ?? "Not yet refreshed")}</dd></dl>`
+    ? `<dl class="details-grid"><dt>Group</dt><dd>${escapeHtml(source.group_label)}</dd><dt>Group ID</dt><dd>${escapeHtml(source.group_id)}</dd><dt>Last refresh</dt><dd>${escapeHtml(source.last_refreshed_at ?? "Not yet refreshed")}</dd></dl>`
     : '<p class="status">No Microsoft Entra identity source is configured.</p>';
   const rows = people.length === 0
     ? '<p class="subtle">No eligible people are cached.</p>'
@@ -185,15 +186,16 @@ function identitySourceMarkup(state) {
     ? `<section class="card configuration-card"><h3>Complete Microsoft Entra sign-in</h3><p>${escapeHtml(setup.challenge.message)}</p><dl class="details-grid"><dt>Code</dt><dd><code>${escapeHtml(setup.challenge.user_code)}</code></dd><dt>Sign-in page</dt><dd><a href="${escapeHtml(setup.challenge.verification_uri)}" target="_blank" rel="noreferrer">${escapeHtml(setup.challenge.verification_uri)}</a></dd></dl><form class="configuration-form" data-configuration-form="identity-source-complete"><input type="hidden" name="challengeId" value="${escapeHtml(setup.challenge.challenge_id)}"><button class="button" type="submit">I have signed in — preview group</button></form></section>`
     : setup?.preview
       ? `<section class="card configuration-card"><h3>Preview identity source</h3><dl class="details-grid"><dt>Tenant</dt><dd>${escapeHtml(setup.preview.tenant_display)}</dd><dt>Group</dt><dd>${escapeHtml(setup.preview.group_label)}</dd><dt>Eligible people</dt><dd>${escapeHtml(setup.preview.eligible_people.length)}</dd></dl><p>Applying this binding replaces the current people source and invalidates stale workflow candidates.</p><form class="configuration-form" data-configuration-form="identity-source-apply"><input type="hidden" name="previewId" value="${escapeHtml(setup.preview.preview_id)}"><label class="configuration-enabled"><input type="checkbox" name="confirmed" required> I confirm this group is the workspace’s people source.</label><button class="button" type="submit">Apply identity source</button></form></section>`
-      : `<section class="card configuration-card"><h3>${source ? "Replace identity source" : "Set up identity source"}</h3><p>Enter the administrator-approved tenant and one direct-user group. Sign-in uses delegated Microsoft Graph access.</p><form class="configuration-form" data-configuration-form="identity-source-start"><label>Tenant ID<input name="tenantId" required placeholder="00000000-0000-0000-0000-000000000000"></label><label>Group ID<input name="groupId" required placeholder="00000000-0000-0000-0000-000000000000"></label><button class="button" type="submit">Sign in and preview group</button></form></section>`;
-  return `<section class="configuration-secondary"><button class="button secondary" type="button" data-configuration-secondary-close>← Back to Workflow</button><div class="configuration-grid"><section class="card configuration-card"><span class="badge">Secondary configuration</span><h2>Microsoft Entra identity source</h2>${details}</section>${setupMarkup}<section class="card configuration-card"><h3>Eligible people — read only</h3><p>Only direct, enabled user members returned by Microsoft Graph can be assigned.</p>${rows}<form data-configuration-form="identity-source-refresh"><button class="button secondary" type="submit" ${source ? "" : "disabled"}>Refresh people</button></form></section></div></section>`;
+      : `<section class="card configuration-card"><h3>${source ? "Replace identity source" : "Set up identity source"}</h3><p>Enter one direct-user group. Sign-in uses delegated Microsoft Graph access.</p><form class="configuration-form" data-configuration-form="identity-source-start"><label>Library Entra group ID<input name="groupId" required placeholder="00000000-0000-0000-0000-000000000000"></label><button class="button" type="submit">Sign in and preview group</button></form></section>`;
+  const globalMarkup = `<section class="card configuration-card"><h3>Application Entra configuration</h3><p>Shared by local libraries for this OS user; not stored in <code>.dms</code>.</p><form class="configuration-form" data-configuration-form="global-entra"><label>Public client ID<input name="clientId" value="${escapeHtml(global?.client_id ?? "")}" ${global?.client_id_environment_managed ? "readonly" : ""}></label><label>Tenant ID<input name="tenantId" value="${escapeHtml(global?.tenant_id ?? "")}" ${global?.tenant_id_environment_managed ? "readonly" : ""}></label><button class="button" type="submit">Save application configuration</button></form></section>`;
+  return `<section class="configuration-secondary"><button class="button secondary" type="button" data-configuration-secondary-close>← Back to Workflow</button><div class="configuration-grid">${globalMarkup}<section class="card configuration-card"><span class="badge">Secondary configuration</span><h2>Microsoft Entra identity source</h2>${details}</section>${setupMarkup}<section class="card configuration-card"><h3>Eligible people — read only</h3><p>Only direct, enabled user members returned by Microsoft Graph can be assigned.</p>${rows}<form data-configuration-form="identity-source-refresh"><button class="button secondary" type="submit" ${source ? "" : "disabled"}>Refresh people</button></form></section></div></section>`;
 }
 
 function notificationsMarkup(snapshot) {
   const settings = snapshot.notification_settings;
   const transport = settings?.transport ?? "mailto";
   const smtp = settings?.smtp;
-  return `<section class="card configuration-card configuration-notifications"><span class="badge">Workspace notification transport</span><h2>Review and release email</h2><p>Choose one transport for workflow notices. Delivery credentials stay in the OS credential store and are never written to <code>.dms</code>.</p><form class="configuration-form configuration-notification-form" data-configuration-form="notifications"><label>Transport<select name="transport" required><option value="smtp" ${transport === "smtp" ? "selected" : ""}>SMTP relay</option><option value="mailto" ${transport === "mailto" ? "selected" : ""}>Host mail app (mailto)</option></select></label><div class="configuration-grid"><label>SMTP relay host<input name="relayHost" value="${escapeHtml(smtp?.relay_host ?? "")}" placeholder="smtp.example.com"></label><label>SMTP relay port<input name="relayPort" type="number" min="1" max="65535" value="${escapeHtml(smtp?.relay_port ?? 587)}"></label><label>Sender address<input name="sender" type="email" value="${escapeHtml(smtp?.sender ?? "")}" placeholder="dms@example.com"></label></div><p class="subtle">SMTP relay credentials are configured through the OS credential store when live delivery is enabled.</p><button class="button" type="submit">Save notification transport</button></form></section>`;
+  return `<section class="card configuration-card configuration-notifications"><span class="badge">Workspace notification transport</span><h2>Review and release email</h2><p>Choose one transport for workflow notices. Delivery credentials stay in the OS credential store and are never written to <code>.dms</code>.</p><form class="configuration-form configuration-notification-form" data-configuration-form="notifications"><label>Transport<select name="transport" required><option value="smtp" ${transport === "smtp" ? "selected" : ""}>SMTP relay</option><option value="mailto" ${transport === "mailto" ? "selected" : ""}>Host mail app (mailto)</option></select></label><div class="configuration-grid"><label>SMTP relay host<input name="relayHost" value="${escapeHtml(smtp?.relay_host ?? "")}" placeholder="smtp.example.com"></label><label>SMTP relay port<input name="relayPort" type="number" min="1" max="65535" value="${escapeHtml(smtp?.relay_port ?? 587)}"></label><label>Sender address<input name="sender" type="email" value="${escapeHtml(smtp?.sender ?? "")}" placeholder="dms@example.com"></label><label>Microsoft 365 app password<input name="smtpAppPassword" type="password" autocomplete="new-password"></label></div><p class="subtle">${snapshot.smtp_credential_configured ? "Credential configured. Leave the password blank to retain it." : "No credential configured."}</p><button class="button" type="submit">Save notification transport</button></form></section>`;
 }
 
 function unavailableRouteMarkup(route) {
@@ -284,13 +286,20 @@ export function configurationMutationRequest(kind, values, selectedFolder) {
         relayHost: formValue(values, "relayHost"),
         relayPort: Number(formValue(values, "relayPort")),
         sender: formValue(values, "sender"),
+        smtpAppPassword: formValue(values, "smtpAppPassword"),
       },
     };
   }
   if (kind === "identity-source-start") {
     return {
       command: "begin_identity_source_sign_in",
-      arguments: { tenantId: formValue(values, "tenantId"), groupId: formValue(values, "groupId") },
+      arguments: { groupId: formValue(values, "groupId") },
+    };
+  }
+  if (kind === "global-entra") {
+    return {
+      command: "configure_global_entra",
+      arguments: { clientId: formValue(values, "clientId"), tenantId: formValue(values, "tenantId") },
     };
   }
   if (kind === "identity-source-complete") {

@@ -78,15 +78,119 @@ source-file access-control boundary.
 
 ## Development status
 
-Install Rust 1.88 or newer. The desktop build also needs the platform prerequisites
-listed by [Tauri](https://v2.tauri.app/start/prerequisites/). Then run:
+The committed [`rust-toolchain.toml`](rust-toolchain.toml) selects Rust
+**1.88.0** and supplies `clippy` and `rustfmt`; `Cargo.toml` retains Rust 1.88
+as the minimum supported version. Use a native Windows toolchain for Windows
+desktop builds and tests. Git Bash/MSYS does not provide the required MSVC Rust
+environment.
 
-```sh
+### Windows setup
+
+1. Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+   and select **Desktop development with C++**. Keep the MSVC x64/x86 build
+   tools and a Windows 10 or 11 SDK selected.
+2. Install the [Microsoft Edge WebView2 Evergreen Runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
+3. In PowerShell, install Rustup and Node.js LTS, then restart the terminal so
+   `%USERPROFILE%\\.cargo\\bin` is on `PATH`:
+
+   ```powershell
+   winget install --id Rustlang.Rustup
+   winget install --id OpenJS.NodeJS.LTS
+   ```
+
+   In the repository, Rustup automatically installs/selects the committed
+   `1.88.0-x86_64-pc-windows-msvc` toolchain. Confirm the required commands
+   resolve before testing:
+
+   ```powershell
+   cargo --version
+   rustc --version
+   rustup component list --installed
+   node --version
+   ```
+
+4. For the external Office-release smoke only, install and license the
+   appropriate Microsoft Office desktop applications. Office is not needed for
+   the ordinary Rust and frontend test suites.
+
+Then run the local checks from a native Windows terminal:
+
+```powershell
+cargo fmt --all -- --check
 cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
 cargo run -p dms-cli -- --help
 node --test crates/dms-desktop/ui/app.test.mjs
 cargo run -p dms-desktop
 ```
+
+WSL can run the headless Rust and frontend checks when its own Linux Rust
+toolchain is installed, but it is not a substitute for native Windows WebView2,
+Windows packaging, or Office integration validation. Linux development has
+separate [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/#linux).
+
+### Ubuntu on WSL2 setup
+
+Use an Ubuntu **WSL2** distribution and keep the checkout in its Linux
+filesystem (for example, `/home/<user>/src/dms`), not under `/mnt/c`. From an
+elevated Windows PowerShell, install or confirm WSL2 and Ubuntu if needed:
+
+```powershell
+wsl --install -d Ubuntu
+wsl --set-default-version 2
+```
+
+Open Ubuntu (`wsl -d Ubuntu`) and install the compiler, Tauri development
+libraries, Git, and Node.js. The Ubuntu packages provide a supported Node LTS
+line; the repository has no separate npm dependency installation step.
+
+```bash
+sudo apt update
+sudo apt install -y \
+  build-essential \
+  curl \
+  file \
+  git \
+  libayatana-appindicator3-dev \
+  librsvg2-dev \
+  libssl-dev \
+  libwebkit2gtk-4.1-dev \
+  libxdo-dev \
+  nodejs \
+  npm \
+  pkg-config \
+  wget
+```
+
+Install Rust through Rustup rather than Ubuntu's `rustc`/`cargo` packages, then
+restart the Ubuntu shell. When you enter this checkout, the committed
+`rust-toolchain.toml` selects Rust 1.88.0 with `clippy` and `rustfmt`.
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+exit
+```
+
+Reopen Ubuntu, clone or enter the checkout, and verify the local toolchain:
+
+```bash
+cd ~/src/dms
+cargo --version
+rustc --version
+rustup component list --installed
+node --version
+npm --version
+cargo fmt --all -- --check
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+node --test crates/dms-desktop/ui/app.test.mjs
+```
+
+`cargo run -p dms-desktop` can be used only when WSLg is available and the
+Linux desktop prerequisites above are installed. It validates the Linux Tauri
+adapter, not the native Windows application. Run native Windows desktop,
+WebView2, packaging, and Office integration checks from the Windows setup
+above.
 
 Initialize an explicit workspace and register a source draft:
 

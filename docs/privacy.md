@@ -7,12 +7,13 @@
 | Draft source documents (Office and Markdown) | Edit root (operator-controlled) | Content is business documentation; app does not upload it |
 | Released versioned PDFs | Publish root (operator-controlled) | Final released artifacts (`*_VMAJOR.MINOR_<confidentiality-type-id>.pdf`); the path exposes the classification ID |
 | DMS metadata, library membership, notes, approval state, checksums | `<edit-root>/.dms/` | Local only; may contain personal names in notes or approver fields |
-| Microsoft Entra workflow identity binding and display cache | `<edit-root>/.dms/` | Tenant/group object IDs, referenced user object IDs, and cached display name/email for routing; no app-managed user accounts or OAuth tokens |
+| Microsoft Entra workflow group binding and display cache | `<edit-root>/.dms/` | Group object ID, referenced user object IDs, and cached display name/email for routing; no app-managed user accounts, tenant/client ID, or OAuth tokens |
+| App-global Entra configuration | OS user app-config `global-settings.json` | Non-secret public-client ID and tenant ID shared by local libraries; non-empty `DMS_ENTRA_CLIENT_ID` / `DMS_ENTRA_TENANT_ID` process overrides are not persisted |
 | Document control data and workflow-role policies (title, owner, number, type, review dates, assigned editor/approver) | `<edit-root>/.dms/` | Local control metadata; not Office properties, Markdown front matter, or document body content |
 | Confidentiality policy and effective document label | `<edit-root>/.dms/` | Local classification metadata; a label does not enforce access control |
 | Approval-notification metadata | `<edit-root>/.dms/` | Requester/approver display name/email, approver Entra tenant/object ID on a decision, outcome, send time, and delivery-attempt result; no document content |
 | Workspace root paths | Inside `.dms` | Absolute edit/publish paths on the operator machine |
-| SMTP relay password | OS credential store (when implemented) | Never stored in `.dms`; relay settings contain no password |
+| SMTP relay app password | OS credential store | Write-only Configuration input; never stored in `.dms`, app preferences, frontend state, IPC results, or errors |
 | Microsoft Entra delegated-token cache | OS credential store | Interactive sign-in tokens for Microsoft Graph; never stored in `.dms` |
 | Workspace advisory lock | `<edit-root>/.dms/lock` | Process id, hostname, timestamp; advisory only, never contains document content |
 | Export/audit reports | `<edit-root>/.dms/exports/` (operator-chosen) | Aggregated lifecycle, approval, periodic-review, and release evidence; produced on demand |

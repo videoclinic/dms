@@ -1,6 +1,6 @@
 use std::{
     collections::BTreeSet,
-    fs,
+    env, fs,
     path::{Component, Path, PathBuf},
     sync::Mutex,
 };
@@ -33,6 +33,7 @@ pub mod notify;
 use assistance::ClaudeDesktopApp;
 
 const PREFERENCES_FILENAME: &str = "preferences.json";
+const GLOBAL_SETTINGS_FILENAME: &str = "global-settings.json";
 const RECENT_LIBRARIES_LIMIT: usize = 10;
 
 struct DesktopIntegrations {
@@ -43,7 +44,7 @@ struct DesktopIntegrations {
 impl Default for DesktopIntegrations {
     fn default() -> Self {
         Self {
-            graph: Mutex::new(graph::MicrosoftGraphClient::production()),
+            graph: Mutex::new(graph::MicrosoftGraphClient::production(None)),
             approver_actor: Mutex::new(None),
         }
     }
@@ -54,6 +55,10 @@ struct UnavailableGraphClient;
 
 #[cfg(test)]
 impl GraphClient for UnavailableGraphClient {
+    fn tenant_id(&self) -> std::result::Result<Uuid, String> {
+        Err("live Microsoft Graph integration is not configured".to_owned())
+    }
+
     fn direct_user_members(
         &mut self,
         _source: &EntraIdentitySource,
@@ -146,6 +151,23 @@ pub struct WorkspaceConfiguration {
     pub eligible_people: Vec<EntraPerson>,
     pub workflow_policies: Vec<WorkflowPolicyAssignment>,
     pub notification_settings: Option<NotificationSettings>,
+    pub global_entra_configuration: GlobalEntraConfiguration,
+    pub smtp_credential_configured: bool,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+struct GlobalSettings {
+    entra_client_id: String,
+    entra_tenant_id: String,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct GlobalEntraConfiguration {
+    pub client_id: String,
+    pub tenant_id: String,
+    pub client_id_environment_managed: bool,
+    pub tenant_id_environment_managed: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -318,8 +340,38 @@ fn initialize_workspace(
 }
 
 #[tauri::command]
-fn load_workspace_configuration(edit_root: String) -> Result<WorkspaceConfiguration, String> {
-    workspace_configuration(Path::new(&edit_root))
+fn load_workspace_configuration(
+    app: AppHandle,
+    edit_root: String,
+) -> Result<WorkspaceConfiguration, String> {
+    workspace_configuration(&app, Path::new(&edit_root))
+}
+
+#[tauri::command]
+fn configure_global_entra(
+    app: AppHandle,
+    client_id: String,
+    tenant_id: String,
+    state: State<'_, DesktopIntegrations>,
+) -> Result<GlobalEntraConfiguration, String> {
+    let path = global_settings_path(&app)?;
+    let mut settings = load_global_settings_at(&path)?;
+    let effective = effective_global_entra_configuration(&settings)?;
+    if !effective.client_id_environment_managed {
+        settings.entra_client_id = client_id.trim().to_owned();
+    }
+    if !effective.tenant_id_environment_managed {
+        settings.entra_tenant_id = tenant_id.trim().to_owned();
+    }
+    let effective = effective_global_entra_configuration(&settings)?;
+    let runtime = runtime_entra_configuration(&effective)?;
+    save_global_settings_at(&path, &settings)?;
+    *state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())? =
+        graph::MicrosoftGraphClient::production(runtime);
+    Ok(effective)
 }
 
 #[tauri::command]
@@ -431,19 +483,16 @@ fn set_workflow_policy_with<G: GraphClient + ?Sized>(
 
 #[tauri::command]
 fn begin_identity_source_sign_in(
-    tenant_id: String,
     group_id: String,
     state: State<'_, DesktopIntegrations>,
 ) -> Result<graph::DeviceLoginChallenge, String> {
-    let tenant_id = Uuid::parse_str(&tenant_id)
-        .map_err(|_| "tenant ID must be a Microsoft Entra directory UUID".to_owned())?;
     let group_id = Uuid::parse_str(&group_id)
         .map_err(|_| "group ID must be a Microsoft Entra group UUID".to_owned())?;
     state
         .graph
         .lock()
         .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?
-        .begin_identity_source_setup(tenant_id, group_id)
+        .begin_identity_source_setup(group_id)
 }
 
 #[tauri::command]
@@ -464,14 +513,15 @@ fn begin_approver_sign_in(
     state: State<'_, DesktopIntegrations>,
 ) -> Result<graph::DeviceLoginChallenge, String> {
     let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
-    let source = workspace.identity_source().ok_or_else(|| {
+    workspace.identity_source().ok_or_else(|| {
         "configure a Microsoft Entra identity source before signing in for approval".to_owned()
     })?;
-    state
+    let mut graph = state
         .graph
         .lock()
-        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?
-        .begin_approver_sign_in(source.tenant_id)
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
+    let tenant_id = graph.tenant_id()?;
+    graph.begin_approver_sign_in(tenant_id)
 }
 
 #[tauri::command]
@@ -504,14 +554,14 @@ fn apply_identity_source(
             "applying a Microsoft Entra identity source requires explicit confirmation".to_owned(),
         );
     }
-    let (tenant_id, tenant_display, group_id, group_label, people) = state
+    let (_tenant_id, _tenant_display, group_id, group_label, people) = state
         .graph
         .lock()
         .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?
         .apply_identity_source_preview(preview_id)?;
     mutate_workspace_configuration(Path::new(&edit_root), |workspace| {
         workspace
-            .replace_identity_source(tenant_id, &tenant_display, group_id, &group_label, people)
+            .replace_identity_source(group_id, &group_label, people)
             .map(|_| ())
     })
 }
@@ -541,24 +591,68 @@ fn configure_notifications(
     relay_host: String,
     relay_port: u16,
     sender: String,
+    smtp_app_password: String,
+) -> Result<WorkspaceConfiguration, String> {
+    let credentials = notify::OsCredentialStore;
+    configure_notifications_with_credentials(
+        &edit_root,
+        &transport,
+        &relay_host,
+        relay_port,
+        &sender,
+        &smtp_app_password,
+        &credentials,
+    )
+}
+
+fn configure_notifications_with_credentials<C: notify::CredentialStore>(
+    edit_root: &str,
+    transport: &str,
+    relay_host: &str,
+    relay_port: u16,
+    sender: &str,
+    smtp_app_password: &str,
+    credentials: &C,
 ) -> Result<WorkspaceConfiguration, String> {
     let (transport, smtp) = match transport.trim() {
         "smtp" => (
             NotificationTransport::Smtp,
             Some(SmtpSettings {
-                relay_host,
+                relay_host: relay_host.to_owned(),
                 relay_port,
-                sender,
+                sender: sender.to_owned(),
             }),
         ),
         "mailto" => (NotificationTransport::Mailto, None),
         value => return Err(format!("unknown notification transport: {value}")),
     };
-    mutate_workspace_configuration(Path::new(&edit_root), |workspace| {
-        workspace
-            .configure_notifications(transport, smtp)
-            .map(|_| ())
-    })
+    let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .configure_notifications(transport, smtp)
+        .map_err(|error| error.to_string())?;
+    match transport {
+        NotificationTransport::Smtp if !smtp_app_password.trim().is_empty() => {
+            credentials.set_smtp_password(workspace.workspace_id, smtp_app_password)?
+        }
+        NotificationTransport::Smtp
+            if !credentials.smtp_password_exists(workspace.workspace_id)? =>
+        {
+            return Err(
+                "SMTP configuration requires a Microsoft 365 app password in the OS credential store"
+                    .to_owned(),
+            );
+        }
+        NotificationTransport::Mailto => {
+            credentials.delete_smtp_password(workspace.workspace_id)?
+        }
+        _ => {}
+    }
+    workspace.save().map_err(|error| error.to_string())?;
+    workspace_configuration_from_with_global_and_credentials(
+        &workspace,
+        effective_global_entra_configuration(&GlobalSettings::default())?,
+        credentials,
+    )
 }
 
 #[tauri::command]
@@ -747,6 +841,10 @@ struct SignedInActorGraph<'a, G: GraphClient + ?Sized> {
 }
 
 impl<G: GraphClient + ?Sized> GraphClient for SignedInActorGraph<'_, G> {
+    fn tenant_id(&self) -> std::result::Result<Uuid, String> {
+        self.graph.tenant_id()
+    }
+
     fn direct_user_members(
         &mut self,
         source: &EntraIdentitySource,
@@ -1497,6 +1595,106 @@ fn save_preferences_at(path: &Path, preferences: &Preferences) -> Result<(), Str
         .map_err(|error| format!("cannot write preferences at {}: {error}", path.display()))
 }
 
+fn global_settings_path(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_config_dir()
+        .map_err(|error| format!("cannot resolve the app-config directory: {error}"))
+        .map(|directory| directory.join(GLOBAL_SETTINGS_FILENAME))
+}
+
+fn load_global_settings_at(path: &Path) -> Result<GlobalSettings, String> {
+    if !path.exists() {
+        return Ok(GlobalSettings::default());
+    }
+    let content = fs::read_to_string(path)
+        .map_err(|error| format!("cannot read global settings at {}: {error}", path.display()))?;
+    serde_json::from_str(&content)
+        .map_err(|error| format!("global settings at {} are invalid: {error}", path.display()))
+}
+
+fn save_global_settings_at(path: &Path, settings: &GlobalSettings) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| format!("global settings path {} has no parent", path.display()))?;
+    fs::create_dir_all(parent).map_err(|error| {
+        format!(
+            "cannot create app-config directory {}: {error}",
+            parent.display()
+        )
+    })?;
+    let content = serde_json::to_vec_pretty(settings)
+        .map_err(|error| format!("cannot encode global settings: {error}"))?;
+    fs::write(path, content).map_err(|error| {
+        format!(
+            "cannot write global settings at {}: {error}",
+            path.display()
+        )
+    })
+}
+
+fn nonempty_environment(name: &str) -> Result<Option<String>, String> {
+    match env::var(name) {
+        Ok(value) if value.trim().is_empty() => Ok(None),
+        Ok(value) => Ok(Some(value.trim().to_owned())),
+        Err(env::VarError::NotPresent) => Ok(None),
+        Err(error) => Err(format!("cannot read {name}: {error}")),
+    }
+}
+
+fn effective_global_entra_configuration(
+    settings: &GlobalSettings,
+) -> Result<GlobalEntraConfiguration, String> {
+    effective_global_entra_configuration_with_overrides(
+        settings,
+        nonempty_environment("DMS_ENTRA_CLIENT_ID")?,
+        nonempty_environment("DMS_ENTRA_TENANT_ID")?,
+    )
+}
+
+fn effective_global_entra_configuration_with_overrides(
+    settings: &GlobalSettings,
+    client_override: Option<String>,
+    tenant_override: Option<String>,
+) -> Result<GlobalEntraConfiguration, String> {
+    let client_id = client_override
+        .clone()
+        .unwrap_or_else(|| settings.entra_client_id.trim().to_owned());
+    let tenant_id = tenant_override
+        .clone()
+        .unwrap_or_else(|| settings.entra_tenant_id.trim().to_owned());
+    if let Some(tenant_id) = tenant_override.as_deref() {
+        Uuid::parse_str(tenant_id).map_err(|_| {
+            "DMS_ENTRA_TENANT_ID must be a Microsoft Entra directory UUID".to_owned()
+        })?;
+    }
+    Ok(GlobalEntraConfiguration {
+        client_id,
+        tenant_id,
+        client_id_environment_managed: client_override.is_some(),
+        tenant_id_environment_managed: tenant_override.is_some(),
+    })
+}
+
+fn runtime_entra_configuration(
+    effective: &GlobalEntraConfiguration,
+) -> Result<Option<graph::RuntimeEntraConfiguration>, String> {
+    if effective.client_id.is_empty() && effective.tenant_id.is_empty() {
+        return Ok(None);
+    }
+    if effective.client_id.is_empty() || effective.tenant_id.is_empty() {
+        return Err(
+            "both Microsoft Entra public-client ID and tenant ID must be configured".to_owned(),
+        );
+    }
+    Uuid::parse_str(&effective.client_id)
+        .map_err(|_| "Microsoft Entra public-client ID must be an application UUID".to_owned())?;
+    Ok(Some(graph::RuntimeEntraConfiguration {
+        client_id: effective.client_id.clone(),
+        tenant_id: Uuid::parse_str(&effective.tenant_id)
+            .map_err(|_| "Microsoft Entra tenant ID must be a directory UUID".to_owned())?,
+    }))
+}
+
 fn normalize_preferences(mut preferences: Preferences) -> Preferences {
     let mut seen = BTreeSet::new();
     preferences.recent_libraries = preferences
@@ -1573,12 +1771,41 @@ fn workspace_summary_from(workspace: &Workspace) -> WorkspaceSummary {
     }
 }
 
-fn workspace_configuration(edit_root: &Path) -> Result<WorkspaceConfiguration, String> {
+fn workspace_configuration(
+    app: &AppHandle,
+    edit_root: &Path,
+) -> Result<WorkspaceConfiguration, String> {
     let workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
-    workspace_configuration_from(&workspace)
+    let settings = load_global_settings_at(&global_settings_path(app)?)?;
+    workspace_configuration_from_with_global(
+        &workspace,
+        effective_global_entra_configuration(&settings)?,
+    )
 }
 
 fn workspace_configuration_from(workspace: &Workspace) -> Result<WorkspaceConfiguration, String> {
+    workspace_configuration_from_with_global(
+        workspace,
+        effective_global_entra_configuration(&GlobalSettings::default())?,
+    )
+}
+
+fn workspace_configuration_from_with_global(
+    workspace: &Workspace,
+    global_entra_configuration: GlobalEntraConfiguration,
+) -> Result<WorkspaceConfiguration, String> {
+    workspace_configuration_from_with_global_and_credentials(
+        workspace,
+        global_entra_configuration,
+        &notify::OsCredentialStore,
+    )
+}
+
+fn workspace_configuration_from_with_global_and_credentials<C: notify::CredentialStore>(
+    workspace: &Workspace,
+    global_entra_configuration: GlobalEntraConfiguration,
+    credentials: &C,
+) -> Result<WorkspaceConfiguration, String> {
     Ok(WorkspaceConfiguration {
         workspace: workspace_summary_from(workspace),
         default_review_interval_months: workspace.default_review_interval_months(),
@@ -1600,6 +1827,8 @@ fn workspace_configuration_from(workspace: &Workspace) -> Result<WorkspaceConfig
         eligible_people: workspace.eligible_people().into_iter().cloned().collect(),
         workflow_policies: workspace.workflow_policies(),
         notification_settings: workspace.notification_settings().cloned(),
+        global_entra_configuration,
+        smtp_credential_configured: credentials.smtp_password_exists(workspace.workspace_id)?,
     })
 }
 
@@ -1939,6 +2168,15 @@ pub fn run() {
         .manage(DesktopIntegrations::default())
         .setup(|app| {
             let handle = app.handle().clone();
+            let settings = load_global_settings_at(&global_settings_path(&handle)?)?;
+            let runtime =
+                runtime_entra_configuration(&effective_global_entra_configuration(&settings)?)?;
+            *app.state::<DesktopIntegrations>()
+                .graph
+                .lock()
+                .map_err(|_| "Microsoft Graph integration state is unavailable")? =
+                graph::MicrosoftGraphClient::production(runtime);
+            let handle = app.handle().clone();
             app.deep_link()
                 .on_open_url(move |_event| focus_main_window(&handle));
             if std::env::var_os("DMS_DESKTOP_SMOKE").is_some() {
@@ -1966,6 +2204,7 @@ pub fn run() {
             open_workspace,
             resolve_registered_permalink,
             load_workspace_configuration,
+            configure_global_entra,
             configure_default_review_interval,
             configure_document_type,
             configure_confidentiality_type,
@@ -2191,7 +2430,8 @@ mod tests {
         workspace.save().unwrap();
         let root = edit_root.path().to_string_lossy().into_owned();
 
-        let initial = load_workspace_configuration(root.clone()).unwrap();
+        let initial =
+            workspace_configuration_from(&Workspace::open(edit_root.path()).unwrap()).unwrap();
         assert!(initial.default_review_interval_months > 0);
         assert!(initial
             .policy_folders
@@ -2228,6 +2468,10 @@ mod tests {
         }
 
         impl GraphClient for RefreshedGraph {
+            fn tenant_id(&self) -> Result<Uuid, String> {
+                Ok(Uuid::nil())
+            }
+
             fn direct_user_members(
                 &mut self,
                 _source: &EntraIdentitySource,
@@ -2251,8 +2495,6 @@ mod tests {
         let approver_id = Uuid::new_v4();
         workspace
             .replace_identity_source(
-                Uuid::new_v4(),
-                "Example tenant",
                 Uuid::new_v4(),
                 "DMS workflow",
                 vec![
@@ -2294,24 +2536,6 @@ mod tests {
             policy.folder == "Policies/HR" && policy.editor.is_some() && policy.approver.is_none()
         }));
 
-        let notifications = configure_notifications(
-            root.clone(),
-            "smtp".into(),
-            "smtp.example.test".into(),
-            587,
-            "dms@example.test".into(),
-        )
-        .unwrap();
-        assert_eq!(
-            notifications
-                .notification_settings
-                .unwrap()
-                .smtp
-                .unwrap()
-                .relay_host,
-            "smtp.example.test"
-        );
-
         let catalogue = configure_confidentiality_type(
             root,
             "restricted".into(),
@@ -2321,6 +2545,193 @@ mod tests {
         )
         .unwrap();
         assert_eq!(catalogue.confidentiality_types[0].id, "restricted");
+    }
+
+    #[test]
+    fn global_entra_settings_use_complete_environment_overrides_or_fail_closed() {
+        let settings = GlobalSettings {
+            entra_client_id: Uuid::new_v4().to_string(),
+            entra_tenant_id: Uuid::new_v4().to_string(),
+        };
+        let tenant_id = Uuid::new_v4();
+        let client_id = Uuid::new_v4();
+
+        let effective = effective_global_entra_configuration_with_overrides(
+            &settings,
+            Some(client_id.to_string()),
+            Some(tenant_id.to_string()),
+        )
+        .unwrap();
+        assert_eq!(effective.client_id, client_id.to_string());
+        assert_eq!(effective.tenant_id, tenant_id.to_string());
+        assert!(effective.client_id_environment_managed);
+        assert!(effective.tenant_id_environment_managed);
+        assert_eq!(
+            runtime_entra_configuration(&effective)
+                .unwrap()
+                .unwrap()
+                .tenant_id,
+            tenant_id
+        );
+
+        assert!(effective_global_entra_configuration_with_overrides(
+            &settings,
+            None,
+            Some("not-a-tenant-id".to_owned()),
+        )
+        .unwrap_err()
+        .contains("DMS_ENTRA_TENANT_ID"));
+        assert!(runtime_entra_configuration(
+            &effective_global_entra_configuration_with_overrides(
+                &settings,
+                Some(client_id.to_string()),
+                None,
+            )
+            .unwrap(),
+        )
+        .is_ok());
+        assert!(runtime_entra_configuration(
+            &effective_global_entra_configuration_with_overrides(
+                &settings,
+                Some("not-a-client-id".to_owned()),
+                None,
+            )
+            .unwrap(),
+        )
+        .unwrap_err()
+        .contains("public-client ID"));
+    }
+
+    #[test]
+    fn global_entra_settings_round_trip_outside_workspace_metadata() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory
+            .path()
+            .join("config")
+            .join(GLOBAL_SETTINGS_FILENAME);
+        let settings = GlobalSettings {
+            entra_client_id: Uuid::new_v4().to_string(),
+            entra_tenant_id: Uuid::new_v4().to_string(),
+        };
+
+        save_global_settings_at(&path, &settings).unwrap();
+
+        assert_eq!(load_global_settings_at(&path).unwrap(), settings);
+        assert!(!path.to_string_lossy().contains(".dms"));
+    }
+
+    #[test]
+    fn smtp_configuration_requires_a_stored_app_password_and_never_persists_it() {
+        #[derive(Default)]
+        struct MemoryCredentials {
+            password: std::sync::Mutex<Option<String>>,
+        }
+
+        impl notify::CredentialStore for MemoryCredentials {
+            fn smtp_password(&self, _workspace_id: Uuid) -> Result<String, String> {
+                self.password
+                    .lock()
+                    .map_err(|_| "credential test store is unavailable".to_owned())?
+                    .clone()
+                    .ok_or_else(|| "SMTP app password is missing".to_owned())
+            }
+
+            fn set_smtp_password(&self, _workspace_id: Uuid, password: &str) -> Result<(), String> {
+                *self
+                    .password
+                    .lock()
+                    .map_err(|_| "credential test store is unavailable".to_owned())? =
+                    Some(password.to_owned());
+                Ok(())
+            }
+
+            fn delete_smtp_password(&self, _workspace_id: Uuid) -> Result<(), String> {
+                *self
+                    .password
+                    .lock()
+                    .map_err(|_| "credential test store is unavailable".to_owned())? = None;
+                Ok(())
+            }
+
+            fn smtp_password_exists(&self, _workspace_id: Uuid) -> Result<bool, String> {
+                Ok(self
+                    .password
+                    .lock()
+                    .map_err(|_| "credential test store is unavailable".to_owned())?
+                    .is_some())
+            }
+        }
+
+        let edit_root = tempfile::tempdir().unwrap();
+        let publish_root = tempfile::tempdir().unwrap();
+        Workspace::init(edit_root.path(), publish_root.path()).unwrap();
+        let credentials = MemoryCredentials::default();
+        let root = edit_root.path().to_string_lossy().into_owned();
+
+        let error = configure_notifications_with_credentials(
+            &root,
+            "smtp",
+            "smtp.example.test",
+            587,
+            "dms@example.test",
+            "",
+            &credentials,
+        )
+        .unwrap_err();
+
+        assert!(error.contains("requires a Microsoft 365 app password"));
+        assert!(Workspace::open(edit_root.path())
+            .unwrap()
+            .notification_settings()
+            .is_none());
+
+        let configured = configure_notifications_with_credentials(
+            &root,
+            "smtp",
+            "smtp.example.test",
+            587,
+            "dms@example.test",
+            "one-way-secret",
+            &credentials,
+        )
+        .unwrap();
+        assert!(configured.smtp_credential_configured);
+        assert!(!serde_json::to_string(&configured)
+            .unwrap()
+            .contains("one-way-secret"));
+        assert!(
+            !fs::read_to_string(edit_root.path().join(".dms/workspace.json"))
+                .unwrap()
+                .contains("one-way-secret")
+        );
+
+        let retained = configure_notifications_with_credentials(
+            &root,
+            "smtp",
+            "smtp.example.test",
+            587,
+            "dms@example.test",
+            "",
+            &credentials,
+        )
+        .unwrap();
+        assert!(retained.smtp_credential_configured);
+
+        let mailto = configure_notifications_with_credentials(
+            &root,
+            "mailto",
+            "",
+            587,
+            "",
+            "",
+            &credentials,
+        )
+        .unwrap();
+        assert!(!mailto.smtp_credential_configured);
+        assert_eq!(
+            mailto.notification_settings.unwrap().transport,
+            NotificationTransport::Mailto
+        );
     }
 
     #[test]
@@ -2761,10 +3172,15 @@ mod tests {
     #[test]
     fn production_lifecycle_helpers_compose_graph_delivery_and_pdf_export_with_fakes() {
         struct TestGraph {
+            tenant_id: Uuid,
             people: Vec<EntraPerson>,
         }
 
         impl GraphClient for TestGraph {
+            fn tenant_id(&self) -> std::result::Result<Uuid, String> {
+                Ok(self.tenant_id)
+            }
+
             fn direct_user_members(
                 &mut self,
                 _source: &EntraIdentitySource,
@@ -2827,13 +3243,7 @@ mod tests {
             EntraPerson::eligible(requester_id, "Rita Requester", "requester@example.test"),
         ];
         workspace
-            .replace_identity_source(
-                tenant_id,
-                "Example tenant",
-                Uuid::new_v4(),
-                "DMS workflow",
-                people.clone(),
-            )
+            .replace_identity_source(Uuid::new_v4(), "DMS workflow", people.clone())
             .unwrap();
         workspace
             .update_workflow_policy(
@@ -2872,7 +3282,7 @@ mod tests {
             .unwrap();
         workspace.save().unwrap();
         let root = edit_root.path().to_string_lossy().into_owned();
-        let mut graph = TestGraph { people };
+        let mut graph = TestGraph { tenant_id, people };
         let mut notifier = TestNotifier;
 
         let submitted = submit_document_candidate_with(

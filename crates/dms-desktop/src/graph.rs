@@ -15,6 +15,12 @@ const ENTRA_TOKEN_PURPOSE: &str = "entra-delegated-token";
 const GRAPH_SCOPE: &str = "openid profile offline_access User.Read GroupMember.Read.All";
 const GRAPH_API: &str = "https://graph.microsoft.com/v1.0";
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct RuntimeEntraConfiguration {
+    pub client_id: String,
+    pub tenant_id: Uuid,
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct DeviceLoginChallenge {
     pub challenge_id: Uuid,
@@ -232,6 +238,7 @@ fn read_response(
 
 pub(crate) struct MicrosoftGraphClient<H = UreqHttpClient, S = OsTokenStore> {
     client_id: Option<String>,
+    tenant_id: Option<Uuid>,
     http: H,
     tokens: S,
     pending: BTreeMap<Uuid, PendingDeviceLogin>,
@@ -239,12 +246,10 @@ pub(crate) struct MicrosoftGraphClient<H = UreqHttpClient, S = OsTokenStore> {
 }
 
 impl MicrosoftGraphClient {
-    pub fn production() -> Self {
+    pub fn production(configuration: Option<RuntimeEntraConfiguration>) -> Self {
         Self {
-            client_id: option_env!("DMS_ENTRA_CLIENT_ID")
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(str::to_owned),
+            client_id: configuration.as_ref().map(|value| value.client_id.clone()),
+            tenant_id: configuration.map(|value| value.tenant_id),
             http: UreqHttpClient,
             tokens: OsTokenStore,
             pending: BTreeMap::new(),
@@ -259,9 +264,10 @@ where
     S: TokenStore,
 {
     #[cfg(test)]
-    fn with_parts(client_id: &str, http: H, tokens: S) -> Self {
+    fn with_parts(client_id: &str, tenant_id: Uuid, http: H, tokens: S) -> Self {
         Self {
             client_id: Some(client_id.to_owned()),
+            tenant_id: Some(tenant_id),
             http,
             tokens,
             pending: BTreeMap::new(),
@@ -271,10 +277,9 @@ where
 
     pub fn begin_identity_source_setup(
         &mut self,
-        tenant_id: Uuid,
         group_id: Uuid,
     ) -> Result<DeviceLoginChallenge, String> {
-        self.begin_delegated_sign_in(tenant_id, Some(group_id))
+        self.begin_delegated_sign_in(self.configured_tenant_id()?, Some(group_id))
     }
 
     pub fn begin_approver_sign_in(
@@ -379,6 +384,12 @@ where
     fn client_id(&self) -> Result<&str, String> {
         self.client_id.as_deref().ok_or_else(|| {
             "this desktop build has no Microsoft Entra client ID; rebuild with DMS_ENTRA_CLIENT_ID set to the registered public-client application ID".to_owned()
+        })
+    }
+
+    fn configured_tenant_id(&self) -> Result<Uuid, String> {
+        self.tenant_id.ok_or_else(|| {
+            "Microsoft Entra tenant ID is not configured; set it in Application Entra configuration or DMS_ENTRA_TENANT_ID".to_owned()
         })
     }
 
@@ -591,20 +602,25 @@ where
     H: HttpClient,
     S: TokenStore,
 {
+    fn tenant_id(&self) -> Result<Uuid, String> {
+        self.configured_tenant_id()
+    }
+
     fn direct_user_members(
         &mut self,
         source: &EntraIdentitySource,
     ) -> Result<Vec<EntraPerson>, String> {
-        let token = self.token_for(source.tenant_id)?;
+        let token = self.token_for(self.configured_tenant_id()?)?;
         self.direct_user_members_with_token(source.group_id, &token)
     }
 
     fn authenticated_actor(
         &mut self,
-        source: &EntraIdentitySource,
+        _source: &EntraIdentitySource,
     ) -> Result<AuthenticatedActor, String> {
-        let token = self.token_for(source.tenant_id)?;
-        self.authenticated_actor_with_token(source.tenant_id, &token)
+        let tenant_id = self.configured_tenant_id()?;
+        let token = self.token_for(tenant_id)?;
+        self.authenticated_actor_with_token(tenant_id, &token)
     }
 }
 
@@ -747,12 +763,14 @@ mod tests {
                 ),
             ),
         ]);
-        let mut graph =
-            MicrosoftGraphClient::with_parts("client", http, MemoryTokenStore::default());
+        let mut graph = MicrosoftGraphClient::with_parts(
+            "client",
+            tenant_id,
+            http,
+            MemoryTokenStore::default(),
+        );
 
-        let challenge = graph
-            .begin_identity_source_setup(tenant_id, group_id)
-            .unwrap();
+        let challenge = graph.begin_identity_source_setup(group_id).unwrap();
         assert_eq!(challenge.user_code, "ABCD-EFGH");
         let preview = graph
             .complete_identity_source_setup(challenge.challenge_id)
@@ -780,8 +798,12 @@ mod tests {
             ),
             response(200, &format!(r#"{{"id":"{actor_id}"}}"#)),
         ]);
-        let mut graph =
-            MicrosoftGraphClient::with_parts("client", http, MemoryTokenStore::default());
+        let mut graph = MicrosoftGraphClient::with_parts(
+            "client",
+            tenant_id,
+            http,
+            MemoryTokenStore::default(),
+        );
 
         let challenge = graph.begin_approver_sign_in(tenant_id).unwrap();
         let actor = graph
@@ -820,11 +842,9 @@ mod tests {
                 ),
             ),
         ]);
-        let mut graph = MicrosoftGraphClient::with_parts("client", http, tokens);
+        let mut graph = MicrosoftGraphClient::with_parts("client", tenant_id, http, tokens);
         let source = EntraIdentitySource {
             binding_id: Uuid::new_v4(),
-            tenant_id,
-            tenant_display: "Contoso".to_owned(),
             group_id,
             group_label: "Quality".to_owned(),
             last_refreshed_at: None,

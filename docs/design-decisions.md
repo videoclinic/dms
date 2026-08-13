@@ -374,3 +374,25 @@ Capability-local rules stay in their CAP files.
   to Document defaults. Maintenance, releases, audit, and Library retain their
   separate operational roles. Saved Configuration views retain the active route;
   the no-workspace setup route cannot imply that missing policy settings exist.
+
+## ADR-0024 — App-global Entra runtime configuration and write-only SMTP credentials
+
+- **Decision:** The Entra public-client ID and tenant ID are non-secret,
+  app-global OS-user settings in Tauri's app-config directory, shared by all
+  local libraries. `DMS_ENTRA_CLIENT_ID` and `DMS_ENTRA_TENANT_ID` are evaluated
+  at process start; each non-empty valid value overrides its stored counterpart
+  and is read-only in Configuration, while an invalid non-empty value blocks
+  Graph work without fallback. `.dms` retains only the library's group binding,
+  display cache, role references, and historical workflow evidence. SMTP app
+  passwords are write-only Configuration input and live only in OS credential
+  storage keyed by workspace ID.
+- **Why:** A public-client/tenant pair identifies the desktop application and
+  organization rather than an individual library. Keeping it out of portable
+  workspace metadata avoids leaking tenant topology into copied libraries and
+  lets one operator configure it once. SMTP credentials must not cross the UI
+  persistence or IPC read boundary.
+- **Consequences:** A global tenant change never rewrites library metadata; the
+  next group refresh revalidates access and fails closed on mismatch or
+  inaccessibility. Tokens remain tenant-scoped in OS credential storage.
+  Switching a workspace to `mailto:` removes its SMTP credential. Environment
+  configuration is a process-level override, not a save target.

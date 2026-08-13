@@ -363,6 +363,7 @@ impl Workspace {
         {
             return Err(DmsError::ReleaseIntegrityRequired(review.release_id));
         }
+        let tenant_id = graph.tenant_id().map_err(DmsError::GraphRefreshFailed)?;
         self.refresh_eligible_people(graph)?;
         let source = self
             .identity_source
@@ -371,7 +372,7 @@ impl Workspace {
         let actor = graph
             .authenticated_actor(source)
             .map_err(DmsError::InteractiveSignInFailed)?;
-        if actor.tenant_id != source.tenant_id
+        if actor.tenant_id != tenant_id
             || actor.object_id != review.approver.object_id
             || !self.identity_cache.contains_key(&actor.object_id)
         {

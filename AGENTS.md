@@ -136,6 +136,9 @@ ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
 | Root `README.md` | Public project overview and current concept state; it summarizes but does not replace CAP, CHG, or architecture records |
 | Root `LICENSE` | MIT license for project source and documentation |
 | `Cargo.toml`, `Cargo.lock`, `crates/` | Rust workspace: shared `dms-core`, standalone `dms` CLI, and Tauri `dms-desktop` adapter |
+| `rust-toolchain.toml` | Exact Rust 1.88.0 toolchain with `clippy` and `rustfmt`; `Cargo.toml` retains the 1.88 MSRV |
+| Native Windows desktop development | Requires the MSVC Rust toolchain selected by `rust-toolchain.toml`, Visual Studio Build Tools with Desktop development with C++, and the WebView2 Evergreen Runtime; WSL is not a Windows desktop-integration substitute |
+| Ubuntu on WSL2 development | Uses Rustup-selected Linux Rust 1.88.0, Node.js, and Tauri's Ubuntu development libraries; keep the checkout under the Linux filesystem and treat any WSLg launch only as Linux-adapter validation |
 | `.github/workflows/desktop-platform-smoke.yml` | Rust 1.88 Windows/macOS workspace gate, desktop launch smoke, native multi-page WebView PDF export smoke, and NSIS/DMG packaging smoke |
 
 ### Index scope

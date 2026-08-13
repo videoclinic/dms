@@ -171,12 +171,12 @@ macOS** that:
 | 9i | Canonical notification templates and desktop delivery adapters | done (`39db45b`; local Rust format/test/Clippy and 59 frontend tests pass) | Core emits CAP-0010's literal review-request and minor-publication templates; desktop SMTP and host-mail adapters resolve credentials only from OS storage, preserve explicit `mailto:` confirmation, and pass fake-backed delivery tests and operator setup checks |
 | 9j | Live Entra setup, refresh, and approver sign-in | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 59 frontend tests; Linux launch smoke; release build) | Schema v10 persists each identity-cache refresh time; Configuration previews and explicitly applies administrator-supplied tenant/group bindings through interactive delegated Graph access; OS credential storage holds the delegated-token cache; direct-user filtering, refresh-before-role-assignment, policy rerouting, and approver actor verification pass fake-backed tests |
 | 9k | External lifecycle commands and Office export | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; release desktop build; 60 frontend tests; strict repository links; Markdown table structure; `git diff --check`) | Production submit/review/decision/release commands and Library operator surfaces compose the 9i delivery and 9j Graph adapters with installed Office automation on Windows/macOS; retryable mailto confirmations cover review, decision-outcome, and minor-publication delivery; integration fakes and operator smoke instructions pass |
-| 9k.1 | Runtime Entra configuration and SMTP app-password setup | pending | `cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0; schema-v11 fixtures prove only the library group binding remains in `.dms`, environment overrides are read-only, and the SMTP app password persists only in OS credential storage |
+| 9k.1 | Runtime Entra configuration and SMTP app-password setup | done (`cargo fmt --all -- --check`; `cargo test --workspace`; `cargo clippy --workspace --all-targets -- -D warnings`; 60 desktop UI tests; generated CAP-0010/CAP-0021 HTML and PNG checks; capability-link and Markdown-table checks; `git diff --check`) | Schema v11 removes workspace tenant ID/display while preserving the library group binding, cache, roles, and historical evidence; desktop runtime Graph construction obtains the public-client/tenant configuration from app-global settings and fails closed for invalid overrides; Configuration shows read-only environment-managed Entra fields and group-only library binding; SMTP app passwords are write-only OS credentials, retained on blank input, deleted for `mailto:`, and absent from workspace metadata, snapshots, IPC responses, errors, and wireframes |
 | 9l | External operator smokes + CAP promotion (deferred until a macOS host is available) | pending | Licensed Office release smoke passes on Windows and macOS; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated Node-runtime action annotations; every implemented CAP links executable evidence, CHG status is done, and the record is archived |
 
-**Current phase:** 9k.1 — pending. No phase is in progress; resume here after the
-Phase 9k checkpoint [`7b7402b`](https://github.com/videoclinic/dms/commit/7b7402b).
-Phase 9l remains blocked until a macOS host meets its entry pre-checks.
+**Current phase:** 9l — pending and blocked until a macOS host meets its entry
+pre-checks. Phase 9k.1 local verification is complete; resume from its checkpoint
+after this CHG update is committed and pushed.
 
 Mark a phase `in-progress` only while it is being executed, `done (<evidence>)`
 only after its gate passes, and `pending` otherwise.
@@ -219,7 +219,8 @@ persisting or returning it.
 **Created:** 2026-08-13
 **Depends on:** `CHG-0001#phase-9k` (`7b7402b`)
 **Plan family:** `CHG-0001-tauri-local-dms-bootstrap`
-**Status:** pending — implementation has not started
+**Status:** done — local implementation and verification complete; Phase 9l
+retains the external operator-smoke and CAP-promotion evidence.
 
 ### Phase 9k.1 fresh-session context
 
@@ -312,6 +313,18 @@ persisting or returning it.
 
 **Verification gate:**
 `cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0; v10→v11 fixtures prove tenant/client IDs are absent from `.dms` while group binding and evidence survive; frontend tests prove environment-provided client/tenant values are read-only; credential-store fakes prove the app password is write-only and absent from all returned/persisted workspace data; regenerated CAP-0010/CAP-0021 wireframes match the manifest; repository link and Markdown-table checks pass.
+
+**Completion evidence (2026-08-13):** `cargo fmt --all -- --check`,
+`cargo test --workspace`, and `cargo clippy --workspace --all-targets -- -D warnings`
+exit 0; `node --test crates/dms-desktop/ui/*.test.mjs` passes all 60 tests.
+The focused migration and desktop configuration tests cover group-only v11
+metadata, retained v10 backup, fail-closed runtime Entra configuration, and
+write-only SMTP credential retention/replacement/deletion. `node generate.mjs`
+regenerated the wireframes; headless Chrome rendered CAP-0010 and CAP-0021 PNGs,
+the manifest contains 21 non-empty HTML/PNG pairs, generated contract text is
+present, capability Markdown links resolve, Markdown table structure validates,
+and `git diff --check` exits 0. No Microsoft 365, licensed Office, Windows, or
+macOS external observation was attempted or claimed.
 
 ### Phase 9k.1 out of scope
 

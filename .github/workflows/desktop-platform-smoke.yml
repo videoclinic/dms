@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.88
+      - uses: dtolnay/rust-toolchain@1.88.0
         with:
           components: clippy, rustfmt
       - uses: actions/setup-node@v4

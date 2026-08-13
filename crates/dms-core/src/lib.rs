@@ -28,7 +28,7 @@ pub use lifecycle::*;
 pub use maintenance::*;
 pub use policies::*;
 
-pub const SCHEMA_VERSION: u32 = 10;
+pub const SCHEMA_VERSION: u32 = 11;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 
@@ -415,9 +415,12 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = matches!(found, 1..=9);
+        let migrated = matches!(found, 1..=10);
         if found == 1 {
             migrate_v1_catalogues(&mut value)?;
+        }
+        if found <= 10 {
+            migrate_v10_identity_source(&mut value);
         }
         if migrated {
             value["schema_version"] = serde_json::Value::from(SCHEMA_VERSION);
@@ -853,6 +856,17 @@ fn migrate_v1_catalogues(value: &mut serde_json::Value) -> Result<()> {
     }
     value["document_types"] = serde_json::Value::Object(document_types);
     Ok(())
+}
+
+fn migrate_v10_identity_source(value: &mut serde_json::Value) {
+    let Some(source) = value
+        .get_mut("identity_source")
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return;
+    };
+    source.remove("tenant_id");
+    source.remove("tenant_display");
 }
 
 fn canonical_existing_directory(path: &Path, label: &str) -> Result<PathBuf> {

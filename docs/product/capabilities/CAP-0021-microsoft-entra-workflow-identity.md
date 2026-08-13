@@ -5,13 +5,14 @@
 | ID | CAP-0021 |
 | Status | partial — Phase 9j live identity-source setup, refresh, and sign-in |
 | Authority | Microsoft Entra ID group |
-| Storage | `<edit-root>/.dms/` binding and display cache; OS credential store token cache |
+| Storage | `<edit-root>/.dms/` group binding and display cache; OS-user app-global Entra settings; OS credential store token cache |
 | Tests | [Core policy and schema migration tests](../../../crates/dms-core/tests/policies.rs), [desktop Graph and configuration tests](../../../crates/dms-desktop/src/graph.rs), [configuration UI tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
 
 ## Implemented subset
 
-1. **Configuration → Workflow → Manage identity source** accepts an
-   administrator-supplied tenant ID and group object ID, starts delegated
+1. **Configuration → Workflow → Manage identity source** uses a distinct
+   app-global public-client/tenant configuration card plus a per-library group
+   object ID card, starts delegated
    Microsoft Entra device authorization, previews the resolved tenant/group and
    eligible direct enabled user members, and applies the binding only after
    explicit confirmation.
@@ -24,30 +25,34 @@
 4. An approver sign-in command uses delegated device authorization, resolves
    `/me` to an immutable tenant/object-ID actor, and leaves the actor available
    to the lifecycle adapter. Approval-decision composition remains phase 9k.
-5. The public-client ID is build configuration. Delegated access and refresh
-   tokens are stored only in the OS credential store; `.dms` retains neither
-   tokens nor client secrets.
+5. The public-client and tenant IDs are app-global OS-user configuration.
+   Non-empty `DMS_ENTRA_CLIENT_ID` and `DMS_ENTRA_TENANT_ID` process values
+   override their stored counterparts and are read-only in Configuration;
+   invalid non-empty values fail closed. Delegated access and refresh tokens
+   are stored only in the OS credential store; `.dms` retains neither tokens,
+   client/tenant IDs, nor client secrets.
 
 ## Full capability contract (remaining outcomes are not all present)
 
 When implemented, the following must hold:
 
-1. Before a workspace can configure workflow roles or submit a review, it has a
-   Microsoft Entra identity-source binding. The binding contains the expected
-   tenant ID, one group object ID, and a display label. The desktop client ID is
-   product configuration, not a workspace secret. The application does not
+1. Before a workspace can configure workflow roles or submit a review, app-global
+   configuration provides a valid Microsoft Entra public-client ID and tenant ID,
+   and the workspace has an identity-source binding containing one group object
+   ID and a display label. The application does not
    create or modify the Entra group.
-2. While a binding exists, **Configuration → Workflow** shows its tenant
-   display, group label/object ID, connection state, eligible-person count, and
+2. While a binding exists, **Configuration → Workflow** shows the app-global
+   tenant configuration, group label/object ID, connection state, eligible-person count, and
    last refresh in a compact current-source summary. **Manage identity source**
    opens first setup and replacement as a secondary surface from Workflow with a
    visible return to that route; the identity source has no independent
    Configuration-navigation entry. The Tenant ID/group object ID form, preview,
    and replacement warning do not permanently occupy a main Configuration
    column.
-3. First setup and a later binding replacement require an operator to enter the
-   tenant ID and group object ID supplied by Microsoft 365 administration, sign
-   in interactively, preview the resolved source, and explicitly apply the
+3. First setup and a later binding replacement require an operator to configure
+   the public-client/tenant IDs supplied by Microsoft 365 administration and
+   then enter the library group object ID, sign in interactively, preview the
+   resolved source, and explicitly apply the
    binding. Replacing a binding marks every live workflow-role policy
    `unresolved`; the app never attempts to map roles between groups. Historical
    evidence remains unchanged.
@@ -107,5 +112,5 @@ When implemented, the following must hold:
 - Local store: [`CAP-0001-local-folder-dms.md`](CAP-0001-local-folder-dms.md)
 - Architecture: [`../../architecture.md`](../../architecture.md)
 - Privacy: [`../../privacy.md`](../../privacy.md)
-- ADR-0021: [`../../design-decisions.md`](../../design-decisions.md)
+- ADR-0021, ADR-0024: [`../../design-decisions.md`](../../design-decisions.md)
 - Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)

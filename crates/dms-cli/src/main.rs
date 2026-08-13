@@ -394,10 +394,6 @@ enum PolicyCommand {
         #[arg(long)]
         edit_root: PathBuf,
         #[arg(long)]
-        tenant_id: Uuid,
-        #[arg(long)]
-        tenant_display: String,
-        #[arg(long)]
         group_id: Uuid,
         #[arg(long)]
         group_label: String,
@@ -442,6 +438,10 @@ struct RemovalResult {
 struct UnavailableGraphClient;
 
 impl GraphClient for UnavailableGraphClient {
+    fn tenant_id(&self) -> std::result::Result<Uuid, String> {
+        Err("live Microsoft Graph integration is not configured".to_owned())
+    }
+
     fn direct_user_members(
         &mut self,
         _source: &EntraIdentitySource,
@@ -846,8 +846,6 @@ fn run_policy(command: PolicyCommand, json: bool) -> CliResult<()> {
         }
         PolicyCommand::ReplaceIdentitySource {
             edit_root,
-            tenant_id,
-            tenant_display,
             group_id,
             group_label,
             eligible_people,
@@ -856,13 +854,7 @@ fn run_policy(command: PolicyCommand, json: bool) -> CliResult<()> {
         } => {
             let people: Vec<EntraPerson> = read_marked_json(&eligible_people)?;
             let mut workspace = Workspace::open(&edit_root)?;
-            let source = workspace.replace_identity_source(
-                tenant_id,
-                &tenant_display,
-                group_id,
-                &group_label,
-                people,
-            )?;
+            let source = workspace.replace_identity_source(group_id, &group_label, people)?;
             workspace.update_workflow_policy(
                 ".",
                 RoleUpdate::replace(root_editor),

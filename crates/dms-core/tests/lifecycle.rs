@@ -58,13 +58,7 @@ impl Fixture {
             EntraPerson::eligible(requester_id, "Rita Requester", "requester@example.test"),
         ];
         workspace
-            .replace_identity_source(
-                tenant_id,
-                "Example tenant",
-                group_id,
-                "DMS workflow",
-                people.clone(),
-            )
+            .replace_identity_source(group_id, "DMS workflow", people.clone())
             .expect("identity source");
         workspace
             .update_workflow_policy(
@@ -142,6 +136,10 @@ struct FakeGraph {
 }
 
 impl GraphClient for FakeGraph {
+    fn tenant_id(&self) -> std::result::Result<Uuid, String> {
+        Ok(self.actor.tenant_id)
+    }
+
     fn direct_user_members(
         &mut self,
         _source: &EntraIdentitySource,

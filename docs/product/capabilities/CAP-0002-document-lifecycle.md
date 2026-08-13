@@ -15,8 +15,9 @@ When implemented, the following must hold:
 1. Only documents **in the library** (CAP-0006) participate in versioning and
    release. Uncontrolled files under the edit root are invisible to lifecycle
    actions until added.
-2. The workspace configuration binds workflow routing to a Microsoft Entra tenant
-   and group, plus non-secret SMTP relay settings. The group supplies eligible
+2. App-global OS-user configuration supplies the Microsoft Entra public-client
+   and tenant IDs, while workspace configuration binds workflow routing to one
+   Microsoft Entra group plus non-secret SMTP relay settings. The group supplies eligible
    people on demand; it is not copied into an application user roster. The relay
    password and Microsoft Entra delegated-token cache are resolved from the OS
    credential store, not `.dms`.

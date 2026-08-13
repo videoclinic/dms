@@ -19,8 +19,9 @@ PDFs under a **publish root**, with integrity checksums.
 | Microsoft Office (host-installed) | PDF export engine for Office drafts invoked by the app on release (Word/Excel/PowerPoint as applicable) |
 | Native WebView PDF API | Prints Markdown CommonMark HTML through a shipped print shell (header/footer chrome from release-context export map) to PDF on release |
 | Claude Desktop (optional host app) | Operator-mediated, consented handoff for advisory target-version mode and changelog wording; not a callable local model or lifecycle authority |
-| Microsoft Entra ID + Microsoft Graph | Per-workspace group supplies eligible workflow people; delegated interactive sign-in verifies review decisions; never reads or synchronizes document content |
-| `<edit-root>/.dms/` | Roots config, library registry, DMS-managed document control data, Microsoft Entra tenant/group binding + read-only display cache, SMTP settings (no secrets), folder confidentiality and workflow-role policies, notes, approval/release history, evidence hashes, checksums, advisory lock |
+| Microsoft Entra ID + Microsoft Graph | App-global public-client and tenant configuration plus a per-workspace group supplies eligible workflow people; delegated interactive sign-in verifies review decisions; never reads or synchronizes document content |
+| OS-user app config | `preferences.json` plus `global-settings.json`; the latter stores only the non-secret Entra public-client ID and tenant ID shared by local libraries |
+| `<edit-root>/.dms/` | Roots config, library registry, DMS-managed document control data, Entra group binding + read-only display cache, SMTP relay settings (no secrets), folder confidentiality and workflow-role policies, notes, approval/release history, evidence hashes, checksums, advisory lock |
 | Edit root tree | Operator-edited Microsoft Office and Markdown source drafts (library members are a subset) |
 | Publish root tree | Versioned released PDFs in a directory tree mirrored from edit-relative paths |
 
@@ -75,24 +76,29 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
   scheme opens a document selection without a review target and remains valid
   across draft renames and version bumps.
 - Workflow roles select individual, direct user members of the workspace's
-  configured Microsoft Entra group. `.dms` records the tenant and group object
-  IDs plus role references to immutable Entra user object IDs; it does not keep
-  an application-managed user roster. A group may be a Microsoft 365 group when
+  configured Microsoft Entra group. `.dms` records only the group object ID,
+  group label, display cache, and role references to immutable Entra user object
+  IDs. The public-client and tenant IDs are app-global OS-user configuration,
+  not workspace metadata. It does not keep an application-managed user roster. A group may be a Microsoft 365 group when
   its membership is exactly the intended workflow population.
 - The app refreshes Microsoft Graph membership when assigning a role and before
   workflow authority is applied. Cached display information is presentation
   data only. A missing, disabled, or no-longer-eligible identity leaves the
   policy unresolved and blocks new review work until rerouted.
 - The desktop public client uses delegated device authorization for identity
-  source setup and approver sign-in. Its Graph access and refresh tokens live
-  only in the OS credential store; the workspace persists no tokens or client
-  secret.
+  source setup and approver sign-in. `DMS_ENTRA_CLIENT_ID` and
+  `DMS_ENTRA_TENANT_ID`, when non-empty, override the corresponding stored
+  app-global value for that process and are read-only in Configuration. Invalid
+  non-empty overrides fail closed. Graph access and refresh tokens live only in
+  the OS credential store; the workspace persists no token, client ID, tenant
+  ID, or client secret.
 - Recording an approval decision requires interactive Microsoft Entra sign-in.
   The signed-in tenant/object ID must match the review's snapshotted effective
   approver and still be eligible in the bound group. This verifies the decision
   actor; it does not grant source-file access or turn the app into a web portal.
 - The application sends notification email through a configured SMTP relay. The
-  relay password is held in the OS credential store, never in `.dms`.
+  Microsoft 365 app password is a write-only Configuration input and is held in
+  the OS credential store, never in `.dms`, frontend state, or an IPC response.
 - When SMTP is not configured, the desktop app opens the host's default email
   handler with a pre-filled `mailto:` URI as a fallback notification path; this
   is an outbound mail draft, not a server-issued message, and the lifecycle

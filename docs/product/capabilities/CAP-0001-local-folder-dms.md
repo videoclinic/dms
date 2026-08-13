@@ -32,10 +32,12 @@ When implemented, the following must hold:
 7. If `.dms` is missing under a chosen edit root, the app initializes it only
    after an explicit confirm, including choosing or confirming the publish root.
 8. `.dms` stores the workspace confidentiality catalogue, document-type
-   catalogue, Microsoft Entra tenant/group binding, read-only identity display
-   cache, relative folder policies that reference Entra user object IDs, and
+   catalogue, Microsoft Entra group binding, read-only identity display cache,
+   relative folder policies that reference Entra user object IDs, and
    document-control-data fields required by CAP-0008, CAP-0015, CAP-0019, and
-   CAP-0021. It stores no SMTP password, OAuth token, or other credential.
+   CAP-0021. It stores no Entra tenant/client ID, SMTP password, OAuth token,
+   or other credential. The non-secret Entra public-client and tenant IDs are
+   OS-user app-global settings shared by local libraries.
 9. **Workspace** is the first route inside CAP-0005's Configuration workspace.
    When no workspace is open, the same route is the sole **Set up workspace**
    entry point; it guides the operator through edit-root and publish-root

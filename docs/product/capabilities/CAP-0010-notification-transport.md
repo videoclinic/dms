@@ -12,7 +12,12 @@
 When implemented, the following must hold:
 
 1. **Configuration → Notifications** stores the selected notification transport
-   (`smtp` or `mailto`) and the non-secret SMTP relay settings. The persistent
+   (`smtp` or `mailto`) and the non-secret SMTP relay settings. For SMTP it also
+   accepts a write-only Microsoft 365 app-password field that writes directly to
+   OS credential storage after relay validation; the value is never pre-filled,
+   serialized, or returned. A blank field retains an existing credential, while
+   SMTP cannot be saved or used without one. Switching to `mailto` deletes the
+   workspace-scoped SMTP credential. The persistent
    Configuration navigation also exposes Workspace, Document defaults, and
    Workflow so notification settings remain a discoverable peer rather than an
    isolated page. The relay password is always resolved from the OS credential

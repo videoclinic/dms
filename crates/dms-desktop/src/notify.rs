@@ -14,6 +14,9 @@ const SMTP_PASSWORD_PURPOSE: &str = "smtp-password";
 
 pub trait CredentialStore: Send + Sync {
     fn smtp_password(&self, workspace_id: Uuid) -> Result<String, String>;
+    fn set_smtp_password(&self, workspace_id: Uuid, password: &str) -> Result<(), String>;
+    fn delete_smtp_password(&self, workspace_id: Uuid) -> Result<(), String>;
+    fn smtp_password_exists(&self, workspace_id: Uuid) -> Result<bool, String>;
 }
 
 #[derive(Default)]
@@ -21,17 +24,57 @@ pub struct OsCredentialStore;
 
 impl CredentialStore for OsCredentialStore {
     fn smtp_password(&self, workspace_id: Uuid) -> Result<String, String> {
-        let entry = Entry::new(
-            KEYRING_SERVICE,
-            &format!("{workspace_id}/{SMTP_PASSWORD_PURPOSE}"),
-        )
-        .map_err(|error| format!("cannot access the OS credential store: {error}"))?;
+        let entry = smtp_password_entry(workspace_id)?;
         entry.get_password().map_err(|error| {
             format!(
                 "SMTP password is not available in the OS credential store for workspace {workspace_id}: {error}"
             )
         })
     }
+
+    fn set_smtp_password(&self, workspace_id: Uuid, password: &str) -> Result<(), String> {
+        if password.trim().is_empty() {
+            return Err("SMTP app password cannot be empty".to_owned());
+        }
+        smtp_password_entry(workspace_id)?
+            .set_password(password)
+            .map_err(|error| {
+                format!("cannot save SMTP app password in the OS credential store: {error}")
+            })
+    }
+
+    fn delete_smtp_password(&self, workspace_id: Uuid) -> Result<(), String> {
+        match smtp_password_entry(workspace_id)?.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(error) => Err(format!(
+                "cannot delete SMTP app password from the OS credential store: {error}"
+            )),
+        }
+    }
+
+    fn smtp_password_exists(&self, workspace_id: Uuid) -> Result<bool, String> {
+        match smtp_password_entry(workspace_id)?.get_password() {
+            Ok(_) => Ok(true),
+            Err(keyring::Error::NoEntry) => Ok(false),
+            Err(error) => Err(format!(
+                "cannot access the OS credential store for the SMTP app password: {error}"
+            )),
+        }
+    }
+}
+
+impl OsCredentialStore {
+    pub fn smtp_password_exists(workspace_id: Uuid) -> Result<bool, String> {
+        CredentialStore::smtp_password_exists(&Self, workspace_id)
+    }
+}
+
+fn smtp_password_entry(workspace_id: Uuid) -> Result<Entry, String> {
+    Entry::new(
+        KEYRING_SERVICE,
+        &format!("{workspace_id}/{SMTP_PASSWORD_PURPOSE}"),
+    )
+    .map_err(|error| format!("cannot access the OS credential store: {error}"))
 }
 
 pub struct DesktopNotifier<C> {
@@ -156,6 +199,18 @@ mod tests {
     impl CredentialStore for FakeCredentials {
         fn smtp_password(&self, _workspace_id: Uuid) -> Result<String, String> {
             Ok("not-used-for-mailto".to_owned())
+        }
+
+        fn set_smtp_password(&self, _workspace_id: Uuid, _password: &str) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn delete_smtp_password(&self, _workspace_id: Uuid) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn smtp_password_exists(&self, _workspace_id: Uuid) -> Result<bool, String> {
+            Ok(false)
         }
     }
 

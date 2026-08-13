@@ -240,7 +240,7 @@ tr:last-child td { border-bottom: 0; }
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Keep the bound group visible as a compact, read-only source; open setup or replacement only when the workspace source changes.</p>
+      <p class="subtitle">Configure the Entra public client and tenant once for this OS user; each library retains only its bound group and display cache.</p>
       <section class="configuration-nav" aria-label="Configuration navigation">
     <div class="config-nav-head"><div><h3>Configuration</h3><p>Set up the workspace once, then choose the task that matches the setting you need.</p></div><div class="config-secondary"><span>Workflow</span><span aria-hidden="true">›</span><strong>Identity source</strong><button class="btn outline config-back">← Back to Workflow</button></div></div>
     <nav class="config-tabs" aria-label="Configuration sections"><a class="config-tab" href="#"><strong>Workspace</strong><span>Roots and local metadata</span></a><a class="config-tab" href="#"><strong>Document defaults</strong><span>Classification and catalogues</span></a><a class="config-tab active" href="#" aria-current="page"><strong>Workflow</strong><span>People and role routing</span></a><a class="config-tab" href="#"><strong>Notifications</strong><span>Review and release email</span></a></nav>
@@ -255,8 +255,13 @@ tr:last-child td { border-bottom: 0; }
     .default-state { padding: 0.65rem 0.75rem; border-radius: calc(var(--radius) - 2px); background: var(--muted); font-size: 0.8rem; }
     .default-state strong { display: block; margin-bottom: 0.2rem; font-size: 0.82rem; }
   </style>
+      <section class="card">
+        <h3 class="card-title">Application Entra configuration</h3>
+        <dl class="kv"><div><dt>Public client ID</dt><dd>3e7f…c2a1 <span class="muted">(environment-managed, read only)</span></dd></div><div><dt>Tenant ID</dt><dd>8d29…0bf3 <span class="muted">(environment-managed, read only)</span></dd></div><div><dt>Storage</dt><dd>Per-OS-user app configuration; never written to a library .dms store</dd></div></dl>
+        <p class="hint">A non-empty <code>DMS_ENTRA_CLIENT_ID</code> or <code>DMS_ENTRA_TENANT_ID</code> overrides the stored value for this process. Invalid values block use rather than falling back.</p>
+      </section>
       <section class="config-summary">
-        <div class="summary-copy"><strong>Current identity source <span class="badge ok">connected</span></strong><span>videoclinic.de · VC DMS Workflow Users · 9c14…bf72 · 3 eligible people · refreshed 2025-08-05 09:16 UTC</span></div>
+        <div class="summary-copy"><strong>Current library group <span class="badge ok">connected</span></strong><span>VC DMS Workflow Users · 9c14…bf72 · 3 eligible people · refreshed 2025-08-05 09:16 UTC</span></div>
         <button class="btn outline">Refresh people</button>
         <button class="btn outline">Replace identity source…</button>
       </section>

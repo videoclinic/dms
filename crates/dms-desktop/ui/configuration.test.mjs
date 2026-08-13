@@ -58,6 +58,13 @@ const snapshot = {
     transport: "smtp",
     smtp: { relay_host: "smtp.example.test", relay_port: 587, sender: "dms@example.test" },
   },
+  global_entra_configuration: {
+    client_id: "client-1",
+    tenant_id: "tenant-1",
+    client_id_environment_managed: false,
+    tenant_id_environment_managed: true,
+  },
+  smtp_credential_configured: true,
 };
 
 const assistancePolicy = {
@@ -113,10 +120,13 @@ test("workflow route configures folder roles and opens identity source in place"
   assert.match(markup, /Eligible people — read only/);
   assert.match(markup, /identity-source-start/);
   assert.match(markup, /delegated Microsoft Graph access/);
+  assert.match(markup, /Application Entra configuration/);
+  assert.match(markup, /name="tenantId"[^>]*readonly/);
+  assert.match(markup, /Library Entra group/);
   assert.equal(closeConfigurationSecondary(state).secondary, null);
 });
 
-test("notifications route edits only non-secret transport settings", () => {
+test("notifications route submits a write-only SMTP app password without rendering it", () => {
   let state = applyConfigurationSnapshot(createConfigurationState(), snapshot);
   state = setConfigurationRoute(state, "notifications");
   const markup = configurationMarkup(state, assistancePolicy);
@@ -124,7 +134,9 @@ test("notifications route edits only non-secret transport settings", () => {
   assert.match(markup, /data-configuration-form="notifications"/);
   assert.match(markup, /smtp\.example\.test/);
   assert.match(markup, /OS credential store/);
-  assert.doesNotMatch(markup, /name="password"/);
+  assert.match(markup, /name="smtpAppPassword"/);
+  assert.match(markup, /type="password"/);
+  assert.match(markup, /Credential configured/);
 });
 
 test("confidentiality catalogue is a secondary surface that returns to document defaults", () => {
@@ -202,12 +214,23 @@ test("configuration mutations map forms to narrow desktop commands", () => {
   assert.deepEqual(
     configurationMutationRequest(
       "identity-source-start",
-      new Map([["tenantId", " tenant "], ["groupId", " group "]]),
+      new Map([["groupId", " group "]]),
       ".",
     ),
     {
       command: "begin_identity_source_sign_in",
-      arguments: { tenantId: "tenant", groupId: "group" },
+      arguments: { groupId: "group" },
+    },
+  );
+  assert.deepEqual(
+    configurationMutationRequest(
+      "global-entra",
+      new Map([["clientId", " client "], ["tenantId", " tenant "]]),
+      ".",
+    ),
+    {
+      command: "configure_global_entra",
+      arguments: { clientId: "client", tenantId: "tenant" },
     },
   );
   assert.deepEqual(
@@ -229,6 +252,7 @@ test("configuration mutations map forms to narrow desktop commands", () => {
         ["relayHost", " smtp.example.test "],
         ["relayPort", "587"],
         ["sender", " dms@example.test "],
+        ["smtpAppPassword", " one-way-secret "],
       ]),
       ".",
     ),
@@ -239,6 +263,7 @@ test("configuration mutations map forms to narrow desktop commands", () => {
         relayHost: "smtp.example.test",
         relayPort: 587,
         sender: "dms@example.test",
+        smtpAppPassword: "one-way-secret",
       },
     },
   );
