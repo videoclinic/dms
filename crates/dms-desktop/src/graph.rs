@@ -79,7 +79,6 @@ struct DeviceCodeResponse {
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 struct OAuthTokenResponse {
     access_token: String,
     refresh_token: Option<String>,
@@ -734,6 +733,22 @@ mod tests {
             status,
             body: body.to_owned(),
         }
+    }
+
+    #[test]
+    fn device_flow_token_response_accepts_documented_optional_fields() {
+        let token = parse_success::<OAuthTokenResponse>(
+            response(
+                200,
+                r#"{"token_type":"Bearer","scope":"openid profile offline_access User.Read GroupMember.Read.All","expires_in":3600,"access_token":"access","id_token":"identity","refresh_token":"refresh"}"#,
+            ),
+            "complete Microsoft Entra sign-in",
+        )
+        .unwrap();
+
+        assert_eq!(token.access_token, "access");
+        assert_eq!(token.refresh_token.as_deref(), Some("refresh"));
+        assert_eq!(token.expires_in, 3600);
     }
 
     #[test]

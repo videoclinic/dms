@@ -114,22 +114,25 @@ runtime Entra configuration shipped in phase 9k.1 of CHG-0001:
    (`crates/dms-desktop/ui/configuration.mjs:185-189`,
    `crates/dms-desktop/src/graph.rs:278-322`).
 
-The slice is purely an Entra configuration UX correction. It does not change
-the runtime Entra configuration shape, the Graph client, the OS credential
-store contract, the device-flow protocol, the privacy posture, or the Office
-export pipeline. CHG-0001 phase 9l (Windows external smokes + CAP promotion)
-remains untouched and continues to own the Office/release evidence gate.
+The slice is an Entra configuration UX correction plus one required Graph
+adapter remediation discovered during live device-flow sign-in: accept the
+documented optional fields in a successful token response. It does not change
+the runtime Entra configuration shape, scopes, OS credential-store contract,
+privacy posture, or Office export pipeline. CHG-0001 phase 9l (Windows external
+smokes + CAP promotion) remains untouched and continues to own the
+Office/release evidence gate.
 
 ## Phases
 
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
 | 1 | Fix global-entra save to stay on the configuration screen | done (`node --test crates/dms-desktop/ui/*.test.mjs` — 61 passed; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`) | `node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0 with a new test asserting the success notice equals `"Application Entra configuration saved."` and that the `GlobalEntraConfiguration` payload is never fed to `applyConfigurationSnapshot`; all existing configuration tests still pass |
-| 2 | Open device-flow verification_uri in the host browser (Configuration + Library) | pending | `cargo fmt --all -- --check`; `cargo test --workspace`; `cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs`; a new Rust unit test for `validate_external_url` covering `https://example.com` → `Ok`, `file:///etc/passwd` → `Err`, `javascript:alert(1)` → `Err`, empty → `Err`, `http://localhost:1234` → `Ok`, `http://example.com` → `Err`; frontend markup emits `data-open-external="https://…"` and never `target="_blank"` for the device-flow URI |
-| 3 | Allow regenerating an expired or failed device-code challenge | pending | `cargo test --workspace`; `node --test crates/dms-desktop/ui/*.test.mjs`; `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets -- -D warnings`; frontend test asserts that `state.configuration.identity_setup.challenge` plus a non-empty `state.configuration.error` renders a `data-configuration-form="identity-source-restart"` button (and is absent on a fresh challenge); Library test asserts the matching `data-library-approver-sign-in-restart` control; the restart path re-uses the existing `begin_identity_source_sign_in` / `begin_approver_sign_in` commands — no new IPC, no new Graph state |
-| 4 | CAP-0021 amendment + DOX closeout | pending | CAP-0021 `Implemented subset` lists three present-tense bullets for in-place save confirmation, host-browser opener, and expired-challenge regenerate control; `docs/changes/README.md` still lists both CHG-0001 and CHG-0002 as active; `docs/changes/active/` contains both files; `crates/dms-desktop/AGENTS.md` Configuration contract unchanged (the fix conforms to it); `git diff --check` clean; conventional commit lands with explicit verification evidence |
+| 2 | Accept documented optional fields in a successful device-flow token response | done (`CARGO_INCREMENTAL=0 cargo test -p dms-desktop device_flow_token_response_accepts_documented_optional_fields`; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs` — 61 passed) | `CARGO_INCREMENTAL=0 cargo test -p dms-desktop device_flow_token_response_accepts_documented_optional_fields` exits 0 after a RED run where the current strict response parser rejects `token_type`, `scope`, and `id_token`; `CARGO_INCREMENTAL=0 cargo test --workspace`, `cargo fmt --all -- --check`, and `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings` exit 0 |
+| 3 | Open device-flow verification_uri in the host browser (Configuration + Library) | pending | `cargo fmt --all -- --check`; `cargo test --workspace`; `cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs`; a new Rust unit test for `validate_external_url` covering `https://example.com` → `Ok`, `file:///etc/passwd` → `Err`, `javascript:alert(1)` → `Err`, empty → `Err`, `http://localhost:1234` → `Ok`, `http://example.com` → `Err`; frontend markup emits `data-open-external="https://…"` and never `target="_blank"` for the device-flow URI |
+| 4 | Allow regenerating an expired or failed device-code challenge | pending | `cargo test --workspace`; `node --test crates/dms-desktop/ui/*.test.mjs`; `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets -- -D warnings`; frontend test asserts that `state.configuration.identity_setup.challenge` plus a non-empty `state.configuration.error` renders a `data-configuration-form="identity-source-restart"` button (and is absent on a fresh challenge); Library test asserts the matching `data-library-approver-sign-in-restart` control; the restart path re-uses the existing `begin_identity_source_sign_in` / `begin_approver_sign_in` commands — no new IPC, no new Graph state |
+| 5 | CAP-0021 amendment + DOX closeout | pending | CAP-0021 `Implemented subset` lists three present-tense bullets for in-place save confirmation, host-browser opener, and expired-challenge regenerate control; `docs/changes/README.md` still lists both CHG-0001 and CHG-0002 as active; `docs/changes/active/` contains both files; `crates/dms-desktop/AGENTS.md` Configuration contract unchanged (the fix conforms to it); `git diff --check` clean; conventional commit lands with explicit verification evidence |
 
-**Current phase:** 2 — pending until the Phase 1 checkpoint is committed and pushed. Each phase below carries the steps,
+**Current phase:** 3 — pending until the Phase 2 checkpoint is committed. Each phase below carries the steps,
 verification gate, and recovery path the executor must follow.
 
 Mark a phase `in-progress` only while it is being executed, `done
@@ -183,7 +186,34 @@ the notice, and never writes to `appState.workspace`.
 `cargo fmt --all -- --check`, `cargo test --workspace`, and
 `cargo clippy --workspace --all-targets -- -D warnings` all exit 0.
 
-### Phase 2 — Open device-flow verification_uri in the host browser (Configuration + Library)
+### Phase 2 — Accept documented optional fields in a successful device-flow token response
+
+**Goal:** The Graph adapter parses Microsoft Entra's documented successful
+device-flow token response while retaining strict deserialization for fields it
+uses to persist the delegated token. In particular, a response containing
+`token_type`, `scope`, and `id_token` alongside `access_token`,
+`refresh_token`, and `expires_in` must not fail before the preview can begin.
+
+**Steps:**
+
+1. In `crates/dms-desktop/src/graph.rs`, add a focused unit test named
+   `device_flow_token_response_accepts_documented_optional_fields` that passes
+   a successful token response with `token_type`, `scope`, and `id_token` to
+   `parse_success::<OAuthTokenResponse>` and asserts the persisted fields.
+2. Run `CARGO_INCREMENTAL=0 cargo test -p dms-desktop
+   device_flow_token_response_accepts_documented_optional_fields`; it must fail
+   because `OAuthTokenResponse` currently uses `#[serde(deny_unknown_fields)]`.
+3. Remove `deny_unknown_fields` from `OAuthTokenResponse` only. Do not add or
+   store Microsoft token fields DMS does not use; Serde ignores them.
+4. Re-run the focused test, then the phase gate.
+
+**Verification gate:** the focused test completes a Microsoft-shaped response
+containing documented optional fields; `cargo fmt --all -- --check`,
+`CARGO_INCREMENTAL=0 cargo test --workspace`, and
+`CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`
+all exit 0.
+
+### Phase 3 — Open device-flow verification_uri in the host browser (Configuration + Library)
 
 **Goal:** The device-flow verification URL opens the host's default browser
 through Tauri shell opener. The stale `<a target="_blank">` markup is gone.
@@ -253,7 +283,7 @@ passes; `cargo fmt --all -- --check`, `cargo test --workspace`,
 switch to `reqwest::Url` (already a transitive dep) and document the
 rationale in the commit; do not silently fall back to substring checks.
 
-### Phase 3 — Allow regenerating an expired or failed device-code challenge
+### Phase 4 — Allow regenerating an expired or failed device-code challenge
 
 **Goal:** When `state.configuration.identity_setup.challenge` exists and
 either has expired server-side or was just failed by
@@ -331,7 +361,7 @@ inside `begin_delegated_sign_in` (`graph.rs:292-322`) in the same change —
 do not split into a separate CHG phase, and document the sweep in the CHG
 row's evidence line.
 
-### Phase 4 — CAP-0021 amendment + DOX closeout
+### Phase 5 — CAP-0021 amendment + DOX closeout
 
 **Goal:** The active CHG records this slice; CAP-0021 reflects the new
 operator-visible behaviour; the DOX chain stays consistent.
