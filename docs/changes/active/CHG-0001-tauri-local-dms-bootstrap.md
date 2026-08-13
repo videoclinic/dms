@@ -23,8 +23,9 @@
 | Follow-up request | Direct operator request: The UI concept should be adapted for scrolling, so the areas where navigation happens are not affected by scrolling in areas like document control data that can be very exchaustive and long |
 | Follow-up request | Direct operator request: Clicking "Recent libraries" is without effect |
 | Follow-up request | Direct operator request: Add an option to override the lock in the app |
+| Follow-up request | Direct operator request: make the Microsoft Entra public-client ID and tenant ID runtime-configurable for each company; `DMS_ENTRA_CLIENT_ID` and a tenant environment variable supplied before DMS starts must be read-only in the UI, while absent values remain editable; store the public-client ID and tenant ID globally, keep the group ID in library metadata, add Microsoft 365 SMTP app-password setup, and defer final macOS testing because no macOS computer is currently available. |
 | Affected CAPs | CAP-0001 … CAP-0022 |
-| Decision records | ADR-0001 … ADR-0023 in `docs/design-decisions.md` |
+| Decision records | ADR-0001 … ADR-0023 in `docs/design-decisions.md`; Phase 9k.1 adds ADR-0024 |
 
 ## Scope
 
@@ -170,10 +171,154 @@ macOS** that:
 | 9i | Canonical notification templates and desktop delivery adapters | done (`39db45b`; local Rust format/test/Clippy and 59 frontend tests pass) | Core emits CAP-0010's literal review-request and minor-publication templates; desktop SMTP and host-mail adapters resolve credentials only from OS storage, preserve explicit `mailto:` confirmation, and pass fake-backed delivery tests and operator setup checks |
 | 9j | Live Entra setup, refresh, and approver sign-in | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 59 frontend tests; Linux launch smoke; release build) | Schema v10 persists each identity-cache refresh time; Configuration previews and explicitly applies administrator-supplied tenant/group bindings through interactive delegated Graph access; OS credential storage holds the delegated-token cache; direct-user filtering, refresh-before-role-assignment, policy rerouting, and approver actor verification pass fake-backed tests |
 | 9k | External lifecycle commands and Office export | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; release desktop build; 60 frontend tests; strict repository links; Markdown table structure; `git diff --check`) | Production submit/review/decision/release commands and Library operator surfaces compose the 9i delivery and 9j Graph adapters with installed Office automation on Windows/macOS; retryable mailto confirmations cover review, decision-outcome, and minor-publication delivery; integration fakes and operator smoke instructions pass |
-| 9l | External operator smokes + CAP promotion | pending — start only after the Phase 9l entry pre-checks pass | Licensed Office release smoke passes on Windows and macOS; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated Node-runtime action annotations; every implemented CAP links executable evidence, CHG status is done, and the record is archived |
+| 9k.1 | Runtime Entra configuration and SMTP app-password setup | pending | `cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0; schema-v11 fixtures prove only the library group binding remains in `.dms`, environment overrides are read-only, and the SMTP app password persists only in OS credential storage |
+| 9l | External operator smokes + CAP promotion (deferred until a macOS host is available) | pending | Licensed Office release smoke passes on Windows and macOS; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated Node-runtime action annotations; every implemented CAP links executable evidence, CHG status is done, and the record is archived |
 
-**Current phase:** 9l — pending until every entry pre-check passes on the target
-operator hosts after Phase 9k checkpoint [`7b7402b`](https://github.com/videoclinic/dms/commit/7b7402b).
+**Current phase:** 9k.1 — pending. No phase is in progress; resume here after the
+Phase 9k checkpoint [`7b7402b`](https://github.com/videoclinic/dms/commit/7b7402b).
+Phase 9l remains blocked until a macOS host meets its entry pre-checks.
+
+Mark a phase `in-progress` only while it is being executed, `done (<evidence>)`
+only after its gate passes, and `pending` otherwise.
+
+## Risk call-out — Phase 9k.1
+
+The change moves a currently workspace-persisted Entra tenant binding into an
+app-global configuration and starts accepting an SMTP app password. A partial
+migration could make an existing group source unusable. The password may exist
+only transiently in the write-only form and its single local command input; it
+must never appear in `.dms`, persisted frontend state, an IPC response, test
+fixture, log, or the CHG.
+
+- Keep the working tree clean before the schema migration. The v10 fixture and
+  migration backup are the recovery path: if the v11 migration or save fails,
+  restore the retained v10 `workspace.json` backup and do not retry against the
+  partially written store.
+- Treat a non-empty but invalid `DMS_ENTRA_CLIENT_ID` or `DMS_ENTRA_TENANT_ID`
+  as an explicit configuration error. Do not silently fall back to a stored
+  value, and do not give the user an editable field that appears to override it.
+- Validate SMTP host/port/sender and the selected transport before writing a new
+  app password to OS storage. A blank password means “keep the stored password”;
+  an SMTP setup without a stored password must fail clearly before it can be
+  used. Switching to `mailto:` removes the workspace-scoped SMTP credential.
+- The local test suite and CI fakes prove the adapters only. They cannot prove a
+  Microsoft 365 SMTP app password, delegated Graph consent, installed Office,
+  or macOS host integration; those remain Phase 9l evidence.
+
+## Phase 9k.1 — Runtime Entra configuration and SMTP app-password setup
+
+**Goal:** Replace compile-time `DMS_ENTRA_CLIENT_ID` with app-global runtime
+configuration, add app-global `DMS_ENTRA_TENANT_ID` support, retain only each
+library’s Entra group ID in `.dms`, and let the Notifications route write a
+Microsoft 365 SMTP app password directly to OS credential storage without
+persisting or returning it.
+
+**Plan ID:** `CHG-0001#phase-9k.1`
+**Execution slot:** P0100 (phase-local; the active CHG keeps its immutable
+`CHG-0001-…` filename under the change-record lifecycle)
+**Created:** 2026-08-13
+**Depends on:** `CHG-0001#phase-9k` (`7b7402b`)
+**Plan family:** `CHG-0001-tauri-local-dms-bootstrap`
+**Status:** pending — implementation has not started
+
+### Phase 9k.1 fresh-session context
+
+- **Entry checkpoint:** Phase 9k checkpoint
+  [`7b7402b`](https://github.com/videoclinic/dms/commit/7b7402b); no uncommitted
+  changes unless they belong to this phase.
+- **Context sources:** this phase and the phase table in this CHG;
+  `docs/architecture.md` (**Runtime shape**, **Trust and control boundary**),
+  `docs/privacy.md` (**Data classes**, **Processing principles**),
+  `docs/design-decisions.md` (ADR-0009, ADR-0012, ADR-0021, ADR-0022),
+  `docs/product/capabilities/CAP-0001-local-folder-dms.md`,
+  `docs/product/capabilities/CAP-0010-notification-transport.md`,
+  `docs/product/capabilities/CAP-0021-microsoft-entra-workflow-identity.md`,
+  `crates/dms-core/AGENTS.md`, and `crates/dms-desktop/AGENTS.md`.
+- **Atomicity rationale:** This is one vertical slice: v11 metadata migration,
+  app-global settings, Graph construction, secure SMTP credential mutation, and
+  the Configuration forms must agree on the same ownership boundary. Splitting
+  them would either leave tenant IDs in workspace metadata or expose a password
+  input with no safe persistence path. This CHG exceeds the normal 40 KiB plan
+  warning because it is the repository’s single active historical progress
+  authority; a new session need load only this subsection and its listed sources.
+- **Produces:** schema-v11 migration/test fixtures; a global runtime Entra
+  configuration boundary; group-only library bindings; app-password setup;
+  refreshed CAP/ADR/architecture/privacy/wireframe contracts; and a Phase 9l
+  macOS-host blocker stated as an external verification condition.
+
+**Steps:**
+
+1. Amend the current-state contracts before code: add ADR-0024 for app-global
+   Entra client/tenant configuration and its environment precedence; update
+   CAP-0001, CAP-0002, CAP-0010, CAP-0021, `architecture.md`, and `privacy.md`.
+   Regenerate the CAP-0010 and CAP-0021 wireframes from
+   `docs/product/wireframes/generate.mjs` and render their PNGs. The contracts
+   must distinguish app-global configuration from per-library metadata and from
+   OS credentials.
+2. Add an app-global, per-OS-user configuration file beside
+   `preferences.json` in Tauri’s `app_config_dir`, named
+   `global-settings.json`. It holds only the non-secret Entra public-client ID
+   and tenant ID. It is shared by all local DMS libraries for that OS user and
+   is never written below `<edit-root>/.dms/`.
+3. Define the effective runtime configuration precisely:
+   - `DMS_ENTRA_CLIENT_ID` is read through `std::env::var` when DMS starts; it
+     replaces the compile-time `option_env!` path.
+   - `DMS_ENTRA_TENANT_ID` is read through `std::env::var` when DMS starts.
+   - Each non-empty environment value wins over the corresponding stored global
+     value for that process. The UI labels that field as environment-managed and
+     makes it read-only. An absent variable leaves the stored global field
+     editable. An invalid non-empty environment value is a blocking error, not
+     a fallback trigger.
+   - The Configuration → Workflow → Manage identity source surface has a
+     distinct **Application Entra configuration** card for the global public
+     client ID and tenant ID, and a **Library Entra group** card for the current
+     workspace’s group ID. Saving the global card does not rewrite any library.
+4. Migrate `.dms` from schema v10 to v11. Remove the tenant ID/display from
+   `EntraIdentitySource`; retain the binding ID, group ID/label, last refresh,
+   cached people, role references, and historical workflow evidence. The group
+   ID is the only current Entra configuration identifier owned by library
+   metadata. Runtime Graph operations obtain the tenant/client from effective
+   app-global settings. Existing historical decision events keep their recorded
+   tenant/object IDs. A global tenant change does not rewrite library metadata;
+   the next required refresh revalidates the group and fails closed on mismatch
+   or inaccessible membership.
+5. Retain the existing core Graph port, but keep app-config, environment,
+   desktop Graph transport, and credential-store logic out of `dms-core`.
+   Inject the effective global Entra configuration into the desktop Graph
+   client. Token entries remain tenant-scoped in the OS credential store;
+   `.dms` contains no token, client ID, tenant ID, or client secret after v11.
+6. Extend **Configuration → Notifications** for SMTP app-password setup. For
+   SMTP it shows a non-secret credential status and a write-only **Microsoft 365
+   app password** field; it never pre-fills, serializes, or returns the value.
+   The value exists only until its one-way local command submission completes.
+   An empty field retains an existing credential, while a missing credential is
+   rejected before an SMTP workflow operation. Write/replace/delete through a
+   narrow desktop credential-store boundary keyed by workspace ID, after core
+   notification settings validate. Selecting `mailto:` deletes the
+   workspace-scoped SMTP credential with the relay settings. The sender remains
+   the SMTP authentication user unless a later product request adds a distinct
+   username.
+7. Add focused migration, core-port, desktop adapter, credential-store fake, and
+   frontend tests. Cover runtime environment precedence and invalid overrides;
+   read-only environment-managed fields; editable stored fields; group-only v11
+   metadata; legacy v10 migration/backup; global tenant-change fail-closed
+   refresh; password write/replace/delete; blank-password retention; no password
+   in Configuration snapshots, IPC results, `.dms`, or errors; and the existing
+   SMTP/`mailto:` delivery paths. Use synthetic values only.
+8. Run the phase gate, check generated wireframe/index/manifest links and
+   Markdown tables, then record the exact command output in the phase status
+   before starting Phase 9l. Do not attempt or promote external Microsoft 365,
+   Office, Windows, or macOS observations as local test evidence.
+
+**Verification gate:**
+`cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0; v10→v11 fixtures prove tenant/client IDs are absent from `.dms` while group binding and evidence survive; frontend tests prove environment-provided client/tenant values are read-only; credential-store fakes prove the app password is write-only and absent from all returned/persisted workspace data; regenerated CAP-0010/CAP-0021 wireframes match the manifest; repository link and Markdown-table checks pass.
+
+### Phase 9k.1 out of scope
+
+- Running against a live Microsoft 365 tenant, SMTP relay, licensed Office, or
+  macOS host; those observations are Phase 9l-only evidence.
+- Promoting affected CAPs to implemented or archiving this CHG before Phase 9l
+  passes on both required operating systems.
 
 ## Implementation notes
 
@@ -197,7 +342,8 @@ operator hosts after Phase 9k checkpoint [`7b7402b`](https://github.com/videocli
   in phase 2 — must include `edit_root`, `publish_root`, stable workspace ID,
   library entries with
   relative paths and stable IDs, confidentiality and document-type catalogues,
-  Microsoft Entra tenant/group binding plus a read-only display cache,
+  Microsoft Entra group binding plus a read-only display cache (the global
+  client/tenant configuration is outside `.dms`),
   direct relative folder policies (including the required root policy),
   document control data, per-doc overrides, version counters,
   release history, approval event chain, review-request IDs, requester identity,
@@ -235,10 +381,53 @@ operator hosts after Phase 9k checkpoint [`7b7402b`](https://github.com/videocli
   interactive operator identity. CI fakes and unit tests do not satisfy those
   external gates.
 
-### Phase 9k operator smoke instructions
+## Phase 9l — External operator smokes + CAP promotion
 
-1. In Configuration, apply the tenant/group binding, refresh its eligible people,
-   and configure either SMTP with its OS-stored credential or `mailto:` delivery.
+**Goal:** On suitable Windows and macOS hosts, prove the configured Entra,
+SMTP-or-host-mail, and Office release paths end to end, then update CAP status
+only for evidence that those hosts establish.
+
+**Plan ID:** `CHG-0001#phase-9l`
+**Execution slot:** P0200 (phase-local; the active CHG keeps its immutable
+`CHG-0001-…` filename under the change-record lifecycle)
+**Created:** 2026-08-13
+**Depends on:** `CHG-0001#phase-9k.1`
+**Plan family:** `CHG-0001-tauri-local-dms-bootstrap`
+**Status:** pending — blocked until a suitable macOS host is available
+
+### Phase 9l fresh-session context
+
+- **Entry checkpoint:** Phase 9k.1 marked `done (<gate evidence>)` in this CHG.
+- **Context sources:** Phase 9k.1; this Phase 9l section; CAP-0001, CAP-0002,
+  CAP-0010, CAP-0021; `docs/architecture.md`; `docs/privacy.md`; and the
+  Windows/macOS desktop-smoke workflow.
+- **Produces:** non-secret Windows and macOS operator-smoke evidence, current
+  CAP outcomes where evidence warrants them, and an archived CHG only after all
+  active change gates pass.
+
+**Steps:**
+
+1. Run every Phase 9l entry pre-check before changing this phase to
+   `in-progress`; leave it pending if macOS hardware, a licensed Office host,
+   or controlled identity/notification access is unavailable.
+2. On each host, run the controlled Entra identity, major-review, decision,
+   notification, and Office/Markdown release scenarios below. Preserve only
+   non-secret paths, checksums, test output, and workflow evidence.
+3. Run the repository record/link/table and workspace gates on the checkout that
+   supplies the observed build. Update CAPs only with present-tense behaviour
+   proven by the evidence, then record exact gates before closing the CHG.
+
+**Verification gate:**
+All five entry pre-checks pass; Windows and macOS each produce non-secret
+evidence for the configured identity, notification, and release flows; required
+Rust/frontend/records/link gates exit 0; and CAP statuses and CHG closure match
+the recorded evidence.
+
+### Phase 9l operator smoke instructions
+
+1. In Configuration, enter the global public-client/tenant configuration, apply
+   the library group binding, refresh its eligible people, and configure either
+   SMTP with its OS-stored credential or `mailto:` delivery.
 2. Add or open a controlled draft, select an eligible requesting editor, submit a
    major candidate, and confirm that a `mailto:` draft does not advance review
    until the operator confirms it was sent.
