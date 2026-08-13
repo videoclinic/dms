@@ -1634,6 +1634,22 @@ async function handleSubmit(event) {
         render(appState);
         return;
       }
+      if (configurationMutation === "global-entra") {
+        appState = {
+          ...appState,
+          configuration: {
+            ...appState.configuration,
+            snapshot: {
+              ...appState.configuration.snapshot,
+              global_entra_configuration: result,
+            },
+            notice: "Application Entra configuration saved.",
+            error: "",
+          },
+        };
+        render(appState);
+        return;
+      }
       const notices = {
         "review-interval": "Default review interval saved.",
         "document-type": "Document type saved.",
@@ -1642,6 +1658,7 @@ async function handleSubmit(event) {
         "remove-confidentiality-policy": "Folder confidentiality policy removed.",
         "workflow-policy": "Workflow roles saved.",
         "remove-workflow-policy": "Folder workflow exception removed.",
+        "global-entra": "Application Entra configuration saved.",
         notifications: "Notification transport saved.",
       };
       const notice = notices[configurationMutation] ?? "Configuration saved.";

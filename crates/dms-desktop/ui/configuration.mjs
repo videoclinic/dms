@@ -31,6 +31,9 @@ export function createConfigurationState() {
 }
 
 export function applyConfigurationSnapshot(state, snapshot, notice = "") {
+  if (!snapshot?.workspace) {
+    return { ...state, notice: "", error: "" };
+  }
   const folders = snapshot?.policy_folders?.map((folder) => folder.relative_path) ?? [];
   const selected = folders.includes(state.selected_folder) ? state.selected_folder : ".";
   return {

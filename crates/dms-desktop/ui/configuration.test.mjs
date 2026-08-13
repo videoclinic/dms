@@ -87,6 +87,34 @@ test("configuration state keeps one routed activity and a selected policy folder
   assert.throws(() => setConfigurationRoute(state, "unknown"), /Unknown configuration route/);
 });
 
+test("configuration snapshot rejects a global Entra result without a workspace snapshot", () => {
+  const savedGlobalEntra = {
+    client_id: "client-2",
+    tenant_id: "tenant-2",
+    client_id_environment_managed: false,
+    tenant_id_environment_managed: false,
+  };
+  const initial = applyConfigurationSnapshot(createConfigurationState(), snapshot);
+  const saved = applyConfigurationSnapshot(
+    initial,
+    { ...snapshot, global_entra_configuration: savedGlobalEntra },
+    "Application Entra configuration saved.",
+  );
+
+  assert.equal(saved.notice, "Application Entra configuration saved.");
+  assert.deepEqual(saved.snapshot.workspace, workspace);
+  assert.deepEqual(saved.snapshot.global_entra_configuration, savedGlobalEntra);
+
+  const rawResult = applyConfigurationSnapshot(
+    saved,
+    savedGlobalEntra,
+    "Application Entra configuration saved.",
+  );
+  assert.deepEqual(rawResult.snapshot, saved.snapshot);
+  assert.equal(rawResult.notice, "");
+  assert.equal(rawResult.error, "");
+});
+
 test("workspace route shows the persistent route navigation and supported local settings", () => {
   const state = applyConfigurationSnapshot(createConfigurationState(), snapshot);
   const markup = configurationMarkup(state, assistancePolicy);
