@@ -172,11 +172,12 @@ macOS** that:
 | 9j | Live Entra setup, refresh, and approver sign-in | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 59 frontend tests; Linux launch smoke; release build) | Schema v10 persists each identity-cache refresh time; Configuration previews and explicitly applies administrator-supplied tenant/group bindings through interactive delegated Graph access; OS credential storage holds the delegated-token cache; direct-user filtering, refresh-before-role-assignment, policy rerouting, and approver actor verification pass fake-backed tests |
 | 9k | External lifecycle commands and Office export | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; release desktop build; 60 frontend tests; strict repository links; Markdown table structure; `git diff --check`) | Production submit/review/decision/release commands and Library operator surfaces compose the 9i delivery and 9j Graph adapters with installed Office automation on Windows/macOS; retryable mailto confirmations cover review, decision-outcome, and minor-publication delivery; integration fakes and operator smoke instructions pass |
 | 9k.1 | Runtime Entra configuration and SMTP app-password setup | done (`cargo fmt --all -- --check`; `cargo test --workspace`; `cargo clippy --workspace --all-targets -- -D warnings`; 60 desktop UI tests; generated CAP-0010/CAP-0021 HTML and PNG checks; capability-link and Markdown-table checks; `git diff --check`) | Schema v11 removes workspace tenant ID/display while preserving the library group binding, cache, roles, and historical evidence; desktop runtime Graph construction obtains the public-client/tenant configuration from app-global settings and fails closed for invalid overrides; Configuration shows read-only environment-managed Entra fields and group-only library binding; SMTP app passwords are write-only OS credentials, retained on blank input, deleted for `mailto:`, and absent from workspace metadata, snapshots, IPC responses, errors, and wireframes |
-| 9l | External operator smokes + CAP promotion (deferred until a macOS host is available) | pending | Licensed Office release smoke passes on Windows and macOS; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated Node-runtime action annotations; every implemented CAP links executable evidence, CHG status is done, and the record is archived |
+| 9l | Windows external operator smokes + CAP promotion | pending | Licensed Office release smoke passes on Windows; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated Node-runtime action annotations; CAP statuses distinguish Windows-host evidence from existing CI coverage and make no untested macOS-installed-Office claim; CHG status is done and the record is archived |
 
-**Current phase:** 9l — pending and blocked until a macOS host meets its entry
-pre-checks. Phase 9k.1 local verification is complete; resume from its checkpoint
-after this CHG update is committed and pushed.
+**Current phase:** 9l — pending until a Windows host meets its entry pre-checks.
+Phase 9k.1 local verification is complete; resume from its checkpoint after this
+CHG update is committed and pushed. macOS remains a supported runtime target with
+existing CI coverage, but an external macOS operator smoke is not a Phase 9l gate.
 
 Mark a phase `in-progress` only while it is being executed, `done (<evidence>)`
 only after its gate passes, and `pending` otherwise.
@@ -202,8 +203,9 @@ fixture, log, or the CHG.
   an SMTP setup without a stored password must fail clearly before it can be
   used. Switching to `mailto:` removes the workspace-scoped SMTP credential.
 - The local test suite and CI fakes prove the adapters only. They cannot prove a
-  Microsoft 365 SMTP app password, delegated Graph consent, installed Office,
-  or macOS host integration; those remain Phase 9l evidence.
+  Microsoft 365 SMTP app password, delegated Graph consent, or installed Office
+  on a configured Windows host; those remain Phase 9l evidence. Existing macOS
+  CI coverage is retained, but no external macOS operator smoke is scheduled.
 
 ## Phase 9k.1 — Runtime Entra configuration and SMTP app-password setup
 
@@ -245,7 +247,7 @@ retains the external operator-smoke and CAP-promotion evidence.
 - **Produces:** schema-v11 migration/test fixtures; a global runtime Entra
   configuration boundary; group-only library bindings; app-password setup;
   refreshed CAP/ADR/architecture/privacy/wireframe contracts; and a Phase 9l
-  macOS-host blocker stated as an external verification condition.
+  Windows-host external verification condition.
 
 **Steps:**
 
@@ -309,7 +311,7 @@ retains the external operator-smoke and CAP-promotion evidence.
 8. Run the phase gate, check generated wireframe/index/manifest links and
    Markdown tables, then record the exact command output in the phase status
    before starting Phase 9l. Do not attempt or promote external Microsoft 365,
-   Office, Windows, or macOS observations as local test evidence.
+   Office, or Windows observations as local test evidence.
 
 **Verification gate:**
 `cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0; v10→v11 fixtures prove tenant/client IDs are absent from `.dms` while group binding and evidence survive; frontend tests prove environment-provided client/tenant values are read-only; credential-store fakes prove the app password is write-only and absent from all returned/persisted workspace data; regenerated CAP-0010/CAP-0021 wireframes match the manifest; repository link and Markdown-table checks pass.
@@ -328,10 +330,13 @@ macOS external observation was attempted or claimed.
 
 ### Phase 9k.1 out of scope
 
-- Running against a live Microsoft 365 tenant, SMTP relay, licensed Office, or
-  macOS host; those observations are Phase 9l-only evidence.
+- Running against a live Microsoft 365 tenant, SMTP relay, or licensed Windows
+  Office host; those observations are Phase 9l-only evidence. An external macOS
+  operator smoke is deferred and is not a gate for this CHG.
 - Promoting affected CAPs to implemented or archiving this CHG before Phase 9l
-  passes on both required operating systems.
+  passes its Windows-host gate. Existing macOS CI evidence remains required for
+  the supported-target claim, but no external macOS Office observation gates
+  this CHG.
 
 ## Implementation notes
 
@@ -389,16 +394,18 @@ macOS external observation was attempted or claimed.
   operator surfaces or transitions land, including full lifecycle composition,
   complete corruption recovery and backup-history surfaces, and external
   Entra/Office smoke evidence.
-- The Office-on-Windows/macOS and administrator-configured Microsoft 365 Entra
-  smokes require licensed host applications, a configured tenant/group, and an
+- The Windows Office and administrator-configured Microsoft 365 Entra smokes
+  require a licensed Windows host application, a configured tenant/group, and an
   interactive operator identity. CI fakes and unit tests do not satisfy those
-  external gates.
+  external gates. The CI macOS package and native Markdown PDF smoke remain the
+  current macOS evidence; external macOS Office observation is deferred.
 
-## Phase 9l — External operator smokes + CAP promotion
+## Phase 9l — Windows external operator smokes + CAP promotion
 
-**Goal:** On suitable Windows and macOS hosts, prove the configured Entra,
+**Goal:** On a suitable Windows host, prove the configured Entra,
 SMTP-or-host-mail, and Office release paths end to end, then update CAP status
-only for evidence that those hosts establish.
+only for evidence that host establishes. macOS remains supported through existing
+CI coverage; this phase does not assert external macOS Office evidence.
 
 **Plan ID:** `CHG-0001#phase-9l`
 **Execution slot:** P0200 (phase-local; the active CHG keeps its immutable
@@ -406,24 +413,25 @@ only for evidence that those hosts establish.
 **Created:** 2026-08-13
 **Depends on:** `CHG-0001#phase-9k.1`
 **Plan family:** `CHG-0001-tauri-local-dms-bootstrap`
-**Status:** pending — blocked until a suitable macOS host is available
+**Status:** pending — blocked until a suitable Windows host meets the entry pre-checks
 
 ### Phase 9l fresh-session context
 
 - **Entry checkpoint:** Phase 9k.1 marked `done (<gate evidence>)` in this CHG.
 - **Context sources:** Phase 9k.1; this Phase 9l section; CAP-0001, CAP-0002,
   CAP-0010, CAP-0021; `docs/architecture.md`; `docs/privacy.md`; and the
-  Windows/macOS desktop-smoke workflow.
-- **Produces:** non-secret Windows and macOS operator-smoke evidence, current
-  CAP outcomes where evidence warrants them, and an archived CHG only after all
-  active change gates pass.
+  Windows/macOS desktop-smoke workflow for retained CI evidence.
+- **Produces:** non-secret Windows operator-smoke evidence, current CAP outcomes
+  where that evidence warrants them, and an archived CHG only after all active
+  change gates pass. No CAP outcome may claim unobserved macOS-installed-Office
+  behaviour.
 
 **Steps:**
 
 1. Run every Phase 9l entry pre-check before changing this phase to
-   `in-progress`; leave it pending if macOS hardware, a licensed Office host,
-   or controlled identity/notification access is unavailable.
-2. On each host, run the controlled Entra identity, major-review, decision,
+   `in-progress`; leave it pending if the Windows host, licensed Office, or
+   controlled identity/notification access is unavailable.
+2. On the Windows host, run the controlled Entra identity, major-review, decision,
    notification, and Office/Markdown release scenarios below. Preserve only
    non-secret paths, checksums, test output, and workflow evidence.
 3. Run the repository record/link/table and workspace gates on the checkout that
@@ -431,10 +439,10 @@ only for evidence that those hosts establish.
    proven by the evidence, then record exact gates before closing the CHG.
 
 **Verification gate:**
-All five entry pre-checks pass; Windows and macOS each produce non-secret
-evidence for the configured identity, notification, and release flows; required
-Rust/frontend/records/link gates exit 0; and CAP statuses and CHG closure match
-the recorded evidence.
+All five entry pre-checks pass; Windows produces non-secret evidence for the
+configured identity, notification, and release flows; required Rust/frontend/
+records/link gates exit 0; CAP statuses make no untested macOS-installed-Office
+claim; and CHG closure matches the recorded evidence.
 
 ### Phase 9l operator smoke instructions
 
@@ -446,10 +454,10 @@ the recorded evidence.
    until the operator confirms it was sent.
 3. Use the Library review action to complete interactive approver sign-in, record
    a decision as an eligible approver, and confirm any `mailto:` decision notice.
-4. Release the approved candidate on a licensed Windows or macOS Office host for
-   `.docx`, or release a Markdown candidate through the native WebView print
-   path; verify the versioned PDF and workflow evidence. Exercise a direct minor
-   release and confirm its publication notice the same way.
+4. Release the approved candidate on the licensed Windows Office host for `.docx`
+   and release a Markdown candidate through the native WebView print path; verify
+   the versioned PDFs and workflow evidence. Exercise a direct minor release and
+   confirm its publication notice the same way.
 5. Use the evidence panel to verify each delivery attempt and retry control. The
    resulting configured Entra, delivery, and licensed-Office observations are
    Phase 9l acceptance evidence; never place tenant credentials in the record.
@@ -460,10 +468,10 @@ Run and record these checks before changing Phase 9l from pending to in-progress
 If any check fails, leave Phase 9l pending; do not promote a CAP or run a partial
 external smoke as phase evidence.
 
-1. A Windows host and a macOS host are each available outside WSL, each has the
-   Phase 9k checkpoint or a later `main` checkout, and each has an activated,
-   licensed Office installation that can export a controlled `.docx` to PDF.
-2. Each host has a disposable DMS workspace with explicit edit and publish roots,
+1. A Windows host is available outside WSL with the Phase 9k.1 checkpoint or a
+   later `main` checkout and an activated, licensed Office installation that can
+   export a controlled `.docx` to PDF.
+2. The Windows host has a disposable DMS workspace with explicit edit and publish roots,
    a controlled `.docx` draft, and permission to inspect and remove its generated
    PDF evidence.
 3. An Entra administrator can apply the intended tenant/group binding, and two
@@ -473,7 +481,7 @@ external smoke as phase evidence.
    SMTP relay with its credential already in OS credential storage, or a registered
    host mail handler that can compose and manually confirm delivery. Use only
    controlled test recipients.
-5. The operator can retain non-secret evidence for each host: exported PDF path
+5. The operator can retain non-secret Windows-host evidence: exported PDF path
    and checksum, workflow-history delivery outcomes, Entra actor verification, and
    command/test output. Never record tokens, relay credentials, or tenant secrets.
 - Phase 9 was expected to be promotion-only, but the CAP audit found unresolved
