@@ -12,6 +12,8 @@ use uuid::Uuid;
 
 const KEYRING_SERVICE: &str = "dms-desktop";
 const ENTRA_TOKEN_PURPOSE: &str = "entra-delegated-token";
+const TOKEN_CHUNK_UTF16_LIMIT: usize = 2_048;
+const MAX_TOKEN_CHUNKS: usize = 128;
 const GRAPH_SCOPE: &str = "openid profile offline_access User.Read GroupMember.Read.All";
 const GRAPH_API: &str = "https://graph.microsoft.com/v1.0";
 
@@ -40,12 +42,20 @@ pub struct IdentitySourcePreview {
     pub eligible_people: Vec<EntraPerson>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct DelegatedToken {
     access_token: String,
     refresh_token: String,
     expires_at: DateTime<Utc>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct DelegatedTokenManifest {
+    version: u8,
+    generation: Uuid,
+    chunk_count: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -141,16 +151,18 @@ pub(crate) trait TokenStore: Send {
     fn save(&self, tenant_id: Uuid, token: &DelegatedToken) -> Result<(), String>;
 }
 
-#[derive(Default)]
-pub(crate) struct OsTokenStore;
+trait TokenCredentials {
+    fn get(&self, account: &str) -> Result<Option<String>, String>;
+    fn set(&self, account: &str, password: &str) -> Result<(), String>;
+    fn delete(&self, account: &str) -> Result<(), String>;
+}
 
-impl TokenStore for OsTokenStore {
-    fn load(&self, tenant_id: Uuid) -> Result<Option<DelegatedToken>, String> {
-        let entry = token_entry(tenant_id)?;
-        match entry.get_password() {
-            Ok(serialized) => serde_json::from_str(&serialized)
-                .map(Some)
-                .map_err(|_| "the delegated Microsoft Entra token cache is invalid; sign in again".to_owned()),
+struct OsTokenCredentials;
+
+impl TokenCredentials for OsTokenCredentials {
+    fn get(&self, account: &str) -> Result<Option<String>, String> {
+        match credential_entry(account)?.get_password() {
+            Ok(password) => Ok(Some(password)),
             Err(keyring::Error::NoEntry) => Ok(None),
             Err(error) => Err(format!(
                 "cannot access the OS credential store for the delegated Microsoft Entra token: {error}"
@@ -158,22 +170,165 @@ impl TokenStore for OsTokenStore {
         }
     }
 
-    fn save(&self, tenant_id: Uuid, token: &DelegatedToken) -> Result<(), String> {
-        let serialized = serde_json::to_string(token).map_err(|error| {
-            format!("cannot serialize delegated Microsoft Entra token: {error}")
-        })?;
-        token_entry(tenant_id)?.set_password(&serialized).map_err(|error| {
+    fn set(&self, account: &str, password: &str) -> Result<(), String> {
+        credential_entry(account)?.set_password(password).map_err(|error| {
             format!("cannot save the delegated Microsoft Entra token in the OS credential store: {error}")
         })
     }
+
+    fn delete(&self, account: &str) -> Result<(), String> {
+        match credential_entry(account)?.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(error) => Err(format!(
+                "cannot delete the delegated Microsoft Entra token from the OS credential store: {error}"
+            )),
+        }
+    }
 }
 
-fn token_entry(tenant_id: Uuid) -> Result<Entry, String> {
-    Entry::new(
-        KEYRING_SERVICE,
-        &format!("{tenant_id}/{ENTRA_TOKEN_PURPOSE}"),
+#[derive(Default)]
+pub(crate) struct OsTokenStore;
+
+impl TokenStore for OsTokenStore {
+    fn load(&self, tenant_id: Uuid) -> Result<Option<DelegatedToken>, String> {
+        load_delegated_token_with_credentials(&OsTokenCredentials, tenant_id)
+    }
+
+    fn save(&self, tenant_id: Uuid, token: &DelegatedToken) -> Result<(), String> {
+        save_delegated_token_with_credentials(&OsTokenCredentials, tenant_id, token)
+    }
+}
+
+fn credential_entry(account: &str) -> Result<Entry, String> {
+    Entry::new(KEYRING_SERVICE, account)
+        .map_err(|error| format!("cannot access the OS credential store: {error}"))
+}
+
+fn delegated_token_account(tenant_id: Uuid) -> String {
+    format!("{tenant_id}/{ENTRA_TOKEN_PURPOSE}")
+}
+
+fn delegated_token_chunk_account(tenant_id: Uuid, generation: Uuid, index: usize) -> String {
+    format!(
+        "{}/{generation}/{index}",
+        delegated_token_account(tenant_id)
     )
-    .map_err(|error| format!("cannot access the OS credential store: {error}"))
+}
+
+fn load_delegated_token_with_credentials<C: TokenCredentials>(
+    credentials: &C,
+    tenant_id: Uuid,
+) -> Result<Option<DelegatedToken>, String> {
+    let Some(primary) = credentials.get(&delegated_token_account(tenant_id))? else {
+        return Ok(None);
+    };
+    let Ok(manifest) = serde_json::from_str::<DelegatedTokenManifest>(&primary) else {
+        return parse_delegated_token(&primary).map(Some);
+    };
+    if manifest.version != 1 || !(1..=MAX_TOKEN_CHUNKS).contains(&manifest.chunk_count) {
+        return invalid_delegated_token_cache();
+    }
+    let mut serialized = String::new();
+    for index in 0..manifest.chunk_count {
+        let chunk = credentials
+            .get(&delegated_token_chunk_account(
+                tenant_id,
+                manifest.generation,
+                index,
+            ))
+            .map_err(|_| invalid_delegated_token_cache_error())?
+            .ok_or_else(invalid_delegated_token_cache_error)?;
+        if chunk.encode_utf16().count() > TOKEN_CHUNK_UTF16_LIMIT {
+            return invalid_delegated_token_cache();
+        }
+        serialized.push_str(&chunk);
+    }
+    parse_delegated_token(&serialized).map(Some)
+}
+
+fn save_delegated_token_with_credentials<C: TokenCredentials>(
+    credentials: &C,
+    tenant_id: Uuid,
+    token: &DelegatedToken,
+) -> Result<(), String> {
+    let serialized = serde_json::to_string(token)
+        .map_err(|error| format!("cannot serialize delegated Microsoft Entra token: {error}"))?;
+    let chunks = split_utf16_safe(&serialized, TOKEN_CHUNK_UTF16_LIMIT);
+    if chunks.is_empty() || chunks.len() > MAX_TOKEN_CHUNKS {
+        return Err(
+            "cannot save the delegated Microsoft Entra token: token is too large".to_owned(),
+        );
+    }
+    let primary_account = delegated_token_account(tenant_id);
+    let previous_manifest = credentials
+        .get(&primary_account)?
+        .and_then(|primary| serde_json::from_str::<DelegatedTokenManifest>(&primary).ok())
+        .filter(|manifest| manifest.version == 1);
+    let generation = Uuid::new_v4();
+    let mut saved_accounts: Vec<String> = Vec::with_capacity(chunks.len());
+    for (index, chunk) in chunks.iter().enumerate() {
+        let account = delegated_token_chunk_account(tenant_id, generation, index);
+        if let Err(error) = credentials.set(&account, chunk) {
+            for account in saved_accounts {
+                let _ = credentials.delete(&account);
+            }
+            return Err(error);
+        }
+        saved_accounts.push(account);
+    }
+    let manifest = serde_json::to_string(&DelegatedTokenManifest {
+        version: 1,
+        generation,
+        chunk_count: chunks.len(),
+    })
+    .map_err(|error| format!("cannot serialize delegated Microsoft Entra token: {error}"))?;
+    if let Err(error) = credentials.set(&primary_account, &manifest) {
+        for account in saved_accounts {
+            let _ = credentials.delete(&account);
+        }
+        return Err(error);
+    }
+    if let Some(previous_manifest) = previous_manifest {
+        for index in 0..previous_manifest.chunk_count.min(MAX_TOKEN_CHUNKS) {
+            let _ = credentials.delete(&delegated_token_chunk_account(
+                tenant_id,
+                previous_manifest.generation,
+                index,
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn split_utf16_safe(value: &str, limit: usize) -> Vec<&str> {
+    let mut chunks = Vec::new();
+    let mut chunk_start = 0;
+    let mut chunk_units = 0;
+    for (index, character) in value.char_indices() {
+        let character_units = character.len_utf16();
+        if chunk_units > 0 && chunk_units + character_units > limit {
+            chunks.push(&value[chunk_start..index]);
+            chunk_start = index;
+            chunk_units = 0;
+        }
+        chunk_units += character_units;
+    }
+    if chunk_start < value.len() {
+        chunks.push(&value[chunk_start..]);
+    }
+    chunks
+}
+
+fn parse_delegated_token(serialized: &str) -> Result<DelegatedToken, String> {
+    serde_json::from_str(serialized).map_err(|_| invalid_delegated_token_cache_error())
+}
+
+fn invalid_delegated_token_cache<T>() -> Result<T, String> {
+    Err(invalid_delegated_token_cache_error())
+}
+
+fn invalid_delegated_token_cache_error() -> String {
+    "the delegated Microsoft Entra token cache is invalid; sign in again".to_owned()
 }
 
 pub(crate) trait HttpClient: Send {
@@ -665,7 +820,10 @@ fn oauth_error(body: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::VecDeque;
+    use std::{
+        collections::{BTreeMap, VecDeque},
+        sync::Mutex,
+    };
 
     use super::*;
 
@@ -688,6 +846,36 @@ mod tests {
 
         fn save(&self, _tenant_id: Uuid, token: &DelegatedToken) -> Result<(), String> {
             *self.token.lock().unwrap() = Some(token.clone());
+            Ok(())
+        }
+    }
+
+    #[derive(Default)]
+    struct MemoryTokenCredentials {
+        passwords: Mutex<BTreeMap<String, String>>,
+    }
+
+    impl MemoryTokenCredentials {
+        fn passwords(&self) -> BTreeMap<String, String> {
+            self.passwords.lock().unwrap().clone()
+        }
+    }
+
+    impl TokenCredentials for MemoryTokenCredentials {
+        fn get(&self, account: &str) -> Result<Option<String>, String> {
+            Ok(self.passwords.lock().unwrap().get(account).cloned())
+        }
+
+        fn set(&self, account: &str, password: &str) -> Result<(), String> {
+            self.passwords
+                .lock()
+                .unwrap()
+                .insert(account.to_owned(), password.to_owned());
+            Ok(())
+        }
+
+        fn delete(&self, account: &str) -> Result<(), String> {
+            self.passwords.lock().unwrap().remove(account);
             Ok(())
         }
     }
@@ -749,6 +937,65 @@ mod tests {
         assert_eq!(token.access_token, "access");
         assert_eq!(token.refresh_token.as_deref(), Some("refresh"));
         assert_eq!(token.expires_in, 3600);
+    }
+
+    #[test]
+    fn oversized_delegated_token_round_trips_through_chunked_credentials() {
+        let tenant_id = Uuid::new_v4();
+        let credentials = MemoryTokenCredentials::default();
+        let token = DelegatedToken {
+            access_token: "access".repeat(600),
+            refresh_token: "refresh".repeat(600),
+            expires_at: Utc::now(),
+        };
+
+        assert!(
+            serde_json::to_string(&token)
+                .unwrap()
+                .encode_utf16()
+                .count()
+                > 2_560
+        );
+        save_delegated_token_with_credentials(&credentials, tenant_id, &token).unwrap();
+
+        assert!(credentials
+            .passwords()
+            .values()
+            .all(|password| password.encode_utf16().count() <= TOKEN_CHUNK_UTF16_LIMIT));
+        assert_eq!(
+            load_delegated_token_with_credentials(&credentials, tenant_id).unwrap(),
+            Some(token)
+        );
+    }
+
+    #[test]
+    fn delegated_token_loads_legacy_single_credential() {
+        let tenant_id = Uuid::new_v4();
+        let credentials = MemoryTokenCredentials::default();
+        let token = DelegatedToken {
+            access_token: "synthetic-access".to_owned(),
+            refresh_token: "synthetic-refresh".to_owned(),
+            expires_at: Utc::now(),
+        };
+        credentials
+            .set(
+                &delegated_token_account(tenant_id),
+                &serde_json::to_string(&token).unwrap(),
+            )
+            .unwrap();
+
+        assert_eq!(
+            load_delegated_token_with_credentials(&credentials, tenant_id).unwrap(),
+            Some(token)
+        );
+    }
+
+    #[test]
+    fn token_chunks_do_not_split_unicode_scalar_boundaries() {
+        let chunks = split_utf16_safe("a😀b", 2);
+
+        assert_eq!(chunks, vec!["a", "😀", "b"]);
+        assert!(chunks.iter().all(|chunk| chunk.encode_utf16().count() <= 2));
     }
 
     #[test]

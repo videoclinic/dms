@@ -4,13 +4,13 @@
 | --- | --- |
 | ID | CHG-0002 |
 | Status | in-progress |
-| External request | Direct operator request: (1) Clicking "Save application configuration" the view is left and started with the Library view. I would expect to see a confirmation that the settings are set. (2) Clicking the "Sign-in page" link/url does not open the standard browser -- my assumption is that Tauri is a "browser" itself the "Sign-in page" is not opned. (3) Tried to use the device id and failed; I'm missing a regeneration of a new device code because the "previous" one is not accepted by Entra ID anymore |
+| External request | Direct operator request: (1) Clicking "Save application configuration" the view is left and started with the Library view. I would expect to see a confirmation that the settings are set. (2) Clicking the "Sign-in page" link/url does not open the standard browser -- my assumption is that Tauri is a "browser" itself the "Sign-in page" is not opned. (3) Tried to use the device id and failed; I'm missing a regeneration of a new device code because the "previous" one is not accepted by Entra ID anymore. (4) Windows Credential Manager rejects a delegated Entra token when its UTF-16 password representation exceeds 2,560 characters. |
 | Affected CAPs | CAP-0021 |
 | Decision records | (none — UX corrections to phase 9k.1, no cross-cutting fork) |
 
 ## Goal
 
-Eliminate three operator-facing defects introduced by phase 9k.1 so the Entra
+Eliminate four operator-facing defects introduced by phase 9k.1 so the Entra
 configuration flow matches the operator contract in
 `crates/dms-desktop/AGENTS.md` lines 95-103:
 
@@ -23,6 +23,9 @@ configuration flow matches the operator contract in
 3. When an Entra device code has expired or the previous sign-in attempt
    failed, the operator must be able to regenerate a new challenge from the
    same surface without leaving the workflow.
+4. A valid delegated Microsoft Entra token must persist in the OS credential
+   store even when its serialized value exceeds the Windows Credential Manager
+   2,560 UTF-16-character password limit.
 
 ## Current state
 
@@ -42,6 +45,11 @@ configuration flow matches the operator contract in
   the stale challenge (kept in `state.configuration.identity_setup.challenge`)
   with no regeneration affordance — `configuration.mjs:185-189` only renders the
   input form when no challenge is present.
+- `crates/dms-desktop/src/graph.rs:161-167` serializes an entire delegated
+  access token, refresh token, and expiry into one `keyring::Entry` password.
+  Windows Credential Manager rejects that aggregate when its UTF-16 encoding is
+  longer than 2,560 characters. The Entra response is valid; the failure is at
+  the desktop credential-store boundary.
 - No shell-opener dependency is registered. `tauri = "2.11.5"` is in
   `Cargo.toml:25`; Tauri 2 exposes `AppHandle::shell().open(...)` without an
   additional plugin. The closest precedent in this workspace is
@@ -70,7 +78,7 @@ are repeated inside each phase; the list here is the loading checklist.
   around lines 2540-2620)
 - `crates/dms-desktop/src/graph.rs` (`begin_identity_source_setup` lines
   278-283; `complete_identity_source_setup` lines 324-348; `begin_delegated_sign_in`
-  lines 292-322)
+  lines 292-322; `OsTokenStore` lines 139-177)
 - `crates/dms-desktop/Cargo.toml` (Tauri 2.11.5 workspace dep, no
   `tauri-plugin-opener`)
 - `crates/dms-desktop/ui/configuration.test.mjs` and
@@ -114,13 +122,13 @@ runtime Entra configuration shipped in phase 9k.1 of CHG-0001:
    (`crates/dms-desktop/ui/configuration.mjs:185-189`,
    `crates/dms-desktop/src/graph.rs:278-322`).
 
-The slice is an Entra configuration UX correction plus one required Graph
-adapter remediation discovered during live device-flow sign-in: accept the
-documented optional fields in a successful token response. It does not change
-the runtime Entra configuration shape, scopes, OS credential-store contract,
-privacy posture, or Office export pipeline. CHG-0001 phase 9l (Windows external
-smokes + CAP promotion) remains untouched and continues to own the
-Office/release evidence gate.
+The slice is an Entra configuration UX correction plus required Graph-adapter
+remediations discovered during live device-flow sign-in: accept documented
+optional fields in a successful token response and keep oversized delegated
+tokens in OS-credential-store-only chunk entries. It does not change the runtime
+Entra configuration shape, scopes, privacy posture, or Office export pipeline.
+CHG-0001 phase 9l (Windows external smokes + CAP promotion) remains untouched
+and continues to own the Office/release evidence gate.
 
 ## Phases
 
@@ -129,10 +137,11 @@ Office/release evidence gate.
 | 1 | Fix global-entra save to stay on the configuration screen | done (`node --test crates/dms-desktop/ui/*.test.mjs` — 61 passed; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`) | `node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0 with a new test asserting the success notice equals `"Application Entra configuration saved."` and that the `GlobalEntraConfiguration` payload is never fed to `applyConfigurationSnapshot`; all existing configuration tests still pass |
 | 2 | Accept documented optional fields in a successful device-flow token response | done (`CARGO_INCREMENTAL=0 cargo test -p dms-desktop device_flow_token_response_accepts_documented_optional_fields`; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs` — 61 passed) | `CARGO_INCREMENTAL=0 cargo test -p dms-desktop device_flow_token_response_accepts_documented_optional_fields` exits 0 after a RED run where the current strict response parser rejects `token_type`, `scope`, and `id_token`; `CARGO_INCREMENTAL=0 cargo test --workspace`, `cargo fmt --all -- --check`, and `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings` exit 0 |
 | 3 | Open device-flow verification_uri in the host browser (Configuration + Library) | done (`CARGO_INCREMENTAL=0 cargo test -p dms-desktop external_url_validation_allows_only_browser_safe_urls`; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs` — 63 passed; `DMS_DESKTOP_SMOKE=1 CARGO_INCREMENTAL=0 cargo run -p dms-desktop`) | `cargo fmt --all -- --check`; `cargo test --workspace`; `cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs`; a new Rust unit test for `validate_external_url` covering `https://example.com` → `Ok`, `file:///etc/passwd` → `Err`, `javascript:alert(1)` → `Err`, empty → `Err`, `http://localhost:1234` → `Ok`, `http://example.com` → `Err`; frontend markup emits `data-open-external="https://…"` and never `target="_blank"` for the device-flow URI |
-| 4 | Allow regenerating an expired or failed device-code challenge | pending | `cargo test --workspace`; `node --test crates/dms-desktop/ui/*.test.mjs`; `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets -- -D warnings`; frontend test asserts that `state.configuration.identity_setup.challenge` plus a non-empty `state.configuration.error` renders a `data-configuration-form="identity-source-restart"` button (and is absent on a fresh challenge); Library test asserts the matching `data-library-approver-sign-in-restart` control; the restart path re-uses the existing `begin_identity_source_sign_in` / `begin_approver_sign_in` commands — no new IPC, no new Graph state |
-| 5 | CAP-0021 amendment + DOX closeout | pending | CAP-0021 `Implemented subset` lists three present-tense bullets for in-place save confirmation, host-browser opener, and expired-challenge regenerate control; `docs/changes/README.md` still lists both CHG-0001 and CHG-0002 as active; `docs/changes/active/` contains both files; `crates/dms-desktop/AGENTS.md` Configuration contract unchanged (the fix conforms to it); `git diff --check` clean; conventional commit lands with explicit verification evidence |
+| 4 | Persist oversized delegated Entra tokens within the OS credential store | done (`CARGO_INCREMENTAL=0 cargo test -p dms-desktop oversized_delegated_token_round_trips_through_chunked_credentials`; `CARGO_INCREMENTAL=0 cargo test -p dms-desktop delegated_token_loads_legacy_single_credential`; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs` — 63 passed; `DMS_DESKTOP_SMOKE=1 CARGO_INCREMENTAL=0 cargo run -p dms-desktop`) | `CARGO_INCREMENTAL=0 cargo test -p dms-desktop oversized_delegated_token_round_trips_through_chunked_credentials` completes a synthetic token whose serialized value exceeds 2,560 UTF-16 code units; every stored password is below the conservative 2,048-code-unit chunk limit; the loaded token equals the input; legacy single-entry JSON still loads; `cargo fmt --all -- --check`; `CARGO_INCREMENTAL=0 cargo test --workspace`; `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings` |
+| 5 | Allow regenerating an expired or failed device-code challenge | pending | `cargo test --workspace`; `node --test crates/dms-desktop/ui/*.test.mjs`; `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets -- -D warnings`; frontend test asserts that `state.configuration.identity_setup.challenge` plus a non-empty `state.configuration.error` renders a `data-configuration-form="identity-source-restart"` button (and is absent on a fresh challenge); Library test asserts the matching `data-library-approver-sign-in-restart` control; the restart path re-uses the existing `begin_identity_source_sign_in` / `begin_approver_sign_in` commands — no new IPC, no new Graph state |
+| 6 | CAP-0021 amendment + DOX closeout | pending | CAP-0021 `Implemented subset` lists four present-tense bullets for in-place save confirmation, host-browser opener, OS credential-store token chunking, and expired-challenge regenerate control; `docs/changes/README.md` still lists both CHG-0001 and CHG-0002 as active; `docs/changes/active/` contains both files; `crates/dms-desktop/AGENTS.md` Configuration contract unchanged (the fix conforms to it); `git diff --check` clean; conventional commit lands with explicit verification evidence |
 
-**Current phase:** 4 — pending until the Phase 3 checkpoint is committed. Each phase below carries the steps,
+**Current phase:** 5 — expired or failed device-code challenge regeneration. Each phase below carries the steps,
 verification gate, and recovery path the executor must follow.
 
 Mark a phase `in-progress` only while it is being executed, `done
@@ -287,7 +296,57 @@ dependency if direct use proves unavailable; do not silently fall back to
 substring checks. Do not add Tauri shell/opener plugins for this URL-only use
 case.
 
-### Phase 4 — Allow regenerating an expired or failed device-code challenge
+### Phase 4 — Persist oversized delegated Entra tokens within the OS credential store
+
+**Goal:** A delegated token whose serialized UTF-16 representation exceeds the
+Windows Credential Manager password limit remains entirely inside the OS
+credential store. The primary existing entry becomes a small versioned manifest;
+freshly generated credential entries hold UTF-16-safe fragments. No token,
+fragment, encryption key, or recovery material enters `.dms`, frontend state,
+or a local file.
+
+**Steps:**
+
+1. In `crates/dms-desktop/src/graph.rs`, separate the token-format logic from
+   `OsTokenStore` behind a small private credential-entry interface so unit tests
+   can use an in-memory map and production alone calls `keyring::Entry`.
+2. Serialize `DelegatedToken` exactly as today, but split the resulting string
+   only at Unicode scalar boundaries. Each fragment must contain at most 2,048
+   UTF-16 code units, leaving operational margin below Windows' 2,560-unit
+   limit. Do not split by byte index or Rust `String` length.
+3. Store fragments under a UUID generation beneath the existing tenant/purpose
+   namespace. Write all new fragments first, then replace the primary entry with
+   a versioned manifest containing only the generation and fragment count. This
+   preserves the previously committed manifest if a fragment write fails.
+4. Read a manifest by loading every referenced fragment in order before parsing
+   the reassembled JSON. Bound the fragment count and map absent/invalid
+   fragments to the existing generic invalid-cache recovery message. Continue to
+   parse a non-manifest primary entry as the legacy single-entry JSON shape so
+   currently stored short tokens remain usable after upgrade.
+5. After a successful manifest switch, best-effort delete only the prior
+   manifest generation. Failed cleanup must not report a successful saved token
+   as failed; the new manifest remains authoritative and later saves retry
+   cleanup for their own prior generation.
+6. Add `oversized_delegated_token_round_trips_through_chunked_credentials` in
+   `graph.rs` with a synthetic oversized token. Assert the serialized input
+   exceeds 2,560 UTF-16 units, every test-backend password is at most 2,048
+   units, and the loaded value equals the input. Add a separate legacy
+   single-entry load regression.
+7. Run the focused test RED before production implementation, then run it GREEN
+   and the phase gate.
+
+**Verification gate:** `CARGO_INCREMENTAL=0 cargo test -p dms-desktop
+oversized_delegated_token_round_trips_through_chunked_credentials` and the
+legacy-load regression pass; `cargo fmt --all -- --check`,
+`CARGO_INCREMENTAL=0 cargo test --workspace`, and
+`CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`
+all exit 0.
+
+**Recovery path:** If a platform rejects a 2,048 UTF-16-unit fragment, reduce
+the shared fragment limit and re-run the synthetic regression. Do not bypass the
+OS credential store with filesystem, registry, `.dms`, or frontend persistence.
+
+### Phase 5 — Allow regenerating an expired or failed device-code challenge
 
 **Goal:** When `state.configuration.identity_setup.challenge` exists and
 either has expired server-side or was just failed by
@@ -365,7 +424,7 @@ inside `begin_delegated_sign_in` (`graph.rs:292-322`) in the same change —
 do not split into a separate CHG phase, and document the sweep in the CHG
 row's evidence line.
 
-### Phase 5 — CAP-0021 amendment + DOX closeout
+### Phase 6 — CAP-0021 amendment + DOX closeout
 
 **Goal:** The active CHG records this slice; CAP-0021 reflects the new
 operator-visible behaviour; the DOX chain stays consistent.
@@ -374,14 +433,15 @@ operator-visible behaviour; the DOX chain stays consistent.
 
 1. Mark each completed phase row in this file as `done (<evidence>)` using
    the gate output for that phase. Update the `**Current phase:**` line to
-   point at the next pending row, or remove the line if all four are done.
+   point at the next pending row, or remove the line if every phase is done.
 2. Amend `docs/product/capabilities/CAP-0021-microsoft-entra-workflow-identity.md`
-   `Implemented subset` to add three present-tense bullets immediately after
+   `Implemented subset` to add four present-tense bullets immediately after
    item 1:
 
    ```
    - The **Application Entra configuration** card confirms a successful save with an in-place status notice and remains on the same Configuration secondary surface; the active Configuration activity never changes as a side effect of saving global Entra configuration.
    - The device-flow sign-in page opens in the host's default browser through a Tauri shell opener that accepts only `https:` URLs (and `http://localhost`/`http://127.0.0.1` for local development); the in-app WebView never navigates to the verification URI.
+   - Delegated Microsoft Entra tokens remain exclusively in the OS credential store. When their serialized UTF-16 representation exceeds the Windows Credential Manager per-password limit, DMS writes UTF-16-safe fragments under a versioned manifest and continues to read the previous single-entry cache format.
    - An expired or failed Microsoft Entra device-flow challenge surfaces an explicit **Sign in again** control on the same surface that re-issues a fresh challenge with the operator's last group ID; the previous pending challenge is discarded by the Graph adapter.
    ```
 3. Replace the `## Links → ## Progress` line at the bottom of CAP-0021 so it
@@ -398,12 +458,12 @@ operator-visible behaviour; the DOX chain stays consistent.
    exists yet).
 7. Stage the diff and commit with a conventional commit message generated
    via `github/dev-git-commit-message`: scope `dms-desktop`, summary
-   `fix(configuration): confirm Entra save, open device flow in host browser, regenerate expired challenge`.
+   `fix(configuration): confirm Entra save, open device flow in host browser, persist oversized delegated tokens, regenerate expired challenge`.
    The commit must include this CHG file, the README update, the CAP-0021
    amendment, the code changes, and the new tests.
 
 **Verification gate:** `git diff --check` clean; every CHG-0002 phase row
-carries `done (<evidence>)`; CAP-0021 `Implemented subset` contains the three
+carries `done (<evidence>)`; CAP-0021 `Implemented subset` contains the four
 new bullets; `docs/changes/README.md` still lists exactly two active CHGs and
 zero archived CHGs; commit message follows conventional format; the engine
 (this CHG's eventual executor) confirms the commit lands and is pushed.
@@ -434,6 +494,10 @@ zero archived CHGs; commit message follows conventional format; the engine
   that Microsoft Graph already returns to the desktop adapter, validated
   against the same allowlist that protects every other outbound launch in
   this codebase.
+- Token fragments and their manifest remain OS credential-store entries. A new
+  generation is written before the manifest switch so a failed fragment write
+  cannot corrupt the previously committed cache; cleanup of superseded fragments
+  is best effort and never changes a successful save into a reported failure.
 - The Windows + macOS shell-opener behaviour must be exercised by the local
   Linux smoke (`DMS_DESKTOP_SMOKE=1 cargo run -p dms-desktop`) before the
   CI/platform smoke is claimed; if the local smoke fails to launch the host
@@ -452,11 +516,7 @@ zero archived CHGs; commit message follows conventional format; the engine
   `crates/dms-desktop/src/graph.rs`. Recorded as a recovery path in Phase 3
   only — not part of the operator-visible contract change.
 - Re-issuing any CHG-0001 phase's evidence line. This slice does not
-  retroactively re-prove 9j / 9k / 9k.1 — only its own four phases.
-- Adopting `phased-plan-execution` in this turn. This CHG is the executable
-  contract for phases 1–4; execution belongs to the next session, which loads
-  this CHG + its AGENTS chain + the exact `Context sources` to keep the
-  fresh-session context bounded.
+  retroactively re-prove 9j / 9k / 9k.1 — only its own phases.
 
 ## Links
 
