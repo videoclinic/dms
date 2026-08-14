@@ -546,6 +546,8 @@ fn complete_approver_sign_in(
 fn apply_identity_source(
     edit_root: String,
     preview_id: Uuid,
+    initial_editor_id: Option<Uuid>,
+    initial_approver_id: Option<Uuid>,
     confirmed: bool,
     state: State<'_, DesktopIntegrations>,
 ) -> Result<WorkspaceConfiguration, String> {
@@ -554,16 +556,53 @@ fn apply_identity_source(
             "applying a Microsoft Entra identity source requires explicit confirmation".to_owned(),
         );
     }
-    let (_tenant_id, _tenant_display, group_id, group_label, people) = state
+    state
         .graph
         .lock()
         .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?
-        .apply_identity_source_preview(preview_id)?;
-    mutate_workspace_configuration(Path::new(&edit_root), |workspace| {
-        workspace
-            .replace_identity_source(group_id, &group_label, people)
-            .map(|_| ())
-    })
+        .apply_identity_source_preview(
+            preview_id,
+            |_tenant_id, _tenant_display, group_id, group_label, people| {
+                mutate_workspace_configuration(Path::new(&edit_root), |workspace| {
+                    apply_identity_source_to_workspace(
+                        workspace,
+                        group_id,
+                        &group_label,
+                        people,
+                        initial_editor_id,
+                        initial_approver_id,
+                    )
+                })
+            },
+        )
+}
+
+fn apply_identity_source_to_workspace(
+    workspace: &mut Workspace,
+    group_id: Uuid,
+    group_label: &str,
+    people: Vec<EntraPerson>,
+    initial_editor_id: Option<Uuid>,
+    initial_approver_id: Option<Uuid>,
+) -> dms_core::Result<()> {
+    let initial_roles = if workspace.identity_source().is_none() {
+        Some((
+            initial_editor_id.ok_or(DmsError::RequiredRootWorkflowPolicy)?,
+            initial_approver_id.ok_or(DmsError::RequiredRootWorkflowPolicy)?,
+        ))
+    } else {
+        None
+    };
+
+    workspace.replace_identity_source(group_id, group_label, people)?;
+    if let Some((editor_id, approver_id)) = initial_roles {
+        workspace.update_workflow_policy(
+            ".",
+            RoleUpdate::replace(editor_id),
+            RoleUpdate::replace(approver_id),
+        )?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -2346,6 +2385,101 @@ mod tests {
         assert!(validate_external_url("javascript:alert(1)").is_err());
         assert!(validate_external_url("").is_err());
         assert!(validate_external_url("http://example.com").is_err());
+    }
+
+    #[test]
+    fn first_identity_source_setup_requires_and_persists_root_roles_atomically() {
+        let edit_root = tempfile::tempdir().unwrap();
+        let publish_root = tempfile::tempdir().unwrap();
+        let mut workspace = Workspace::init(edit_root.path(), publish_root.path()).unwrap();
+        let editor_id = Uuid::new_v4();
+        let approver_id = Uuid::new_v4();
+        let people = vec![
+            EntraPerson::eligible(editor_id, "Eva Editor", "editor@example.test"),
+            EntraPerson::eligible(approver_id, "Ada Approver", "approver@example.test"),
+        ];
+
+        assert!(matches!(
+            apply_identity_source_to_workspace(
+                &mut workspace,
+                Uuid::new_v4(),
+                "DMS workflow",
+                people.clone(),
+                None,
+                None,
+            ),
+            Err(DmsError::RequiredRootWorkflowPolicy)
+        ));
+        assert!(workspace.identity_source().is_none());
+
+        apply_identity_source_to_workspace(
+            &mut workspace,
+            Uuid::new_v4(),
+            "DMS workflow",
+            people,
+            Some(editor_id),
+            Some(approver_id),
+        )
+        .unwrap();
+        workspace.save().unwrap();
+
+        let root = workspace
+            .workflow_policies()
+            .into_iter()
+            .find(|policy| policy.folder == ".")
+            .unwrap();
+        assert_eq!(root.editor.unwrap().object_id, editor_id);
+        assert_eq!(root.approver.unwrap().object_id, approver_id);
+    }
+
+    #[test]
+    fn replacement_identity_source_does_not_remap_existing_root_roles() {
+        let edit_root = tempfile::tempdir().unwrap();
+        let publish_root = tempfile::tempdir().unwrap();
+        let mut workspace = Workspace::init(edit_root.path(), publish_root.path()).unwrap();
+        let editor_id = Uuid::new_v4();
+        let approver_id = Uuid::new_v4();
+        apply_identity_source_to_workspace(
+            &mut workspace,
+            Uuid::new_v4(),
+            "Original group",
+            vec![
+                EntraPerson::eligible(editor_id, "Eva Editor", "editor@example.test"),
+                EntraPerson::eligible(approver_id, "Ada Approver", "approver@example.test"),
+            ],
+            Some(editor_id),
+            Some(approver_id),
+        )
+        .unwrap();
+        let original_root = workspace.workflow_policies().remove(0);
+
+        let replacement_editor_id = Uuid::new_v4();
+        let replacement_approver_id = Uuid::new_v4();
+        apply_identity_source_to_workspace(
+            &mut workspace,
+            Uuid::new_v4(),
+            "Replacement group",
+            vec![
+                EntraPerson::eligible(replacement_editor_id, "Rita Editor", "rita@example.test"),
+                EntraPerson::eligible(
+                    replacement_approver_id,
+                    "Arno Approver",
+                    "arno@example.test",
+                ),
+            ],
+            Some(replacement_editor_id),
+            Some(replacement_approver_id),
+        )
+        .unwrap();
+        workspace.save().unwrap();
+
+        let replacement_root = workspace.workflow_policies().remove(0);
+        assert_eq!(replacement_root.editor, original_root.editor);
+        assert_eq!(replacement_root.approver, original_root.approver);
+        assert_ne!(
+            replacement_root.editor.unwrap().binding_id,
+            workspace.identity_source().unwrap().binding_id
+        );
     }
 
     #[test]

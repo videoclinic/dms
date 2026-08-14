@@ -1012,48 +1012,47 @@ const CAPS = [
     subtitle: "Configure the Entra public client and tenant once for this OS user; each library retains only its bound group and display cache.",
     body: `${defaultsFirstStyles()}
       <section class="card">
-        <h3 class="card-title">Application Entra configuration</h3>
-        ${kv([
-          ["Public client ID", "3e7f…c2a1 <span class=\"muted\">(environment-managed, read only)</span>"],
-          ["Tenant ID", "8d29…0bf3 <span class=\"muted\">(environment-managed, read only)</span>"],
-          ["Storage", "Per-OS-user app configuration; never written to a library .dms store"],
-        ])}
-        <p class="hint">A non-empty <code>DMS_ENTRA_CLIENT_ID</code> or <code>DMS_ENTRA_TENANT_ID</code> overrides the stored value for this process. Invalid values block use rather than falling back.</p>
-      </section>
-      <section class="config-summary">
-        <div class="summary-copy"><strong>Current library group ${badge("connected", "ok")}</strong><span>VC DMS Workflow Users · 9c14…bf72 · 3 eligible people · refreshed 2025-08-05 09:16 UTC</span></div>
-        <button class="btn outline">Refresh people</button>
-        <button class="btn outline">Replace identity source…</button>
+        <div class="row between"><h3 class="card-title" style="margin:0">Application Entra configuration</h3>${badge("configured", "ok")}</div>
+        <p class="hint">Public client <code>3e7f…c2a1</code> · tenant <code>8d29…0bf3</code> · environment-managed and read only · stored per OS user, never in a library <code>.dms</code> store.</p>
       </section>
       <div class="grid-2">
+        <section class="card">
+          <div class="row between"><h3 class="card-title" style="margin:0">Preview identity source</h3>${badge("first setup", "info")}</div>
+          ${kv([
+            ["Tenant", "Example Healthcare GmbH"],
+            ["Group", "DMS Workflow Users · 9c14…bf72"],
+            ["Eligible people", "3 direct enabled users"],
+          ])}
+          <fieldset style="margin:0.8rem 0;border:1px solid var(--border);border-radius:calc(var(--radius) - 2px);padding:0.75rem">
+            <legend style="padding:0 0.3rem;font-weight:600">Initial edit-root workflow roles</legend>
+            <p class="hint" style="margin-top:0">Both defaults are required and are saved atomically with this identity source.</p>
+            <div class="grid-2">
+              <label><span class="label">Editor</span><select aria-label="Initial editor" style="width:100%;height:2rem;margin-top:0.35rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.5rem;background:var(--background);color:var(--foreground)"><option selected>Lukas Roth — lukas@example.test</option><option>Anna Berg — anna@example.test</option><option>Mira Klein — mira@example.test</option></select></label>
+              <label><span class="label">Approver</span><select aria-label="Initial approver" style="width:100%;height:2rem;margin-top:0.35rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.5rem;background:var(--background);color:var(--foreground)"><option>Lukas Roth — lukas@example.test</option><option selected>Anna Berg — anna@example.test</option><option>Mira Klein — mira@example.test</option></select></label>
+            </div>
+          </fieldset>
+          <label class="row gap-2" style="align-items:flex-start"><input type="checkbox" checked/> <span>I confirm this group is the workspace’s people source.</span></label>
+          <div class="row gap-2" style="margin-top:0.75rem"><button class="btn">Apply identity source</button><button class="btn outline">Cancel preview</button></div>
+          <p class="hint">No intermediate binding-only state is saved. If persistence fails, this preview remains available for retry.</p>
+        </section>
         <section class="card">
           <h3 class="card-title">Eligible people — read only</h3>
           ${growingTable({
             headers: ["Person", "Email", "Object ID", "State"],
             rows: [
-              ["Lukas Roth", "lukas@vc.de", "a714…51bf", badge("active", "ok")],
-              ["Anna Berg", "anna@vc.de", "b023…882a", badge("active", "ok")],
-              ["Mira Klein", "mira@vc.de", "c144…0d91", badge("active", "ok")],
+              ["Lukas Roth", "lukas@example.test", "a714…51bf", badge("active", "ok")],
+              ["Anna Berg", "anna@example.test", "b023…882a", badge("active", "ok")],
+              ["Mira Klein", "mira@example.test", "c144…0d91", badge("active", "ok")],
             ],
             filterLabel: "Person or email",
             filterAriaLabel: "Filter eligible people",
-            filterPlaceholder: "e.g. Anna or vc.de",
+            filterPlaceholder: "e.g. Anna or example.test",
             matchingLabel: "eligible people",
           })}
           <p class="hint">Use this read-only list only to select editor/approver routing. Add, remove, disable, and profile changes happen in Microsoft Entra.</p>
         </section>
-        <section class="card">
-          <h3 class="card-title">Authority boundary</h3>
-          ${kv([
-            ["Approval decision", "Entra tenant/object ID matches review snapshot"],
-            ["DMS user management", "Not available"],
-            ["SharePoint permissions", "Not read as a roster"],
-            ["OneDrive sharing", "Not read as a roster"],
-            ["Document content", "Never sent to Microsoft Graph"],
-          ])}
-          <p class="hint">The Entra group verifies workflow identity. Filesystem, SharePoint, and OneDrive permissions independently control source-file access. Setup and source replacement require explicit management, a preview, interactive sign-in, and confirmation.</p>
-        </section>
-      </div>`,
+      </div>
+      <section class="config-summary"><div class="summary-copy"><strong>Authority boundary</strong><span>DMS does not manage Entra users or file permissions and never sends document content to Microsoft Graph. Replacing this source preserves role references as unresolved; it does not map them to the new group.</span></div></section>`,
   },
 ];
 

@@ -45,6 +45,19 @@ export function applyConfigurationSnapshot(state, snapshot, notice = "") {
   };
 }
 
+export function applyGlobalEntraConfiguration(state, configuration) {
+  return {
+    ...state,
+    snapshot: {
+      ...state.snapshot,
+      global_entra_configuration: configuration,
+    },
+    identity_setup: null,
+    notice: "Application Entra configuration saved.",
+    error: "",
+  };
+}
+
 export function setConfigurationRoute(state, route) {
   if (!ROUTES.some(([id]) => id === route)) {
     throw new Error(`Unknown configuration route: ${route}`);
@@ -159,6 +172,27 @@ function roleSelectMarkup(snapshot, policy, roleName, rootFolder) {
   return `<label>${roleName === "editor" ? "Editor" : "Approver"}<select name="${roleName}" required ${source && snapshot.eligible_people.length > 0 ? "" : "disabled"}>${options.join("")}</select></label>`;
 }
 
+function identitySourcePreviewMarkup(preview, source) {
+  const initialSetup = !source;
+  const initialRoleSelect = (roleName) => {
+    const fieldName = roleName === "editor" ? "initialEditorId" : "initialApproverId";
+    const label = roleName === "editor" ? "Editor" : "Approver";
+    const options = [
+      '<option value="" selected disabled>Choose a person</option>',
+      ...preview.eligible_people.map((person) => `<option value="${escapeHtml(person.object_id)}">${escapeHtml(person.display_name)} — ${escapeHtml(person.email)}</option>`),
+    ];
+    return `<label>${label}<select name="${fieldName}" required ${preview.eligible_people.length > 0 ? "" : "disabled"}>${options.join("")}</select></label>`;
+  };
+  const roleMarkup = initialSetup
+    ? `<fieldset><legend>Initial edit-root workflow roles</legend><p>Choose the required workspace defaults from this group. They are saved atomically with the identity source.</p>${initialRoleSelect("editor")}${initialRoleSelect("approver")}</fieldset>`
+    : "";
+  const consequence = initialSetup
+    ? "Applying this binding saves the people source and required edit-root roles together."
+    : "Applying this binding replaces the current people source, invalidates stale workflow candidates, and leaves existing role references unresolved.";
+  const disabled = initialSetup && preview.eligible_people.length === 0 ? "disabled" : "";
+  return `<section class="card configuration-card"><h3>Preview identity source</h3><dl class="details-grid"><dt>Tenant</dt><dd>${escapeHtml(preview.tenant_display)}</dd><dt>Group</dt><dd>${escapeHtml(preview.group_label)}</dd><dt>Eligible people</dt><dd>${escapeHtml(preview.eligible_people.length)}</dd></dl><p>${consequence}</p><form class="configuration-form" data-configuration-form="identity-source-apply"><input type="hidden" name="previewId" value="${escapeHtml(preview.preview_id)}">${roleMarkup}<label class="configuration-enabled"><input type="checkbox" name="confirmed" required> I confirm this group is the workspace’s people source.</label><button class="button" type="submit" ${disabled}>Apply identity source</button></form></section>`;
+}
+
 function workflowMarkup(state) {
   const snapshot = state.snapshot;
   const source = snapshot.identity_source;
@@ -191,7 +225,7 @@ function identitySourceMarkup(state) {
       ? `<section class="card configuration-card"><h3>Previous sign-in failed</h3><p>Generate a new Microsoft Entra device code before continuing.</p><form class="configuration-form" data-configuration-form="identity-source-start"><input type="hidden" name="groupId" value="${escapeHtml(setup.last_group_id)}"><button class="button secondary" type="submit">Sign in again</button></form></section>`
       : `<section class="card configuration-card"><h3>Complete Microsoft Entra sign-in</h3><p>${escapeHtml(setup.challenge.message)}</p><dl class="details-grid"><dt>Code</dt><dd><code>${escapeHtml(setup.challenge.user_code)}</code></dd><dt>Sign-in page</dt><dd><button class="button secondary" type="button" data-open-external="${escapeHtml(setup.challenge.verification_uri)}">Open sign-in page</button></dd></dl><form class="configuration-form" data-configuration-form="identity-source-complete"><input type="hidden" name="challengeId" value="${escapeHtml(setup.challenge.challenge_id)}"><button class="button" type="submit">I have signed in — preview group</button></form></section>`
     : setup?.preview
-      ? `<section class="card configuration-card"><h3>Preview identity source</h3><dl class="details-grid"><dt>Tenant</dt><dd>${escapeHtml(setup.preview.tenant_display)}</dd><dt>Group</dt><dd>${escapeHtml(setup.preview.group_label)}</dd><dt>Eligible people</dt><dd>${escapeHtml(setup.preview.eligible_people.length)}</dd></dl><p>Applying this binding replaces the current people source and invalidates stale workflow candidates.</p><form class="configuration-form" data-configuration-form="identity-source-apply"><input type="hidden" name="previewId" value="${escapeHtml(setup.preview.preview_id)}"><label class="configuration-enabled"><input type="checkbox" name="confirmed" required> I confirm this group is the workspace’s people source.</label><button class="button" type="submit">Apply identity source</button></form></section>`
+      ? identitySourcePreviewMarkup(setup.preview, source)
       : `<section class="card configuration-card"><h3>${source ? "Replace identity source" : "Set up identity source"}</h3><p>Enter one direct-user group. Sign-in uses delegated Microsoft Graph access.</p><form class="configuration-form" data-configuration-form="identity-source-start"><label>Library Entra group ID<input name="groupId" required placeholder="00000000-0000-0000-0000-000000000000"></label><button class="button" type="submit">Sign in and preview group</button></form></section>`;
   const globalMarkup = `<section class="card configuration-card"><h3>Application Entra configuration</h3><p>Shared by local libraries for this OS user; not stored in <code>.dms</code>.</p><form class="configuration-form" data-configuration-form="global-entra"><label>Public client ID<input name="clientId" value="${escapeHtml(global?.client_id ?? "")}" ${global?.client_id_environment_managed ? "readonly" : ""}></label><label>Tenant ID<input name="tenantId" value="${escapeHtml(global?.tenant_id ?? "")}" ${global?.tenant_id_environment_managed ? "readonly" : ""}></label><button class="button" type="submit">Save application configuration</button></form></section>`;
   return `<section class="configuration-secondary"><button class="button secondary" type="button" data-configuration-secondary-close>← Back to Workflow</button><div class="configuration-grid">${globalMarkup}<section class="card configuration-card"><span class="badge">Secondary configuration</span><h2>Microsoft Entra identity source</h2>${details}</section>${setupMarkup}<section class="card configuration-card"><h3>Eligible people — read only</h3><p>Only direct, enabled user members returned by Microsoft Graph can be assigned.</p>${rows}<form data-configuration-form="identity-source-refresh"><button class="button secondary" type="submit" ${source ? "" : "disabled"}>Refresh people</button></form></section></div></section>`;
@@ -317,7 +351,12 @@ export function configurationMutationRequest(kind, values, selectedFolder) {
   if (kind === "identity-source-apply") {
     return {
       command: "apply_identity_source",
-      arguments: { previewId: formValue(values, "previewId"), confirmed: values.has("confirmed") },
+      arguments: {
+        previewId: formValue(values, "previewId"),
+        initialEditorId: formValue(values, "initialEditorId") || null,
+        initialApproverId: formValue(values, "initialApproverId") || null,
+        confirmed: values.has("confirmed"),
+      },
     };
   }
   if (kind === "identity-source-refresh") {

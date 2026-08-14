@@ -27,6 +27,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
 | [CHG-0002](archive/CHG-0002-entra-configuration-ux-fixes.md) | Entra configuration UX fixes | done | CAP-0021 |
+| [CHG-0003](archive/CHG-0003-retry-safe-entra-identity-application.md) | Retry-safe Entra identity-source application | done | CAP-0019, CAP-0021 |
 
 ## Related
 

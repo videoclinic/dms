@@ -98,9 +98,11 @@ macOS.
   pickers refresh then use the core-owned eligible-person cache. The identity
   surface accepts administrator-supplied tenant/group IDs, drives delegated
   device authorization, previews and explicitly applies a binding, and refreshes
-  direct enabled user members through Microsoft Graph. Desktop-only delegated
-  tokens remain in the OS credential store; credentials never cross the frontend
-  IPC boundary or enter `.dms`.
+  direct enabled user members through Microsoft Graph. First setup selects and
+  persists the required edit-root editor and approver atomically with that
+  binding; replacement never remaps existing role references. Desktop-only
+  delegated tokens remain in the OS credential store; credentials never cross
+  the frontend IPC boundary or enter `.dms`.
 - Claude Desktop assistance remains unavailable unless workspace policy,
   effective confidentiality, a verified current release, and a supported local
   installation all allow it. An oversized preview shows its measured size and

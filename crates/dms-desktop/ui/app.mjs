@@ -40,6 +40,7 @@ import {
 } from "./assistance.mjs";
 import {
   applyConfigurationSnapshot,
+  applyGlobalEntraConfiguration,
   closeConfigurationSecondary,
   configurationMarkup,
   configurationMutationRequest,
@@ -63,6 +64,19 @@ const DESTINATIONS = [
   ["Configuration", "⚙"],
 ];
 const RECENT_LIBRARIES_LIMIT = 10;
+const activeFormSubmissions = new WeakSet();
+
+export function beginFormSubmission(form, submitter) {
+  if (activeFormSubmissions.has(form)) return false;
+  activeFormSubmissions.add(form);
+  if (submitter) submitter.disabled = true;
+  return true;
+}
+
+export function finishFormSubmission(form, submitter) {
+  activeFormSubmissions.delete(form);
+  if (submitter?.isConnected) submitter.disabled = false;
+}
 
 export function defaultPreferences() {
   return { sidebar_expanded: true, saved_views: [], recent_libraries: [] };
@@ -1630,6 +1644,8 @@ async function handleSubmit(event) {
   const configurationMutation = event.target.dataset.configurationForm;
   if (configurationMutation) {
     event.preventDefault();
+    const submitter = event.submitter;
+    if (!beginFormSubmission(event.target, submitter)) return;
     try {
       const request = configurationMutationRequest(
         configurationMutation,
@@ -1664,15 +1680,7 @@ async function handleSubmit(event) {
       if (configurationMutation === "global-entra") {
         appState = {
           ...appState,
-          configuration: {
-            ...appState.configuration,
-            snapshot: {
-              ...appState.configuration.snapshot,
-              global_entra_configuration: result,
-            },
-            notice: "Application Entra configuration saved.",
-            error: "",
-          },
+          configuration: applyGlobalEntraConfiguration(appState.configuration, result),
         };
         render(appState);
         return;
@@ -1702,6 +1710,8 @@ async function handleSubmit(event) {
         ...appState,
         configuration: { ...appState.configuration, notice: "", error: String(error) },
       };
+    } finally {
+      finishFormSubmission(event.target, submitter);
     }
     render(appState);
     return;

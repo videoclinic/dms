@@ -15,7 +15,12 @@
    object ID card, starts delegated
    Microsoft Entra device authorization, previews the resolved tenant/group and
    eligible direct enabled user members, and applies the binding only after
-   explicit confirmation.
+   explicit confirmation. The apply action is single-flight per rendered form;
+   the preview is consumed only after the workspace binding saves successfully,
+   so a failed save remains retryable. First setup requires the operator to
+   select the edit-root editor and approver from that preview, then persists the
+   binding, people cache, and both root roles atomically. A later replacement
+   does not remap existing role references to people in the new group.
 - The **Application Entra configuration** card confirms a successful save with
   an in-place status notice and remains on the same Configuration secondary
   surface; saving global Entra configuration never changes the active
@@ -33,6 +38,8 @@
   explicit **Sign in again** control on the same surface. It reissues a fresh
   challenge with the operator's transient last group ID, and the Graph adapter
   discards expired pending challenges.
+- Saving app-global Entra settings clears any rendered challenge or preview
+  invalidated when the Graph client adopts that configuration.
 2. Replacing a binding retains historical evidence, invalidates stale workflow
    candidates, and leaves existing role references unresolved rather than mapping
    them to the replacement group.
@@ -69,10 +76,11 @@ When implemented, the following must hold:
 3. First setup and a later binding replacement require an operator to configure
    the public-client/tenant IDs supplied by Microsoft 365 administration and
    then enter the library group object ID, sign in interactively, preview the
-   resolved source, and explicitly apply the
-   binding. Replacing a binding marks every live workflow-role policy
-   `unresolved`; the app never attempts to map roles between groups. Historical
-   evidence remains unchanged.
+   resolved source, select the required edit-root editor and approver during
+   first setup, and explicitly apply the binding. First setup persists the
+   binding, people cache, and both roles atomically. Replacing a binding marks
+   every live workflow-role policy `unresolved`; the app never attempts to map
+   roles between groups. Historical evidence remains unchanged.
 4. A Microsoft 365 administrator supplies a dedicated Entra security group for
    the workspace, or an existing Microsoft 365 group only when its membership
    exactly matches the intended workflow population. The source is explicit;
@@ -135,4 +143,6 @@ When implemented, the following must hold:
 - Progress: [`CHG-0001`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
   owns the broader Tauri bootstrap and remaining phase 9l integration evidence;
   archived [`CHG-0002`](../../changes/archive/CHG-0002-entra-configuration-ux-fixes.md)
-  records the completed Entra configuration UX corrections.
+  records the completed Entra configuration UX corrections; archived
+  [`CHG-0003`](../../changes/archive/CHG-0003-retry-safe-entra-identity-application.md)
+  records reliable identity-source application.

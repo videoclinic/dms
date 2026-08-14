@@ -94,8 +94,10 @@ access to group content such as conversations and files, while
 4. In **Library Entra group**, enter the group's **Object ID**.
 5. Select **Sign in and preview group**. Complete the displayed device sign-in
    with an account that can read the selected group's membership.
-6. Check the returned tenant, group, and eligible-person list, then explicitly
-   apply the source binding.
+6. Check the returned tenant, group, and eligible-person list. On first setup,
+   select the required edit-root editor and approver from that preview.
+7. Confirm and apply the identity source. DMS persists the binding, people
+   cache, and both root roles together.
 
 The client and tenant IDs are non-secret, OS-user-wide DMS settings shared by
 local libraries. The group object ID is library-specific DMS metadata. DMS
@@ -155,8 +157,8 @@ Filesystem and SharePoint/OneDrive permissions remain separately administered.
 
 ## Sources
 
-[1] https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app
-[2] https://learn.microsoft.com/en-us/entra/identity-platform/scenario-desktop-app-configuration
-[3] https://learn.microsoft.com/en-us/graph/api/group-list-members?view=graph-rest-1.0
-[4] https://learn.microsoft.com/en-us/graph/permissions-reference
-[5] https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-device-code
+[1]: https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app
+[2]: https://learn.microsoft.com/en-us/entra/identity-platform/scenario-desktop-app-configuration
+[3]: https://learn.microsoft.com/en-us/graph/api/group-list-members?view=graph-rest-1.0
+[4]: https://learn.microsoft.com/en-us/graph/permissions-reference
+[5]: https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-device-code

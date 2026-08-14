@@ -534,20 +534,23 @@ where
         self.authenticated_actor_with_token(pending.tenant_id, &token.access_token)
     }
 
-    pub fn apply_identity_source_preview(
+    pub fn apply_identity_source_preview<T>(
         &mut self,
         preview_id: Uuid,
-    ) -> Result<(Uuid, String, Uuid, String, Vec<EntraPerson>), String> {
-        let preview = self.previews.remove(&preview_id).ok_or_else(|| {
+        apply: impl FnOnce(Uuid, String, Uuid, String, Vec<EntraPerson>) -> Result<T, String>,
+    ) -> Result<T, String> {
+        let preview = self.previews.get(&preview_id).cloned().ok_or_else(|| {
             "Microsoft Entra preview is no longer available; sign in and preview again".to_owned()
         })?;
-        Ok((
+        let result = apply(
             preview.tenant_id,
             preview.tenant_display,
             preview.group_id,
             preview.group_label,
             preview.people,
-        ))
+        )?;
+        self.previews.remove(&preview_id);
+        Ok(result)
     }
 
     fn client_id(&self) -> Result<&str, String> {
@@ -1137,6 +1140,47 @@ mod tests {
         assert_eq!(preview.eligible_people.len(), 1);
         assert_eq!(preview.eligible_people[0].object_id, enabled_user);
         assert!(!serde_json::to_string(&preview).unwrap().contains("access"));
+    }
+
+    #[test]
+    fn failed_identity_source_application_keeps_the_preview_for_retry() {
+        let tenant_id = Uuid::new_v4();
+        let group_id = Uuid::new_v4();
+        let preview_id = Uuid::new_v4();
+        let mut graph = MicrosoftGraphClient::with_parts(
+            "client",
+            tenant_id,
+            FakeHttp::with_responses(Vec::new()),
+            MemoryTokenStore::default(),
+        );
+        graph.previews.insert(
+            preview_id,
+            PreparedPreview {
+                tenant_id,
+                tenant_display: "Contoso".to_owned(),
+                group_id,
+                group_label: "Quality group".to_owned(),
+                people: Vec::new(),
+            },
+        );
+
+        let error = graph
+            .apply_identity_source_preview(preview_id, |_, _, _, _, _| {
+                Err::<(), _>("workspace save failed".to_owned())
+            })
+            .unwrap_err();
+        assert_eq!(error, "workspace save failed");
+
+        let applied_group = graph
+            .apply_identity_source_preview(preview_id, |_, _, group_id, _, _| Ok(group_id))
+            .unwrap();
+        assert_eq!(applied_group, group_id);
+        assert_eq!(
+            graph
+                .apply_identity_source_preview(preview_id, |_, _, _, _, _| Ok(()))
+                .unwrap_err(),
+            "Microsoft Entra preview is no longer available; sign in and preview again"
+        );
     }
 
     #[test]

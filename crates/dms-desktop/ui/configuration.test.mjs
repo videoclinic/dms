@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   applyConfigurationSnapshot,
+  applyGlobalEntraConfiguration,
   closeConfigurationSecondary,
   configurationMarkup,
   configurationMutationRequest,
@@ -115,6 +116,28 @@ test("configuration snapshot rejects a global Entra result without a workspace s
   assert.equal(rawResult.error, "");
 });
 
+test("saving global Entra configuration clears backend-invalidated setup state", () => {
+  const savedGlobalEntra = {
+    client_id: "client-2",
+    tenant_id: "tenant-2",
+    client_id_environment_managed: false,
+    tenant_id_environment_managed: false,
+  };
+  const initial = {
+    ...applyConfigurationSnapshot(createConfigurationState(), snapshot),
+    identity_setup: { preview: { preview_id: "stale-preview" } },
+    error: "old error",
+  };
+
+  const saved = applyGlobalEntraConfiguration(initial, savedGlobalEntra);
+
+  assert.deepEqual(saved.snapshot.workspace, workspace);
+  assert.deepEqual(saved.snapshot.global_entra_configuration, savedGlobalEntra);
+  assert.equal(saved.identity_setup, null);
+  assert.equal(saved.notice, "Application Entra configuration saved.");
+  assert.equal(saved.error, "");
+});
+
 test("workspace route shows the persistent route navigation and supported local settings", () => {
   const state = applyConfigurationSnapshot(createConfigurationState(), snapshot);
   const markup = configurationMarkup(state, assistancePolicy);
@@ -204,6 +227,56 @@ test("failed identity-source challenge offers a same-surface restart with the la
   const activeMarkup = configurationMarkup({ ...state, error: "" }, assistancePolicy);
   assert.doesNotMatch(activeMarkup, /Sign in again/);
   assert.doesNotMatch(activeMarkup, /Previous sign-in failed/);
+});
+
+test("first identity-source preview requires initial edit-root roles", () => {
+  let state = applyConfigurationSnapshot(createConfigurationState(), {
+    ...snapshot,
+    identity_source: null,
+    eligible_people: [],
+    workflow_policies: [],
+  });
+  state = openConfigurationSecondary(state, "identity-source");
+  state = {
+    ...state,
+    identity_setup: {
+      preview: {
+        preview_id: "preview-1",
+        tenant_display: "Example tenant",
+        group_label: "DMS workflow",
+        eligible_people: snapshot.eligible_people,
+      },
+    },
+  };
+
+  const markup = configurationMarkup(state, assistancePolicy);
+  assert.match(markup, /Initial edit-root workflow roles/);
+  assert.match(markup, /name="initialEditorId" required/);
+  assert.match(markup, /name="initialApproverId" required/);
+  assert.match(markup, /Lukas Roth/);
+  assert.match(markup, /Anna Berg/);
+});
+
+test("replacement identity-source preview leaves existing roles unresolved", () => {
+  let state = applyConfigurationSnapshot(createConfigurationState(), snapshot);
+  state = openConfigurationSecondary(state, "identity-source");
+  state = {
+    ...state,
+    identity_setup: {
+      preview: {
+        preview_id: "preview-2",
+        tenant_display: "Example tenant",
+        group_label: "Replacement workflow",
+        eligible_people: snapshot.eligible_people,
+      },
+    },
+  };
+
+  const markup = configurationMarkup(state, assistancePolicy);
+  assert.match(markup, /leaves existing role references unresolved/);
+  assert.doesNotMatch(markup, /Initial edit-root workflow roles/);
+  assert.doesNotMatch(markup, /name="initialEditorId"/);
+  assert.doesNotMatch(markup, /name="initialApproverId"/);
 });
 
 test("notifications route submits a write-only SMTP app password without rendering it", () => {
@@ -316,12 +389,22 @@ test("configuration mutations map forms to narrow desktop commands", () => {
   assert.deepEqual(
     configurationMutationRequest(
       "identity-source-apply",
-      new Map([["previewId", " preview "], ["confirmed", "on"]]),
+      new Map([
+        ["previewId", " preview "],
+        ["initialEditorId", " editor-1 "],
+        ["initialApproverId", " approver-1 "],
+        ["confirmed", "on"],
+      ]),
       ".",
     ),
     {
       command: "apply_identity_source",
-      arguments: { previewId: "preview", confirmed: true },
+      arguments: {
+        previewId: "preview",
+        initialEditorId: "editor-1",
+        initialApproverId: "approver-1",
+        confirmed: true,
+      },
     },
   );
   assert.deepEqual(

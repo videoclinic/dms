@@ -5,10 +5,12 @@ import { readFileSync } from "node:fs";
 import {
   activityKey,
   applyPermalinkDocumentSelection,
+  beginFormSubmission,
   closeActivity,
   closeWorkspaceSession,
   createInitialState,
   defaultPreferences,
+  finishFormSubmission,
   openActivity,
   permalinkActivity,
   rememberRecentLibrary,
@@ -21,6 +23,20 @@ import {
 } from "./app.mjs";
 
 const workspaceId = "5ef3db10-8f6d-4ae4-9d68-ecb1eaac8235";
+
+test("an active form submission suppresses duplicate IPC dispatch", () => {
+  const form = {};
+  const submitter = { disabled: false, isConnected: true };
+
+  assert.equal(beginFormSubmission(form, submitter), true);
+  assert.equal(submitter.disabled, true);
+  assert.equal(beginFormSubmission(form, submitter), false);
+
+  finishFormSubmission(form, submitter);
+  assert.equal(submitter.disabled, false);
+  assert.equal(beginFormSubmission(form, submitter), true);
+  finishFormSubmission(form, submitter);
+});
 
 function documentActivity(task) {
   return {

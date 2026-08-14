@@ -27,10 +27,13 @@ When implemented, the following must hold:
    Configuration-navigation entry.
 3. The operator selects the edit root or an existing folder from that tree, then
    assigns one responsible editor and one approver. The root assignments are the
-   required defaults after a valid identity-source binding. A folder may change
-   either role without changing the other. The picker lists only currently
-   eligible direct user members of the bound Entra group; it does not accept an
-   arbitrary typed path or reuse Library navigation selection.
+   required defaults after a valid identity-source binding. On first setup, the
+   operator selects both root assignments from the authenticated identity-source
+   preview and the application persists them atomically with the binding and
+   people cache. A folder may change either role without changing the other. The
+   picker lists only currently eligible direct user members of the bound Entra
+   group; it does not accept an arbitrary typed path or reuse Library navigation
+   selection.
 4. Each role derives independently from the nearest configured ancestor folder
    assignment. A document may explicitly override either role; clearing that
    override restores inheritance for that role without copying a policy into the
@@ -83,4 +86,6 @@ When implemented, the following must hold:
 - Workflow identity: [`CAP-0021-microsoft-entra-workflow-identity.md`](CAP-0021-microsoft-entra-workflow-identity.md)
 - Privacy: [`../../privacy.md`](../../privacy.md)
 - ADR-0019, ADR-0021: [`../../design-decisions.md`](../../design-decisions.md)
-- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
+- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md);
+  archived [`CHG-0003`](../../changes/archive/CHG-0003-retry-safe-entra-identity-application.md)
+  records atomic first-binding root-role setup.
