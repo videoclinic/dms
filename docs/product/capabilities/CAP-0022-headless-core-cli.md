@@ -43,6 +43,7 @@ The CLI provides explicit, local operations over the shared `dms-core` library:
 
 ## Links
 
+- DMS Desktop wireframe: none; this capability is headless-only.
 - Architecture and ADR-0023: [`../../architecture.md`](../../architecture.md)
 - Workspace: [`CAP-0001-local-folder-dms.md`](CAP-0001-local-folder-dms.md)
 - Library membership: [`CAP-0006-library-explorer.md`](CAP-0006-library-explorer.md)

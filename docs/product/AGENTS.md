@@ -43,7 +43,9 @@ Own falsifiable capability contracts (`CAP-*.md`) and the product index.
 
 ## Verification
 
-- Every `capabilities/CAP-*.md` appears in `README.md`.
+- Every `capabilities/CAP-*.md` appears in `README.md`. CAPs with a primary
+  DMS Desktop surface link their HTML and PNG wireframes; headless CAPs state
+  why no desktop wireframe applies.
 - CAP status matches working tree reality (no false “implemented”).
 
 ## Child DOX Index
