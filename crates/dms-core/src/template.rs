@@ -479,6 +479,22 @@ fn load_template(path: &Path) -> Result<LoadedTemplate> {
             "table column prototypes must be in the same table".to_owned(),
         ));
     }
+    let table = &document_xml[table_span.0..table_span.1];
+    let rows = all_element_spans(table, "<w:tr", "</w:tr>")?;
+    if rows.len() != 1 {
+        return Err(DmsError::InvalidMarkdownTemplate(format!(
+            "table prototype must contain exactly one row; found {}",
+            rows.len()
+        )));
+    }
+    let row = &table[rows[0].0..rows[0].1];
+    let cells = all_element_spans(row, "<w:tc", "</w:tc>")?;
+    if cells.len() != 2 {
+        return Err(DmsError::InvalidMarkdownTemplate(format!(
+            "table prototype must contain exactly two cells; found {}",
+            cells.len()
+        )));
+    }
     spans.push(table_span);
     spans.sort_unstable_by_key(|span| span.0);
     for pair in spans.windows(2) {
@@ -497,7 +513,7 @@ fn load_template(path: &Path) -> Result<LoadedTemplate> {
         prototype_start,
         prototype_end,
         paragraphs,
-        table: document_xml[table_span.0..table_span.1].to_owned(),
+        table: table.to_owned(),
     })
 }
 

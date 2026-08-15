@@ -264,8 +264,13 @@ never overwrites `.dms` control data.
 1. Run all local workspace, frontend, records, wireframe, and package gates.
 2. Run workspace tests on Windows and macOS and treat canonical path aliases as
    the same edit-root boundary without weakening symlink refusal.
-3. Build the native Windows application and release the controlled A.8.29
-   Markdown using the imported operator Vorlage and installed Word.
+3. Build the native Windows application and run the ignored, environment-gated
+   installed-Word smoke to release the controlled A.8.29 Markdown through the
+   imported operator Vorlage in a retained disposable workspace. Convert Rust
+   verbatim Windows paths to Win32 paths only at the Word COM boundary; retain
+   canonical paths inside core. Refresh document, header, and footer fields
+   plus tables of contents before fixed-format export so filled `DMS_*`
+   properties and generated headings become visible without stale markers.
 4. Verify PDF page count, visible template chrome, title/number/version/
    confidentiality fields, filename, SHA-256, publish-tree placement, and release
    evidence without retaining document content in the CHG.
@@ -273,6 +278,28 @@ never overwrites `.dms` control data.
    installed-Word evidence explicit if unavailable.
 6. Mark this CHG done and archive it. CHG-0001 Phase 9l may resume only from that
    pushed checkpoint.
+
+### Phase 5 evidence — 2026-08-15
+
+- The native Windows release build and the ignored installed-Word lifecycle smoke
+  pass. The retained disposable workspace produced a four-page A4 PDF at
+  `C:\Users\Raphael_Bossek\dms-demo\chg0004-smoke-6342601-j\publish\81_ISO 27001.2024\8.29 Sicherheitsprüfung mit GitHub Dependabot_V1.0_internal-allied.pdf`;
+  SHA-256:
+  `ea64e3df0f952f5797067b5900d25b4a32cb5882d578f593f5617a6984b0b98f`.
+- Extracted and visual checks confirm the release-snapshot title, `V1.0`, and
+  `Intern + Unternehmensverbund`, refreshed table-of-contents entries, intact
+  Videoclinic chrome, and no unresolved body-prototype or Word bookmark markers.
+  The release-record digest and publish-tree path match the committed PDF; the
+  source Markdown and imported template remain byte-identical.
+- Word COM rejects Rust verbatim `\\?\` output paths. The adapter now converts
+  local and UNC verbatim paths only at the Windows Office boundary and retains
+  canonical paths in core. A native Windows unit test covers all three path forms.
+- Local `cargo fmt --all -- --check`, `cargo test --workspace`, workspace Clippy
+  with warnings denied, all 84 frontend tests, Linux and native Windows workspace
+  release builds, strict Markdown links, Markdown tables, the 21-entry wireframe
+  inventory, and `git diff --check` pass.
+- Latest-checkpoint Windows/macOS CI and NSIS/DMG packaging remain the final
+  closeout gate. Installed-Word evidence on macOS remains explicitly pending.
 
 ## Risks and stop conditions
 

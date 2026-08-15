@@ -245,6 +245,20 @@ fn validator_rejects_missing_or_duplicate_body_prototypes() {
         Err(DmsError::InvalidMarkdownTemplate(message)) if message.contains("exactly once")
     ));
 
+    let extra_table_cell = temp.path().join("extra-table-cell.docx");
+    rewrite_xml_part(&valid, &extra_table_cell, "word/document.xml", |xml| {
+        let table_start = xml.find("<w:tbl").unwrap();
+        let row_end = table_start + xml[table_start..].find("</w:tr>").unwrap();
+        let cell_start = table_start + xml[table_start..].find("<w:tc").unwrap();
+        let cell_end = cell_start + xml[cell_start..].find("</w:tc>").unwrap() + "</w:tc>".len();
+        let extra_cell = xml[cell_start..cell_end].replace("{TABLE COLUMN 1}", "extra");
+        format!("{}{}{}", &xml[..row_end], extra_cell, &xml[row_end..])
+    });
+    assert!(matches!(
+        validate_markdown_template(&extra_table_cell),
+        Err(DmsError::InvalidMarkdownTemplate(message)) if message.contains("exactly two cells")
+    ));
+
     let missing_property = temp.path().join("missing-property.docx");
     rewrite_xml_part(&valid, &missing_property, "docProps/custom.xml", |xml| {
         xml.replace("DMS_DOCUMENT_NUMBER", "REMOVED_DOCUMENT_NUMBER")

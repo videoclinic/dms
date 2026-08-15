@@ -254,6 +254,16 @@ try {
   $word.Visible = $false
   $word.DisplayAlerts = 0
   $document = $word.Documents.Open($env:DMS_OFFICE_SOURCE, $false, $true)
+  foreach ($tableOfContents in $document.TablesOfContents) {
+    $tableOfContents.Update() | Out-Null
+  }
+  foreach ($story in $document.StoryRanges) {
+    $range = $story
+    while ($null -ne $range) {
+      $range.Fields.Update() | Out-Null
+      $range = $range.NextStoryRange
+    }
+  }
   $document.ExportAsFixedFormat($env:DMS_OFFICE_OUTPUT, 17)
 } finally {
   if ($null -ne $document) { $document.Close($false) }
@@ -263,10 +273,38 @@ try {
     run_office_command(
         Command::new("powershell.exe")
             .args(["-NoProfile", "-NonInteractive", "-Command", SCRIPT])
-            .env("DMS_OFFICE_SOURCE", source_copy)
-            .env("DMS_OFFICE_OUTPUT", output),
+            .env("DMS_OFFICE_SOURCE", office_compatible_path(source_copy))
+            .env("DMS_OFFICE_OUTPUT", office_compatible_path(output)),
         "Microsoft Word",
     )
+}
+
+#[cfg(windows)]
+fn office_compatible_path(path: &Path) -> std::ffi::OsString {
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+
+    const VERBATIM_PREFIX: &[u16] = &[b'\\' as u16, b'\\' as u16, b'?' as u16, b'\\' as u16];
+    const VERBATIM_UNC_PREFIX: &[u16] = &[
+        b'\\' as u16,
+        b'\\' as u16,
+        b'?' as u16,
+        b'\\' as u16,
+        b'U' as u16,
+        b'N' as u16,
+        b'C' as u16,
+        b'\\' as u16,
+    ];
+
+    let path = path.as_os_str().encode_wide().collect::<Vec<_>>();
+    if let Some(remainder) = path.strip_prefix(VERBATIM_UNC_PREFIX) {
+        let mut compatible = vec![b'\\' as u16, b'\\' as u16];
+        compatible.extend_from_slice(remainder);
+        std::ffi::OsString::from_wide(&compatible)
+    } else if let Some(remainder) = path.strip_prefix(VERBATIM_PREFIX) {
+        std::ffi::OsString::from_wide(remainder)
+    } else {
+        std::ffi::OsString::from_wide(&path)
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -322,6 +360,23 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn word_automation_receives_win32_paths_instead_of_verbatim_paths() {
+        assert_eq!(
+            office_compatible_path(Path::new(r"\\?\C:\Users\Operator\release.pdf")),
+            std::ffi::OsString::from(r"C:\Users\Operator\release.pdf")
+        );
+        assert_eq!(
+            office_compatible_path(Path::new(r"\\?\UNC\server\share\release.pdf")),
+            std::ffi::OsString::from(r"\\server\share\release.pdf")
+        );
+        assert_eq!(
+            office_compatible_path(Path::new(r"C:\Users\Operator\release.pdf")),
+            std::ffi::OsString::from(r"C:\Users\Operator\release.pdf")
+        );
+    }
 
     const MARKDOWN_TEMPLATE: &[u8] =
         include_bytes!("../../dms-core/tests/fixtures/markdown-template.docx");

@@ -159,6 +159,8 @@ macOS.
   parts, including Word custom-property values. Markdown export first assembles
   the CommonMark body into a second temporary DOCX from the validated workspace
   template, then follows the same installed-Word PDF path as `.docx` drafts.
+  Windows Word automation receives Win32 paths rather than Rust verbatim paths
+  and refreshes document fields plus tables of contents before PDF export.
 
 ## Work Guidance
 
@@ -171,6 +173,8 @@ macOS.
 - `cargo test -p dms-desktop`
 - `node --test crates/dms-desktop/ui/*.test.mjs`
 - `DMS_DESKTOP_SMOKE=1 cargo run -p dms-desktop`
+- On Windows with explicit source, template, and new retained-workspace paths:
+  `cargo test -p dms-desktop tests::windows_installed_word_releases_operator_markdown_template -- --ignored --exact`
 - `.github/workflows/desktop-platform-smoke.yml` on Windows and macOS
 
 ## Child DOX Index

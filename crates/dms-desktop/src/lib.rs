@@ -3921,4 +3921,207 @@ mod tests {
         assert_eq!(profile.document_type.as_deref(), Some("procedure"));
         assert_eq!(profile.owner.as_ref().unwrap().object_id, editor_id);
     }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    #[ignore = "requires installed Microsoft Word and explicit operator input paths"]
+    fn windows_installed_word_releases_operator_markdown_template() {
+        struct TestNotifier;
+
+        impl NotificationClient for TestNotifier {
+            fn send(
+                &mut self,
+                _settings: &NotificationSettings,
+                _message: &dms_core::NotificationMessage,
+            ) -> std::result::Result<dms_core::DeliveryReceipt, String> {
+                Ok(dms_core::DeliveryReceipt::accepted(250, "accepted"))
+            }
+        }
+
+        let required_path = |name: &str| {
+            PathBuf::from(
+                env::var_os(name)
+                    .unwrap_or_else(|| panic!("{name} must name an explicit Windows path")),
+            )
+        };
+        let source_input = required_path("DMS_WINDOWS_MARKDOWN_SMOKE_SOURCE");
+        let template_input = required_path("DMS_WINDOWS_MARKDOWN_SMOKE_TEMPLATE");
+        let smoke_root = required_path("DMS_WINDOWS_MARKDOWN_SMOKE_ROOT");
+        assert!(source_input.is_file(), "Markdown smoke source is missing");
+        assert!(template_input.is_file(), "Word smoke template is missing");
+        assert!(
+            !smoke_root.exists(),
+            "retained smoke workspace already exists"
+        );
+
+        let source_before = fs::read(&source_input).unwrap();
+        let template_before = fs::read(&template_input).unwrap();
+        let edit_root = smoke_root.join("edit");
+        let publish_root = smoke_root.join("publish");
+        fs::create_dir_all(edit_root.join("81_ISO 27001.2024")).unwrap();
+        fs::create_dir(&publish_root).unwrap();
+        let source = edit_root
+            .join("81_ISO 27001.2024")
+            .join(source_input.file_name().unwrap());
+        let template = edit_root.join("Vorlage.docx");
+        fs::copy(&source_input, &source).unwrap();
+        fs::copy(&template_input, &template).unwrap();
+
+        let assembled = smoke_root.join("assembled.docx");
+        let filled = smoke_root.join("release.docx");
+        let preflight_pdf = smoke_root.join("preflight.pdf");
+        dms_core::assemble_markdown_docx(
+            &template,
+            &fs::read_to_string(&source).unwrap(),
+            &assembled,
+        )
+        .unwrap();
+        export::fill_office_placeholders(
+            &assembled,
+            &filled,
+            &dms_core::ExportChrome {
+                version_label: "V1.0".to_owned(),
+                confidentiality: dms_core::ConfidentialitySnapshot {
+                    type_id: "internal-allied".to_owned(),
+                    label: "Intern + Unternehmensverbund".to_owned(),
+                },
+                title: "A.8.29 Sicherheitsprüfung bei Entwicklung und Abnahme".to_owned(),
+                document_number: None,
+            },
+        )
+        .unwrap();
+        export::OfficeAutomation::export_pdf(
+            &mut export::InstalledOfficeAutomation,
+            &filled,
+            &preflight_pdf,
+        )
+        .unwrap();
+
+        let mut workspace = Workspace::init(&edit_root, &publish_root).unwrap();
+        workspace.import_markdown_template(&template).unwrap();
+        workspace
+            .configure_document_type("procedure", "Verfahrensanweisung", true)
+            .unwrap();
+        workspace
+            .configure_confidentiality_type("internal-allied", "Intern + Unternehmensverbund", true)
+            .unwrap();
+        workspace
+            .set_confidentiality_policy(".", "internal-allied")
+            .unwrap();
+        let tenant_id = Uuid::new_v4();
+        let editor_id = Uuid::new_v4();
+        let approver_id = Uuid::new_v4();
+        let requester_id = Uuid::new_v4();
+        let people = vec![
+            EntraPerson::eligible(editor_id, "Windows Smoke Editor", "editor@example.test"),
+            EntraPerson::eligible(
+                approver_id,
+                "Windows Smoke Approver",
+                "approver@example.test",
+            ),
+            EntraPerson::eligible(
+                requester_id,
+                "Windows Smoke Requester",
+                "requester@example.test",
+            ),
+        ];
+        workspace
+            .replace_identity_source(Uuid::new_v4(), "Windows smoke", people.clone())
+            .unwrap();
+        workspace
+            .update_workflow_policy(
+                ".",
+                RoleUpdate::replace(editor_id),
+                RoleUpdate::replace(approver_id),
+            )
+            .unwrap();
+        workspace
+            .configure_notifications(
+                NotificationTransport::Smtp,
+                Some(SmtpSettings {
+                    relay_host: "smtp.example.test".to_owned(),
+                    relay_port: 587,
+                    login_user: "dms@example.test".to_owned(),
+                    from_mailbox: "dms@example.test".to_owned(),
+                }),
+            )
+            .unwrap();
+        let document = workspace.add_document(&source).unwrap();
+        let binding_id = workspace.identity_source().unwrap().binding_id;
+        workspace
+            .update_control(
+                document.id,
+                ControlUpdate {
+                    title: Some("A.8.29 Sicherheitsprüfung bei Entwicklung und Abnahme".to_owned()),
+                    document_type: Some(Some("procedure".to_owned())),
+                    owner: Some(Some(OwnerReference {
+                        binding_id,
+                        object_id: editor_id,
+                    })),
+                    ..ControlUpdate::default()
+                },
+            )
+            .unwrap();
+        workspace.save().unwrap();
+
+        let root = edit_root.to_string_lossy().into_owned();
+        let mut graph = TestGraph { tenant_id, people };
+        let mut notifier = TestNotifier;
+        let submitted = submit_document_candidate_with(
+            &root,
+            CandidateSubmissionInput {
+                document_id: document.id,
+                target_mode: "next_minor".to_owned(),
+                manual_major: None,
+                manual_minor: None,
+                changelog: "Validate the Word-template Markdown release path".to_owned(),
+                effective_date: "2026-08-15".to_owned(),
+                requester_object_id: requester_id,
+                staged_owner_object_id: None,
+                staged_editor_object_id: None,
+                review_override_reason: String::new(),
+                mailto_confirmed: false,
+            },
+            &mut graph,
+            &mut notifier,
+        )
+        .unwrap();
+        assert_eq!(
+            submitted.active_candidate.as_ref().unwrap().status,
+            dms_core::CandidateStatus::InReview
+        );
+        decide_document_review_with(
+            &root,
+            document.id,
+            ReviewDecision::Approved,
+            "Installed-Word smoke approved".to_owned(),
+            AuthenticatedActor {
+                tenant_id,
+                object_id: approver_id,
+            },
+            &mut graph,
+            &mut notifier,
+        )
+        .unwrap();
+        let mut exporter = export::LocalPdfExporter::new(export::InstalledOfficeAutomation);
+        release_document_candidate_with(
+            &root,
+            document.id,
+            String::new(),
+            &mut graph,
+            &mut notifier,
+            &mut exporter,
+        )
+        .unwrap();
+
+        let reopened = Workspace::open(&edit_root).unwrap();
+        let release = reopened.current_release(document.id).unwrap().unwrap();
+        let pdf = reopened.publish_root.join(&release.relative_pdf_path);
+        assert!(pdf.is_file());
+        assert_eq!(fs::read(&source_input).unwrap(), source_before);
+        assert_eq!(fs::read(&template_input).unwrap(), template_before);
+        println!("DMS_SMOKE_PDF={}", pdf.display());
+        println!("DMS_SMOKE_SHA256={}", release.pdf_digest);
+        println!("DMS_SMOKE_VERSION={}", release.version);
+    }
 }

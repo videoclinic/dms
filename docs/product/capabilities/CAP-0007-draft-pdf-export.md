@@ -5,7 +5,7 @@
 | ID | CAP-0007 |
 | Status | not implemented |
 | Mechanism | Installed Microsoft Word for Office drafts and Markdown converted into a temporary DOCX from the workspace Word-template asset |
-| Tests | Partial phase-5 and CHG-0004 Phases 1–4 evidence: [`dms-desktop` adapter/unit tests](../../../crates/dms-desktop/src/export.rs) cover template-backed temporary DOCX assembly, controlled-field fill, installed-Office dispatch through a test double, valid-PDF enforcement, and unchanged source/template bytes; [core lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs) cover fail-closed missing, changed, invalid, and unconfigured template states without export or release evidence; [desktop Configuration tests](../../../crates/dms-desktop/src/lib.rs) and [frontend tests](../../../crates/dms-desktop/ui/configuration.test.mjs) cover template selection, validation display, removal confirmation, and Library exclusion; [core template tests](../../../crates/dms-core/tests/markdown_template.rs) cover strict custom properties, temporary DOCX assembly, and template-package preservation; Windows/macOS CI runs the fake-backed Markdown pipeline, while supported-host installed-Word evidence remains required before promotion. |
+| Tests | Partial phase-5 and CHG-0004 evidence: [`dms-desktop` adapter/unit tests](../../../crates/dms-desktop/src/export.rs) cover template-backed temporary DOCX assembly, controlled-field fill, installed-Office dispatch through a test double, valid-PDF enforcement, Win32-safe Word COM paths, and unchanged source/template bytes; [core lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs) cover fail-closed missing, changed, invalid, and unconfigured template states without export or release evidence; [desktop Configuration tests](../../../crates/dms-desktop/src/lib.rs) and [frontend tests](../../../crates/dms-desktop/ui/configuration.test.mjs) cover template selection, validation display, removal confirmation, and Library exclusion; [core template tests](../../../crates/dms-core/tests/markdown_template.rs) cover strict custom properties, temporary DOCX assembly, and template-package preservation. A retained Windows installed-Word smoke released the controlled A.8.29 Markdown as a four-page A4 PDF with refreshed title, table of contents, version, and confidentiality, no unresolved template markers, matching SHA-256 release evidence, and unchanged source/template bytes. Windows/macOS CI runs the fake-backed pipeline; installed-Word evidence on macOS remains pending, so this CAP is not promoted. |
 
 ## Outcomes (contract — not yet true in runtime)
 
@@ -63,7 +63,8 @@ When implemented, the following must hold:
     Generated temporary DOCX custom properties `DMS_TITLE`,
     `DMS_DOCUMENT_NUMBER`, `DMS_VERSION`, and `DMS_CONFIDENTIALITY` are filled
     from export chrome. Word `DOCPROPERTY` fields expose those values in the
-    template and are refreshed before PDF export. The literal tokens `{TITLE}`,
+    template and are refreshed before PDF export together with any template table
+    of contents. The literal tokens `{TITLE}`,
     `{DOCUMENT_NUMBER}`, `{VERSION}`, and `{CONFIDENTIALITY}` remain supported in
     temporary Office copies and custom-property values. The source Office draft,
     Markdown source, and imported template are never modified during release.
