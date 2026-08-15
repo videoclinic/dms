@@ -598,11 +598,14 @@ const CAPS = [
           ${kv([
             ["Host", "smtp.videoclinic.de"],
             ["Port", "587 (STARTTLS)"],
-            ["Sender / authentication user", "dms@videoclinic.de"],
-            ["Microsoft 365 app password", "Write-only input · stored in OS credential store"],
+            ["SMTP login user", "dms-relay@videoclinic.de"],
+            ["From address", "&quot;Doc Mgmt&quot; &lt;dms@videoclinic.de&gt;"],
+            ["Microsoft 365 app password", "*** · write-only · stored in OS credential store"],
+            ["Test target", "dms@videoclinic.de (parsed From mailbox)"],
             ["Minor-publication recipient", "anna@videoclinic.de (effective approver snapshot)"],
           ])}
-          <p class="hint">A blank password input retains the existing OS credential. SMTP cannot be saved or used without one; changing to <code>mailto:</code> removes the workspace-scoped credential. No password is returned or written to <code>.dms</code>.</p>
+          <div class="row gap-2" style="margin-top:0.75rem"><button class="btn outline">Send test email to “Doc Mgmt” &lt;dms@videoclinic.de&gt;</button></div>
+          <p class="hint">A blank password input retains the existing OS credential. The login user authenticates only; the formatted From mailbox supplies the message identity and fixed test recipient. Changing to <code>mailto:</code> removes the workspace-scoped credential. No password is returned or written to <code>.dms</code>.</p>
         </section>
         <section class="card">
           <div class="row gap-2 mb"><h3 class="card-title">Minor-publication notice</h3>${badge("released V1.4", "ok")}</div>
@@ -947,6 +950,7 @@ const CAPS = [
     subtitle: "Set editor and approver defaults at the root, then add only the folder exceptions that need different routing.",
     body: `
       ${defaultsFirstStyles()}
+      <style>.app[data-cap="CAP-0019"] .defaults-grid { grid-template-columns: 28rem minmax(0, 1fr); }</style>
       <section class="config-summary">
         <div class="summary-copy"><strong>People source ${badge("connected", "ok")}</strong><span>VC DMS Workflow Users · 3 eligible direct members · refreshed just now</span></div>
         <button class="btn outline">Refresh people</button>
@@ -955,44 +959,32 @@ const CAPS = [
       <div class="defaults-grid">
         <section class="card tree">
           <h3 class="card-title">Choose default or exception</h3>
-          <ul class="tree-root">
-            <li>
-              <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📂 edit-root <span class="badge info">defaults</span></span></div>
-              <ul>
-                <li>
+          <ul class="tree-root" role="tree" aria-label="Workflow folders">
+            <li role="treeitem" aria-level="1" aria-expanded="true">
+              <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📂 edit-root <span class="badge info">Editor · Lukas</span> <span class="badge info">Approver · Anna</span></span></div>
+              <ul role="group">
+                <li role="treeitem" aria-level="2" aria-expanded="true">
                   <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📂 policies</span></div>
-                  <ul>
-                    <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 HR</span></div></li>
-                    <li><div class="tree-node active"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 IT <span class="badge warn">exception</span></span></div></li>
+                  <ul role="group">
+                    <li role="treeitem" aria-level="3" aria-selected="true"><div class="tree-node active"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 HR</span></div></li>
+                    <li role="treeitem" aria-level="3"><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 IT <span class="badge warn">Editor · Lara</span> <span class="badge warn">Approver · Anna</span></span></div></li>
                   </ul>
                 </li>
-                <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 records <span class="badge danger">unresolved</span></span></div></li>
-                <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 Archive (empty)</span></div></li>
+                <li role="treeitem" aria-level="2"><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 records <span class="badge danger">Editor · unresolved</span> <span class="badge warn">Approver · Anna</span></span></div></li>
+                <li role="treeitem" aria-level="2"><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 Archive (empty)</span></div></li>
               </ul>
             </li>
           </ul>
           <p class="hint">Select edit-root to change both routing defaults. <code>.dms</code> is hidden; Library navigation does not set this selection.</p>
         </section>
         <section class="card">
-          <div class="row between mb"><h3 class="card-title" style="margin:0">Default for policies/IT/</h3>${badge("direct exception", "warn")}</div>
-          <div class="default-state"><strong>Parent defaults: Lukas Roth / Anna Berg from edit-root</strong>Save below changes this folder and inheriting descendants only. Each role remains independent; document overrides remain unchanged.</div>
+          <div class="row between mb"><h3 class="card-title" style="margin:0">Inherited for policies/HR/</h3>${badge("inherited", "info")}</div>
+          <div class="default-state"><strong>Effective roles: Lukas Roth / Anna Berg from edit-root</strong>Save below creates a direct assignment for this folder and inheriting descendants only. Each role remains independent; document overrides remain unchanged.</div>
           <div class="grid-2" style="margin-top:0.75rem">
             <div><div class="label" style="margin-bottom:0.35rem">Responsible editor</div><button class="btn outline" style="width:100%;text-align:left">Lukas Roth · Change…</button></div>
             <div><div class="label" style="margin-bottom:0.35rem">Approver</div><button class="btn outline" style="width:100%;text-align:left">Anna Berg · Change…</button></div>
           </div>
-          <div class="row gap-2" style="margin-top:0.75rem"><button class="btn">Save folder exception</button><button class="btn danger">Remove exception</button></div>
-          <h3 class="card-title" style="margin-top:1rem">Folder exceptions</h3>
-          ${growingTable({
-            headers: ["Path", "Editor", "Approver", "State"],
-            rows: [
-              ["policies/IT/", "Lukas Roth", "Anna Berg", "direct"],
-              ["records/", "Unresolved", "Anna Berg", "Mira Klein ineligible"],
-            ],
-            filterLabel: "Path or person",
-            filterAriaLabel: "Filter workflow folder exceptions",
-            filterPlaceholder: "e.g. IT or Anna",
-            matchingLabel: "folder exceptions",
-          })}
+          <div class="row gap-2" style="margin-top:0.75rem"><button class="btn">Save folder exception</button></div>
           <div class="callout warn" style="margin-top:0.75rem">An unresolved role blocks a new review. DMS Desktop never chooses a replacement; an operator reroutes the policy from the current Entra group.</div>
         </section>
       </div>`,

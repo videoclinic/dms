@@ -11,6 +11,7 @@ import {
   openConfigurationSecondary,
   selectConfigurationFolder,
   setConfigurationRoute,
+  toggleConfigurationFolder,
 } from "./configuration.mjs";
 
 const workspace = {
@@ -52,10 +53,16 @@ const snapshot = {
   ],
   workflow_policies: [
     { folder: ".", editor: { binding_id: "binding-1", object_id: "editor-1" }, approver: { binding_id: "binding-1", object_id: "approver-1" } },
+    { folder: "Policies/HR", editor: null, approver: { binding_id: "binding-1", object_id: "approver-1" } },
   ],
   notification_settings: {
     transport: "smtp",
-    smtp: { relay_host: "smtp.example.test", relay_port: 587, sender: "dms@example.test" },
+    smtp: {
+      relay_host: "smtp.example.test",
+      relay_port: 587,
+      login_user: "smtp-login@example.test",
+      from_mailbox: "\"Doc Mgmt\" <dms@example.test>",
+    },
   },
   global_entra_configuration: {
     client_id: "client-1",
@@ -339,7 +346,53 @@ test("notifications route submits a write-only SMTP app password without renderi
   assert.match(markup, /OS credential store/);
   assert.match(markup, /name="smtpAppPassword"/);
   assert.match(markup, /type="password"/);
+  assert.match(markup, /placeholder="\*\*\*"/);
+  assert.match(markup, /name="loginUser"/);
+  assert.match(markup, /name="fromMailbox"/);
+  assert.match(markup, /data-configuration-form="smtp-test"/);
+  assert.match(markup, /Send test email to &quot;Doc Mgmt&quot; &lt;dms@example\.test&gt;/);
   assert.match(markup, /Credential configured/);
+
+  const withoutCredential = configurationMarkup(
+    setConfigurationRoute(
+      applyConfigurationSnapshot(createConfigurationState(), {
+        ...snapshot,
+        smtp_credential_configured: false,
+      }),
+      "notifications",
+    ),
+    assistancePolicy,
+  );
+  assert.match(withoutCredential, /data-configuration-form="smtp-test"><button[^>]*disabled/);
+
+  const mailto = configurationMarkup(
+    setConfigurationRoute(
+      applyConfigurationSnapshot(createConfigurationState(), {
+        ...snapshot,
+        notification_settings: { transport: "mailto", smtp: null },
+        smtp_credential_configured: false,
+      }),
+      "notifications",
+    ),
+    assistancePolicy,
+  );
+  assert.doesNotMatch(mailto, /data-configuration-form="smtp-test"/);
+});
+
+test("workflow tree exposes semantic levels, direct role badges, and independent branch toggles", () => {
+  let state = applyConfigurationSnapshot(createConfigurationState(), snapshot);
+  state = setConfigurationRoute(state, "workflow");
+  let markup = configurationMarkup(state, assistancePolicy);
+
+  assert.match(markup, /role="tree"/);
+  assert.match(markup, /role="treeitem" aria-level="3"/);
+  assert.match(markup, /Approver: Anna Berg/);
+  assert.match(markup, /data-configuration-folder-toggle="Policies"/);
+
+  state = toggleConfigurationFolder(state, "Policies");
+  markup = configurationMarkup(state, assistancePolicy);
+  assert.doesNotMatch(markup, /data-configuration-folder="Policies\/HR"/);
+  assert.equal(state.selected_folder, ".");
 });
 
 test("confidentiality catalogue is a secondary surface that returns to document defaults", () => {
@@ -464,7 +517,8 @@ test("configuration mutations map forms to narrow desktop commands", () => {
         ["transport", "smtp"],
         ["relayHost", " smtp.example.test "],
         ["relayPort", "587"],
-        ["sender", " dms@example.test "],
+        ["loginUser", " smtp-login@example.test "],
+        ["fromMailbox", " \"Doc Mgmt\" <dms@example.test> "],
         ["smtpAppPassword", " one-way-secret "],
       ]),
       ".",
@@ -475,10 +529,15 @@ test("configuration mutations map forms to narrow desktop commands", () => {
         transport: "smtp",
         relayHost: "smtp.example.test",
         relayPort: 587,
-        sender: "dms@example.test",
+        loginUser: "smtp-login@example.test",
+        fromMailbox: "\"Doc Mgmt\" <dms@example.test>",
         smtpAppPassword: "one-way-secret",
       },
     },
+  );
+  assert.deepEqual(
+    configurationMutationRequest("smtp-test", new Map(), "."),
+    { command: "test_smtp_notification", arguments: {} },
   );
   assert.deepEqual(
     configurationMutationRequest(

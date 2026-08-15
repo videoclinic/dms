@@ -51,6 +51,7 @@ import {
   openConfigurationSecondary,
   selectConfigurationFolder,
   setConfigurationRoute,
+  toggleConfigurationFolder,
 } from "./configuration.mjs";
 import {
   applyAuditReportSnapshot,
@@ -1562,6 +1563,23 @@ async function handleClick(event) {
     return;
   }
 
+  const configurationFolderToggle = event.target.closest("[data-configuration-folder-toggle]")?.dataset.configurationFolderToggle;
+  if (configurationFolderToggle) {
+    try {
+      appState = {
+        ...appState,
+        configuration: toggleConfigurationFolder(appState.configuration, configurationFolderToggle),
+      };
+    } catch (error) {
+      appState = {
+        ...appState,
+        configuration: { ...appState.configuration, notice: "", error: String(error) },
+      };
+    }
+    render(appState);
+    return;
+  }
+
   const configurationFolder = event.target.closest("[data-configuration-folder]")?.dataset.configurationFolder;
   if (configurationFolder) {
     try {
@@ -1834,6 +1852,19 @@ async function handleSubmit(event) {
         appState = {
           ...appState,
           configuration: applyGlobalEntraConfiguration(appState.configuration, result),
+        };
+        render(appState);
+        return;
+      }
+      if (configurationMutation === "smtp-test") {
+        const code = result.response_code ? ` Relay response: ${result.response_code}.` : "";
+        appState = {
+          ...appState,
+          configuration: {
+            ...appState.configuration,
+            notice: `${result.detail} Recipient: ${result.recipient}.${code}`,
+            error: "",
+          },
         };
         render(appState);
         return;

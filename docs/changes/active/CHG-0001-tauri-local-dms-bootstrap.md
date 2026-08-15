@@ -212,11 +212,11 @@ phase also adds an intentional test delivery.
 | 9k.2 | Entra identity-source overview | done (workspace format/test/Clippy gate; 14 focused configuration UI tests; encoded host-browser URL coverage; regenerated and visually inspected 1440×1100 CAP-0021 HTML/PNG; 21-entry manifest; strict links; 41 Markdown tables; DOX pass; `git diff --check`) | `cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0; CAP-0021 and its generated HTML/PNG show public-client ID, tenant ID, and a host-browser group-page control; `git diff --check` exits 0 |
 | 9k.3 | Release-bound control data and immutable owner identity | done (`cargo fmt --all -- --check`; workspace tests; Clippy with warnings denied; 16 focused Library UI tests; 9 focused Maintenance UI tests; regenerated and visually inspected CAP-0002/CAP-0015/CAP-0017 HTML/PNG; 21-entry manifest; changed-document links; DOX pass; `git diff --check`) | Schema-v11 fixture migrates without inventing historical release or owner identity; a successful empty Graph result produces only the literal `<owner>` / `<editor>` placeholders while a Graph failure still fails closed; a later successful real-person refresh permits an operator-selected release-bound Owner/Editor replacement without rewriting past evidence; candidate/release/audit/maintenance tests prove immutable control, owner, and effective-date snapshots plus effective-date-based scheduling; owner/editor/approver references remain object-ID based across name/email changes; release maintenance and audit use stored release evidence rather than mutable profile/cache fallbacks |
 | 9k.4 | Library filtering, recursive folder counters, interaction, width, and shipped icons | done (workspace format/test/Clippy gate; 5 focused core Library tests; 82 frontend tests; regenerated and visually inspected CAP-0002/CAP-0006/CAP-0015 HTML/PNG; 21-entry manifest; modified-CAP links and Markdown tables; DOX pass; `git diff --check`) | Core and UI tests prove identical recursive `~` draft, `+` applicable-not-controlled, and `!` unsupported counts beside each folder in tree and list views; all-on session-wide **Draft documents** / **Available to add** / **Unsupported files** toggles filter every folder and search result before pagination without changing counters; candidate form selects `Next minor` by default; a table-folder click opens that folder without a double-click; the centre/details splitter is pointer- and keyboard-usable with bounded session-only width; runtime and wireframes use app-local SVGs rather than a font dependency |
-| 9k.5 | Workflow tree and SMTP identity/test configuration | pending | Workflow renders an accessible folder tree with all direct role assignments visibly marked; schema-v12 SMTP settings migrate to separate login user and RFC 5322 `From` mailbox without exposing the password; a fake-backed SMTP test addresses that `From` mailbox and a saved credential renders only `***`; Rust/frontend gates and regenerated CAP-0010/CAP-0019 wireframes pass; `git diff --check` exits 0 |
+| 9k.5 | Workflow tree and SMTP identity/test configuration | done (schema-v13 migration and backup test; workspace format/test/Clippy gate; 40 focused Configuration/App frontend tests; regenerated and visually inspected CAP-0010/CAP-0019 HTML/PNG; 21-entry manifest and Markdown-table checks; DOX pass; `git diff --check`) | Workflow renders an accessible folder tree with all direct role assignments visibly marked; schema-v12 SMTP settings migrate to separate login user and RFC 5322 `From` mailbox without exposing the password; a fake-backed SMTP test addresses that `From` mailbox and a saved credential renders only `***`; Rust/frontend gates and regenerated CAP-0010/CAP-0019 wireframes pass; `git diff --check` exits 0 |
 | 9l | Windows external operator smokes + CAP promotion | pending | Licensed Office release smoke passes on Windows; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated Node-runtime action annotations; CAP statuses distinguish Windows-host evidence from existing CI coverage and make no untested macOS-installed-Office claim; CHG status is done and the record is archived |
 
-**Current phase:** Phase 9k.4 is complete. Phase 9k.5 is the next pending phase
-before Phase 9l can start. macOS remains a
+**Current phase:** Phase 9k.5 is done and awaits its Git checkpoint.
+Phase 9l remains pending until that checkpoint is pushed. macOS remains a
 supported runtime target with existing CI coverage,
 but an external macOS operator smoke is not a Phase 9l gate.
 
@@ -1187,7 +1187,7 @@ CAP wireframes are one Configuration contract. Splitting them would leave a
 persisted transport model or a primary operator surface inconsistent with the
 behaviour it claims.
 **Context sources:** this phase and the phase table; CAP-0010 outcomes 1–9 and
-non-goals; CAP-0019 outcomes 2–4 and 11; CAP-0005 outcome 10;
+non-goals; CAP-0019 outcomes 2–4; CAP-0005 outcome 10;
 ADR-0024; `docs/product/wireframes/AGENTS.md` and
 `docs/product/wireframes/generate.mjs` (CAP-0010 and CAP-0019);
 `crates/AGENTS.md`; `crates/dms-core/AGENTS.md`;
@@ -1201,31 +1201,22 @@ focused Rust/frontend tests.
 markers; schema-v13 SMTP settings with separately persisted non-secret login
 user and RFC 5322 `From` mailbox; a non-secret `***` credential indicator; and
 a fake-backed, explicitly targeted SMTP test-delivery command and UI.
-**Status:** pending — queued after the Library interaction vertical slice.
+**Status:** done — gate passed; Git checkpoint pending.
 
 ### Current state
 
-- `workflowMarkup` reuses `folderTreeMarkup`, which maps every policy folder
-  into one depth-indented button rather than a parent/child tree, and shows no
-  direct editor/approver assignment marker (`crates/dms-desktop/ui/configuration.mjs:101-110`,
-  `196-209`).
-- The configuration snapshot already supplies all existing policy folders and
-  direct workflow policies, so the frontend can construct the tree without a
-  new directory or identity query (`crates/dms-desktop/src/lib.rs:143-155`,
-  `1849-1877`).
-- Persisted `SmtpSettings.sender` conflates the SMTP authentication user and
-  message sender (`crates/dms-core/src/lifecycle.rs:148-160`); the desktop
-  adapter uses it for both `From` and `Credentials::new` (`crates/dms-desktop/src/notify.rs:155-179`).
-- Notifications currently render a single email-only Sender input and a blank
-  password input; a stored credential appears only as prose, not `***`
-  (`crates/dms-desktop/ui/configuration.mjs:234-239`).
-- The app already keeps the app password in the workspace-scoped OS credential
-  store and exposes only a boolean configuration status in the snapshot
-  (`crates/dms-desktop/src/notify.rs:15-77`, `crates/dms-desktop/src/lib.rs:1853-1877`).
-- The current store is schema v11. This phase starts only after Phase 9k.3 has
-  produced schema v12, so it must migrate v12 settings to schema v13 rather than
-  silently accepting an unknown persisted field shape (`crates/dms-core/src/lib.rs:31`,
-  `400-463`).
+- Workflow owns a semantic expandable folder tree. Direct Editor and Approver
+  assignments are independently marked; inherited values remain in the one
+  selected-folder editor. Document defaults retain their existing flat picker.
+- Schema v13 persists SMTP relay host, login user, and formatted `From` mailbox
+  separately. Opening schema v12 maps its legacy sender to both identity fields,
+  validates the result, retains the v12 backup, and writes the migrated store.
+- The notification adapter authenticates with the login user and parses the
+  independent RFC 5322 `From` mailbox. The saved app password remains write-only
+  OS credential data and renders only as the literal `***` configured indicator.
+- The saved SMTP configuration exposes one credential-gated test action to the
+  parsed `From` mailbox. Fake-backed tests prove its fixed content/recipient and
+  sanitized result; `mailto:` exposes no SMTP test action.
 
 **Steps:**
 

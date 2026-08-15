@@ -152,7 +152,8 @@ pub enum NotificationTransport {
 pub struct SmtpSettings {
     pub relay_host: String,
     pub relay_port: u16,
-    pub sender: String,
+    pub login_user: String,
+    pub from_mailbox: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -508,7 +509,15 @@ impl Workspace {
             NotificationTransport::Smtp => {
                 let mut smtp = smtp.ok_or(DmsError::SmtpConfigurationRequired)?;
                 smtp.relay_host = configured_text(&smtp.relay_host, "SMTP relay host")?;
-                smtp.sender = configured_text(&smtp.sender, "SMTP sender")?;
+                smtp.login_user = configured_text(&smtp.login_user, "SMTP login user")?;
+                smtp.from_mailbox = configured_text(&smtp.from_mailbox, "SMTP From address")?;
+                smtp.from_mailbox
+                    .parse::<lettre::message::Mailbox>()
+                    .map_err(|error| {
+                        DmsError::InvalidConfiguration(format!(
+                            "SMTP From address is not a valid mailbox: {error}"
+                        ))
+                    })?;
                 if smtp.relay_port == 0 {
                     return Err(DmsError::InvalidConfiguration("SMTP relay port".to_owned()));
                 }

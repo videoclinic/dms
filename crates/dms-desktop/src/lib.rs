@@ -12,13 +12,14 @@ use dms_core::{
     ConfidentialityPolicy, ConfidentialityType, ControlUpdate, DeliveryAttempt, DmsError, Document,
     DocumentControl, DocumentType, EffectiveConfidentiality, EffectiveWorkflowRoles,
     EntraIdentitySource, EntraPerson, GraphClient, LibraryEntry, LibraryFolder, LibraryFolderNode,
-    Lifecycle, LocalLifecycleActions, Note, NotificationClient, NotificationSettings,
-    NotificationTransport, OwnerReference, PdfExporter, PeriodicReview, PeriodicReviewMarker,
-    PeriodicReviewResult, PermalinkTarget, PersonSnapshot, PolicyFolder, ReleaseCandidate,
-    ReleaseVerificationStatus, RestoreOutcome, RestoreRequest, ReviewDecision, RoleUpdate,
-    SmtpSettings, SourceState, TargetSelection, Version, WorkflowEvent, WorkflowPolicyAssignment,
-    WorkflowVerification, Workspace, WorkspaceLock, WorkspaceLockStatus,
+    Lifecycle, LocalLifecycleActions, Note, NotificationClient, NotificationKind,
+    NotificationMessage, NotificationSettings, NotificationTransport, OwnerReference, PdfExporter,
+    PeriodicReview, PeriodicReviewMarker, PeriodicReviewResult, PermalinkTarget, PersonSnapshot,
+    PolicyFolder, ReleaseCandidate, ReleaseVerificationStatus, RestoreOutcome, RestoreRequest,
+    ReviewDecision, RoleUpdate, SmtpSettings, SourceState, TargetSelection, Version, WorkflowEvent,
+    WorkflowPolicyAssignment, WorkflowVerification, Workspace, WorkspaceLock, WorkspaceLockStatus,
 };
+use lettre::message::Mailbox;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -153,6 +154,13 @@ pub struct WorkspaceConfiguration {
     pub notification_settings: Option<NotificationSettings>,
     pub global_entra_configuration: GlobalEntraConfiguration,
     pub smtp_credential_configured: bool,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct SmtpTestResult {
+    pub recipient: String,
+    pub response_code: Option<u16>,
+    pub detail: String,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -655,37 +663,47 @@ fn configure_notifications(
     transport: String,
     relay_host: String,
     relay_port: u16,
-    sender: String,
+    login_user: String,
+    from_mailbox: String,
     smtp_app_password: String,
 ) -> Result<WorkspaceConfiguration, String> {
     let credentials = notify::OsCredentialStore;
     configure_notifications_with_credentials(
         &edit_root,
-        &transport,
-        &relay_host,
-        relay_port,
-        &sender,
-        &smtp_app_password,
+        NotificationConfigurationInput {
+            transport,
+            relay_host,
+            relay_port,
+            login_user,
+            from_mailbox,
+            smtp_app_password,
+        },
         &credentials,
     )
 }
 
+struct NotificationConfigurationInput {
+    transport: String,
+    relay_host: String,
+    relay_port: u16,
+    login_user: String,
+    from_mailbox: String,
+    smtp_app_password: String,
+}
+
 fn configure_notifications_with_credentials<C: notify::CredentialStore>(
     edit_root: &str,
-    transport: &str,
-    relay_host: &str,
-    relay_port: u16,
-    sender: &str,
-    smtp_app_password: &str,
+    input: NotificationConfigurationInput,
     credentials: &C,
 ) -> Result<WorkspaceConfiguration, String> {
-    let (transport, smtp) = match transport.trim() {
+    let (transport, smtp) = match input.transport.trim() {
         "smtp" => (
             NotificationTransport::Smtp,
             Some(SmtpSettings {
-                relay_host: relay_host.to_owned(),
-                relay_port,
-                sender: sender.to_owned(),
+                relay_host: input.relay_host,
+                relay_port: input.relay_port,
+                login_user: input.login_user,
+                from_mailbox: input.from_mailbox,
             }),
         ),
         "mailto" => (NotificationTransport::Mailto, None),
@@ -696,8 +714,8 @@ fn configure_notifications_with_credentials<C: notify::CredentialStore>(
         .configure_notifications(transport, smtp)
         .map_err(|error| error.to_string())?;
     match transport {
-        NotificationTransport::Smtp if !smtp_app_password.trim().is_empty() => {
-            credentials.set_smtp_password(workspace.workspace_id, smtp_app_password)?
+        NotificationTransport::Smtp if !input.smtp_app_password.trim().is_empty() => {
+            credentials.set_smtp_password(workspace.workspace_id, &input.smtp_app_password)?
         }
         NotificationTransport::Smtp
             if !credentials.smtp_password_exists(workspace.workspace_id)? =>
@@ -718,6 +736,58 @@ fn configure_notifications_with_credentials<C: notify::CredentialStore>(
         effective_global_entra_configuration(&GlobalSettings::default())?,
         credentials,
     )
+}
+
+#[tauri::command]
+fn test_smtp_notification(edit_root: String) -> Result<SmtpTestResult, String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let credentials = notify::OsCredentialStore;
+    let mut notifier = notify::production_notifier(workspace.workspace_id, false);
+    test_smtp_notification_with(&workspace, &credentials, &mut notifier)
+}
+
+fn test_smtp_notification_with<C: notify::CredentialStore, N: NotificationClient>(
+    workspace: &Workspace,
+    credentials: &C,
+    notifier: &mut N,
+) -> Result<SmtpTestResult, String> {
+    let settings = workspace
+        .notification_settings()
+        .ok_or_else(|| "SMTP test requires saved notification settings".to_owned())?;
+    if settings.transport != NotificationTransport::Smtp {
+        return Err("SMTP test is unavailable for mailto notification transport".to_owned());
+    }
+    let smtp = settings
+        .smtp
+        .as_ref()
+        .ok_or_else(|| "SMTP test requires saved relay settings".to_owned())?;
+    if !credentials
+        .smtp_password_exists(workspace.workspace_id)
+        .map_err(|_| "Cannot verify the saved SMTP credential.".to_owned())?
+    {
+        return Err("SMTP test requires a configured app password".to_owned());
+    }
+    let from = smtp
+        .from_mailbox
+        .parse::<Mailbox>()
+        .map_err(|error| format!("invalid saved SMTP From address: {error}"))?;
+    let recipient = from.email.to_string();
+    let message = NotificationMessage {
+        kind: NotificationKind::ReviewRequest,
+        recipient: recipient.clone(),
+        subject: "DMS SMTP configuration test".to_owned(),
+        body: "This message confirms that the saved DMS SMTP configuration can deliver email. It contains no document or workflow content.".to_owned(),
+        mailto_uri: String::new(),
+    };
+    let receipt = notifier.send(settings, &message).map_err(|_| {
+        "SMTP test delivery failed. Verify the saved relay, identity, From mailbox, and app password."
+            .to_owned()
+    })?;
+    Ok(SmtpTestResult {
+        recipient,
+        response_code: receipt.response_code,
+        detail: "SMTP test message accepted by the configured relay.".to_owned(),
+    })
 }
 
 #[tauri::command]
@@ -2441,6 +2511,7 @@ pub fn run() {
             apply_identity_source,
             refresh_identity_source,
             configure_notifications,
+            test_smtp_notification,
             load_library,
             search_library,
             add_library_documents,
@@ -3043,17 +3114,17 @@ mod tests {
         Workspace::init(edit_root.path(), publish_root.path()).unwrap();
         let credentials = MemoryCredentials::default();
         let root = edit_root.path().to_string_lossy().into_owned();
+        let smtp_input = |smtp_app_password: &str| NotificationConfigurationInput {
+            transport: "smtp".to_owned(),
+            relay_host: "smtp.example.test".to_owned(),
+            relay_port: 587,
+            login_user: "smtp-login@example.test".to_owned(),
+            from_mailbox: "\"Doc Mgmt\" <dms@example.test>".to_owned(),
+            smtp_app_password: smtp_app_password.to_owned(),
+        };
 
-        let error = configure_notifications_with_credentials(
-            &root,
-            "smtp",
-            "smtp.example.test",
-            587,
-            "dms@example.test",
-            "",
-            &credentials,
-        )
-        .unwrap_err();
+        let error = configure_notifications_with_credentials(&root, smtp_input(""), &credentials)
+            .unwrap_err();
 
         assert!(error.contains("requires a Microsoft 365 app password"));
         assert!(Workspace::open(edit_root.path())
@@ -3063,11 +3134,7 @@ mod tests {
 
         let configured = configure_notifications_with_credentials(
             &root,
-            "smtp",
-            "smtp.example.test",
-            587,
-            "dms@example.test",
-            "one-way-secret",
+            smtp_input("one-way-secret"),
             &credentials,
         )
         .unwrap();
@@ -3081,25 +3148,69 @@ mod tests {
                 .contains("one-way-secret")
         );
 
-        let retained = configure_notifications_with_credentials(
-            &root,
-            "smtp",
-            "smtp.example.test",
-            587,
-            "dms@example.test",
-            "",
-            &credentials,
-        )
-        .unwrap();
+        let retained =
+            configure_notifications_with_credentials(&root, smtp_input(""), &credentials).unwrap();
         assert!(retained.smtp_credential_configured);
+
+        #[derive(Default)]
+        struct RecordingNotifier {
+            recipient: Option<String>,
+            subject: Option<String>,
+        }
+
+        impl NotificationClient for RecordingNotifier {
+            fn send(
+                &mut self,
+                _settings: &NotificationSettings,
+                message: &NotificationMessage,
+            ) -> std::result::Result<dms_core::DeliveryReceipt, String> {
+                self.recipient = Some(message.recipient.clone());
+                self.subject = Some(message.subject.clone());
+                Ok(dms_core::DeliveryReceipt::accepted(250, "fake accepted"))
+            }
+        }
+
+        let workspace = Workspace::open(edit_root.path()).unwrap();
+        let mut notifier = RecordingNotifier::default();
+        let result = test_smtp_notification_with(&workspace, &credentials, &mut notifier).unwrap();
+        assert_eq!(result.recipient, "dms@example.test");
+        assert_eq!(result.response_code, Some(250));
+        assert_eq!(notifier.recipient.as_deref(), Some("dms@example.test"));
+        assert_eq!(
+            notifier.subject.as_deref(),
+            Some("DMS SMTP configuration test")
+        );
+
+        struct FailingNotifier;
+
+        impl NotificationClient for FailingNotifier {
+            fn send(
+                &mut self,
+                _settings: &NotificationSettings,
+                _message: &NotificationMessage,
+            ) -> std::result::Result<dms_core::DeliveryReceipt, String> {
+                Err("relay details that must not cross IPC".to_owned())
+            }
+        }
+
+        let error = test_smtp_notification_with(&workspace, &credentials, &mut FailingNotifier)
+            .unwrap_err();
+        assert_eq!(
+            error,
+            "SMTP test delivery failed. Verify the saved relay, identity, From mailbox, and app password."
+        );
+        assert!(!error.contains("relay details"));
 
         let mailto = configure_notifications_with_credentials(
             &root,
-            "mailto",
-            "",
-            587,
-            "",
-            "",
+            NotificationConfigurationInput {
+                transport: "mailto".to_owned(),
+                relay_host: String::new(),
+                relay_port: 587,
+                login_user: String::new(),
+                from_mailbox: String::new(),
+                smtp_app_password: String::new(),
+            },
             &credentials,
         )
         .unwrap();
@@ -3639,7 +3750,8 @@ mod tests {
                 Some(SmtpSettings {
                     relay_host: "smtp.example.test".to_owned(),
                     relay_port: 587,
-                    sender: "dms@example.test".to_owned(),
+                    login_user: "dms@example.test".to_owned(),
+                    from_mailbox: "dms@example.test".to_owned(),
                 }),
             )
             .unwrap();

@@ -249,8 +249,9 @@ tr:last-child td { border-bottom: 0; }
       <div class="grid-2">
         <section class="card">
           <div class="row gap-2 mb"><h3 class="card-title">SMTP relay</h3><span class="badge ok">credential configured</span></div>
-          <dl class="kv"><div><dt>Host</dt><dd>smtp.videoclinic.de</dd></div><div><dt>Port</dt><dd>587 (STARTTLS)</dd></div><div><dt>Sender / authentication user</dt><dd>dms@videoclinic.de</dd></div><div><dt>Microsoft 365 app password</dt><dd>Write-only input · stored in OS credential store</dd></div><div><dt>Minor-publication recipient</dt><dd>anna@videoclinic.de (effective approver snapshot)</dd></div></dl>
-          <p class="hint">A blank password input retains the existing OS credential. SMTP cannot be saved or used without one; changing to <code>mailto:</code> removes the workspace-scoped credential. No password is returned or written to <code>.dms</code>.</p>
+          <dl class="kv"><div><dt>Host</dt><dd>smtp.videoclinic.de</dd></div><div><dt>Port</dt><dd>587 (STARTTLS)</dd></div><div><dt>SMTP login user</dt><dd>dms-relay@videoclinic.de</dd></div><div><dt>From address</dt><dd>&quot;Doc Mgmt&quot; &lt;dms@videoclinic.de&gt;</dd></div><div><dt>Microsoft 365 app password</dt><dd>*** · write-only · stored in OS credential store</dd></div><div><dt>Test target</dt><dd>dms@videoclinic.de (parsed From mailbox)</dd></div><div><dt>Minor-publication recipient</dt><dd>anna@videoclinic.de (effective approver snapshot)</dd></div></dl>
+          <div class="row gap-2" style="margin-top:0.75rem"><button class="btn outline">Send test email to “Doc Mgmt” &lt;dms@videoclinic.de&gt;</button></div>
+          <p class="hint">A blank password input retains the existing OS credential. The login user authenticates only; the formatted From mailbox supplies the message identity and fixed test recipient. Changing to <code>mailto:</code> removes the workspace-scoped credential. No password is returned or written to <code>.dms</code>.</p>
         </section>
         <section class="card">
           <div class="row gap-2 mb"><h3 class="card-title">Minor-publication notice</h3><span class="badge ok">released V1.4</span></div>

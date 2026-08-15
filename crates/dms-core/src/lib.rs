@@ -28,7 +28,7 @@ pub use lifecycle::*;
 pub use maintenance::*;
 pub use policies::*;
 
-pub const SCHEMA_VERSION: u32 = 12;
+pub const SCHEMA_VERSION: u32 = 13;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 
@@ -423,7 +423,7 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = matches!(found, 1..=11);
+        let migrated = matches!(found, 1..=12);
         if found == 1 {
             migrate_v1_catalogues(&mut value)?;
         }
@@ -432,6 +432,9 @@ impl Workspace {
         }
         if found <= 11 {
             migrate_v11_release_bound_control(&mut value);
+        }
+        if found <= 12 {
+            migrate_v12_smtp_identity(&mut value);
         }
         if migrated {
             value["schema_version"] = serde_json::Value::from(SCHEMA_VERSION);
@@ -978,6 +981,22 @@ fn migrate_v11_control(
         owner.map_or(serde_json::Value::Null, serde_json::Value::String),
     );
     control.remove("effective_date")
+}
+
+fn migrate_v12_smtp_identity(value: &mut serde_json::Value) {
+    let Some(smtp) = value
+        .get_mut("notification_settings")
+        .and_then(serde_json::Value::as_object_mut)
+        .and_then(|settings| settings.get_mut("smtp"))
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return;
+    };
+    let Some(sender) = smtp.remove("sender") else {
+        return;
+    };
+    smtp.insert("login_user".to_owned(), sender.clone());
+    smtp.insert("from_mailbox".to_owned(), sender);
 }
 
 fn canonical_existing_directory(path: &Path, label: &str) -> Result<PathBuf> {

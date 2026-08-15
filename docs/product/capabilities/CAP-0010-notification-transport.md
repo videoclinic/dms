@@ -5,14 +5,16 @@
 | ID | CAP-0010 |
 | Status | not implemented |
 | Transports | Configured SMTP relay (ADR-0009) and host default mail handler via `mailto:` (ADR-0012) |
-| Tests | Partial configuration and Phase 9k fake-backed lifecycle evidence: [core lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [notification adapter tests](../../../crates/dms-desktop/src/notify.rs), and [Library request tests](../../../crates/dms-desktop/ui/library.test.mjs); configured external delivery remains Phase 9l work |
+| Tests | Partial Phases 9i, 9k, and 9k.5 fake-backed evidence: [core lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [notification adapter tests](../../../crates/dms-desktop/src/notify.rs), [Library request tests](../../../crates/dms-desktop/ui/library.test.mjs), and [Configuration transport/test tests](../../../crates/dms-desktop/ui/configuration.test.mjs); configured external delivery remains Phase 9l work |
 
 ## Outcomes (contract — not yet true in runtime)
 
 When implemented, the following must hold:
 
 1. **Configuration → Notifications** stores the selected notification transport
-   (`smtp` or `mailto`) and the non-secret SMTP relay settings. For SMTP it also
+   (`smtp` or `mailto`) and the non-secret SMTP relay settings. SMTP stores a
+   login user used only for relay authentication and a separate RFC 5322 `From`
+   mailbox that may include a display name. For SMTP it also
    accepts a write-only Microsoft 365 app-password field that writes directly to
    OS credential storage after relay validation; the value is never pre-filled,
    serialized, or returned. A blank field retains an existing credential, while
@@ -21,7 +23,8 @@ When implemented, the following must hold:
    Configuration navigation also exposes Workspace, Document defaults, and
    Workflow so notification settings remain a discoverable peer rather than an
    isolated page. The relay password is always resolved from the OS credential
-   store, never stored in `.dms`.
+   store, never stored in `.dms`. Once saved, the UI represents credential
+   presence only as `***`; it never reconstructs or returns the password.
 2. When the transport is `smtp`, a review request uses the configured relay to
    send the canonical review-request notification below. Successful relay
    acceptance is recorded in the workflow event chain; failure leaves the
@@ -61,6 +64,11 @@ When implemented, the following must hold:
 9. If the host has no registered mail handler and the transport is `mailto`,
    the action surfaces a clear message naming the missing handler; the
    workflow does not silently fall back to SMTP.
+10. A configured SMTP transport with a stored credential exposes one deliberate
+    test action whose label names the saved `From` mailbox. It sends a fixed
+    message containing no document or workflow content to the parsed address of
+    that mailbox. The action accepts no arbitrary recipient and returns only a
+    sanitized success/failure plus an optional numeric relay response code.
 
 ## Review-request notification (contract)
 

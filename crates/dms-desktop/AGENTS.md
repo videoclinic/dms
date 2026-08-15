@@ -129,6 +129,13 @@ macOS.
   encoded Microsoft My Account group page through the host-browser boundary.
   Desktop-only delegated tokens remain in the OS credential store; credentials
   never cross the frontend IPC boundary or enter `.dms`.
+- Workflow folders render as a semantic tree with session-only independent
+  branch state. Folder selection expands only its ancestor chain; direct Editor
+  and Approver assignments are badged without labelling inherited roles as direct.
+- SMTP configuration keeps relay authentication login separate from the RFC 5322
+  `From` mailbox. Credential presence is exposed only as `***`; the test action
+  targets the parsed saved `From` address, sends fixed non-document content, and
+  reports only a sanitized result with an optional relay response code.
 - Claude Desktop assistance remains unavailable unless workspace policy,
   effective confidentiality, a verified current release, and a supported local
   installation all allow it. An oversized preview shows its measured size and

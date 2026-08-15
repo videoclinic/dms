@@ -130,6 +130,9 @@ persistence.
   retains `v11.json.bak`, preserves legacy owner text without identity inference,
   maps a stored date only to the current non-withdrawn release and retained open
   candidates, and leaves older release snapshot omissions unrecorded.
+- Schema v13 separates the SMTP authentication login user from its RFC 5322
+  `From` mailbox. Its v12 migration copies the legacy sender to both fields and
+  retains `v12.json.bak`; SMTP passwords remain outside core metadata.
 
 ## Verification
 

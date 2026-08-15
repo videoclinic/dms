@@ -75,7 +75,8 @@ impl Fixture {
                 (transport == NotificationTransport::Smtp).then(|| SmtpSettings {
                     relay_host: "smtp.example.test".to_owned(),
                     relay_port: 587,
-                    sender: "dms@example.test".to_owned(),
+                    login_user: "dms@example.test".to_owned(),
+                    from_mailbox: "dms@example.test".to_owned(),
                 }),
             )
             .expect("notification settings");

@@ -23,6 +23,7 @@ export function createConfigurationState() {
     route: "workspace",
     secondary: null,
     selected_folder: ".",
+    expanded_folders: ["."],
     snapshot: null,
     identity_setup: null,
     notice: "",
@@ -36,10 +37,22 @@ export function applyConfigurationSnapshot(state, snapshot, notice = "") {
   }
   const folders = snapshot?.policy_folders?.map((folder) => folder.relative_path) ?? [];
   const selected = folders.includes(state.selected_folder) ? state.selected_folder : ".";
+  const expanded = new Set((state.expanded_folders ?? ["."]).filter((folder) => folders.includes(folder)));
+  expanded.add(".");
+  if (!state.snapshot) {
+    for (const policy of snapshot.workflow_policies ?? []) {
+      let folder = policy.folder;
+      while (folder && folder !== ".") {
+        expanded.add(folder);
+        folder = parentFolder(folder);
+      }
+    }
+  }
   return {
     ...state,
     snapshot,
     selected_folder: selected,
+    expanded_folders: [...expanded],
     notice,
     error: "",
   };
@@ -82,7 +95,32 @@ export function selectConfigurationFolder(state, folder) {
     (candidate) => candidate.relative_path === normalized,
   );
   if (!exists) throw new Error(`Unknown configuration folder: ${normalized}`);
-  return { ...state, selected_folder: normalized, notice: "", error: "" };
+  const expanded = new Set(state.expanded_folders ?? ["."]);
+  let parent = parentFolder(normalized);
+  while (parent) {
+    expanded.add(parent);
+    if (parent === ".") break;
+    parent = parentFolder(parent);
+  }
+  return {
+    ...state,
+    selected_folder: normalized,
+    expanded_folders: [...expanded],
+    notice: "",
+    error: "",
+  };
+}
+
+export function toggleConfigurationFolder(state, folder) {
+  const normalized = String(folder ?? "").trim() || ".";
+  const exists = state.snapshot?.policy_folders?.some(
+    (candidate) => candidate.relative_path === normalized,
+  );
+  if (!exists) throw new Error(`Unknown configuration folder: ${normalized}`);
+  const expanded = new Set(state.expanded_folders ?? ["."]);
+  if (expanded.has(normalized)) expanded.delete(normalized);
+  else expanded.add(normalized);
+  return { ...state, expanded_folders: [...expanded], notice: "", error: "" };
 }
 
 function routeNavigation(route) {
@@ -102,12 +140,55 @@ function policyFolderLabel(folder) {
   return folder === "." ? "Edit root" : folder.split("/").at(-1);
 }
 
-function folderTreeMarkup(state) {
-  return `<section class="card configuration-card"><h3>Choose default or exception</h3><div class="configuration-folder-tree">${state.snapshot.policy_folders.map(({ relative_path: folder }) => {
-    const depth = folder === "." ? 0 : folder.split("/").length;
+function parentFolder(folder) {
+  if (folder === "." || !folder.includes("/")) return ".";
+  return folder.slice(0, folder.lastIndexOf("/"));
+}
+
+function directRoleBadge(snapshot, assignment, label) {
+  if (!assignment) return "";
+  const person = snapshot.eligible_people.find((candidate) => (
+    candidate.object_id === assignment.object_id
+    && snapshot.identity_source?.binding_id === assignment.binding_id
+  ));
+  return `<span class="badge configuration-role-badge">${escapeHtml(label)}: ${escapeHtml(person?.display_name ?? "Unresolved")}</span>`;
+}
+
+function folderListMarkup(state) {
+  const rows = state.snapshot.policy_folders.map((folder) => {
+    const current = folder.relative_path === state.selected_folder;
+    return `<button type="button" data-configuration-folder="${escapeHtml(folder.relative_path)}" class="configuration-folder${current ? " current" : ""}" style="--folder-depth:${folder.depth}" ${current ? 'aria-current="true"' : ""}><span aria-hidden="true">▦</span><span><strong>${escapeHtml(policyFolderLabel(folder.relative_path))}</strong><small>${escapeHtml(folder.relative_path)}</small></span></button>`;
+  }).join("");
+  return `<section class="card configuration-card"><h3>Choose default or exception</h3><div class="configuration-folder-tree">${rows}</div></section>`;
+}
+
+function folderTreeMarkup(state, showWorkflowRoles = false) {
+  const folders = state.snapshot.policy_folders.map(({ relative_path }) => relative_path);
+  const expanded = new Set(state.expanded_folders ?? ["."]);
+  const children = new Map(folders.map((folder) => [folder, []]));
+  for (const folder of folders) {
+    if (folder !== ".") children.get(parentFolder(folder))?.push(folder);
+  }
+  const renderFolder = (folder, level) => {
+    const descendants = children.get(folder) ?? [];
+    const hasChildren = descendants.length > 0;
+    const isExpanded = expanded.has(folder);
     const current = folder === state.selected_folder;
-    return `<button type="button" data-configuration-folder="${escapeHtml(folder)}" aria-current="${current}" class="configuration-folder${current ? " current" : ""}" style="--folder-depth:${depth}"><span aria-hidden="true">▦</span><span><strong>${escapeHtml(policyFolderLabel(folder))}</strong><small>${escapeHtml(folder)}</small></span></button>`;
-  }).join("")}</div></section>`;
+    const policy = showWorkflowRoles
+      ? state.snapshot.workflow_policies.find((candidate) => candidate.folder === folder)
+      : null;
+    const badges = policy
+      ? `<span class="configuration-role-badges">${directRoleBadge(state.snapshot, policy.editor, "Editor")}${directRoleBadge(state.snapshot, policy.approver, "Approver")}</span>`
+      : "";
+    const toggle = hasChildren
+      ? `<button type="button" class="configuration-folder-toggle" data-configuration-folder-toggle="${escapeHtml(folder)}" aria-label="${isExpanded ? "Collapse" : "Expand"} ${escapeHtml(policyFolderLabel(folder))}"><span aria-hidden="true">${isExpanded ? "▾" : "▸"}</span></button>`
+      : '<span class="configuration-folder-toggle-spacer" aria-hidden="true"></span>';
+    const group = hasChildren && isExpanded
+      ? `<div role="group">${descendants.map((child) => renderFolder(child, level + 1)).join("")}</div>`
+      : "";
+    return `<div role="treeitem" aria-level="${level}" aria-selected="${current}" ${hasChildren ? `aria-expanded="${isExpanded}"` : ""} class="configuration-folder-item">${toggle}<button type="button" data-configuration-folder="${escapeHtml(folder)}" class="configuration-folder${current ? " current" : ""}" style="--folder-depth:${level - 1}"><span aria-hidden="true">▦</span><span><strong>${escapeHtml(policyFolderLabel(folder))}</strong><small>${escapeHtml(folder)}</small></span>${badges}</button>${group}</div>`;
+  };
+  return `<section class="card configuration-card"><h3>Choose default or exception</h3><div class="configuration-folder-tree" role="tree" aria-label="Configuration folders">${renderFolder(".", 1)}</div></section>`;
 }
 
 function selectedPolicyMarkup(state) {
@@ -138,7 +219,7 @@ function documentDefaultsMarkup(state) {
   const root = snapshot.confidentiality_policies.find((policy) => policy.folder === ".");
   const rootType = snapshot.confidentiality_types.find((type) => type.id === root?.type_id);
   const enabledCount = snapshot.confidentiality_types.filter((type) => type.enabled).length;
-  return `<section class="configuration-summary"><div><strong>Workspace default</strong><span>${escapeHtml(rootType?.label ?? "Not configured")}</span></div><span class="badge">${enabledCount} enabled confidentiality ${enabledCount === 1 ? "type" : "types"}</span></section><div class="configuration-defaults-grid">${folderTreeMarkup(state)}${selectedPolicyMarkup(state)}</div>${documentTypesMarkup(snapshot)}`;
+  return `<section class="configuration-summary"><div><strong>Workspace default</strong><span>${escapeHtml(rootType?.label ?? "Not configured")}</span></div><span class="badge">${enabledCount} enabled confidentiality ${enabledCount === 1 ? "type" : "types"}</span></section><div class="configuration-defaults-grid">${folderListMarkup(state)}${selectedPolicyMarkup(state)}</div>${documentTypesMarkup(snapshot)}`;
 }
 
 function confidentialityTypesMarkup(state) {
@@ -209,7 +290,7 @@ function workflowMarkup(state) {
   const editor = roleSelectMarkup(snapshot, direct, "editor", rootFolder);
   const approver = roleSelectMarkup(snapshot, direct, "approver", rootFolder);
   const canSave = Boolean(source && snapshot.eligible_people.length > 0);
-  return `<section class="configuration-summary"><div><strong>People source</strong><span>One direct-user Microsoft Entra group</span></div>${sourceSummary}<button class="button secondary" type="button" data-configuration-secondary="identity-source">Manage identity source…</button></section><div class="configuration-defaults-grid">${folderTreeMarkup(state)}<section class="card configuration-card"><span class="badge">Selected folder</span><h3>${escapeHtml(rootFolder ? "Edit root" : selected)}</h3><p>${direct ? "Direct workflow role assignment." : rootFolder ? "Root roles are required after an identity source is connected." : "Editor and approver inherit independently from the nearest parent assignment."}</p><form class="configuration-form" data-configuration-form="workflow-policy">${editor}${approver}<button class="button" type="submit" ${canSave ? "" : "disabled"}>Save workflow roles</button></form>${!rootFolder && direct ? '<form data-configuration-form="remove-workflow-policy"><button class="button secondary" type="submit">Remove folder exception</button></form>' : ""}</section></div>`;
+  return `<section class="configuration-summary"><div><strong>People source</strong><span>One direct-user Microsoft Entra group</span></div>${sourceSummary}<button class="button secondary" type="button" data-configuration-secondary="identity-source">Manage identity source…</button></section><div class="configuration-defaults-grid">${folderTreeMarkup(state, true)}<section class="card configuration-card"><span class="badge">Selected folder</span><h3>${escapeHtml(rootFolder ? "Edit root" : selected)}</h3><p>${direct ? "Direct workflow role assignment." : rootFolder ? "Root roles are required after an identity source is connected." : "Editor and approver inherit independently from the nearest parent assignment."}</p><form class="configuration-form" data-configuration-form="workflow-policy">${editor}${approver}<button class="button" type="submit" ${canSave ? "" : "disabled"}>Save workflow roles</button></form>${!rootFolder && direct ? '<form data-configuration-form="remove-workflow-policy"><button class="button secondary" type="submit">Remove folder exception</button></form>' : ""}</section></div>`;
 }
 
 function identitySourceMarkup(state) {
@@ -242,7 +323,11 @@ function notificationsMarkup(snapshot) {
   const settings = snapshot.notification_settings;
   const transport = settings?.transport ?? "mailto";
   const smtp = settings?.smtp;
-  return `<section class="card configuration-card configuration-notifications"><span class="badge">Workspace notification transport</span><h2>Review and release email</h2><p>Choose one transport for workflow notices. Delivery credentials stay in the OS credential store and are never written to <code>.dms</code>.</p><form class="configuration-form configuration-notification-form" data-configuration-form="notifications"><label>Transport<select name="transport" required><option value="smtp" ${transport === "smtp" ? "selected" : ""}>SMTP relay</option><option value="mailto" ${transport === "mailto" ? "selected" : ""}>Host mail app (mailto)</option></select></label><div class="configuration-grid"><label>SMTP relay host<input name="relayHost" value="${escapeHtml(smtp?.relay_host ?? "")}" placeholder="smtp.example.com"></label><label>SMTP relay port<input name="relayPort" type="number" min="1" max="65535" value="${escapeHtml(smtp?.relay_port ?? 587)}"></label><label>Sender address<input name="sender" type="email" value="${escapeHtml(smtp?.sender ?? "")}" placeholder="dms@example.com"></label><label>Microsoft 365 app password<input name="smtpAppPassword" type="password" autocomplete="new-password"></label></div><p class="subtle">${snapshot.smtp_credential_configured ? "Credential configured. Leave the password blank to retain it." : "No credential configured."}</p><button class="button" type="submit">Save notification transport</button></form></section>`;
+  const canTest = transport === "smtp" && snapshot.smtp_credential_configured;
+  const testAction = transport === "smtp"
+    ? `<form data-configuration-form="smtp-test"><button class="button secondary" type="submit" ${canTest ? "" : "disabled"}>Send test email to ${escapeHtml(smtp?.from_mailbox ?? "From address")}</button></form>`
+    : "";
+  return `<section class="card configuration-card configuration-notifications"><span class="badge">Workspace notification transport</span><h2>Review and release email</h2><p>Choose one transport for workflow notices. Delivery credentials stay in the OS credential store and are never written to <code>.dms</code>.</p><form class="configuration-form configuration-notification-form" data-configuration-form="notifications"><label>Transport<select name="transport" required><option value="smtp" ${transport === "smtp" ? "selected" : ""}>SMTP relay</option><option value="mailto" ${transport === "mailto" ? "selected" : ""}>Host mail app (mailto)</option></select></label><div class="configuration-grid"><label>SMTP relay host<input name="relayHost" value="${escapeHtml(smtp?.relay_host ?? "")}" placeholder="smtp.example.com"></label><label>SMTP relay port<input name="relayPort" type="number" min="1" max="65535" value="${escapeHtml(smtp?.relay_port ?? 587)}"></label><label>SMTP login user<input name="loginUser" value="${escapeHtml(smtp?.login_user ?? "")}" placeholder="smtp-user@example.com"></label><label>From mailbox<input name="fromMailbox" value="${escapeHtml(smtp?.from_mailbox ?? "")}" placeholder="&quot;Doc Mgmt&quot; &lt;dms@example.com&gt;"></label><label>Microsoft 365 app password<input name="smtpAppPassword" type="password" autocomplete="new-password" placeholder="${snapshot.smtp_credential_configured ? "***" : ""}"></label></div><p class="subtle">${snapshot.smtp_credential_configured ? "Credential configured. Leave the password blank to retain it." : "No credential configured."}</p><button class="button" type="submit">Save notification transport</button></form>${testAction}</section>`;
 }
 
 function unavailableRouteMarkup(route) {
@@ -332,10 +417,14 @@ export function configurationMutationRequest(kind, values, selectedFolder) {
         transport: formValue(values, "transport"),
         relayHost: formValue(values, "relayHost"),
         relayPort: Number(formValue(values, "relayPort")),
-        sender: formValue(values, "sender"),
+        loginUser: formValue(values, "loginUser"),
+        fromMailbox: formValue(values, "fromMailbox"),
         smtpAppPassword: formValue(values, "smtpAppPassword"),
       },
     };
+  }
+  if (kind === "smtp-test") {
+    return { command: "test_smtp_notification", arguments: {} };
   }
   if (kind === "identity-source-start") {
     return {

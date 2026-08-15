@@ -6,7 +6,7 @@
 | Status | not implemented |
 | Identity source | Microsoft Entra workspace group (CAP-0021) |
 | Storage | `<edit-root>/.dms/` routing policies and identity references |
-| Tests | Partial phases 2 and 9f.4 evidence: [core policy tests](../../../crates/dms-core/tests/policies.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [workflow route tests](../../../crates/dms-desktop/ui/configuration.test.mjs); live identity refresh remains phase 9i work |
+| Tests | Partial Phases 2, 9f.4, 9j, and 9k.5 evidence: [core policy tests](../../../crates/dms-core/tests/policies.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), and [semantic workflow-tree tests](../../../crates/dms-desktop/ui/configuration.test.mjs); configured external operator smoke remains Phase 9l work |
 
 ## Outcomes (contract — not yet true in runtime)
 
@@ -19,8 +19,11 @@ When implemented, the following must hold:
 2. Under **Configuration → Workflow**, workflow-role routing uses the same
    defaults-first policy layout as CAP-0008: a compact people-source summary
    shows the bound group and its refresh/connection state, while an
-   edit-root-relative tree and selected-folder editor define routing defaults
-   and exceptions. The persistent Configuration navigation also exposes
+   semantic, independently expandable edit-root-relative tree and selected-folder
+   editor define routing defaults and exceptions. Tree items expose levels,
+   selection, and expandable state to assistive technology. Each direct Editor
+   or Approver assignment is visibly badged on its folder; inherited roles are
+   not misrepresented as direct badges. The persistent Configuration navigation also exposes
    Workspace, Document defaults, and Notifications. **Manage identity source**
    opens CAP-0021 as a secondary surface with a visible return to Workflow;
    Entra setup does not occupy a permanent routing column or a separate
@@ -69,10 +72,6 @@ When implemented, the following must hold:
 10. Role routing does not grant or revoke filesystem access and does not prevent
    source-file editing. Filesystem, SharePoint, and OneDrive ACLs remain the
    access-control boundary.
-11. The folder-exceptions table follows CAP-0005's growing-table interaction;
-    its text filter case-insensitively matches the edit-root-relative path,
-    effective editor, effective approver, and routing state before pagination.
-
 ## Non-goals
 
 - Application-enforced editing permissions

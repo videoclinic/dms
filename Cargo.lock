@@ -1062,6 +1062,7 @@ name = "dms-core"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "lettre",
  "pdf-extract",
  "quick-xml 0.37.5",
  "serde",

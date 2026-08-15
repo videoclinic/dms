@@ -427,10 +427,18 @@ button { cursor: pointer; }
 .configuration-summary span:not(.badge) { color: #5f707c; font-size: 13px; }
 .configuration-defaults-grid { display: grid; grid-template-columns: minmax(240px, .75fr) minmax(360px, 1.25fr); gap: 18px; align-items: start; }
 .configuration-folder-tree { display: grid; gap: 4px; }
-.configuration-folder { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px 8px calc(10px + var(--folder-depth) * 14px); color: #334651; text-align: left; background: transparent; border: 1px solid transparent; border-radius: 7px; }
+.configuration-folder-item { display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: start; gap: 2px; }
+.configuration-folder-item > [role="group"] { display: grid; grid-column: 1 / -1; gap: 4px; margin-left: 18px; }
+.configuration-folder-toggle { display: grid; place-items: center; width: 24px; height: 34px; padding: 0; color: #536773; background: transparent; border: 0; border-radius: 5px; }
+.configuration-folder-toggle:hover, .configuration-folder-toggle:focus-visible { background: #e8f0f5; outline: 2px solid transparent; }
+.configuration-folder-toggle-spacer { width: 24px; height: 34px; }
+.configuration-folder { display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%; padding: 8px 10px; color: #334651; text-align: left; background: transparent; border: 1px solid transparent; border-radius: 7px; }
+.configuration-folder-tree:not([role="tree"]) > .configuration-folder { padding-left: calc(10px + var(--folder-depth) * 14px); }
 .configuration-folder.current { background: #e8f0f5; border-color: #b6c8d4; }
-.configuration-folder > span:last-child { display: grid; min-width: 0; gap: 2px; }
+.configuration-folder > span:nth-child(2) { display: grid; min-width: 0; gap: 2px; }
 .configuration-folder small { overflow: hidden; color: #6c7b86; text-overflow: ellipsis; white-space: nowrap; }
+.configuration-role-badges { display: flex; flex-wrap: wrap; justify-content: end; gap: 4px; margin-left: auto; }
+.configuration-role-badge { font-size: 10px; white-space: nowrap; }
 .configuration-card-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
 .configuration-card-heading p { margin-top: 4px; color: #61717d; font-size: 13px; }
 .configuration-type-row { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(120px, .6fr) auto auto; align-items: center; gap: 10px; padding-top: 10px; border-top: 1px solid #edf1f3; }

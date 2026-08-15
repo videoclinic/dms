@@ -77,14 +77,50 @@ fn smtp_password_entry(workspace_id: Uuid) -> Result<Entry, String> {
     .map_err(|error| format!("cannot access the OS credential store: {error}"))
 }
 
-pub struct DesktopNotifier<C> {
+pub(crate) trait SmtpSender {
+    fn send(
+        &self,
+        settings: &dms_core::SmtpSettings,
+        password: String,
+        message: &Message,
+    ) -> Result<DeliveryReceipt, String>;
+}
+
+#[derive(Default)]
+pub(crate) struct ProductionSmtpSender;
+
+impl SmtpSender for ProductionSmtpSender {
+    fn send(
+        &self,
+        settings: &dms_core::SmtpSettings,
+        password: String,
+        message: &Message,
+    ) -> Result<DeliveryReceipt, String> {
+        let mailer = SmtpTransport::starttls_relay(&settings.relay_host)
+            .map_err(|error| format!("cannot configure SMTP relay: {error}"))?
+            .port(settings.relay_port)
+            .credentials(Credentials::new(settings.login_user.clone(), password))
+            .build();
+        let response = mailer
+            .send(message)
+            .map_err(|error| format!("SMTP delivery failed: {error}"))?;
+        let code = response.code().to_string().parse::<u16>().unwrap_or(250);
+        Ok(DeliveryReceipt::accepted(
+            code,
+            &format!("SMTP relay accepted message: {response:?}"),
+        ))
+    }
+}
+
+pub(crate) struct DesktopNotifier<C, S = ProductionSmtpSender> {
     credentials: C,
+    smtp_sender: S,
     workspace_id: Uuid,
     mailto_confirmed: bool,
     open_uri: fn(&str) -> Result<(), String>,
 }
 
-impl<C> DesktopNotifier<C> {
+impl<C> DesktopNotifier<C, ProductionSmtpSender> {
     pub fn new(
         credentials: C,
         workspace_id: Uuid,
@@ -93,6 +129,7 @@ impl<C> DesktopNotifier<C> {
     ) -> Self {
         Self {
             credentials,
+            smtp_sender: ProductionSmtpSender,
             workspace_id,
             mailto_confirmed,
             open_uri,
@@ -100,7 +137,7 @@ impl<C> DesktopNotifier<C> {
     }
 }
 
-pub fn production_notifier(
+pub(crate) fn production_notifier(
     workspace_id: Uuid,
     mailto_confirmed: bool,
 ) -> DesktopNotifier<OsCredentialStore> {
@@ -127,7 +164,7 @@ fn open_host_mail_handler(uri: &str) -> Result<(), String> {
         .map_err(|error| format!("cannot open the host mail handler: {error}"))
 }
 
-impl<C: CredentialStore> NotificationClient for DesktopNotifier<C> {
+impl<C: CredentialStore, S: SmtpSender> NotificationClient for DesktopNotifier<C, S> {
     fn send(
         &mut self,
         settings: &NotificationSettings,
@@ -157,34 +194,21 @@ impl<C: CredentialStore> NotificationClient for DesktopNotifier<C> {
                     .smtp
                     .as_ref()
                     .ok_or_else(|| "SMTP transport requires relay settings".to_owned())?;
-                let email =
-                    Message::builder()
-                        .from(smtp.sender.parse::<Mailbox>().map_err(|error| {
-                            format!("invalid SMTP sender {}: {error}", smtp.sender)
-                        })?)
-                        .to(message.recipient.parse::<Mailbox>().map_err(|error| {
-                            format!(
-                                "invalid notification recipient {}: {error}",
-                                message.recipient
-                            )
-                        })?)
-                        .subject(&message.subject)
-                        .body(message.body.clone())
-                        .map_err(|error| format!("cannot build notification message: {error}"))?;
+                let email = Message::builder()
+                    .from(smtp.from_mailbox.parse::<Mailbox>().map_err(|error| {
+                        format!("invalid SMTP From address {}: {error}", smtp.from_mailbox)
+                    })?)
+                    .to(message.recipient.parse::<Mailbox>().map_err(|error| {
+                        format!(
+                            "invalid notification recipient {}: {error}",
+                            message.recipient
+                        )
+                    })?)
+                    .subject(&message.subject)
+                    .body(message.body.clone())
+                    .map_err(|error| format!("cannot build notification message: {error}"))?;
                 let password = self.credentials.smtp_password(self.workspace_id)?;
-                let mailer = SmtpTransport::starttls_relay(&smtp.relay_host)
-                    .map_err(|error| format!("cannot configure SMTP relay: {error}"))?
-                    .port(smtp.relay_port)
-                    .credentials(Credentials::new(smtp.sender.clone(), password))
-                    .build();
-                let response = mailer
-                    .send(&email)
-                    .map_err(|error| format!("SMTP delivery failed: {error}"))?;
-                let code = response.code().to_string().parse::<u16>().unwrap_or(250);
-                Ok(DeliveryReceipt::accepted(
-                    code,
-                    &format!("SMTP relay accepted message: {response:?}"),
-                ))
+                self.smtp_sender.send(smtp, password, &email)
             }
         }
     }
@@ -193,6 +217,7 @@ impl<C: CredentialStore> NotificationClient for DesktopNotifier<C> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
 
     struct FakeCredentials;
 
@@ -211,6 +236,28 @@ mod tests {
 
         fn smtp_password_exists(&self, _workspace_id: Uuid) -> Result<bool, String> {
             Ok(false)
+        }
+    }
+
+    #[derive(Default)]
+    struct FakeSmtpSender {
+        observed: Mutex<Option<(String, String, String, String)>>,
+    }
+
+    impl SmtpSender for FakeSmtpSender {
+        fn send(
+            &self,
+            settings: &dms_core::SmtpSettings,
+            password: String,
+            message: &Message,
+        ) -> Result<DeliveryReceipt, String> {
+            *self.observed.lock().expect("SMTP observation") = Some((
+                settings.login_user.clone(),
+                settings.from_mailbox.clone(),
+                password,
+                String::from_utf8(message.formatted()).expect("formatted message"),
+            ));
+            Ok(DeliveryReceipt::accepted(250, "fake accepted"))
         }
     }
 
@@ -271,5 +318,45 @@ mod tests {
         let receipt = notifier.send(&mailto_settings(), &message()).unwrap();
 
         assert_eq!(receipt.status, DeliveryStatus::Confirmed);
+    }
+
+    #[test]
+    fn smtp_uses_login_user_only_for_auth_and_formatted_from_mailbox_for_message() {
+        let mut notifier = DesktopNotifier {
+            credentials: FakeCredentials,
+            smtp_sender: FakeSmtpSender::default(),
+            workspace_id: Uuid::new_v4(),
+            mailto_confirmed: false,
+            open_uri: host_mail_handler,
+        };
+        let settings = NotificationSettings {
+            transport: NotificationTransport::Smtp,
+            smtp: Some(dms_core::SmtpSettings {
+                relay_host: "smtp.example.test".to_owned(),
+                relay_port: 587,
+                login_user: "smtp-login@example.test".to_owned(),
+                from_mailbox: "\"Doc Mgmt\" <sender@example.test>".to_owned(),
+            }),
+        };
+
+        let receipt = notifier
+            .send(&settings, &message())
+            .expect("fake SMTP delivery");
+
+        assert_eq!(receipt.response_code, Some(250));
+        let observed = notifier
+            .smtp_sender
+            .observed
+            .lock()
+            .expect("SMTP observation")
+            .clone()
+            .expect("SMTP delivery");
+        assert_eq!(observed.0, "smtp-login@example.test");
+        assert_eq!(observed.1, "\"Doc Mgmt\" <sender@example.test>");
+        assert_eq!(observed.2, "not-used-for-mailto");
+        assert!(observed
+            .3
+            .contains("From: \"Doc Mgmt\" <sender@example.test>"));
+        assert!(observed.3.contains("To: approver@example.test"));
     }
 }
