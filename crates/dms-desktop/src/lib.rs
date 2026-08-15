@@ -1970,14 +1970,10 @@ fn mutate_workspace_configuration(
 
 fn library_snapshot(edit_root: &Path, folder: &Path) -> Result<LibrarySnapshot, String> {
     let workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
-    Ok(LibrarySnapshot {
-        tree: workspace
-            .library_tree()
-            .map_err(|error| error.to_string())?,
-        folder: workspace
-            .library_folder(folder)
-            .map_err(|error| error.to_string())?,
-    })
+    let (tree, folder) = workspace
+        .library_snapshot(folder)
+        .map_err(|error| error.to_string())?;
+    Ok(LibrarySnapshot { tree, folder })
 }
 
 fn document_selection(edit_root: &Path, document_id: Uuid) -> Result<DocumentSelection, String> {

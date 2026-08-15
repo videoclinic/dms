@@ -242,8 +242,14 @@ tr:last-child td { border-bottom: 0; }
     .app[data-cap="CAP-0015"] .control-boundary-summary { display: grid; gap: 0.4rem; margin: 0.75rem 0; }
     .app[data-cap="CAP-0015"] .control-boundary-summary > div { padding: 0.45rem 0.55rem; border-left: 3px solid var(--border); background: var(--muted); font-size: 0.75rem; }
     .app[data-cap="CAP-0015"] .control-boundary-summary strong { display: block; color: var(--foreground); }
+    .app[data-cap="CAP-0015"] .list-card table { table-layout: fixed; }
+    .app[data-cap="CAP-0015"] .list-card th:nth-child(1) { width: 1.5rem; }
+    .app[data-cap="CAP-0015"] .list-card th:nth-child(2) { width: 5.9rem; }
+    .app[data-cap="CAP-0015"] .list-card th:nth-child(3) { width: 6.6rem; }
+    .app[data-cap="CAP-0015"] .list-card th:nth-child(4) { width: 4.5rem; }
+    .app[data-cap="CAP-0015"] .list-card th:nth-child(5) { width: 5.3rem; }
   </style>
-      <div class="grid-explorer-detail document-control-panes">
+      <div class="grid-explorer-detail document-control-panes" style="grid-template-columns:17.5rem minmax(22.5rem,1fr) 0.45rem 22rem">
         <aside class="card tree">
           <h3 class="card-title">Folders</h3>
           <ul class="tree-root">
@@ -297,6 +303,7 @@ tr:last-child td { border-bottom: 0; }
     <div class="row gap-2"><span class="muted">1–2 of 2</span><button class="btn outline" disabled>Previous</button><button class="btn outline" disabled>Next</button></div>
   </div>
         </section>
+        <div role="separator" aria-label="Resize document details" aria-orientation="vertical" style="cursor:col-resize;background:var(--border);border-radius:999px" title="Session-only width · 280–640 px"></div>
         <aside class="card detail-pane" aria-label="Scrollable document selection details">
     <div class="row between mb">
       <h3 class="card-title" style="margin:0">HR Data Privacy Policy</h3>

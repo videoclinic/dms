@@ -65,7 +65,15 @@ macOS.
   edit-root-relative folder, sort, and at most one stable document target.
 - Render the Library folder surface as a nested tree with independent branch
   toggles. Navigating expands the current folder's ancestor chain without
-  resetting unrelated session branch state.
+  resetting unrelated session branch state. A folder row's primary click or
+  `Enter` opens that folder; its disclosure control only expands or collapses it.
+- Library folder counters and the table use the same core snapshot. Session-wide
+  Draft documents, Available to add, and Unsupported files controls filter files
+  before sorting and pagination, apply equally to folder and search results, and
+  never hide folders or alter counters.
+- The Library centre/details divider resizes the selection pane only for the
+  current session, preserves at least 360 px for folder contents, and restores
+  the width at drag start when cancelled with `Escape`.
 - The Library selection pane owns add/unregister/reassociate/permalink controls,
   document-control editing, the document confidentiality override, candidate
   submission, review decision, release, local lifecycle actions, and canonical

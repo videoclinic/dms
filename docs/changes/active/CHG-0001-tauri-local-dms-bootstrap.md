@@ -211,12 +211,12 @@ phase also adds an intentional test delivery.
 | 9k.1.1 | Document Notes return navigation | done (`cargo fmt --all -- --check`; workspace tests; Clippy with warnings denied; 73 frontend tests; regenerated CAP-0003 HTML and 1440×1100 PNG; exact-return, stable-ID fallback, failure-retention, and visual browser QA; strict repository links; 54 Markdown tables; DOX pass; `git diff --check`) | **Back to Library** restores the same stable document without duplicating or reloading the Library activity, falls back through stable-ID resolution when the Library changed, leaves Notes open, and preserves Notes compose/edit/delete state on success and failure |
 | 9k.2 | Entra identity-source overview | done (workspace format/test/Clippy gate; 14 focused configuration UI tests; encoded host-browser URL coverage; regenerated and visually inspected 1440×1100 CAP-0021 HTML/PNG; 21-entry manifest; strict links; 41 Markdown tables; DOX pass; `git diff --check`) | `cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0; CAP-0021 and its generated HTML/PNG show public-client ID, tenant ID, and a host-browser group-page control; `git diff --check` exits 0 |
 | 9k.3 | Release-bound control data and immutable owner identity | done (`cargo fmt --all -- --check`; workspace tests; Clippy with warnings denied; 16 focused Library UI tests; 9 focused Maintenance UI tests; regenerated and visually inspected CAP-0002/CAP-0015/CAP-0017 HTML/PNG; 21-entry manifest; changed-document links; DOX pass; `git diff --check`) | Schema-v11 fixture migrates without inventing historical release or owner identity; a successful empty Graph result produces only the literal `<owner>` / `<editor>` placeholders while a Graph failure still fails closed; a later successful real-person refresh permits an operator-selected release-bound Owner/Editor replacement without rewriting past evidence; candidate/release/audit/maintenance tests prove immutable control, owner, and effective-date snapshots plus effective-date-based scheduling; owner/editor/approver references remain object-ID based across name/email changes; release maintenance and audit use stored release evidence rather than mutable profile/cache fallbacks |
-| 9k.4 | Library filtering, recursive folder counters, interaction, width, and shipped icons | pending | Core and UI tests prove identical recursive `~` draft, `+` applicable-not-controlled, and `!` unsupported counts beside each folder in tree and list views; all-on session-wide **Draft documents** / **Available to add** / **Unsupported files** toggles filter every folder and search result before pagination without changing counters; candidate form selects `Next minor` by default; a table-folder click opens that folder without a double-click; the centre/details splitter is pointer- and keyboard-usable with bounded session-only width; runtime and wireframes use app-local SVGs rather than a font dependency; `node --test crates/dms-desktop/ui/app.test.mjs crates/dms-desktop/ui/library.test.mjs` and full Rust/frontend gates exit 0; regenerated CAP-0002/CAP-0006/CAP-0015 wireframes match their manifest entries; `git diff --check` exits 0 |
+| 9k.4 | Library filtering, recursive folder counters, interaction, width, and shipped icons | done (workspace format/test/Clippy gate; 5 focused core Library tests; 82 frontend tests; regenerated and visually inspected CAP-0002/CAP-0006/CAP-0015 HTML/PNG; 21-entry manifest; modified-CAP links and Markdown tables; DOX pass; `git diff --check`) | Core and UI tests prove identical recursive `~` draft, `+` applicable-not-controlled, and `!` unsupported counts beside each folder in tree and list views; all-on session-wide **Draft documents** / **Available to add** / **Unsupported files** toggles filter every folder and search result before pagination without changing counters; candidate form selects `Next minor` by default; a table-folder click opens that folder without a double-click; the centre/details splitter is pointer- and keyboard-usable with bounded session-only width; runtime and wireframes use app-local SVGs rather than a font dependency |
 | 9k.5 | Workflow tree and SMTP identity/test configuration | pending | Workflow renders an accessible folder tree with all direct role assignments visibly marked; schema-v12 SMTP settings migrate to separate login user and RFC 5322 `From` mailbox without exposing the password; a fake-backed SMTP test addresses that `From` mailbox and a saved credential renders only `***`; Rust/frontend gates and regenerated CAP-0010/CAP-0019 wireframes pass; `git diff --check` exits 0 |
 | 9l | Windows external operator smokes + CAP promotion | pending | Licensed Office release smoke passes on Windows; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated Node-runtime action annotations; CAP statuses distinguish Windows-host evidence from existing CI coverage and make no untested macOS-installed-Office claim; CHG status is done and the record is archived |
 
-**Current phase:** 9k.3 complete. Phase 9k.4 is the next dependency-ready phase;
-Phase 9k.5 remains pending behind it before Phase 9l can start. macOS remains a
+**Current phase:** Phase 9k.4 is complete. Phase 9k.5 is the next pending phase
+before Phase 9l can start. macOS remains a
 supported runtime target with existing CI coverage,
 but an external macOS operator smoke is not a Phase 9l gate.
 
@@ -1013,42 +1013,28 @@ rows; session-wide file-visibility toggles with filter-before-pagination
 semantics; bounded session-only centre/details resizing; single-click folder
 navigation; accessible app-local SVG icons; and tested candidate default/Library
 navigation without a font dependency.
-**Status:** pending — queued after the release-bound data-model vertical slice.
+**Status:** done — verification gate passed; Phase 9k.5 is next.
 
-### Current state
+### Completion evidence
 
-- The candidate `<select>` renders **Next major** as its first selected option,
-  although the request builder already accepts `next_minor`, `next_major`, and
-  `manual` (`crates/dms-desktop/ui/library.mjs:208-232`, `441-466`).
-- The folder tree uses native horizontal resize, but the centre directory view
-  grows with flex while the document-details pane has a fixed 315px width;
-  there is no centre/details divider to give control data more width
-  (`crates/dms-desktop/ui/styles.css:228-276`).
-- A table folder row currently selects first; only double-click or Enter opens
-  it (`crates/dms-desktop/ui/app.mjs:1202-1215`, `2131-2142`).
-- `LibraryFolderNode` carries only name/path, and folder `LibraryEntry` carries
-  neither document membership nor a subtree summary; the tree and row renderers
-  therefore have no shared count source (`crates/dms-core/src/library.rs:46-70`,
-  `73-150`, `crates/dms-desktop/ui/library.mjs:378-405`).
-- Core already classifies each visible file as `InLibrary`, `NotInLibrary`, or
-  `Unsupported` and hides `.dms` plus Office `~$` files, so the counters can use
-  the existing classification rather than a second frontend format heuristic
-  (`crates/dms-core/src/library.rs:93-150`, `372-387`).
-- Library state has sort and page controls but no category-visibility state;
-  `rowsMarkup` currently sorts every folder/search entry and passes the complete
-  result directly to `paginateLibraryEntries` (`crates/dms-desktop/ui/library.mjs:6-25`,
-  `340-410`). CAP-0006 outcome 13 explicitly rules out the filter control now
-  requested (`docs/product/capabilities/CAP-0006-library-explorer.md:161-163`).
-- Pagination already supports 10/25/50/100 rows, clamps an out-of-range page,
-  and resets to page zero after sort or page-size changes; the new visibility
-  operation must join that same ordering before pagination rather than hide rows
-  after a page is sliced (`crates/dms-desktop/ui/library.mjs:349-359`,
-  `crates/dms-desktop/ui/app.mjs:2117-2127`).
-- Runtime Library icons are Unicode stand-ins (`▰`, `▸`, `□`) rather than
-  shipped application assets (`crates/dms-desktop/ui/library.mjs:378-405`).
-- Mona Sans describes itself as a GitHub variable font and ships font files; it
-  is not a Nerd Font-patched icon glyph collection. Shipping it would not solve
-  the icon requirement and would add a font-loading surface.
+- `dms-core` computes and serializes recursive `FolderCounters` once per Library
+  snapshot from the same file classification used by membership. The focused
+  nested-folder test proves exact ancestor roll-up, mutually exclusive buckets,
+  and exclusion of `.dms`, Office `~$` sidecars, and controlled non-drafts.
+- The Library renders the same counters in tree and list, filters folder and
+  search rows before sorting and pagination, prunes hidden selection, and keeps
+  all visibility state session-only. Folder primary click and `Enter` navigate
+  without a transient document selection.
+- The accessible centre/details splitter enforces 280–640 px detail bounds while
+  preserving at least 360 px for folder contents; `Escape` restores the width at
+  drag start. Width is absent from saved views, `.dms`, and OS preferences.
+- App-local inline SVGs cover folder, file, chevron, Back, Forward, Up, and
+  Refresh affordances without a font asset or remote dependency. The existing
+  **Next minor** default has explicit regression coverage.
+- The workspace format/test/Clippy gate and all 82 frontend tests pass. Generated
+  CAP-0002/CAP-0006/CAP-0015 HTML and native-size PNGs were inspected; all 21
+  manifest HTML/PNG pairs are non-empty and agree with their entries. Modified
+  CAP links, Markdown tables, the DOX pass, and `git diff --check` pass.
 
 **Steps:**
 

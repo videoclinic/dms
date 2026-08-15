@@ -60,6 +60,82 @@ fn folder_listing_keeps_exact_files_and_hides_internal_or_office_temporary_entri
     assert_eq!(json["relative_path"], "Policies");
     assert_eq!(json["parent"], ".");
     assert_eq!(json["entries"][0]["relative_path"], "Policies/Empty");
+    assert_eq!(json["entries"][0]["folder_counters"]["draft_documents"], 0);
+    assert!(json["entries"][1].get("folder_counters").is_none());
+}
+
+#[test]
+fn folder_counters_roll_up_descendants_and_classify_only_visible_files() {
+    let (_temp, mut workspace) = initialized_workspace();
+    fs::create_dir_all(workspace.edit_root.join("Policies/HR/Forms")).expect("HR folders");
+    fs::create_dir_all(workspace.edit_root.join("Policies/IT")).expect("IT folder");
+    let controlled_draft = workspace.edit_root.join("Policies/HR/Handbook.md");
+    let controlled_obsolete = workspace.edit_root.join("Policies/IT/Legacy.md");
+    fs::write(&controlled_draft, "# Handbook").expect("controlled draft");
+    fs::write(&controlled_obsolete, "# Legacy").expect("controlled obsolete");
+    fs::write(
+        workspace.edit_root.join("Policies/HR/Forms/Template.docx"),
+        "office",
+    )
+    .expect("available draft");
+    fs::write(
+        workspace.edit_root.join("Policies/HR/Forms/diagram.png"),
+        "image",
+    )
+    .expect("unsupported file");
+    fs::write(
+        workspace
+            .edit_root
+            .join("Policies/HR/Forms/~$Template.docx"),
+        "lock",
+    )
+    .expect("Office sidecar");
+    workspace
+        .add_document(&controlled_draft)
+        .expect("register draft");
+    let obsolete = workspace
+        .add_document(&controlled_obsolete)
+        .expect("register obsolete source");
+    workspace
+        .mark_obsolete(obsolete.id, "Superseded")
+        .expect("mark obsolete");
+
+    let (tree, policies) = workspace
+        .library_snapshot(Path::new("Policies"))
+        .expect("single inventory snapshot");
+    let counters = |path: &str| {
+        tree.iter()
+            .find(|folder| folder.relative_path == Path::new(path))
+            .expect("folder node")
+            .counters
+    };
+    assert_eq!(
+        counters("."),
+        dms_core::FolderCounters {
+            draft_documents: 1,
+            available_to_add: 1,
+            unsupported_files: 1,
+        }
+    );
+    assert_eq!(counters("Policies"), counters("."));
+    assert_eq!(counters("Policies/HR"), counters("."));
+    assert_eq!(counters("Policies/IT"), dms_core::FolderCounters::default());
+
+    let hr = policies
+        .entries
+        .iter()
+        .find(|entry| entry.relative_path == Path::new("Policies/HR"))
+        .expect("HR entry");
+    assert_eq!(hr.folder_counters, Some(counters("Policies/HR")));
+    let it = policies
+        .entries
+        .iter()
+        .find(|entry| entry.relative_path == Path::new("Policies/IT"))
+        .expect("IT entry");
+    assert_eq!(
+        it.folder_counters,
+        Some(dms_core::FolderCounters::default())
+    );
 }
 
 #[test]

@@ -2,6 +2,7 @@ use std::{
     cmp::Ordering,
     collections::HashMap,
     fs,
+    ops::AddAssign,
     path::{Component, Path, PathBuf},
 };
 
@@ -51,6 +52,23 @@ pub struct LibraryEntry {
     pub kind: LibraryEntryKind,
     pub membership: Option<LibraryMembership>,
     pub document: Option<LibraryDocumentSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub folder_counters: Option<FolderCounters>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct FolderCounters {
+    pub draft_documents: usize,
+    pub available_to_add: usize,
+    pub unsupported_files: usize,
+}
+
+impl AddAssign for FolderCounters {
+    fn add_assign(&mut self, other: Self) {
+        self.draft_documents += other.draft_documents;
+        self.available_to_add += other.available_to_add;
+        self.unsupported_files += other.unsupported_files;
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -58,6 +76,7 @@ pub struct LibraryFolderNode {
     pub name: String,
     #[serde(with = "library_path_serde")]
     pub relative_path: PathBuf,
+    pub counters: FolderCounters,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -71,29 +90,31 @@ pub struct LibraryFolder {
 
 impl Workspace {
     pub fn library_tree(&self) -> Result<Vec<LibraryFolderNode>> {
-        let mut folders = vec![LibraryFolderNode {
-            name: self
-                .edit_root
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("Library")
-                .to_owned(),
-            relative_path: PathBuf::from("."),
-        }];
-        self.collect_library_folders(&self.edit_root, &mut folders)?;
-        folders.sort_by(|left, right| path_order(&left.relative_path, &right.relative_path));
-        Ok(folders)
+        self.library_inventory().map(|(tree, _)| tree)
     }
 
     pub fn library_folder(&self, relative_folder: &Path) -> Result<LibraryFolder> {
         let registered = self.registered_document_index();
-        self.library_folder_with_documents(relative_folder, &registered)
+        let (_, counters) = self.library_inventory_with_documents(&registered)?;
+        self.library_folder_with_documents(relative_folder, &registered, Some(&counters))
+    }
+
+    pub fn library_snapshot(
+        &self,
+        relative_folder: &Path,
+    ) -> Result<(Vec<LibraryFolderNode>, LibraryFolder)> {
+        let registered = self.registered_document_index();
+        let (tree, counters) = self.library_inventory_with_documents(&registered)?;
+        let folder =
+            self.library_folder_with_documents(relative_folder, &registered, Some(&counters))?;
+        Ok((tree, folder))
     }
 
     fn library_folder_with_documents(
         &self,
         relative_folder: &Path,
         registered: &HashMap<PathBuf, &Document>,
+        folder_counters: Option<&HashMap<PathBuf, FolderCounters>>,
     ) -> Result<LibraryFolder> {
         let (folder, relative_folder) = self.resolve_library_folder(relative_folder)?;
         let mut entries = Vec::new();
@@ -123,6 +144,9 @@ impl Workspace {
             if file_type.is_dir() {
                 entries.push(LibraryEntry {
                     name,
+                    folder_counters: folder_counters
+                        .and_then(|counters| counters.get(&relative_path))
+                        .copied(),
                     relative_path,
                     kind: LibraryEntryKind::Folder,
                     membership: None,
@@ -224,11 +248,49 @@ impl Workspace {
         ))
     }
 
-    fn collect_library_folders(
+    fn library_inventory(
         &self,
+    ) -> Result<(Vec<LibraryFolderNode>, HashMap<PathBuf, FolderCounters>)> {
+        let registered = self.registered_document_index();
+        self.library_inventory_with_documents(&registered)
+    }
+
+    fn library_inventory_with_documents(
+        &self,
+        registered: &HashMap<PathBuf, &Document>,
+    ) -> Result<(Vec<LibraryFolderNode>, HashMap<PathBuf, FolderCounters>)> {
+        let mut folders = Vec::new();
+        let mut counters = HashMap::new();
+        let root_counters = Self::collect_library_inventory(
+            &self.edit_root,
+            Path::new("."),
+            registered,
+            &mut folders,
+            &mut counters,
+        )?;
+        counters.insert(PathBuf::from("."), root_counters);
+        folders.push(LibraryFolderNode {
+            name: self
+                .edit_root
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("Library")
+                .to_owned(),
+            relative_path: PathBuf::from("."),
+            counters: root_counters,
+        });
+        folders.sort_by(|left, right| path_order(&left.relative_path, &right.relative_path));
+        Ok((folders, counters))
+    }
+
+    fn collect_library_inventory(
         folder: &Path,
+        relative_folder: &Path,
+        registered: &HashMap<PathBuf, &Document>,
         folders: &mut Vec<LibraryFolderNode>,
-    ) -> Result<()> {
+        counters_by_path: &mut HashMap<PathBuf, FolderCounters>,
+    ) -> Result<FolderCounters> {
+        let mut counters = FolderCounters::default();
         for entry in fs::read_dir(folder).map_err(|source| DmsError::Io {
             path: folder.to_path_buf(),
             source,
@@ -237,33 +299,54 @@ impl Workspace {
                 path: folder.to_path_buf(),
                 source,
             })?;
-            let file_type = entry.file_type().map_err(|source| DmsError::Io {
-                path: entry.path(),
-                source,
-            })?;
-            if !file_type.is_dir() {
-                continue;
-            }
             let path = entry.path();
-            let relative_path = path
-                .strip_prefix(&self.edit_root)
-                .map_err(|_| DmsError::OutsideEditRoot(path.clone()))?
-                .to_path_buf();
-            if is_metadata_path(&relative_path) {
-                continue;
-            }
             let name = entry
                 .file_name()
                 .to_str()
                 .ok_or_else(|| DmsError::InvalidLibraryEntry(path.clone()))?
                 .to_owned();
-            folders.push(LibraryFolderNode {
-                name,
-                relative_path,
-            });
-            self.collect_library_folders(&path, folders)?;
+            if (relative_folder == Path::new(".") && name == METADATA_DIRECTORY)
+                || name.starts_with("~$")
+            {
+                continue;
+            }
+            let file_type = entry.file_type().map_err(|source| DmsError::Io {
+                path: path.clone(),
+                source,
+            })?;
+            let relative_path = relative_join(relative_folder, &name);
+            if file_type.is_dir() {
+                if is_metadata_path(&relative_path) {
+                    continue;
+                }
+                let child_counters = Self::collect_library_inventory(
+                    &path,
+                    &relative_path,
+                    registered,
+                    folders,
+                    counters_by_path,
+                )?;
+                counters += child_counters;
+                counters_by_path.insert(relative_path.clone(), child_counters);
+                folders.push(LibraryFolderNode {
+                    name,
+                    relative_path,
+                    counters: child_counters,
+                });
+            } else if file_type.is_file() {
+                match registered.get(&relative_path) {
+                    Some(document) if document.lifecycle == Lifecycle::Draft => {
+                        counters.draft_documents += 1;
+                    }
+                    Some(_) => {}
+                    None if is_supported_source(&relative_path) => {
+                        counters.available_to_add += 1;
+                    }
+                    None => counters.unsupported_files += 1,
+                }
+            }
         }
-        Ok(())
+        Ok(counters)
     }
 
     fn collect_search_results(
@@ -283,6 +366,7 @@ impl Workspace {
                 relative_folder
             },
             registered,
+            None,
         )?;
         for entry in listing.entries {
             if entry.kind == LibraryEntryKind::Folder {
@@ -395,6 +479,7 @@ impl Workspace {
                 lifecycle: document.lifecycle,
                 control: document.control.clone(),
             }),
+            folder_counters: None,
         }
     }
 }

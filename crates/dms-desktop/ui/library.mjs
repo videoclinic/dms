@@ -3,6 +3,16 @@ export function normalizeLibraryPath(path) {
   return normalized || ".";
 }
 
+export function clampLibraryDetailWidth(width, maximum = 640) {
+  const numeric = Number(width);
+  const boundedMaximum = Math.max(280, Math.min(640, Number(maximum) || 640));
+  return Math.min(boundedMaximum, Math.max(280, Number.isFinite(numeric) ? numeric : 420));
+}
+
+export function resizeLibraryDetailWidth(startWidth, startX, currentX, maximum = 640) {
+  return clampLibraryDetailWidth(Number(startWidth) - (Number(currentX) - Number(startX)), maximum);
+}
+
 export function createLibraryState() {
   return {
     tree: [],
@@ -21,6 +31,10 @@ export function createLibraryState() {
     back: [],
     forward: [],
     expanded_folders: ["."],
+    show_draft_documents: true,
+    show_available_to_add: true,
+    show_unsupported_files: true,
+    detail_width: 420,
     loading: false,
   };
 }
@@ -51,7 +65,7 @@ export function toggleTreeFolder(library, relativePath) {
 export function buildFolderTree(folders) {
   const nodes = new Map((folders ?? []).map((folder) => {
     const path = normalizeLibraryPath(folder.relative_path);
-    return [path, { name: folder.name, path, children: [] }];
+    return [path, { name: folder.name, path, counters: folder.counters ?? {}, children: [] }];
   }));
   const roots = [];
   for (const node of nodes.values()) {
@@ -125,6 +139,35 @@ export function membershipKind(entry) {
 
 export function entryDocumentId(entry) {
   return entry?.membership?.in_library?.document_id ?? entry?.document?.id ?? null;
+}
+
+export function filterLibraryEntries(entries, library) {
+  return (entries ?? []).filter((entry) => {
+    if (entry.kind === "folder") return true;
+    const membership = membershipKind(entry);
+    if (membership === "in_library" && entry.document?.lifecycle === "draft") {
+      return library.show_draft_documents;
+    }
+    if (membership === "not_in_library") return library.show_available_to_add;
+    if (membership === "unsupported") return library.show_unsupported_files;
+    return true;
+  });
+}
+
+export function toggleLibraryVisibility(library, key) {
+  if (!["show_draft_documents", "show_available_to_add", "show_unsupported_files"].includes(key)) {
+    return library;
+  }
+  const next = { ...library, [key]: !library[key], page: 0 };
+  const entries = filterLibraryEntries(next.results ?? next.folder?.entries ?? [], next);
+  const visiblePaths = new Set(entries.map((entry) => normalizeLibraryPath(entry.relative_path)));
+  const selection = next.selection.filter((path) => visiblePaths.has(path));
+  return {
+    ...next,
+    selection,
+    detail: selection.length === next.selection.length ? next.detail : null,
+    detail_error: selection.length === next.selection.length ? next.detail_error : "",
+  };
 }
 
 export function toggleLibrarySelection(library, relativePath, additive = false) {
@@ -426,12 +469,44 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+export function libraryIcon(name) {
+  const paths = {
+    folder: '<path d="M3 6h7l2 2h9v11H3z"/><path d="M3 6V4h7l2 2"/>',
+    file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5"/>',
+    chevron_right: '<path d="m9 6 6 6-6 6"/>',
+    chevron_down: '<path d="m6 9 6 6 6-6"/>',
+    back: '<path d="m15 5-7 7 7 7"/>',
+    forward: '<path d="m9 5 7 7-7 7"/>',
+    up: '<path d="m5 14 7-7 7 7"/>',
+    refresh: '<path d="M20 6v5h-5"/><path d="M18.5 16a8 8 0 1 1 .5-8l1 3"/>',
+  };
+  const path = paths[name];
+  if (!path) throw new Error(`Unknown Library icon: ${name}`);
+  return `<svg class="library-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${path}</svg>`;
+}
+
 function membershipLabel(entry) {
   const membership = membershipKind(entry);
   if (membership === "in_library") return "In library";
   if (membership === "not_in_library") return "Not in library";
   if (membership === "unsupported") return "Unsupported draft";
   return "Folder";
+}
+
+function counterChipsMarkup(counters) {
+  const chips = [
+    ["draft_documents", "~", "draft document", "draft documents"],
+    ["available_to_add", "+", "file available to add", "files available to add"],
+    ["unsupported_files", "!", "unsupported file", "unsupported files"],
+  ];
+  return chips
+    .filter(([key]) => Number(counters?.[key]) > 0)
+    .map(([key, symbol, singular, plural]) => {
+      const count = Number(counters[key]);
+      const label = `${count} ${count === 1 ? singular : plural}`;
+      return `<span class="folder-counter ${escapeHtml(key)}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${symbol}${count}</span>`;
+    })
+    .join("");
 }
 
 function treeMarkup(tree, currentPath, expandedFolders) {
@@ -442,26 +517,26 @@ function treeMarkup(tree, currentPath, expandedFolders) {
     const current = node.path === currentPath;
     const branchState = hasChildren ? ` aria-expanded="${isExpanded}"` : "";
     const toggle = hasChildren
-      ? `<button class="tree-toggle" type="button" data-library-tree-toggle="${escapeHtml(node.path)}" aria-expanded="${isExpanded}" aria-label="${isExpanded ? "Collapse" : "Expand"} ${escapeHtml(node.name)}"><span aria-hidden="true">${isExpanded ? "▾" : "▸"}</span></button>`
+      ? `<button class="tree-toggle" type="button" data-library-tree-toggle="${escapeHtml(node.path)}" aria-expanded="${isExpanded}" aria-label="${isExpanded ? "Collapse" : "Expand"} ${escapeHtml(node.name)}">${libraryIcon(isExpanded ? "chevron_down" : "chevron_right")}</button>`
       : '<span class="tree-toggle-spacer" aria-hidden="true"></span>';
     const children = hasChildren
       ? `<ul class="tree-group" role="group"${isExpanded ? "" : " hidden"}>${node.children.map((child) => nodeMarkup(child, level + 1)).join("")}</ul>`
       : "";
-    return `<li class="tree-item${current ? " current" : ""}" role="treeitem" aria-level="${level}"${current ? ' aria-current="page"' : ""}${branchState}><div class="tree-row">${toggle}<button class="tree-label" type="button" data-library-folder="${escapeHtml(node.path)}"><span aria-hidden="true">▰</span><span>${escapeHtml(node.name)}</span></button></div>${children}</li>`;
+    return `<li class="tree-item${current ? " current" : ""}" role="treeitem" aria-level="${level}" aria-selected="${current}"${current ? ' aria-current="page"' : ""}${branchState}><div class="tree-row">${toggle}<button class="tree-label" type="button" data-library-folder="${escapeHtml(node.path)}">${libraryIcon("folder")}<span>${escapeHtml(node.name)}</span>${counterChipsMarkup(node.counters)}</button></div>${children}</li>`;
   };
   return `<ul class="tree-root" role="tree">${buildFolderTree(tree).map((node) => nodeMarkup(node, 1)).join("")}</ul>`;
 }
 
-function rowsMarkup(library) {
-  const allEntries = sortLibraryEntries(library.results ?? library.folder.entries ?? [], library.sort);
+function rowsMarkup(library, entries, emptyMessage) {
+  const filteredEntries = filterLibraryEntries(entries, library);
+  const allEntries = sortLibraryEntries(filteredEntries, library.sort);
   const page = paginateLibraryEntries(allEntries, library.page_size, library.page);
   const rows = page.entries.length === 0
-    ? '<tr><td colspan="5" class="empty-table">This folder has no visible entries.</td></tr>'
+    ? `<tr><td colspan="5" class="empty-table">${escapeHtml(entries.length > 0 ? "No entries match Show in folder." : emptyMessage)}</td></tr>`
     : page.entries.map((entry) => {
         const path = normalizeLibraryPath(entry.relative_path);
         const selected = library.selection.includes(path) ? " selected" : "";
-        const icon = entry.kind === "folder" ? "▸" : "□";
-        return `<tr class="library-row${selected}" tabindex="0" data-library-entry="${escapeHtml(path)}" data-library-kind="${escapeHtml(entry.kind)}"><td><span class="entry-name"><span aria-hidden="true">${icon}</span>${escapeHtml(entry.name)}</span></td><td>${escapeHtml(entry.document?.control?.title ?? "—")}</td><td>${escapeHtml(membershipLabel(entry))}</td><td>${escapeHtml(entry.document?.lifecycle ?? "—")}</td><td>${escapeHtml(path)}</td></tr>`;
+        return `<tr class="library-row${selected}" tabindex="0" data-library-entry="${escapeHtml(path)}" data-library-kind="${escapeHtml(entry.kind)}"><td><span class="entry-name">${libraryIcon(entry.kind === "folder" ? "folder" : "file")}<span>${escapeHtml(entry.name)}</span>${entry.kind === "folder" ? counterChipsMarkup(entry.folder_counters) : ""}</span></td><td>${escapeHtml(entry.document?.control?.title ?? "—")}</td><td>${escapeHtml(membershipLabel(entry))}</td><td>${escapeHtml(entry.document?.lifecycle ?? "—")}</td><td>${escapeHtml(path)}</td></tr>`;
       }).join("");
   const paging = page.total > library.page_size
     ? `<button class="text-button" type="button" data-library-page="previous" ${page.page === 0 ? "disabled" : ""}>Previous</button><span>Page ${page.page + 1} of ${page.page_count}</span><button class="text-button" type="button" data-library-page="next" ${page.page + 1 === page.page_count ? "disabled" : ""}>Next</button>`
@@ -606,7 +681,46 @@ export function libraryMarkup(workspace, activity, library, error = "") {
   const folder = normalizeLibraryPath(library.folder?.relative_path ?? activity?.route_state?.folder);
   const breadcrumbs = breadcrumbSegments(folder, workspace.edit_root.split(/[\\/]/).filter(Boolean).at(-1) ?? "Library")
     .map((segment) => `<button type="button" data-library-folder="${escapeHtml(segment.path)}">${escapeHtml(segment.label)}</button>`)
-    .join('<span aria-hidden="true">›</span>');
+    .join(`<span class="breadcrumb-chevron">${libraryIcon("chevron_right")}</span>`);
   const searchScope = library.entire_library ? "Entire library" : "Current folder";
-  return `<section class="library-workspace"><div class="library-toolbar"><button class="icon-button" type="button" data-library-history="back" ${library.back.length ? "" : "disabled"} aria-label="Back" title="Back">←</button><button class="icon-button" type="button" data-library-history="forward" ${library.forward.length ? "" : "disabled"} aria-label="Forward" title="Forward">→</button><button class="icon-button" type="button" data-library-up ${folder === "." ? "disabled" : ""} aria-label="Up" title="Up">↑</button><button class="icon-button" type="button" data-library-refresh aria-label="Refresh" title="Refresh">↻</button><nav class="breadcrumbs" aria-label="Current folder">${breadcrumbs}</nav><form id="library-search-form" class="library-search"><input name="query" value="${escapeHtml(library.query)}" aria-label="Search library" placeholder="Search files, paths, titles, numbers"><label><input type="checkbox" name="entireLibrary" ${library.entire_library ? "checked" : ""}> Entire library</label><button class="button secondary" type="submit">Search</button>${library.results ? '<button class="text-button" type="button" data-library-clear-search>Clear</button>' : ""}</form><label class="sort-control">Sort <select data-library-sort><option value="name" ${library.sort === "name" ? "selected" : ""}>Name</option><option value="title" ${library.sort === "title" ? "selected" : ""}>Title</option><option value="number" ${library.sort === "number" ? "selected" : ""}>Document number</option><option value="lifecycle" ${library.sort === "lifecycle" ? "selected" : ""}>Lifecycle</option></select></label></div>${error ? `<p class="library-error" role="alert">${escapeHtml(error)}</p>` : ""}<div class="library-grid"><aside class="folder-tree" aria-label="Library folders"><h2>Folders</h2>${treeMarkup(library.tree, folder, library.expanded_folders)}</aside><section class="folder-contents"><header><div><span class="eyebrow">${library.results ? `Search · ${escapeHtml(searchScope)}` : "Current folder"}</span><h2>${escapeHtml(folder === "." ? "Library" : folder.split("/").at(-1))}</h2></div><span>${(library.results ?? library.folder.entries ?? []).length} entries</span></header><div class="table-scroll"><table><thead><tr><th>Name</th><th>Title</th><th>Membership</th><th>Lifecycle</th><th>Relative path</th></tr></thead><tbody>${rowsMarkup(library)}</tbody></table></div></section><aside class="selection-pane" aria-label="Selection details">${selectionMarkup(library)}</aside></div></section>`;
+  const sortOptions = `<option value="name" ${library.sort === "name" ? "selected" : ""}>Name</option><option value="title" ${library.sort === "title" ? "selected" : ""}>Title</option><option value="number" ${library.sort === "number" ? "selected" : ""}>Document number</option><option value="lifecycle" ${library.sort === "lifecycle" ? "selected" : ""}>Lifecycle</option>`;
+  const entries = library.results ?? library.folder.entries ?? [];
+  const visibleTotal = filterLibraryEntries(entries, library).length;
+  const heading = library.results === null ? (folder === "." ? "Library root" : folder.split("/").at(-1)) : "Search results";
+  const visibilityToggle = (key, label) => `<button type="button" data-library-visibility="${key}" aria-pressed="${library[key]}">${label}</button>`;
+  const searchSummary = library.results === null
+    ? ""
+    : `<span class="search-result-summary">${escapeHtml(searchScope)} · ${visibleTotal} visible of ${library.results.length} results <button class="text-button" type="button" data-library-clear-search>Clear</button></span>`;
+  return `<section class="library-workspace">
+    <div class="library-toolbar">
+      <button class="icon-button" type="button" data-library-history="back" ${library.back.length ? "" : "disabled"} aria-label="Back" title="Back">${libraryIcon("back")}</button>
+      <button class="icon-button" type="button" data-library-history="forward" ${library.forward.length ? "" : "disabled"} aria-label="Forward" title="Forward">${libraryIcon("forward")}</button>
+      <button class="icon-button" type="button" data-library-up ${folder === "." ? "disabled" : ""} aria-label="Up" title="Up">${libraryIcon("up")}</button>
+      <button class="icon-button" type="button" data-library-refresh aria-label="Refresh" title="Refresh">${libraryIcon("refresh")}</button>
+      <nav class="breadcrumbs" aria-label="Current folder">${breadcrumbs}</nav>
+      <form id="library-search-form" class="library-search">
+        <input name="query" value="${escapeHtml(library.query)}" aria-label="Search library" placeholder="Search files, paths, titles, numbers">
+        <label><input type="checkbox" name="entireLibrary" ${library.entire_library ? "checked" : ""}> Entire library</label>
+        <button class="button secondary" type="submit">Search</button>
+      </form>
+      <label class="sort-control">Sort <select data-library-sort>${sortOptions}</select></label>
+    </div>
+    ${error ? `<p class="library-error" role="alert">${escapeHtml(error)}</p>` : ""}
+    <div class="library-grid">
+      <aside class="folder-tree" aria-label="Library folders">${treeMarkup(library.tree, folder, library.expanded_folders)}</aside>
+      <section class="folder-contents">
+        <header><div><span class="eyebrow">${library.results === null ? "Current folder" : "Explorer search"}</span><h2>${escapeHtml(heading)}</h2></div><span>${visibleTotal} visible entries</span></header>
+        ${searchSummary}
+        <div class="library-visibility" role="group" aria-label="Show in folder">
+          <span>Show in folder</span>
+          ${visibilityToggle("show_draft_documents", "Draft documents")}
+          ${visibilityToggle("show_available_to_add", "Available to add")}
+          ${visibilityToggle("show_unsupported_files", "Unsupported files")}
+        </div>
+        <div class="table-scroll"><table><thead><tr><th>Name</th><th>Title</th><th>Library state</th><th>Lifecycle</th><th>Relative path</th></tr></thead><tbody>${rowsMarkup(library, entries, library.results === null ? "This folder has no visible entries." : "No files match this search.")}</tbody></table></div>
+      </section>
+      <div class="library-splitter" role="separator" aria-orientation="vertical" aria-label="Resize document details" aria-valuemin="280" aria-valuemax="640" aria-valuenow="${library.detail_width}" tabindex="0" data-library-splitter></div>
+      <aside class="selection-pane" aria-live="polite" style="width:${library.detail_width}px">${selectionMarkup(library)}</aside>
+    </div>
+  </section>`;
 }

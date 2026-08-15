@@ -4,7 +4,7 @@
 | --- | --- |
 | ID | CAP-0006 |
 | Status | not implemented |
-| Tests | Partial phases 3, 9b.1, 9e, 9f.1, 9f.2, 9f.5, 9g, and 9k.3 evidence: [`dms-core` Library and lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [shell, independent-pane scrolling, and permalink-target tests](../../../crates/dms-desktop/ui/app.test.mjs), [hierarchical Library, document-control, placeholder, and workflow frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31359360786) |
+| Tests | Partial phases 3, 9b.1, 9e, 9f.1, 9f.2, 9f.5, 9g, 9k.3, and 9k.4 evidence: [`dms-core` Library and lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [`dms-core` recursive Library counter tests](../../../crates/dms-core/tests/library.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [shell, direct folder activation, bounded splitter, and permalink-target tests](../../../crates/dms-desktop/ui/app.test.mjs), [hierarchical Library, file-visibility, counter, icon, document-control, placeholder, and workflow frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31359360786) |
 
 ## Outcomes (contract — not yet true in runtime)
 
@@ -30,6 +30,14 @@ When implemented, the following must hold:
      control independent from its navigation action. Navigating to a folder
      expands its ancestor chain and keeps unrelated branch expansion stable for
      the application session.
+   - Every tree folder and current-folder folder row shows the same recursive
+     summary immediately after its name: `~N` counts visible controlled files
+     whose lifecycle is exactly `draft`, `+N` counts visible supported source
+     files available to add, and `!N` counts visible unsupported regular files.
+     Counts include descendants, omit zero buckets, and exclude `.dms`, Office
+     `~$` sidecars, directories, and controlled non-draft files. Each badge has
+     an accessible text equivalent; visibility controls never change these
+     unfiltered values.
    - A current-folder toolbar exposes **Back**, **Forward**, and **Up** controls
      plus a clickable breadcrumb rooted at the workspace/edit-root display
      name. Up is unavailable at the root. Tree selection, breadcrumb, current
@@ -52,9 +60,10 @@ When implemented, the following must hold:
      library** (a supported source draft), or not a supported draft. A
      registered document additionally shows its DMS-managed document title and
      control data in a separate **Title** field; that title never replaces
-     the source file name. Single-click selects a folder or file row;
-     double-click or Enter opens a folder. Selecting a tree node or breadcrumb
-     segment opens that folder directly.
+     the source file name. Primary-click or Enter on a folder row opens that
+     folder directly without first selecting it or loading document detail.
+     File rows retain single- and modifier-assisted multi-selection. Selecting
+     a tree node or breadcrumb segment opens that folder directly.
    - Back/Forward history is session-only. Navigating alone does not create a
      saved view; the operator must use CAP-0005's explicit bookmark control.
 3. Selecting one or more **Not in library** supported source files
@@ -94,8 +103,12 @@ When implemented, the following must hold:
    navigation, selection, and pane placement. Its **Document control data**,
    **Actions**, **Revision cycle**, and **Releases** sections are independently
    foldable as defined by CAP-0015; the selection header and Source file
-   identity remain visible. Action labels do **not** repeat the document title
-   or number — the selection header already identifies it.
+   identity remain visible. The centre/details divider is pointer- and
+   keyboard-resizable for the active Library session between 280 and 640 pixels
+   while leaving at least 360 pixels for the directory table; Escape during a
+   drag restores its starting width. Width is not persisted in workspace
+   metadata, preferences, or saved views. Action labels do **not** repeat the
+   document title or number — the selection header already identifies it.
 7. **Multi-select** of two or more file rows uses the **same selection pane**.
    It provides a batch summary (count, short identity list, clear) and
    **multi-applicable actions only**. A homogeneous selection of **Not in
@@ -166,17 +179,25 @@ When implemented, the following must hold:
     in the directory list with an `obsolete` lifecycle state. A missing
     registered document has no fabricated directory row; it is reported as a
     maintenance issue until resolved (CAP-0013).
-13. The Library has no metadata **Filters** control: its normal browsing state
-    always shows the actual current-folder structure and membership annotations.
-    Filtered document reporting belongs to CAP-0012 rather than this explorer.
+13. A labelled **Show in folder** group above the directory table has three
+    independent, all-on session controls: **Draft documents** shows controlled
+    rows whose lifecycle is exactly `draft`; **Available to add** shows
+    supported `Not in library` files; and **Unsupported files** shows
+    unsupported regular files. Folder rows, controlled non-draft rows, and
+    unclassified rows remain visible. The state follows the Library activity
+    across folders and search, filters before sorting and pagination, returns to
+    page zero when changed, and prunes hidden selections and detail. It is a
+    file-visibility aid, not CAP-0012 metadata reporting, and never changes
+    recursive folder counters.
 14. Explorer search starts at the current folder and includes its descendants,
     with an explicit **Entire library** scope. It matches registered-document
     title and document number plus every file's exact source file name and
     relative path case-insensitively. Results retain their relative path and can
     be sorted by title, document number, lifecycle state, latest release, or
     next-review-due date. Search is an explicit result state whose matching rows
-    follow CAP-0005's growing-table pagination; clearing it restores the
-    complete current-folder listing.
+    use the same session-wide file-visibility controls before CAP-0005's
+    growing-table sorting and pagination; clearing search restores the complete
+    current-folder listing without resetting those controls.
 15. A CAP-0020 document permalink that resolves successfully lands here: the
     library navigator selects that document (revealing its folder as needed)
     and shows the selection pane. Resolution never keys off file name or

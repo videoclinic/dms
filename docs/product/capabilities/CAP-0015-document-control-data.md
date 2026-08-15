@@ -5,7 +5,7 @@
 | ID | CAP-0015 |
 | Status | not implemented |
 | Storage | `<edit-root>/.dms/` |
-| Tests | Partial phases 9e–9f.5 and 9k.3 evidence: [release-snapshot, migration, identity-stability, and atomic-handover core tests](../../../crates/dms-core/tests/lifecycle.rs), [document-profile and legacy-owner migration tests](../../../crates/dms-core/tests/workspace.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [Library document-control, release-profile, placeholder, and lifecycle tests](../../../crates/dms-desktop/ui/library.test.mjs), [document-type catalogue tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
+| Tests | Partial phases 9e–9f.5, 9k.3, and 9k.4 evidence: [release-snapshot, migration, identity-stability, and atomic-handover core tests](../../../crates/dms-core/tests/lifecycle.rs), [document-profile and legacy-owner migration tests](../../../crates/dms-core/tests/workspace.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [Library document-control, bounded details-pane, release-profile, placeholder, and lifecycle tests](../../../crates/dms-desktop/ui/library.test.mjs), [document-type catalogue tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 
@@ -88,7 +88,9 @@ When implemented, the following must hold:
     never-released document or when the current release file is missing. When
     these sections exceed the available window height, the selection pane
     scrolls independently under CAP-0006; its scroll never moves Library or
-    application navigation.
+    application navigation. CAP-0006's bounded session splitter may widen this
+    pane without changing its field rules, independent-scroll contract, or
+    persisted document data.
 12. Title, document type, a resolved eligible owner, and a candidate effective
     date are required before review submission.
     Document number, when set, is trimmed and case-insensitively unique across

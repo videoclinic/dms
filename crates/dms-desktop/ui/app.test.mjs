@@ -551,3 +551,15 @@ test("library saved views retain folder, sort, and stable document target withou
   assert.equal(preferences.saved_views[0].document_id, base.document_id);
   assert.deepEqual(preferences.saved_views[0].route_state, base.route_state);
 });
+
+test("Library folder activation and splitter controls stay direct and session-only", () => {
+  const source = readFileSync(new URL("./app.mjs", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(source, /if \(row\.dataset\.libraryKind === "folder"\) \{\s*void loadLibraryFolder\(row\.dataset\.libraryEntry\);\s*return true;/);
+  assert.match(source, /row\?\.dataset\.libraryKind === "folder"/);
+  assert.match(source, /libraryResize && event\.key === "Escape"/);
+  assert.match(source, /grid\.clientWidth - tree\.offsetWidth - splitter\.offsetWidth - 360/);
+  assert.doesNotMatch(source, /localStorage|persistLibraryDetailWidth/);
+  assert.doesNotMatch(styles, /@font-face|\.woff2?|\.ttf/i);
+});

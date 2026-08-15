@@ -32,7 +32,9 @@ persistence.
   workflow evidence before invalidating stale candidates.
 - Folder discovery exposes only edit-root-relative regular files and directories,
   excludes `.dms` and Office temporary sidecars, and never auto-registers or
-  auto-reassociates a source.
+  auto-reassociates a source. Every discovered folder carries recursive counters
+  for draft registered documents, addable supported files, and unsupported files;
+  each visible file contributes to exactly one counter.
 - Unregister and reassociate preserve stable document identity and retained
   document metadata; batch mutations validate atomically before changing state.
 - `Workspace::save` is the persistence boundary for ordinary mutations; release

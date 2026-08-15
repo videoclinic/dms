@@ -12,8 +12,10 @@ import {
   libraryOpenRequest,
   membershipKind,
   normalizeLibraryPath,
+  resizeLibraryDetailWidth,
   selectedEntries,
   toggleLibrarySelection,
+  toggleLibraryVisibility,
   toggleTreeFolder,
 } from "./library.mjs";
 import {
@@ -1150,6 +1152,12 @@ async function handleLibraryClick(event) {
     void loadLibraryFolder(appState.library.folder.relative_path, "replace");
     return true;
   }
+  const visibility = event.target.closest("[data-library-visibility]")?.dataset.libraryVisibility;
+  if (visibility) {
+    appState = { ...appState, library: toggleLibraryVisibility(appState.library, visibility) };
+    render(appState);
+    return true;
+  }
   if (event.target.closest("[data-library-clear-search]")) {
     appState = {
       ...appState,
@@ -1317,6 +1325,10 @@ async function handleLibraryClick(event) {
   }
   const row = event.target.closest("[data-library-entry]");
   if (row) {
+    if (row.dataset.libraryKind === "folder") {
+      void loadLibraryFolder(row.dataset.libraryEntry);
+      return true;
+    }
     appState = {
       ...appState,
       library: toggleLibrarySelection(
@@ -2271,18 +2283,81 @@ function handleChange(event) {
   render(appState);
 }
 
-function handleDoubleClick(event) {
-  const row = event.target.closest("[data-library-entry][data-library-kind='folder']");
-  if (row) void loadLibraryFolder(row.dataset.libraryEntry);
-}
-
 function handleKeyDown(event) {
+  const splitter = event.target.closest("[data-library-splitter]");
+  if (libraryResize && event.key === "Escape") {
+    event.preventDefault();
+    const { startWidth, pointerId, splitter: activeSplitter } = libraryResize;
+    appState = { ...appState, library: { ...appState.library, detail_width: startWidth } };
+    activeSplitter.releasePointerCapture?.(pointerId);
+    libraryResize = null;
+    render(appState);
+    document.querySelector("[data-library-splitter]")?.focus();
+    return;
+  }
+  if (splitter && ["ArrowLeft", "ArrowRight"].includes(event.key)) {
+    event.preventDefault();
+    const delta = event.key === "ArrowLeft" ? 20 : -20;
+    const width = resizeLibraryDetailWidth(
+      appState.library.detail_width,
+      0,
+      -delta,
+      libraryDetailMaximum(splitter),
+    );
+    appState = { ...appState, library: { ...appState.library, detail_width: width } };
+    render(appState);
+    document.querySelector("[data-library-splitter]")?.focus();
+    return;
+  }
   if (event.key !== "Enter") return;
-  const row = event.target.closest("[data-library-entry][data-library-kind='folder']");
-  if (row) {
+  const row = event.target.closest("[data-library-entry]");
+  if (row?.dataset.libraryKind === "folder") {
     event.preventDefault();
     void loadLibraryFolder(row.dataset.libraryEntry);
   }
+}
+
+let libraryResize = null;
+
+function libraryDetailMaximum(splitter) {
+  const grid = splitter.closest(".library-grid");
+  const tree = grid?.querySelector(".folder-tree");
+  if (!grid || !tree) return 640;
+  return Math.min(640, Math.max(280, grid.clientWidth - tree.offsetWidth - splitter.offsetWidth - 360));
+}
+
+function handlePointerDown(event) {
+  const splitter = event.target.closest("[data-library-splitter]");
+  if (!splitter) return;
+  event.preventDefault();
+  splitter.setPointerCapture?.(event.pointerId);
+  libraryResize = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startWidth: appState.library.detail_width,
+    splitter,
+    maximum: libraryDetailMaximum(splitter),
+  };
+}
+
+function handlePointerMove(event) {
+  if (!libraryResize || event.pointerId !== libraryResize.pointerId) return;
+  const width = resizeLibraryDetailWidth(
+    libraryResize.startWidth,
+    libraryResize.startX,
+    event.clientX,
+    libraryResize.maximum,
+  );
+  appState = { ...appState, library: { ...appState.library, detail_width: width } };
+  const pane = document.querySelector(".selection-pane");
+  if (pane) pane.style.width = `${width}px`;
+  libraryResize.splitter.setAttribute("aria-valuenow", String(width));
+}
+
+function finishLibraryResize(event) {
+  if (!libraryResize || event.pointerId !== libraryResize.pointerId) return;
+  libraryResize.splitter.releasePointerCapture?.(event.pointerId);
+  libraryResize = null;
 }
 
 let appState = createInitialState();
@@ -2358,8 +2433,11 @@ async function start() {
   document.addEventListener("click", handleClick);
   document.addEventListener("submit", handleSubmit);
   document.addEventListener("change", handleChange);
-  document.addEventListener("dblclick", handleDoubleClick);
   document.addEventListener("keydown", handleKeyDown);
+  document.addEventListener("pointerdown", handlePointerDown);
+  document.addEventListener("pointermove", handlePointerMove);
+  document.addEventListener("pointerup", finishLibraryResize);
+  document.addEventListener("pointercancel", finishLibraryResize);
   await registerWindowCloseHandler();
   await registerDeepLinkHandler();
   document.querySelector("#collapse-sidebar").addEventListener("click", () => {

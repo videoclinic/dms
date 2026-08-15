@@ -6,21 +6,26 @@ import {
   applyLibrarySnapshot,
   breadcrumbSegments,
   buildFolderTree,
+  clampLibraryDetailWidth,
   createLibraryState,
   confidentialityUpdateRequest,
   documentControlUpdateRequest,
   documentReviewScheduleRequest,
   entryDocumentId,
+  filterLibraryEntries,
   historyTarget,
   lifecycleActionRequest,
+  libraryIcon,
   libraryMarkup,
   libraryOpenRequest,
   membershipKind,
   normalizeLibraryPath,
   paginateLibraryEntries,
+  resizeLibraryDetailWidth,
   selectedEntries,
   sortLibraryEntries,
   toggleLibrarySelection,
+  toggleLibraryVisibility,
   toggleTreeFolder,
 } from "./library.mjs";
 
@@ -103,6 +108,111 @@ test("folder tree is hierarchical and keeps branch expansion independent from na
   assert.match(markup, /role="group"/);
   assert.match(markup, /data-library-tree-toggle="Policies"[^>]*aria-expanded="true"/);
   assert.match(markup, /role="treeitem"[^>]*aria-current="page"/);
+});
+
+test("folder counters render identical escaped nonzero summaries in tree and list", () => {
+  const folders = [
+    { name: "Edit", relative_path: ".", counters: { draft_documents: 2, available_to_add: 1 } },
+    { name: "Policies", relative_path: "Policies", counters: { draft_documents: 2, available_to_add: 1 } },
+    { name: "HR <Ops>", relative_path: "Policies/HR", counters: { draft_documents: 2, available_to_add: 1 } },
+  ];
+  const library = {
+    ...createLibraryState(),
+    tree: folders,
+    expanded_folders: [".", "Policies"],
+    folder: {
+      relative_path: "Policies",
+      parent: ".",
+      entries: [{
+        name: "HR <Ops>",
+        relative_path: "Policies/HR",
+        kind: "folder",
+        folder_counters: { draft_documents: 2, available_to_add: 1 },
+      }],
+    },
+  };
+  const markup = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies" } },
+    library,
+  );
+  assert.equal((markup.match(/aria-label="2 draft documents">~2/g) ?? []).length, 4);
+  assert.equal((markup.match(/aria-label="1 file available to add">\+1/g) ?? []).length, 4);
+  assert.doesNotMatch(markup, /unsupported file/);
+  assert.match(markup, /HR &lt;Ops&gt;/);
+});
+
+test("visibility controls filter files before paging and prune hidden selection without changing folders", () => {
+  const entries = [
+    { name: "HR", relative_path: "Policies/HR", kind: "folder" },
+    file("Draft.md", { in_library: { document_id: "draft" } }, { id: "draft", lifecycle: "draft" }),
+    file("Released.md", { in_library: { document_id: "released" } }, { id: "released", lifecycle: "released" }),
+    file("Available.md", "not_in_library"),
+    file("Unsupported.bin", "unsupported"),
+    file("Unknown.bin", null),
+  ];
+  let library = { ...createLibraryState(), folder: snapshot("Policies", entries).folder };
+  assert.deepEqual(
+    [library.show_draft_documents, library.show_available_to_add, library.show_unsupported_files],
+    [true, true, true],
+  );
+  assert.equal(filterLibraryEntries(entries, library).length, 6);
+  library = { ...library, selection: ["Policies/Draft.md"], detail: { document_id: "draft" }, page: 3 };
+  library = toggleLibraryVisibility(library, "show_draft_documents");
+  assert.equal(library.page, 0);
+  assert.deepEqual(library.selection, []);
+  assert.equal(library.detail, null);
+  assert.deepEqual(filterLibraryEntries(entries, library).map((entry) => entry.name), [
+    "HR", "Released.md", "Available.md", "Unsupported.bin", "Unknown.bin",
+  ]);
+  library = toggleLibraryVisibility(library, "show_available_to_add");
+  library = toggleLibraryVisibility(library, "show_unsupported_files");
+  assert.deepEqual(filterLibraryEntries(entries, library).map((entry) => entry.name), [
+    "HR", "Released.md", "Unknown.bin",
+  ]);
+  const page = paginateLibraryEntries(sortLibraryEntries(filterLibraryEntries(entries, library), "name"), 10, 0);
+  assert.equal(page.total, 3);
+});
+
+test("detail width is bounded per session and inline SVG icons stay self-contained", () => {
+  assert.equal(clampLibraryDetailWidth(120), 280);
+  assert.equal(clampLibraryDetailWidth(900), 640);
+  assert.equal(clampLibraryDetailWidth(600, 440), 440);
+  assert.equal(resizeLibraryDetailWidth(420, 100, 60), 460);
+  assert.equal(createLibraryState().detail_width, 420);
+  for (const icon of ["folder", "file", "chevron_right", "chevron_down", "back", "forward", "up", "refresh"]) {
+    assert.match(libraryIcon(icon), /^<svg class="library-icon"[^>]*aria-hidden="true"/);
+  }
+  assert.throws(() => libraryIcon("missing"), /Unknown Library icon/);
+});
+
+test("search results use the same visibility state instead of changing folder counters", () => {
+  const folderEntry = file("Current.md", "not_in_library");
+  const result = file("Result.md", { in_library: { document_id: "doc-result" } }, {
+    id: "doc-result",
+    lifecycle: "draft",
+    control: { title: "Matched title", document_number: "DOC-7" },
+  });
+  const library = {
+    ...createLibraryState(),
+    show_draft_documents: false,
+    query: "matched",
+    results: [result, file("Released.md", { in_library: { document_id: "released" } }, {
+      id: "released", lifecycle: "released", control: { title: "Released" },
+    })],
+    folder: snapshot("Policies", [folderEntry]).folder,
+  };
+  const markup = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies" } },
+    library,
+  );
+  assert.doesNotMatch(markup, /Policies\/Result\.md/);
+  assert.match(markup, /data-library-entry="Policies\/Released\.md"/);
+  assert.doesNotMatch(markup, /Policies\/Current\.md/);
+  assert.match(markup, /aria-pressed="false">Draft documents/);
+  assert.match(markup, /data-library-splitter/);
+  assert.match(markup, /class="selection-pane"[^>]*width:420px/);
 });
 
 test("multi-selection exposes homogeneous membership without losing exact identities", () => {
@@ -258,6 +368,7 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /Employee handbook/);
   assert.match(markup, /data-library-open-source/);
   assert.match(markup, /data-library-open-release/);
+  assert.match(markup, /<option value="next_minor">Next minor<\/option><option value="next_major">/);
   assert.match(markup, /Current released PDF · V1\.2/);
   assert.match(markup, /id="library-document-control-form"/);
   assert.match(markup, /name="ownerObjectId" required/);

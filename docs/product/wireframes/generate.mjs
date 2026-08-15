@@ -69,7 +69,7 @@ const CAPS = [
     file: "CAP-0002-document-lifecycle",
     title: "Document lifecycle",
     nav: "library",
-    subtitle: "Major changes require approval. Minor changes release directly and notify the assigned approver after publication.",
+    subtitle: "Next minor is the default target. Major changes require approval; minor changes release directly and notify the assigned approver after publication.",
     actions: ["Begin revision", "Release V1.4 minor version", "Preview V2.0 review request"],
     body: `
       <section class="card">
@@ -297,13 +297,20 @@ const CAPS = [
         .app[data-cap="CAP-0006"] .explorer-panes > .card { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
         .app[data-cap="CAP-0006"] .explorer-panes .list-card { display: flex; flex-direction: column; }
         .app[data-cap="CAP-0006"] .explorer-panes .table-wrap { min-height: 0; flex: 1; }
+        .app[data-cap="CAP-0006"] .list-card table { table-layout: fixed; }
+        .app[data-cap="CAP-0006"] .list-card th:nth-child(1) { width: 1.4rem; }
+        .app[data-cap="CAP-0006"] .list-card th:nth-child(2) { width: 5.3rem; }
+        .app[data-cap="CAP-0006"] .list-card th:nth-child(3) { width: 4.3rem; }
+        .app[data-cap="CAP-0006"] .list-card th:nth-child(4) { width: 5.6rem; }
+        .app[data-cap="CAP-0006"] .list-card th:nth-child(5),
+        .app[data-cap="CAP-0006"] .list-card th:nth-child(6) { width: 3.5rem; }
       `)}
       <section class="card explorer-toolbar" style="padding:0.75rem 0.9rem">
         <div class="row gap-2">
-          <button class="icon-btn" title="Back">←</button>
-          <button class="icon-btn" title="Forward">→</button>
-          <button class="icon-btn" title="Up one folder">↑</button>
-          <button class="icon-btn" title="Refresh current folder (F5)">↻</button>
+          <button class="icon-btn" title="Back" aria-label="Back">${wireframeIcon("back")}</button>
+          <button class="icon-btn" title="Forward" aria-label="Forward">${wireframeIcon("forward")}</button>
+          <button class="icon-btn" title="Up one folder" aria-label="Up one folder">${wireframeIcon("up")}</button>
+          <button class="icon-btn" title="Refresh current folder (F5)" aria-label="Refresh current folder">${wireframeIcon("refresh")}</button>
           <div class="row" style="height:2rem;min-width:0;flex:1;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.75rem;font-size:0.82rem;gap:0.45rem">
             <span class="muted">DMS Workspace</span><span>›</span><span>policies</span><span>›</span><strong>HR</strong>
           </div>
@@ -311,7 +318,7 @@ const CAPS = [
         </div>
         <p class="hint" style="margin-top:0.45rem">Back / Forward / Up and clickable breadcrumbs stay synchronized and remain available while any pane scrolls.</p>
       </section>
-      <div class="grid-explorer-detail explorer-panes" style="grid-template-columns:17.5rem minmax(0,1fr) 18.5rem;align-items:stretch">
+      <div class="grid-explorer-detail explorer-panes" style="grid-template-columns:17.5rem minmax(22.5rem,1fr) 0.45rem 20rem;align-items:stretch">
         <aside class="card tree">
           <div class="row between mb">
             <h3 class="card-title" style="margin:0">Folders</h3>
@@ -320,31 +327,31 @@ const CAPS = [
           <p class="hint" style="margin-top:0">Edit-root folders · <code>.dms</code> hidden</p>
           <ul class="tree-root">
             <li>
-              <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📂 DMS Workspace</span></div>
+              <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">${wireframeIcon("folder")} DMS Workspace ${folderCounter("~2", "2 draft documents")} ${folderCounter("+2", "2 files available to add")} ${folderCounter("!1", "1 unsupported file")}</span></div>
               <ul>
                 <li>
-                  <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">📂 policies</span></div>
+                  <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">${wireframeIcon("folder")} policies ${folderCounter("~2", "2 draft documents")} ${folderCounter("+2", "2 files available to add")} ${folderCounter("!1", "1 unsupported file")}</span></div>
                   <ul>
                     <li>
-                      <div class="tree-node active"><span class="tree-twisty">▾</span><span class="tree-label">📂 HR</span></div>
+                      <div class="tree-node active"><span class="tree-twisty">▾</span><span class="tree-label">${wireframeIcon("folder")} HR ${folderCounter("~2", "2 draft documents")} ${folderCounter("+2", "2 files available to add")} ${folderCounter("!1", "1 unsupported file")}</span></div>
                       <ul>
-                        <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 Recruiting</span></div></li>
-                        <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 Templates</span></div></li>
+                        <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">${wireframeIcon("folder")} Recruiting ${folderCounter("~1", "1 draft document")}</span></div></li>
+                        <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">${wireframeIcon("folder")} Templates ${folderCounter("+1", "1 file available to add")}</span></div></li>
                       </ul>
                     </li>
                     <li>
-                      <div class="tree-node"><span class="tree-twisty">▸</span><span class="tree-label">📁 IT</span></div>
+                      <div class="tree-node"><span class="tree-twisty">▸</span><span class="tree-label">${wireframeIcon("folder")} IT</span></div>
                     </li>
                   </ul>
                 </li>
                 <li>
-                  <div class="tree-node"><span class="tree-twisty">▸</span><span class="tree-label">📁 procedures</span></div>
+                  <div class="tree-node"><span class="tree-twisty">▸</span><span class="tree-label">${wireframeIcon("folder")} procedures</span></div>
                 </li>
                 <li>
-                  <div class="tree-node"><span class="tree-twisty">▸</span><span class="tree-label">📁 records</span></div>
+                  <div class="tree-node"><span class="tree-twisty">▸</span><span class="tree-label">${wireframeIcon("folder")} records</span></div>
                 </li>
                 <li>
-                  <div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">📁 Archive (empty)</span></div>
+                  <div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">${wireframeIcon("folder")} Archive (empty)</span></div>
                 </li>
               </ul>
             </li>
@@ -359,10 +366,12 @@ const CAPS = [
             </div>
             <button class="btn outline">Details view</button>
           </div>
-          <div class="row gap-2 mb" style="flex-wrap:wrap">
-            ${badge("3 in library", "info")}
-            ${badge("2 not in library", "warn")}
-            <span class="muted grow" style="text-align:right">All immediate children · Current-folder search includes descendants</span>
+          <div class="row gap-2 mb" style="flex-wrap:wrap" aria-label="Show in folder">
+            <strong style="font-size:0.75rem">Show in folder</strong>
+            <button class="btn outline" aria-pressed="true">Draft documents</button>
+            <button class="btn outline" aria-pressed="true">Available to add</button>
+            <button class="btn outline" aria-pressed="true">Unsupported files</button>
+            <span class="muted grow" style="text-align:right">All on · also applies to search results</span>
           </div>
           <div class="table-wrap"><table>
             <thead><tr>
@@ -370,14 +379,14 @@ const CAPS = [
             </tr></thead>
             <tbody>
               <tr>
-                <td></td><td><strong>📁 Recruiting</strong></td><td>—</td><td>Folder</td><td>—</td><td>—</td>
+                <td></td><td><strong>${wireframeIcon("folder")} Recruiting ${badge("~1", "info")}</strong></td><td>—</td><td>Folder</td><td>—</td><td>—</td>
               </tr>
               <tr>
-                <td></td><td><strong>📁 Templates</strong></td><td>—</td><td>Folder</td><td>—</td><td>—</td>
+                <td></td><td><strong>${wireframeIcon("folder")} Templates ${badge("+1", "ok")}</strong></td><td>—</td><td>Folder</td><td>—</td><td>—</td>
               </tr>
               <tr>
                 <td><span class="check">☐</span></td>
-                <td>Handbook.docx</td>
+                <td>${wireframeIcon("file")} Handbook.docx</td>
                 <td>${badge("In library", "ok")}</td>
                 <td>HR Data Privacy Policy · DOC-014</td>
                 <td>${badge("in_review", "info")}</td>
@@ -428,6 +437,7 @@ const CAPS = [
           ${tablePagination({ ariaLabel: "Library rows per page", count: 8 })}
           <p class="hint"><strong>Name is the source file:</strong> it always shows the exact filesystem name, including the extension. Registered files show the independent DMS title and number under Document.</p>
         </section>
+        <div role="separator" aria-label="Resize document details" aria-orientation="vertical" style="cursor:col-resize;background:var(--border);border-radius:999px" title="Drag or use Left/Right; Escape cancels"></div>
         <aside class="card detail-pane">
           <div class="row between mb">
             <h3 class="card-title" style="margin:0">2 selected</h3>
@@ -441,7 +451,7 @@ const CAPS = [
             <summary>Actions <span>1 available</span></summary>
             <div class="selection-section-body stack-btns"><button class="btn">Add 2 documents to library</button></div>
           </details>
-          <p class="hint">Batch add is available because every selected row is an in-root supported source draft, including Markdown. A mixed or unsupported selection has no incompatible action. Registered documents instead show Source file identity, Document control data, and lifecycle actions here.</p>
+          <p class="hint">Batch add is available because every selected row is an in-root supported source draft, including Markdown. A mixed or unsupported selection has no incompatible action. The divider resizes this pane from 280–640 px for this session while preserving at least 360 px for the list; Escape cancels a drag.</p>
         </aside>
       </div>
       ${batchSelectionPane()}`,
@@ -763,8 +773,14 @@ const CAPS = [
         .app[data-cap="CAP-0015"] .control-boundary-summary { display: grid; gap: 0.4rem; margin: 0.75rem 0; }
         .app[data-cap="CAP-0015"] .control-boundary-summary > div { padding: 0.45rem 0.55rem; border-left: 3px solid var(--border); background: var(--muted); font-size: 0.75rem; }
         .app[data-cap="CAP-0015"] .control-boundary-summary strong { display: block; color: var(--foreground); }
+        .app[data-cap="CAP-0015"] .list-card table { table-layout: fixed; }
+        .app[data-cap="CAP-0015"] .list-card th:nth-child(1) { width: 1.5rem; }
+        .app[data-cap="CAP-0015"] .list-card th:nth-child(2) { width: 5.9rem; }
+        .app[data-cap="CAP-0015"] .list-card th:nth-child(3) { width: 6.6rem; }
+        .app[data-cap="CAP-0015"] .list-card th:nth-child(4) { width: 4.5rem; }
+        .app[data-cap="CAP-0015"] .list-card th:nth-child(5) { width: 5.3rem; }
       `)}
-      <div class="grid-explorer-detail document-control-panes">
+      <div class="grid-explorer-detail document-control-panes" style="grid-template-columns:17.5rem minmax(22.5rem,1fr) 0.45rem 22rem">
         <aside class="card tree">
           <h3 class="card-title">Folders</h3>
           <ul class="tree-root">
@@ -817,6 +833,7 @@ const CAPS = [
           </table></div>
           ${tablePagination({ ariaLabel: "Document rows per page", count: 2 })}
         </section>
+        <div role="separator" aria-label="Resize document details" aria-orientation="vertical" style="cursor:col-resize;background:var(--border);border-radius:999px" title="Session-only width · 280–640 px"></div>
         ${documentControlDataSelectionPane()}
       </div>`,
   },
@@ -1087,6 +1104,22 @@ const CAPS = [
 
 function badge(text, kind = "muted") {
   return `<span class="badge ${kind}">${text}</span>`;
+}
+
+function folderCounter(text, label) {
+  return `<span aria-label="${label}" title="${label}" style="display:inline-flex;min-width:1rem;justify-content:center;padding:0.05rem 0.14rem;border-radius:999px;background:var(--muted);font-size:0.58rem;font-weight:700">${text}</span>`;
+}
+
+function wireframeIcon(name) {
+  const paths = {
+    folder: '<path d="M3 6h7l2 2h9v11H3z"/><path d="M3 6V4h7l2 2"/>',
+    file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h4"/>',
+    back: '<path d="m15 18-6-6 6-6"/>',
+    forward: '<path d="m9 18 6-6-6-6"/>',
+    up: '<path d="m6 15 6-6 6 6"/>',
+    refresh: '<path d="M20 11a8 8 0 1 0-2 5.3"/><path d="M20 4v7h-7"/>',
+  };
+  return `<svg aria-hidden="true" viewBox="0 0 24 24" style="width:1rem;height:1rem;display:inline-block;vertical-align:-0.18rem;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round">${paths[name]}</svg>`;
 }
 function kv(rows) {
   return `<dl class="kv">${rows
