@@ -214,12 +214,32 @@ function documentTypesMarkup(snapshot) {
   return `<section class="card configuration-card configuration-catalogue"><div class="configuration-card-heading"><div><h3>Document types</h3><p>Add, rename, or disable workspace document types.</p></div><button class="button secondary" type="button" data-configuration-secondary="confidentiality-types">Manage confidentiality types…</button></div>${rows}<form class="configuration-type-row create" data-configuration-form="document-type"><label><span class="visually-hidden">New document type ID</span><input name="id" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="type-id"></label><label><span class="visually-hidden">New document type label</span><input name="label" required placeholder="Display label"></label><label class="configuration-enabled"><input type="checkbox" name="enabled" checked> Enabled</label><button class="button" type="submit">Create document type</button></form></section>`;
 }
 
+function markdownTemplateMarkup(snapshot) {
+  const template = snapshot.markdown_template;
+  const validation = snapshot.markdown_template_validation;
+  if (!template) {
+    return `<section class="card configuration-card configuration-template"><span class="badge">Markdown release</span><h3>Word template</h3><p>No template is configured. Markdown candidates cannot use the canonical Word-backed release path until one valid template is selected.</p><form class="configuration-form" data-configuration-form="markdown-template-select"><button class="button" type="submit">Choose Word template…</button></form><p class="subtle">The native picker accepts one <code>.docx</code> file inside the edit root. The file stays operator-maintained and is not a controlled document.</p></section>`;
+  }
+  const state = validation?.state ?? "invalid";
+  const stateLabel = {
+    valid: "Valid",
+    changed: "Changed since selection",
+    missing: "File missing",
+    invalid: "Invalid",
+  }[state] ?? "Invalid";
+  const stateClass = state === "valid" ? "success" : "warning";
+  const detail = validation?.detail
+    ? `<p class="status" role="alert">${escapeHtml(validation.detail)}</p>`
+    : "";
+  return `<section class="card configuration-card configuration-template"><div class="configuration-card-heading"><div><span class="badge">Markdown release</span><h3>Word template</h3></div><span class="badge configuration-template-state ${stateClass}">${escapeHtml(stateLabel)}</span></div><dl class="details-grid"><dt>Template ID</dt><dd><code>${escapeHtml(template.id)}</code></dd><dt>Source path</dt><dd><code>${escapeHtml(template.relative_path)}</code></dd><dt>Contract</dt><dd>Version ${escapeHtml(template.contract_version)}</dd></dl>${detail}<p>Replacing the file keeps this template ID and affects future Markdown releases only. Existing candidates and released PDFs are not rewritten.</p><form class="configuration-form" data-configuration-form="markdown-template-select"><button class="button" type="submit">Replace Word template…</button></form><form class="configuration-form" data-configuration-form="markdown-template-remove"><label class="configuration-enabled"><input type="checkbox" name="confirmed" required> I understand that removing this configuration blocks Markdown release until another valid template is selected and returns this file to ordinary Library discovery.</label><button class="button secondary" type="submit">Remove template configuration</button></form></section>`;
+}
+
 function documentDefaultsMarkup(state) {
   const snapshot = state.snapshot;
   const root = snapshot.confidentiality_policies.find((policy) => policy.folder === ".");
   const rootType = snapshot.confidentiality_types.find((type) => type.id === root?.type_id);
   const enabledCount = snapshot.confidentiality_types.filter((type) => type.enabled).length;
-  return `<section class="configuration-summary"><div><strong>Workspace default</strong><span>${escapeHtml(rootType?.label ?? "Not configured")}</span></div><span class="badge">${enabledCount} enabled confidentiality ${enabledCount === 1 ? "type" : "types"}</span></section><div class="configuration-defaults-grid">${folderListMarkup(state)}${selectedPolicyMarkup(state)}</div>${documentTypesMarkup(snapshot)}`;
+  return `${markdownTemplateMarkup(snapshot)}<section class="configuration-summary"><div><strong>Workspace default</strong><span>${escapeHtml(rootType?.label ?? "Not configured")}</span></div><span class="badge">${enabledCount} enabled confidentiality ${enabledCount === 1 ? "type" : "types"}</span></section><div class="configuration-defaults-grid">${folderListMarkup(state)}${selectedPolicyMarkup(state)}</div>${documentTypesMarkup(snapshot)}`;
 }
 
 function confidentialityTypesMarkup(state) {
@@ -366,6 +386,15 @@ function formValue(values, name) {
 }
 
 export function configurationMutationRequest(kind, values, selectedFolder) {
+  if (kind === "markdown-template-select") {
+    return { command: "choose_markdown_template", arguments: {} };
+  }
+  if (kind === "markdown-template-remove") {
+    return {
+      command: "remove_markdown_template",
+      arguments: { confirmed: values.has("confirmed") },
+    };
+  }
   if (kind === "review-interval") {
     return {
       command: "configure_default_review_interval",

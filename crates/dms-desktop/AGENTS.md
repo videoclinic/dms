@@ -18,7 +18,7 @@ macOS.
 | `ui/maintenance.mjs` | Releases, periodic-review, advisory-lock status/configuration, full backup, and confirmed restore panes |
 | `ui/reports.mjs` | Audit-report generation filters, recent-report history, verification state, paging, and host actions |
 | `ui/assistance.mjs` | Workspace policy form plus document-scoped payload preview, consent, handoff, and editable response draft |
-| `ui/configuration.mjs` | Routed workspace/default/workflow/notification state, secondary catalogue/identity surfaces, and mutation requests |
+| `ui/configuration.mjs` | Routed workspace/default/workflow/notification state, Markdown Word-template controls, secondary catalogue/identity surfaces, and mutation requests |
 | `ui/print/` | Shipped app-local Markdown print shell, stylesheet, and logo |
 | `ui/*.test.mjs` | Framework-free shell and Library interaction tests |
 | `capabilities/` | Tauri window permissions |
@@ -71,6 +71,9 @@ macOS.
   Draft documents, Available to add, and Unsupported files controls filter files
   before sorting and pagination, apply equally to folder and search results, and
   never hide folders or alter counters.
+- Never expose the configured Markdown Word-template asset in Library rows,
+  counters, selections, notes, lifecycle actions, or permalinks. Configuration →
+  Document defaults is its only management surface.
 - The Library centre/details divider resizes the selection pane only for the
   current session, preserves at least 360 px for folder contents, and restores
   the width at drag start when cancelled with `Escape`.
@@ -129,6 +132,11 @@ macOS.
   encoded Microsoft My Account group page through the host-browser boundary.
   Desktop-only delegated tokens remain in the OS credential store; credentials
   never cross the frontend IPC boundary or enter `.dms`.
+- Configuration → Document defaults selects one reusable Markdown Word template
+  through a native `.docx` picker rooted at the edit root. Show its stable ID,
+  exact relative path, and current validation state. Replacement preserves the
+  ID; removal requires explicit confirmation and states that Markdown release is
+  blocked until another valid template is selected.
 - Workflow folders render as a semantic tree with session-only independent
   branch state. Folder selection expands only its ancestor chain; direct Editor
   and Approver assignments are badged without labelling inherited roles as direct.

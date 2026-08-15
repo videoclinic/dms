@@ -1869,7 +1869,21 @@ async function handleSubmit(event) {
         render(appState);
         return;
       }
+      if (configurationMutation === "markdown-template-select" && result === null) {
+        appState = {
+          ...appState,
+          configuration: {
+            ...appState.configuration,
+            notice: "Word template selection cancelled.",
+            error: "",
+          },
+        };
+        render(appState);
+        return;
+      }
       const notices = {
+        "markdown-template-select": "Word template selected and validated.",
+        "markdown-template-remove": "Word template configuration removed.",
         "review-interval": "Default review interval saved.",
         "document-type": "Document type saved.",
         "confidentiality-type": "Confidentiality type saved.",

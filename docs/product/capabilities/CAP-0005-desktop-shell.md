@@ -6,7 +6,7 @@
 | Status | not implemented |
 | Framework | Tauri 2 |
 | Supported OS | Windows, macOS (both required) |
-| Tests | Partial phases 1–9g evidence: [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [shell/setup/sidebar-state/permalink frontend tests](../../../crates/dms-desktop/ui/app.test.mjs), [Configuration route and form tests](../../../crates/dms-desktop/ui/configuration.test.mjs), [Library document and lifecycle-action tests](../../../crates/dms-desktop/ui/library.test.mjs), [release-maintenance frontend tests](../../../crates/dms-desktop/ui/maintenance.test.mjs), [Windows/macOS startup and packaging smoke](../../../.github/workflows/desktop-platform-smoke.yml) |
+| Tests | Partial phases 1–9g and CHG-0004 Phase 3 evidence: [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [shell/setup/sidebar-state/permalink frontend tests](../../../crates/dms-desktop/ui/app.test.mjs), [Configuration route, template, and form tests](../../../crates/dms-desktop/ui/configuration.test.mjs), [Library document and lifecycle-action tests](../../../crates/dms-desktop/ui/library.test.mjs), [release-maintenance frontend tests](../../../crates/dms-desktop/ui/maintenance.test.mjs), [Windows/macOS startup and packaging smoke](../../../.github/workflows/desktop-platform-smoke.yml) |
 
 ## Outcomes (contract — not yet true in runtime)
 

@@ -5,7 +5,7 @@
 | ID | CAP-0007 |
 | Status | not implemented |
 | Mechanism | Installed Microsoft Word for Office drafts and Markdown converted into a temporary DOCX from the workspace Word-template asset |
-| Tests | Partial phase-5 and CHG-0004 Phases 1–2 evidence: [`dms-desktop` adapter/unit tests](../../../crates/dms-desktop/src/export.rs) cover Office temporary-copy field fill; [core template tests](../../../crates/dms-core/tests/markdown_template.rs) cover template validation, deterministic CommonMark-to-OOXML assembly, and non-body package preservation; the operator Vorlage opens and exports through Windows Word with visible title, number, version, and confidentiality fields. The former WebView smoke proves only the superseded path and is not evidence for the target Markdown route. |
+| Tests | Partial phase-5 and CHG-0004 Phases 1–3 evidence: [`dms-desktop` adapter/unit tests](../../../crates/dms-desktop/src/export.rs) cover Office temporary-copy field fill; [desktop Configuration tests](../../../crates/dms-desktop/src/lib.rs) and [frontend tests](../../../crates/dms-desktop/ui/configuration.test.mjs) cover template selection, validation display, removal confirmation, and Library exclusion; [core template tests](../../../crates/dms-core/tests/markdown_template.rs) cover template validation, deterministic CommonMark-to-OOXML assembly, and non-body package preservation; the operator Vorlage opens and exports through Windows Word with visible title, number, version, and confidentiality fields. The former WebView smoke proves only the superseded path and is not evidence for the target Markdown route. |
 
 ## Outcomes (contract — not yet true in runtime)
 

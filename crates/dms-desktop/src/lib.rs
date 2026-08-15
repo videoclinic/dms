@@ -12,12 +12,13 @@ use dms_core::{
     ConfidentialityPolicy, ConfidentialityType, ControlUpdate, DeliveryAttempt, DmsError, Document,
     DocumentControl, DocumentType, EffectiveConfidentiality, EffectiveWorkflowRoles,
     EntraIdentitySource, EntraPerson, GraphClient, LibraryEntry, LibraryFolder, LibraryFolderNode,
-    Lifecycle, LocalLifecycleActions, Note, NotificationClient, NotificationKind,
-    NotificationMessage, NotificationSettings, NotificationTransport, OwnerReference, PdfExporter,
-    PeriodicReview, PeriodicReviewMarker, PeriodicReviewResult, PermalinkTarget, PersonSnapshot,
-    PolicyFolder, ReleaseCandidate, ReleaseVerificationStatus, RestoreOutcome, RestoreRequest,
-    ReviewDecision, RoleUpdate, SmtpSettings, SourceState, TargetSelection, Version, WorkflowEvent,
-    WorkflowPolicyAssignment, WorkflowVerification, Workspace, WorkspaceLock, WorkspaceLockStatus,
+    Lifecycle, LocalLifecycleActions, MarkdownTemplateAsset, MarkdownTemplateValidation, Note,
+    NotificationClient, NotificationKind, NotificationMessage, NotificationSettings,
+    NotificationTransport, OwnerReference, PdfExporter, PeriodicReview, PeriodicReviewMarker,
+    PeriodicReviewResult, PermalinkTarget, PersonSnapshot, PolicyFolder, ReleaseCandidate,
+    ReleaseVerificationStatus, RestoreOutcome, RestoreRequest, ReviewDecision, RoleUpdate,
+    SmtpSettings, SourceState, TargetSelection, Version, WorkflowEvent, WorkflowPolicyAssignment,
+    WorkflowVerification, Workspace, WorkspaceLock, WorkspaceLockStatus,
 };
 use lettre::message::Mailbox;
 use serde::{Deserialize, Serialize};
@@ -143,6 +144,8 @@ pub struct DesktopPermalinkResolution {
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct WorkspaceConfiguration {
     pub workspace: WorkspaceSummary,
+    pub markdown_template: Option<MarkdownTemplateAsset>,
+    pub markdown_template_validation: Option<MarkdownTemplateValidation>,
     pub default_review_interval_months: u32,
     pub document_types: Vec<DocumentType>,
     pub confidentiality_types: Vec<ConfidentialityType>,
@@ -376,6 +379,53 @@ fn load_workspace_configuration(
     edit_root: String,
 ) -> Result<WorkspaceConfiguration, String> {
     workspace_configuration(&app, Path::new(&edit_root))
+}
+
+#[tauri::command]
+async fn choose_markdown_template(
+    app: AppHandle,
+    edit_root: String,
+) -> Result<Option<WorkspaceConfiguration>, String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let selection = app
+        .dialog()
+        .file()
+        .set_title("Choose Markdown Word template")
+        .set_directory(workspace.edit_root)
+        .add_filter("Word document", &["docx"])
+        .blocking_pick_file();
+    let Some(selection) = selection else {
+        return Ok(None);
+    };
+    let source_path = selection
+        .as_path()
+        .ok_or_else(|| "the selected Word template is not a local filesystem path".to_owned())?;
+    import_markdown_template_from_path(Path::new(&edit_root), source_path).map(Some)
+}
+
+fn import_markdown_template_from_path(
+    edit_root: &Path,
+    source_path: &Path,
+) -> Result<WorkspaceConfiguration, String> {
+    mutate_workspace_configuration(edit_root, |workspace| {
+        workspace.import_markdown_template(source_path).map(|_| ())
+    })
+}
+
+#[tauri::command]
+fn remove_markdown_template(
+    edit_root: String,
+    confirmed: bool,
+) -> Result<WorkspaceConfiguration, String> {
+    if !confirmed {
+        return Err(
+            "removing the Markdown Word template requires explicit confirmation".to_owned(),
+        );
+    }
+    mutate_workspace_configuration(Path::new(&edit_root), |workspace| {
+        workspace.remove_markdown_template();
+        Ok(())
+    })
 }
 
 #[tauri::command]
@@ -2004,6 +2054,8 @@ fn workspace_configuration_from_with_global_and_credentials<C: notify::Credentia
 ) -> Result<WorkspaceConfiguration, String> {
     Ok(WorkspaceConfiguration {
         workspace: workspace_summary_from(workspace),
+        markdown_template: workspace.markdown_template().cloned(),
+        markdown_template_validation: workspace.markdown_template_validation(),
         default_review_interval_months: workspace.default_review_interval_months(),
         document_types: workspace.document_types().into_iter().cloned().collect(),
         confidentiality_types: workspace
@@ -2496,6 +2548,8 @@ pub fn run() {
             open_workspace,
             resolve_registered_permalink,
             load_workspace_configuration,
+            choose_markdown_template,
+            remove_markdown_template,
             configure_global_entra,
             open_external_url,
             configure_default_review_interval,
@@ -2884,6 +2938,39 @@ mod tests {
             .policy_folders
             .iter()
             .any(|folder| folder.relative_path == "Policies/HR"));
+
+        let template_path = edit_root.path().join("Word template.docx");
+        fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../dms-core/tests/fixtures/markdown-template.docx"),
+            &template_path,
+        )
+        .unwrap();
+        let template =
+            import_markdown_template_from_path(edit_root.path(), &template_path).unwrap();
+        assert_eq!(
+            template.markdown_template.as_ref().unwrap().relative_path,
+            PathBuf::from("Word template.docx")
+        );
+        assert_eq!(
+            template.markdown_template_validation.unwrap().state,
+            dms_core::MarkdownTemplateValidationState::Valid
+        );
+        let hidden = library_snapshot(edit_root.path(), Path::new(".")).unwrap();
+        assert!(!hidden
+            .folder
+            .entries
+            .iter()
+            .any(|entry| entry.relative_path == Path::new("Word template.docx")));
+        assert!(remove_markdown_template(root.clone(), false).is_err());
+        let removed = remove_markdown_template(root.clone(), true).unwrap();
+        assert!(removed.markdown_template.is_none());
+        let visible = library_snapshot(edit_root.path(), Path::new(".")).unwrap();
+        assert!(visible
+            .folder
+            .entries
+            .iter()
+            .any(|entry| entry.relative_path == Path::new("Word template.docx")));
 
         let interval = configure_default_review_interval(root.clone(), 6).unwrap();
         assert_eq!(interval.default_review_interval_months, 6);

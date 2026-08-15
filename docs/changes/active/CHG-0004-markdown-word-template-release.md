@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | CHG-0004 |
-| Status | in-progress — Phases 1–2 complete; Phase 3 pending |
+| Status | in-progress — Phases 1–3 complete; Phase 4 pending |
 | External request | Direct operator request: “In order to export Markdown files to PDF the idea was to use a Word template like .temp/Vorlage.docx This template could/should be imported into the library for reuse. The frontmatter should be then used in the Word document template as metadata for \"auto-fields\" if possible.” |
 | Affected CAPs | CAP-0001, CAP-0002, CAP-0005, CAP-0006, CAP-0007, CAP-0015 |
 | Decision records | ADR-0008 |
@@ -201,6 +201,27 @@ never overwrites `.dms` control data.
    notes, lifecycle, and permalinks.
 4. Add adapter/frontend tests and update the CAP-0005/CAP-0006/CAP-0007
    wireframes and DOX contracts.
+
+### Phase 3 evidence — 2026-08-15
+
+- Configuration → Document defaults exposes native `.docx` selection, exact
+  template ID and relative path, validation state, stable-ID replacement
+  consequences, and explicitly confirmed removal consequences. Picker cancel
+  leaves the configuration unchanged.
+- The desktop adapter delegates import/removal and validation to `dms-core`.
+  Focused adapter coverage proves persistence, valid-state reporting, confirmed
+  removal, and that the configured asset is absent from Library rows until its
+  configuration is removed.
+- Frontend tests prove the configured/unconfigured surfaces, escaped exact path,
+  validation labels, narrow IPC requests, and replacement/removal explanations.
+  The complete frontend suite passes all 84 tests.
+- CAP-0005, CAP-0006, and CAP-0007 HTML and PNG wireframes were regenerated at
+  1440×1100. Visual inspection found no clipping, overlap, broken glyph, or
+  action-hierarchy defect; CAP-0007 contains no stale WebView/print-shell path.
+  The 21-entry manifest resolves non-empty HTML/PNG pairs.
+- `cargo fmt --all -- --check`, `cargo test --workspace`,
+  `cargo clippy --workspace --all-targets -- -D warnings`, strict repository
+  links, Markdown table validation, and `git diff --check` pass.
 
 ## Phase 4 — Canonical Word-backed Markdown release
 

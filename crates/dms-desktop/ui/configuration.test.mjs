@@ -23,6 +23,8 @@ const workspace = {
 
 const snapshot = {
   workspace,
+  markdown_template: null,
+  markdown_template_validation: null,
   default_review_interval_months: 12,
   document_types: [
     { id: "policy", label: "Policy", enabled: true },
@@ -420,9 +422,49 @@ test("document defaults route exposes folder policy and document-type catalogue 
   assert.match(markup, /data-configuration-form="document-type"/);
   assert.match(markup, /Create document type/);
   assert.match(markup, /Manage confidentiality types/);
+  assert.match(markup, /No template is configured/);
+  assert.match(markup, /data-configuration-form="markdown-template-select"/);
+  assert.doesNotMatch(markup, /data-configuration-form="markdown-template-remove"/);
+});
+
+test("document defaults shows exact template identity, validation, and mutation consequences", () => {
+  let state = applyConfigurationSnapshot(createConfigurationState(), {
+    ...snapshot,
+    markdown_template: {
+      id: "template-1",
+      relative_path: "Configuration/Word & Markdown.docx",
+      sha256: "a".repeat(64),
+      contract_version: 1,
+    },
+    markdown_template_validation: {
+      state: "changed",
+      stored_sha256: "a".repeat(64),
+      current_sha256: "b".repeat(64),
+      detail: null,
+    },
+  });
+  state = setConfigurationRoute(state, "document-defaults");
+  const markup = configurationMarkup(state, assistancePolicy);
+
+  assert.match(markup, /template-1/);
+  assert.match(markup, /Configuration\/Word &amp; Markdown\.docx/);
+  assert.match(markup, /Changed since selection/);
+  assert.match(markup, /keeps this template ID/);
+  assert.match(markup, /data-configuration-form="markdown-template-select"/);
+  assert.match(markup, /Replace Word template/);
+  assert.match(markup, /data-configuration-form="markdown-template-remove"/);
+  assert.match(markup, /returns this file to ordinary Library discovery/);
 });
 
 test("configuration mutations map forms to narrow desktop commands", () => {
+  assert.deepEqual(
+    configurationMutationRequest("markdown-template-select", new Map(), "."),
+    { command: "choose_markdown_template", arguments: {} },
+  );
+  assert.deepEqual(
+    configurationMutationRequest("markdown-template-remove", new Map([["confirmed", "on"]]), "."),
+    { command: "remove_markdown_template", arguments: { confirmed: true } },
+  );
   assert.deepEqual(
     configurationMutationRequest("review-interval", new Map([["months", "6"]]), "."),
     { command: "configure_default_review_interval", arguments: { months: 6 } },

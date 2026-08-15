@@ -419,6 +419,11 @@ button { cursor: pointer; }
 .configuration-grid .card, .configuration-card { max-width: none; }
 .configuration-card { display: grid; gap: 14px; }
 .configuration-card h2, .configuration-card h3, .configuration-card p { margin: 0; }
+.configuration-template { border-left: 4px solid #66889e; }
+.configuration-template-state { align-self: start; }
+.configuration-template-state.success { color: #26613c; background: #e3f3e8; }
+.configuration-template-state.warning { color: #7c4f12; background: #fff0cf; }
+.configuration-template .configuration-enabled { max-width: 700px; font-weight: 500; }
 .configuration-form { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; padding-top: 14px; border-top: 1px solid #edf1f3; }
 .configuration-form label { display: grid; min-width: 220px; flex: 1; gap: 6px; font-size: 13px; font-weight: 700; }
 .configuration-form input, .configuration-form select, .configuration-type-row input { width: 100%; height: 38px; padding: 0 10px; background: white; border: 1px solid #bdc9d2; border-radius: 7px; }

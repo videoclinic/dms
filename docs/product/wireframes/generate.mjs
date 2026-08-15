@@ -213,6 +213,7 @@ const CAPS = [
           ${layer("Open activity panes/tabs", "Automatic, session-only quicklinks. Labels state task + target: Audit · HR Data Privacy Policy · DOC-014 for a document or Library · policies/HR for a folder. Opening the same task + document focuses its existing pane; × closes that activity only.")}
           ${layer("Saved views", "Use ☆ Bookmark this view in the header. ★ Bookmarked is an explicit, per-user shortcut restored after relaunch; it is not a .dms workflow record.")}
           ${layer("Viewport-contained scrolling", "The sidebar and activity header stay available. Normal activities scroll inside main content; multi-pane workspaces give navigation, lists, and exhaustive details separate scroll regions.")}
+          ${layer("Configuration → Document defaults", "One reusable Markdown Word template is chosen with the native .docx picker. Its exact edit-root-relative path and validation state stay visible with distinct Replace and confirmed Remove actions.")}
           ${layer("Permalink handler", "OS-registered dms:// URI resolves workspace + document IDs (CAP-0020); opens/focuses matching activity tab.")}
         </div>
       </section>
@@ -275,7 +276,7 @@ const CAPS = [
       <section class="card">
         <h3 class="card-title">Backend command surface</h3>
         <div class="tags">
-          ${["Configure roots", "Open workspace", "Library add/remove", "Lifecycle transitions", "Release + verify", "Copy/resolve permalink", "Audit export", "Backup/restore", "Claude handoff"]
+          ${["Configure roots", "Select/replace/remove Word template", "Open workspace", "Library add/remove", "Lifecycle transitions", "Release + verify", "Copy/resolve permalink", "Audit export", "Backup/restore", "Claude handoff"]
             .map((t) => `<span class="tag">${t}</span>`)
             .join("")}
         </div>
@@ -324,7 +325,7 @@ const CAPS = [
             <h3 class="card-title" style="margin:0">Folders</h3>
             <span class="muted" style="font-size:0.72rem">resize ↔</span>
           </div>
-          <p class="hint" style="margin-top:0">Edit-root folders · <code>.dms</code> hidden</p>
+          <p class="hint" style="margin-top:0">Edit-root folders · <code>.dms</code> and the configured Markdown Word template hidden</p>
           <ul class="tree-root">
             <li>
               <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">${wireframeIcon("folder")} DMS Workspace ${folderCounter("~2", "2 draft documents")} ${folderCounter("+2", "2 files available to add")} ${folderCounter("!1", "1 unsupported file")}</span></div>
@@ -435,7 +436,7 @@ const CAPS = [
             </tbody>
           </table></div>
           ${tablePagination({ ariaLabel: "Library rows per page", count: 8 })}
-          <p class="hint"><strong>Name is the source file:</strong> it always shows the exact filesystem name, including the extension. Registered files show the independent DMS title and number under Document.</p>
+          <p class="hint"><strong>Name is the source file:</strong> it always shows the exact filesystem name, including the extension. Registered files show the independent DMS title and number under Document. The configured Markdown Word template is managed only under Configuration, so it never appears in these rows, counters, selections, or actions.</p>
         </section>
         <div role="separator" aria-label="Resize document details" aria-orientation="vertical" style="cursor:col-resize;background:var(--border);border-radius:999px" title="Drag or use Left/Right; Escape cancels"></div>
         <aside class="card detail-pane">
@@ -461,31 +462,43 @@ const CAPS = [
     file: "CAP-0007-draft-pdf-export",
     title: "Source draft → PDF export",
     nav: "releases",
-    subtitle: "Office via host Office (temp token fill); Markdown via CommonMark print shell + WebView PDF. Shared export chrome from .dms. Classified filename → temp PDF → validate → SHA-256 → atomic rename.",
+    subtitle: "Office drafts export through host Office; Markdown is assembled into a temporary DOCX from the configured workspace template, then follows the same Office PDF path. Classified filename → temp PDF → validate → SHA-256 → atomic rename.",
     body: `
+      <section class="card">
+        <div class="row between mb"><h3 class="card-title" style="margin:0">Markdown Word template prerequisite</h3>${badge("Valid", "ok")}</div>
+        ${kv([
+          ["Configuration route", "Document defaults"],
+          ["Exact source path", "templates/Controlled release.docx"],
+          ["Template identity", "Stable across replacement"],
+          ["Library participation", "Excluded from rows, counters, selection, notes, lifecycle, and permalinks"],
+        ])}
+        <div class="row gap-2" style="margin-top:0.75rem"><button class="btn">Replace Word template…</button><button class="btn outline">Remove configuration…</button></div>
+        <p class="hint">The native picker accepts only an in-root <code>.docx</code>. Replacement affects future Markdown releases only; removal blocks that release path until another valid template is selected.</p>
+      </section>
       <section class="card">
         <h3 class="card-title">Export pipeline</h3>
         <div class="pipeline">
-          ${["Identify source format", "Build export chrome from .dms", "Office temp token fill or MD print shell", "Export to temp PDF", "Validate header", "SHA-256 digest", "Atomic rename"]
+          ${["Identify source format", "Validate front matter + template", "Assemble temp DOCX + DMS properties", "Host Office PDF export", "Validate header", "SHA-256 digest", "Atomic rename"]
             .map((s) => `<div class="step active"><span class="dot"></span>${s}</div>`)
             .join("")}
         </div>
       </section>
       <section class="card">
-        <h3 class="card-title">Markdown print shell (Option A)</h3>
+        <h3 class="card-title">Markdown → template-backed DOCX</h3>
         ${kv([
-          ["Body", "CommonMark HTML; YAML front matter stripped"],
-          ["Chrome source", "Release context only (not front matter / Office props)"],
-          ["Footer captions", "Vertraulichkeitsstufe: <label> · Version: <major>.<minor>"],
-          ["Assets", "Shipped shell.html + print.css + logo (Vorlage-derived)"],
+          ["Body", "CommonMark blocks assembled as native WordprocessingML; YAML front matter stripped"],
+          ["Styles + package assets", "Configured workspace Word template"],
+          ["Controlled values", "Front matter validated against the candidate; DMS_* custom properties written from .dms"],
+          ["PDF engine", "Installed Microsoft Word through the same host export boundary as Office drafts"],
         ])}
-        <p class="muted">CAP-0002 marker checks still read the Markdown body on disk. Print-shell footers repeat chrome on the PDF and do not replace that gate.</p>
+        <p class="muted">The temporary DOCX is an implementation artifact only. A successful release commits the PDF and release evidence, then removes the temporary Word file.</p>
       </section>
       <section class="card">
         <h3 class="card-title">Fail-closed conditions</h3>
         <ul class="list danger-list">
           <li>Office missing or unlicensed for an Office draft → abort, no partial version</li>
-          <li>Markdown render or print-shell failure → abort, no partial version</li>
+          <li>Markdown template missing, changed, invalid, or outside the edit root → abort, no partial version</li>
+          <li>Required front matter invalid or DOCX assembly failure → abort, no partial version</li>
           <li>Unsupported draft extension → abort with clear message</li>
           <li>Temp empty or missing %PDF header → remove temp, no release record</li>
           <li>Target path occupied by non-app file → fail (ADR-0007)</li>

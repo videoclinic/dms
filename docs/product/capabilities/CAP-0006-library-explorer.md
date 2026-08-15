@@ -4,7 +4,7 @@
 | --- | --- |
 | ID | CAP-0006 |
 | Status | not implemented |
-| Tests | Partial phases 3, 9b.1, 9e, 9f.1, 9f.2, 9f.5, 9g, 9k.3, 9k.4, and CHG-0004 Phase 2 evidence: [`dms-core` Library and lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [`dms-core` recursive Library counter tests](../../../crates/dms-core/tests/library.rs), [template-asset exclusion tests](../../../crates/dms-core/tests/markdown_template.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [shell, direct folder activation, bounded splitter, and permalink-target tests](../../../crates/dms-desktop/ui/app.test.mjs), [hierarchical Library, file-visibility, counter, icon, document-control, placeholder, and workflow frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31359360786) |
+| Tests | Partial phases 3, 9b.1, 9e, 9f.1, 9f.2, 9f.5, 9g, 9k.3, 9k.4, and CHG-0004 Phases 2–3 evidence: [`dms-core` Library and lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [`dms-core` recursive Library counter tests](../../../crates/dms-core/tests/library.rs), [template-asset exclusion tests](../../../crates/dms-core/tests/markdown_template.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [shell, direct folder activation, bounded splitter, and permalink-target tests](../../../crates/dms-desktop/ui/app.test.mjs), [hierarchical Library, file-visibility, counter, icon, document-control, placeholder, and workflow frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31359360786) |
 
 ## Outcomes (contract — not yet true in runtime)
 
@@ -55,13 +55,13 @@ When implemented, the following must hold:
      document's membership.
    - The centre pane lists the current folder's immediate child folders followed
      by its immediate child files. Every regular file is represented, except
-     internal `.dms` content and Office lock/temp sidecars defined by CAP-0013.
+     internal `.dms` content, Office lock/temp sidecars defined by CAP-0013, and
+     the configured Markdown export-template asset.
      A file row's **Name** is always the exact filesystem file name, including
      its extension. Each file row states whether it is **In library**, **Not in
-     library** (a supported source draft), **Workspace template** (the configured
-     CAP-0007 asset), or not a supported draft. The template remains visible at
-     its exact edit-root-relative location but is not selectable for document,
-     batch-add, lifecycle, notes, or permalink actions. A
+     library** (a supported source draft), or not a supported draft. The
+     configured CAP-0007 template never appears in Library rows, counters,
+     searches, selection, batch-add, lifecycle, notes, or permalink actions. A
      registered document additionally shows its DMS-managed document title and
      control data in a separate **Title** field; that title never replaces
      the source file name. Primary-click or Enter on a folder row opens that
