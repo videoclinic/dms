@@ -322,6 +322,8 @@ button { cursor: pointer; }
 .identity-list { padding-left: 20px; color: #4d5c67; font-size: 13px; }
 
 .notes-workspace { display: grid; max-width: 1040px; gap: 16px; margin: 0 auto; }
+.notes-return { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; }
+.notes-return span { color: #657581; font-size: 12px; }
 .notes-heading { display: flex; align-items: end; justify-content: space-between; gap: 18px; }
 .notes-heading h2 { margin: 4px 0 0; font-size: 22px; }
 .notes-heading p { margin: 3px 0 0; color: #657581; font-size: 12px; }

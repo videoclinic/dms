@@ -191,7 +191,7 @@ export function permalinkActivity(resolution) {
       ...shared,
       task: "Notes",
       label: `Notes · ${resolution.title}${suffix}`,
-      route_state: {},
+      route_state: { folder: resolution.folder },
     };
   }
   if (resolution.target === "review") {
@@ -220,6 +220,38 @@ export function applyPermalinkDocumentSelection(library, detail) {
     detail,
     detail_error: "",
   };
+}
+
+export function notesLibraryReturnTarget(state, notesActivity) {
+  const activity = state.activities.find((candidate) => (
+    candidate.workspace_id === notesActivity.workspace_id && candidate.task === "Library"
+  )) ?? null;
+  const selected = selectedEntries(state.library);
+  const exact = Boolean(
+    activity
+    && state.library.detail?.document_id === notesActivity.document_id
+    && selected.length === 1
+    && entryDocumentId(selected[0]) === notesActivity.document_id,
+  );
+  return { activity, exact };
+}
+
+export function applyNotesLibraryRestoration(state, notesActivity, priorActivity, detail, snapshot) {
+  const folder = normalizeLibraryPath(detail.folder ?? notesActivity.route_state?.folder);
+  const library = applyPermalinkDocumentSelection(
+    applyLibrarySnapshot(state.library, snapshot, folder, "replace"),
+    detail,
+  );
+  const libraryActivity = {
+    ...(priorActivity ?? {}),
+    workspace_id: notesActivity.workspace_id,
+    destination: "Library",
+    task: "Library",
+    label: folder === "." ? "Library · /" : `Library · ${folder}`,
+    document_id: null,
+    route_state: { ...(priorActivity?.route_state ?? {}), folder, sort: library.sort },
+  };
+  return openActivity({ ...state, library }, libraryActivity);
 }
 
 export function closeActivity(state, key) {
@@ -669,7 +701,7 @@ async function loadWorkspaceConfiguration(notice = "") {
 
 function updateLibraryActivity(folder) {
   const activity = currentActivity(appState);
-  if (!activity || activity.destination !== "Library") return;
+  if (!activity || activity.task !== "Library") return;
   const normalized = normalizeLibraryPath(folder);
   appState = openActivity(appState, {
     ...activity,
@@ -832,17 +864,47 @@ async function loadDocumentNotes(documentId) {
   render(appState);
 }
 
+const LIBRARY_SCROLL_SELECTORS = [".folder-tree", ".table-scroll", ".selection-pane"];
+
+function captureLibraryScroll() {
+  return Object.fromEntries(LIBRARY_SCROLL_SELECTORS.map((selector) => {
+    const element = document.querySelector(selector);
+    return [selector, { top: element?.scrollTop ?? 0, left: element?.scrollLeft ?? 0 }];
+  }));
+}
+
+function restoreLibraryScroll(scroll) {
+  if (!scroll) return;
+  const apply = () => {
+    for (const selector of LIBRARY_SCROLL_SELECTORS) {
+      const element = document.querySelector(selector);
+      const position = scroll[selector];
+      if (element && position) {
+        element.scrollTop = position.top;
+        element.scrollLeft = position.left;
+      }
+    }
+  };
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(apply);
+  else apply();
+}
+
 function openDocumentNotes() {
   const detail = appState.library.detail;
   if (!detail) return;
   const suffix = detail.control.document_number ? ` · ${detail.control.document_number}` : "";
+  const folder = normalizeLibraryPath(appState.library.folder.relative_path);
+  appState = {
+    ...appState,
+    library: { ...appState.library, notes_return_scroll: captureLibraryScroll() },
+  };
   appState = openActivity(appState, {
     workspace_id: appState.workspace.workspace_id,
     destination: "Library",
     task: "Notes",
     label: `Notes · ${detail.control.title}${suffix}`,
     document_id: detail.document_id,
-    route_state: {},
+    route_state: { folder },
   });
   if (!appState.note_documents[detail.document_id]) {
     appState = {
@@ -855,6 +917,59 @@ function openDocumentNotes() {
   }
   render(appState);
   void loadDocumentNotes(detail.document_id);
+}
+
+async function returnDocumentNotesToLibrary(activity) {
+  const target = notesLibraryReturnTarget(appState, activity);
+  if (target.exact) {
+    appState = openActivity(appState, target.activity);
+    render(appState);
+    restoreLibraryScroll(appState.library.notes_return_scroll);
+    return;
+  }
+
+  appState = {
+    ...appState,
+    note_documents: updateNoteDocumentState(appState.note_documents, activity.document_id, {
+      returning_to_library: true,
+      error: "",
+    }),
+  };
+  render(appState);
+  try {
+    const detail = await invokeCommand("load_document_selection", {
+      editRoot: appState.workspace.edit_root,
+      documentId: activity.document_id,
+    });
+    const folder = normalizeLibraryPath(detail.folder ?? activity.route_state?.folder);
+    const snapshot = await invokeCommand("load_library", {
+      editRoot: appState.workspace.edit_root,
+      folder,
+    });
+    appState = applyNotesLibraryRestoration(
+      appState,
+      activity,
+      target.activity,
+      detail,
+      snapshot,
+    );
+    appState = {
+      ...appState,
+      note_documents: updateNoteDocumentState(appState.note_documents, activity.document_id, {
+        returning_to_library: false,
+        error: "",
+      }),
+    };
+  } catch (error) {
+    appState = {
+      ...appState,
+      note_documents: updateNoteDocumentState(appState.note_documents, activity.document_id, {
+        returning_to_library: false,
+        error: String(error),
+      }),
+    };
+  }
+  render(appState);
 }
 
 async function loadClaudeAssistanceAvailability(documentId) {
@@ -1238,10 +1353,35 @@ async function applyNoteMutation(command, arguments_) {
   render(appState);
 }
 
+function retainVisibleNoteDraft(documentId) {
+  const composer = document.querySelector("#document-note-compose-form");
+  const editor = document.querySelector("#document-note-edit-form");
+  const update = {};
+  if (composer) {
+    const form = new FormData(composer);
+    update.compose_body = String(form.get("body") ?? "");
+    update.compose_author = String(form.get("author") ?? "");
+  }
+  if (editor) {
+    update.editing_body = String(new FormData(editor).get("body") ?? "");
+  }
+  appState = {
+    ...appState,
+    note_documents: updateNoteDocumentState(appState.note_documents, documentId, update),
+  };
+}
+
 async function handleNotesClick(event) {
   const activity = currentActivity(appState);
   if (activity?.task !== "Notes") return false;
   const documentId = activity.document_id;
+  if (event.target.closest("[data-note-return-library]")) {
+    if (!noteDocumentState(appState.note_documents, documentId).returning_to_library) {
+      retainVisibleNoteDraft(documentId);
+      await returnDocumentNotesToLibrary(activity);
+    }
+    return true;
+  }
   const edit = event.target.closest("[data-note-edit]")?.dataset.noteEdit;
   if (edit) {
     const note = noteDocumentState(appState.note_documents, documentId)

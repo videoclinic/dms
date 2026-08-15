@@ -25,6 +25,18 @@ The document-notes workflow provides the following behaviour:
    that list so the operator writes without scrolling past existing entries.
    After a successful save, the new note becomes the top list entry under the
    compose field; the compose field clears and stays above the list.
+7. Every Document Notes activity exposes **Back to Library** before the compose
+   field. It targets the same workspace and stable document ID. When the
+   singleton Library activity still has that document selected, the action
+   focuses it without reloading so its folder, search, sort, history, scroll,
+   and selection state remain intact. Otherwise the app resolves the stable ID
+   and reveals the document's current folder and selection detail. A missing
+   source file produces no fabricated row but retains the registered document
+   detail and missing-source state. The Notes activity remains open with its
+   compose, edit, and delete-confirmation state unchanged. A resolution failure
+   leaves Notes current, preserves that state, and shows a document-scoped
+   error. This control returns to the selected document; it is not global
+   browser history.
 
 ## Non-goals
 

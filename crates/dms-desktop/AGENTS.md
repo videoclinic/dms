@@ -76,7 +76,10 @@ macOS.
   retry; review decisions require a fresh interactive Entra sign-in. Cancel review
   and mark obsolete retain failed reason drafts and require explicit confirmation.
   Validation failures stay in that selected-document context. Its notes action
-  opens a document-scoped activity keyed by stable document ID.
+  opens a document-scoped activity keyed by stable document ID. Document Notes
+  returns to the singleton Library activity with the same stable document
+  selected, preserves an unchanged Library view without reloading, and retains
+  Notes drafts and confirmation state when restoration succeeds or fails.
 - Note mutations call `dms-core`, save the workspace metadata, retain failed
   form drafts for retry, and clear the composer only after a successful save.
 - The Releases pane lists every recorded release with its verification status,

@@ -96,7 +96,9 @@ When implemented, the following must hold:
     tab dismisses only that surface; primary destinations stay available.
     Closing the last document-scoped tab does not exit the app. Open activities
     end with the application session and are not restored automatically after a
-    relaunch.
+    relaunch. A Document Notes activity's **Back to Library** control focuses or
+    recreates the singleton Library activity for the same stable document ID;
+    it leaves Notes open and does not create global cross-activity history.
 13. An operator can explicitly save the current surface as a **saved view**.
     The main header always exposes `☆ Bookmark this view`; after saving it,
     that control shows `★ Bookmarked` and exposes an explicit remove-bookmark

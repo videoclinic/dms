@@ -66,6 +66,22 @@ test("composer appears above the newest-first note list and preserves safe plain
   assert.match(markup, /data-note-delete-request="note-2"/);
 });
 
+test("Back to Library precedes the notes composer and blocks duplicate returns", () => {
+  const markup = documentNotesMarkup(activity, { ...createNoteDocumentState(), detail });
+  const returning = documentNotesMarkup(activity, {
+    ...createNoteDocumentState(),
+    detail,
+    returning_to_library: true,
+  });
+
+  assert.ok(markup.indexOf("data-note-return-library") < markup.indexOf("document-note-compose-form"));
+  assert.match(markup, /Back to Library/);
+  assert.match(markup, /aria-label="Back to Library with selected document HR policy"/);
+  assert.match(markup, /Return to HR policy/);
+  assert.match(returning, /data-note-return-library[^>]*disabled/);
+  assert.match(returning, /Returning to Library/);
+});
+
 test("editing and deletion use explicit save, cancel, and confirmation controls", () => {
   const editing = documentNotesMarkup(activity, {
     ...createNoteDocumentState(),

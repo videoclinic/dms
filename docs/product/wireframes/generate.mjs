@@ -20,7 +20,7 @@ const NAV = [
   { id: "config", label: "Configuration", icon: "⚙️" },
 ];
 
-/** @type {Array<{id:string,file:string,title:string,nav:string,subtitle:string,actions?:string[],bookmarked?:boolean,body:string}>} */
+/** @type {Array<{id:string,file:string,title:string,nav:string,subtitle:string,status?:string,actions?:string[],bookmarked?:boolean,body:string}>} */
 const CAPS = [
   {
     id: "CAP-0001",
@@ -130,10 +130,15 @@ const CAPS = [
     file: "CAP-0003-document-notes",
     title: "Document notes",
     nav: "library",
+    status: "implemented",
     subtitle: "Free-text notes by stable document ID. Newest first; New note field above the latest note.",
     actions: ["Add note"],
     body: `
       <section class="card">
+        <div class="row between" style="margin-bottom:0.75rem;gap:1rem;flex-wrap:wrap">
+          <button class="btn outline" aria-label="Back to Library with selected document HR Data Privacy Policy">← Back to Library</button>
+          <span class="muted">Returns to Library · policies/HR with this document selected; Notes stays open.</span>
+        </div>
         <h3 class="card-title">Notes — HR Data Privacy Policy <span class="muted">(doc-77a12bce)</span></h3>
         <div class="composer">
           <label class="label">New note</label>
@@ -1570,7 +1575,7 @@ tr:last-child td { border-bottom: 0; }
       <div class="cap-head">
         ${badge(cap.id, "info")}
         <h2>${cap.title}</h2>
-        ${badge("Status: not implemented", "muted")}
+        ${badge(`Status: ${cap.status ?? "not implemented"}`, "muted")}
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
       <p class="subtitle">${cap.subtitle}</p>

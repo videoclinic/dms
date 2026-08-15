@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 import {
   activityKey,
+  applyNotesLibraryRestoration,
   applyPermalinkDocumentSelection,
   beginFormSubmission,
   closeActivity,
@@ -11,6 +12,7 @@ import {
   createInitialState,
   defaultPreferences,
   finishFormSubmission,
+  notesLibraryReturnTarget,
   openActivity,
   permalinkActivity,
   rememberRecentLibrary,
@@ -254,8 +256,154 @@ test("permalink targets create stable document, review, and notes activities", (
   assert.equal(document.document_id, resolution.document_id);
   assert.deepEqual(document.route_state, { folder: "Policies/HR" });
   assert.equal(activityKey(notes), `${workspaceId}:Notes:document:${resolution.document_id}`);
+  assert.deepEqual(notes.route_state, { folder: "Policies/HR" });
   assert.equal(activityKey(review), `${workspaceId}:Review:document:${resolution.document_id}`);
   assert.equal(review.route_state.review, "5a6382c0-3078-4cf9-a64c-d194686bd1f6");
+});
+
+test("notes return focuses the unchanged Library selection without duplicating its activity", () => {
+  const libraryActivity = {
+    workspace_id: workspaceId,
+    destination: "Library",
+    task: "Library",
+    label: "Library · Policies/HR",
+    document_id: null,
+    route_state: { folder: "Policies/HR", sort: "title" },
+  };
+  const notesActivity = { ...documentActivity("Notes"), route_state: { folder: "Policies/HR" } };
+  let state = openActivity(createInitialState(), libraryActivity);
+  state = {
+    ...state,
+    library: {
+      ...state.library,
+      folder: {
+        relative_path: "Policies/HR",
+        entries: [{
+          relative_path: "Policies/HR/Policy.md",
+          membership: { in_library: { document_id: notesActivity.document_id } },
+        }],
+      },
+      selection: ["Policies/HR/Policy.md"],
+      detail: { document_id: notesActivity.document_id },
+      query: "retained query",
+      sort: "title",
+      back: ["."],
+    },
+  };
+  state = openActivity(state, notesActivity);
+  const noteState = {
+    compose_body: "Unsaved note",
+    compose_author: "Raphael",
+    editing_id: "note-1",
+    editing_body: "Unsaved edit",
+    delete_id: "note-2",
+  };
+  state = { ...state, note_documents: { [notesActivity.document_id]: noteState } };
+  const originalLibrary = state.library;
+
+  const target = notesLibraryReturnTarget(state, notesActivity);
+  assert.equal(target.exact, true);
+  state = openActivity(state, target.activity);
+
+  assert.equal(state.activities.length, 2);
+  assert.equal(state.current_key, activityKey(libraryActivity));
+  assert.equal(state.library, originalLibrary);
+  assert.equal(state.library.query, "retained query");
+  assert.equal(state.library.sort, "title");
+  assert.deepEqual(state.library.back, ["."]);
+  assert.equal(state.note_documents[notesActivity.document_id], noteState);
+});
+
+test("notes return requires stable-ID restoration when the Library view changed or closed", () => {
+  const libraryActivity = {
+    workspace_id: workspaceId,
+    destination: "Library",
+    task: "Library",
+    label: "Library · Policies/HR",
+    document_id: null,
+    route_state: { folder: "Policies/HR" },
+  };
+  const notesActivity = { ...documentActivity("Notes"), route_state: { folder: "Policies/HR" } };
+  let state = openActivity(createInitialState(), libraryActivity);
+  state = {
+    ...state,
+    library: {
+      ...state.library,
+      folder: { relative_path: "Policies/Finance", entries: [] },
+      selection: [],
+      detail: null,
+    },
+  };
+  state = openActivity(state, notesActivity);
+
+  assert.deepEqual(notesLibraryReturnTarget(state, notesActivity), {
+    activity: { ...libraryActivity, key: activityKey(libraryActivity) },
+    exact: false,
+  });
+
+  state = closeActivity(state, activityKey(libraryActivity));
+  assert.deepEqual(notesLibraryReturnTarget(state, notesActivity), { activity: null, exact: false });
+});
+
+test("notes restoration follows a moved source and retains details when its row is missing", () => {
+  const documentId = documentActivity("Notes").document_id;
+  const libraryActivity = {
+    workspace_id: workspaceId,
+    destination: "Library",
+    task: "Library",
+    label: "Library · Policies/Old",
+    document_id: null,
+    route_state: { folder: "Policies/Old", sort: "title" },
+  };
+  const notesActivity = { ...documentActivity("Notes"), route_state: { folder: "Policies/Old" } };
+  let state = openActivity(createInitialState(), libraryActivity);
+  state = openActivity(state, notesActivity);
+
+  state = applyNotesLibraryRestoration(
+    state,
+    notesActivity,
+    state.activities.find((activity) => activity.task === "Library"),
+    {
+      document_id: documentId,
+      folder: "Policies/Moved",
+      relative_path: "Policies/Moved/Policy.md",
+      source_exists: true,
+    },
+    {
+      tree: [],
+      folder: {
+        relative_path: "Policies/Moved",
+        entries: [{
+          relative_path: "Policies/Moved/Policy.md",
+          membership: { in_library: { document_id: documentId } },
+        }],
+      },
+    },
+  );
+
+  assert.equal(state.activities.length, 2);
+  assert.equal(state.activities.find((activity) => activity.task === "Library").label, "Library · Policies/Moved");
+  assert.deepEqual(state.library.selection, ["Policies/Moved/Policy.md"]);
+  assert.equal(state.library.detail.document_id, documentId);
+
+  state = applyNotesLibraryRestoration(
+    state,
+    notesActivity,
+    state.activities.find((activity) => activity.task === "Library"),
+    {
+      document_id: documentId,
+      folder: "Policies/Moved",
+      relative_path: "Policies/Moved/Policy.md",
+      source_exists: false,
+      source_state: "unregistered",
+    },
+    { tree: [], folder: { relative_path: "Policies/Moved", entries: [] } },
+  );
+
+  assert.equal(state.activities.length, 2);
+  assert.deepEqual(state.library.selection, []);
+  assert.equal(state.library.detail.document_id, documentId);
+  assert.equal(state.library.detail.source_exists, false);
 });
 
 test("permalink document details survive a missing filesystem row", () => {

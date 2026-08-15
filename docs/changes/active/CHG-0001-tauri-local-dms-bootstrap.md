@@ -208,17 +208,17 @@ phase also adds an intentional test delivery.
 | 9j | Live Entra setup, refresh, and approver sign-in | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; 59 frontend tests; Linux launch smoke; release build) | Schema v10 persists each identity-cache refresh time; Configuration previews and explicitly applies administrator-supplied tenant/group bindings through interactive delegated Graph access; OS credential storage holds the delegated-token cache; direct-user filtering, refresh-before-role-assignment, policy rerouting, and approver actor verification pass fake-backed tests |
 | 9k | External lifecycle commands and Office export | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; release desktop build; 60 frontend tests; strict repository links; Markdown table structure; `git diff --check`) | Production submit/review/decision/release commands and Library operator surfaces compose the 9i delivery and 9j Graph adapters with installed Office automation on Windows/macOS; retryable mailto confirmations cover review, decision-outcome, and minor-publication delivery; integration fakes and operator smoke instructions pass |
 | 9k.1 | Runtime Entra configuration and SMTP app-password setup | done (`cargo fmt --all -- --check`; `cargo test --workspace`; `cargo clippy --workspace --all-targets -- -D warnings`; 60 desktop UI tests; generated CAP-0010/CAP-0021 HTML and PNG checks; capability-link and Markdown-table checks; `git diff --check`) | Schema v11 removes workspace tenant ID/display while preserving the library group binding, cache, roles, and historical evidence; desktop runtime Graph construction obtains the public-client/tenant configuration from app-global settings and fails closed for invalid overrides; Configuration shows read-only environment-managed Entra fields and group-only library binding; SMTP app passwords are write-only OS credentials, retained on blank input, deleted for `mailto:`, and absent from workspace metadata, snapshots, IPC responses, errors, and wireframes |
-| 9k.1.1 | Document Notes return navigation | pending | `cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && node --test crates/dms-desktop/ui/*.test.mjs` exits 0; focused tests prove **Back to Library** restores the same stable document without duplicating the Library activity or clearing Notes draft/edit state; regenerated CAP-0003 HTML/PNG and browser interaction QA agree; `git diff --check` exits 0 |
+| 9k.1.1 | Document Notes return navigation | done (`cargo fmt --all -- --check`; workspace tests; Clippy with warnings denied; 73 frontend tests; regenerated CAP-0003 HTML and 1440×1100 PNG; exact-return, stable-ID fallback, failure-retention, and visual browser QA; strict repository links; 54 Markdown tables; DOX pass; `git diff --check`) | **Back to Library** restores the same stable document without duplicating or reloading the Library activity, falls back through stable-ID resolution when the Library changed, leaves Notes open, and preserves Notes compose/edit/delete state on success and failure |
 | 9k.2 | Entra identity-source overview | pending | `cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0; CAP-0021 and its generated HTML/PNG show public-client ID, tenant ID, and a host-browser group-page control; `git diff --check` exits 0 |
 | 9k.3 | Release-bound control data and immutable owner identity | pending | Schema-v11 fixture migrates without inventing historical release or owner identity; a successful empty Graph result produces only the literal `<owner>` / `<editor>` placeholders while a Graph failure still fails closed; a later successful real-person refresh permits an operator-selected release-bound Owner/Editor replacement without rewriting past evidence; new candidate/release tests prove immutable control/effective-date snapshots and effective-date-based scheduling; owner/editor/approver references remain object-ID based across name/email changes; `cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && node --test crates/dms-desktop/ui/library.test.mjs` exits 0; regenerated CAP-0002/CAP-0015/CAP-0017 wireframes agree with their manifest entries; CAP-0019/CAP-0021 identity links pass; `git diff --check` exits 0 |
 | 9k.4 | Library filtering, recursive folder counters, interaction, width, and shipped icons | pending | Core and UI tests prove identical recursive `~` draft, `+` applicable-not-controlled, and `!` unsupported counts beside each folder in tree and list views; all-on session-wide **Draft documents** / **Available to add** / **Unsupported files** toggles filter every folder and search result before pagination without changing counters; candidate form selects `Next minor` by default; a table-folder click opens that folder without a double-click; the centre/details splitter is pointer- and keyboard-usable with bounded session-only width; runtime and wireframes use app-local SVGs rather than a font dependency; `node --test crates/dms-desktop/ui/app.test.mjs crates/dms-desktop/ui/library.test.mjs` and full Rust/frontend gates exit 0; regenerated CAP-0002/CAP-0006/CAP-0015 wireframes match their manifest entries; `git diff --check` exits 0 |
 | 9k.5 | Workflow tree and SMTP identity/test configuration | pending | Workflow renders an accessible folder tree with all direct role assignments visibly marked; schema-v12 SMTP settings migrate to separate login user and RFC 5322 `From` mailbox without exposing the password; a fake-backed SMTP test addresses that `From` mailbox and a saved credential renders only `***`; Rust/frontend gates and regenerated CAP-0010/CAP-0019 wireframes pass; `git diff --check` exits 0 |
 | 9l | Windows external operator smokes + CAP promotion | pending | Licensed Office release smoke passes on Windows; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated Node-runtime action annotations; CAP statuses distinguish Windows-host evidence from existing CI coverage and make no untested macOS-installed-Office claim; CHG status is done and the record is archived |
 
-**Current phase:** 9k.1.1 — pending Document Notes return navigation.
-Phase 9k.1 local verification is complete; Phase 9k.1.1 is the lowest-slot
-dependency-ready plan. Phase 9k.2 must then pass before Phase 9k.3, Phase 9k.4,
-and Phase 9k.5, before Phase 9l can start. macOS remains a supported runtime
+**Current phase:** 9k.2 — pending Entra identity-source overview.
+Phase 9k.1.1 local verification is complete. Phase 9k.2 is now the lowest-slot
+dependency-ready plan and must pass before Phase 9k.3, Phase 9k.4, and Phase
+9k.5, before Phase 9l can start. macOS remains a supported runtime
 target with existing CI coverage, but an external macOS operator smoke is not a
 Phase 9l gate.
 
@@ -424,7 +424,10 @@ activities**); `docs/product/capabilities/CAP-0006-library-explorer.md`
 matching regenerated CAP-0003 wireframe; a tested Notes control that focuses or
 recreates the singleton Library activity with the same stable document selected;
 and failure behaviour that preserves the current Notes draft/edit state.
-**Status:** pending — ready as the lowest-slot dependency-ready phase.
+**Status:** done (`cargo fmt --all -- --check`; workspace tests; Clippy with
+warnings denied; 73 frontend tests; regenerated CAP-0003 HTML and 1440×1100
+PNG; exact-return, stable-ID fallback, failure-retention, and visual browser QA;
+strict repository links; 54 Markdown tables; DOX pass; `git diff --check`).
 
 ### Current state
 
@@ -514,6 +517,27 @@ and failure behaviour that preserves the current Notes draft/edit state.
 
 **Verification gate:**
 `cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && node --test crates/dms-desktop/ui/*.test.mjs` exits 0; focused frontend tests prove the Notes control, exact previous-view fast path, stable-ID fallback, missing-row detail, failure retention, singleton Library activity, and unchanged Notes draft/edit/delete state; `(cd docs/product/wireframes && node generate.mjs && google-chrome --headless=new --hide-scrollbars --window-size=1440,1100 --screenshot=exports/CAP-0003-document-notes.png "file://$PWD/html/CAP-0003-document-notes.html" && test -s exports/CAP-0003-document-notes.png)` exits 0; CAP-0003 HTML, PNG, and manifest agree; browser interaction QA returns to the same selected Library document while leaving Notes open; strict repository links and Markdown tables pass; the DOX pass is complete; and `git diff --check` exits 0.
+
+### Phase 9k.1.1 completion evidence
+
+- The full Rust/frontend gate exits 0, including 73 frontend tests. Focused
+  tests cover control placement and escaping, exact unchanged-Library reuse,
+  stable-ID restoration after a changed or closed Library, missing-row retained
+  detail, singleton activities, duplicate-return suppression, and retained
+  compose/edit/delete state.
+- Browser interaction QA opens Notes from a selected fixture document. The
+  exact return performs no additional IPC and restores the selected row/detail;
+  changed Library state invokes stable-ID resolution; failed resolution leaves
+  Notes current, shows the document error, keeps the unsaved body and author,
+  and re-enables retry. The Notes pane remains open throughout.
+- Wireframe regeneration and its 1440×1100 Chrome export exit 0. The 21-entry
+  manifest resolves every matching HTML/PNG pair, and visual inspection finds
+  no clipping, overlap, broken glyph, or action-hierarchy defect.
+- Strict repository links report zero issues; structural validation passes for
+  54 Markdown tables and 386 data rows; `git diff --check` exits 0.
+- The DOX pass updates `crates/dms-desktop/AGENTS.md` for the durable return and
+  state-retention contract. Parent/product/wireframe ownership and child indexes
+  are unchanged.
 
 ## Out of scope — Phase 9k.1.1
 

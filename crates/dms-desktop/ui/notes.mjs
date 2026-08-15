@@ -24,6 +24,7 @@ export function createNoteDocumentState() {
     delete_id: null,
     compose_body: "",
     compose_author: "",
+    returning_to_library: false,
     loading: false,
     error: "",
   };
@@ -77,5 +78,7 @@ export function documentNotesMarkup(activity, state) {
     : notes.length === 0
       ? '<p class="notes-empty">No notes yet.</p>'
       : notes.map((note) => noteMarkup(note, state)).join("");
-  return `<section class="notes-workspace"><header class="notes-heading"><div><span class="eyebrow">Document notes</span><h2>${escapeHtml(title)}</h2>${number ? `<p>${escapeHtml(number)}</p>` : ""}</div><span class="badge">Stable document ID · ${escapeHtml(activity.document_id)}</span></header>${state.error ? `<p class="notes-error" role="alert">${escapeHtml(state.error)}</p>` : ""}<div class="notes-card"><form id="document-note-compose-form" class="note-composer"><label for="new-note-body">New note</label><textarea id="new-note-body" name="body" required placeholder="Plain text — line breaks preserved. UTF-8.">${escapeHtml(state.compose_body)}</textarea><div class="note-composer-footer"><label>Author <input name="author" value="${escapeHtml(state.compose_author)}" autocomplete="name" placeholder="Optional — OS user default"></label><button class="button" type="submit">Save note</button></div></form><div class="note-list" aria-live="polite">${list}</div><p class="notes-hint">Newest first. Deleting a note never deletes the document or workflow evidence comments.</p></div></section>`;
+  const returnLabel = state.returning_to_library ? "Returning to Library…" : "← Back to Library";
+  const returnDisabled = state.returning_to_library ? " disabled" : "";
+  return `<section class="notes-workspace"><div class="notes-return"><button class="button secondary" type="button" data-note-return-library aria-label="Back to Library with selected document ${escapeHtml(title)}"${returnDisabled}>${returnLabel}</button><span>Return to ${escapeHtml(title)} in Library with this document selected.</span></div><header class="notes-heading"><div><span class="eyebrow">Document notes</span><h2>${escapeHtml(title)}</h2>${number ? `<p>${escapeHtml(number)}</p>` : ""}</div><span class="badge">Stable document ID · ${escapeHtml(activity.document_id)}</span></header>${state.error ? `<p class="notes-error" role="alert">${escapeHtml(state.error)}</p>` : ""}<div class="notes-card"><form id="document-note-compose-form" class="note-composer"><label for="new-note-body">New note</label><textarea id="new-note-body" name="body" required placeholder="Plain text — line breaks preserved. UTF-8.">${escapeHtml(state.compose_body)}</textarea><div class="note-composer-footer"><label>Author <input name="author" value="${escapeHtml(state.compose_author)}" autocomplete="name" placeholder="Optional — OS user default"></label><button class="button" type="submit">Save note</button></div></form><div class="note-list" aria-live="polite">${list}</div><p class="notes-hint">Newest first. Deleting a note never deletes the document or workflow evidence comments.</p></div></section>`;
 }

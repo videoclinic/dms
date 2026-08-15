@@ -144,7 +144,13 @@ When implemented, the following must hold:
    identity. Repeating navigation to the same task and document focuses the
    existing tab. The same document may have multiple tabs open only for different
    tasks. Closing a document-scoped tab clears that surface without unregistering
-   the document.
+   the document. Returning from Document Notes with **Back to Library** focuses
+   this singleton activity with the same stable document selected. An unchanged
+   in-memory Library view retains its folder, search, sort, history, scroll, and
+   selection state without reloading. If the activity was closed or its
+   selection changed, the stable document ID resolves its current folder and
+   selection detail. A missing registered source retains document detail and
+   missing-source state without fabricating a filesystem row.
 10. CAP-0005's `Bookmark this view` control saves the current library folder and
     sort order; when exactly one document is selected it also uses that
     document's stable ID as the target. It does not retain a multi-select batch
