@@ -5,19 +5,23 @@
 | ID | CAP-0017 |
 | Status | not implemented |
 | Storage | `<edit-root>/.dms/` |
-| Tests | Partial phases 7 and 9b evidence: [core lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [CLI command tests](../../../crates/dms-cli/tests/cli.rs), [desktop adapter tests](../../../crates/dms-desktop/src/lib.rs), and [desktop periodic-review tests](../../../crates/dms-desktop/ui/maintenance.test.mjs) |
+| Tests | Partial phases 7, 9b, and 9k.3 evidence: [effective-date schedule, migration, and periodic-review core tests](../../../crates/dms-core/tests/lifecycle.rs), [CLI command tests](../../../crates/dms-cli/tests/cli.rs), [desktop schedule adapter tests](../../../crates/dms-desktop/src/lib.rs), and [desktop periodic-review tests](../../../crates/dms-desktop/ui/maintenance.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 
 When implemented, the following must hold:
 
-1. The workspace defines a positive default review interval in months. A
+1. Review schedule is mutable state separate from both the document profile and
+   immutable release snapshots. The workspace defines a positive default review interval in months. A
    document may override the interval or be review-exempt; setting an exemption
    requires a reason comment recorded in the workflow event chain.
-2. A successful release computes the next-review-due date from the release
-   effective date and the document interval. Completing a periodic review
+2. A successful release computes the next-review-due date from the candidate's
+   required effective date captured by that release and the document interval.
+   Completing a periodic review
    computes the next date from the completion date. Dates use calendar months,
-   clamping to the last valid day of the target month.
+   clamping to the last valid day of the target month. A v11 migration preserves
+   an already stored next-review-due date and never substitutes `released_at` or
+   the migration date for missing historical effective-date evidence.
 3. On workspace open, the explorer marks documents due within 30 days and
    overdue documents. The app does not claim background reminders while it is
    closed.

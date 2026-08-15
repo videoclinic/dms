@@ -4,8 +4,8 @@ use clap::{Parser, Subcommand, ValueEnum};
 use dms_core::{
     AuditReportFilter, AuditReportFormat, AuditReportRequest, AuthenticatedActor, ControlUpdate,
     DeliveryReceipt, Document, EntraIdentitySource, EntraPerson, GraphClient, Note,
-    NotificationClient, NotificationMessage, NotificationSettings, PeriodicReviewResult,
-    RestoreRequest, RoleUpdate, Workspace,
+    NotificationClient, NotificationMessage, NotificationSettings, OwnerReference,
+    PeriodicReviewResult, RestoreRequest, RoleUpdate, Workspace,
 };
 use serde::Serialize;
 use uuid::Uuid;
@@ -147,7 +147,7 @@ enum DocumentCommand {
         #[arg(long)]
         document_type: Option<String>,
         #[arg(long)]
-        owner: Option<String>,
+        owner_object_id: Option<Uuid>,
     },
     Unregister {
         #[arg(long)]
@@ -931,18 +931,29 @@ fn run_document(command: DocumentCommand, json: bool) -> CliResult<()> {
             title,
             document_number,
             document_type,
-            owner,
+            owner_object_id,
         } => {
             if title.is_none()
                 && document_number.is_none()
                 && document_type.is_none()
-                && owner.is_none()
+                && owner_object_id.is_none()
             {
                 return Err(input_error(
                     "update-control requires at least one control-data option",
                 ));
             }
             let mut workspace = Workspace::open(&edit_root)?;
+            let owner = owner_object_id
+                .map(|object_id| {
+                    workspace
+                        .identity_source()
+                        .map(|source| OwnerReference {
+                            binding_id: source.binding_id,
+                            object_id,
+                        })
+                        .ok_or_else(|| input_error("owner assignment requires an identity source"))
+                })
+                .transpose()?;
             let updated = workspace.update_control(
                 document,
                 ControlUpdate {
@@ -950,7 +961,7 @@ fn run_document(command: DocumentCommand, json: bool) -> CliResult<()> {
                     document_number: document_number.map(Some),
                     document_type: document_type.map(Some),
                     owner: owner.map(Some),
-                    effective_date: None,
+                    ..ControlUpdate::default()
                 },
             )?;
             workspace.save()?;

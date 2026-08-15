@@ -19,6 +19,8 @@ const GRAPH_SCOPE: &str = "openid profile offline_access User.Read.All GroupMemb
 const GRAPH_API: &str = "https://graph.microsoft.com/v1.0";
 const GRAPH_LIMITED_USER_INFORMATION_ERROR: &str =
     "Microsoft Graph returned limited information for a direct user member; verify delegated User.Read.All tenant-admin consent and the signed-in user's permission to read group members, then sign in again";
+const GRAPH_DISABLED_ONLY_USERS_ERROR: &str =
+    "Microsoft Graph returned direct users, but none are enabled; the eligible-people cache was not changed";
 const OVERSIZED_CREDENTIAL_FRAGMENT_ERROR: &str =
     "cannot save the delegated Microsoft Entra token in the OS credential store: credential fragment exceeds the supported UTF-16 size limit";
 
@@ -696,9 +698,11 @@ where
             "{GRAPH_API}/groups/{group_id}/members/microsoft.graph.user?$select=id,displayName,mail,userPrincipalName,accountEnabled&$top=999"
         ));
         let mut people = BTreeMap::new();
+        let mut direct_user_count = 0_usize;
         while let Some(url) = next.take() {
             let page = self.graph_get::<GraphUsers>(&url, access_token, true)?;
             for user in page.value {
+                direct_user_count += 1;
                 let object_id = Uuid::parse_str(&user.id).map_err(|_| {
                     "Microsoft Graph returned a user without a valid object ID".to_owned()
                 })?;
@@ -740,6 +744,9 @@ where
                 }
             }
             next = page.next_link;
+        }
+        if direct_user_count > 0 && people.is_empty() {
+            return Err(GRAPH_DISABLED_ONLY_USERS_ERROR.to_owned());
         }
         Ok(people.into_values().collect())
     }
@@ -1206,6 +1213,43 @@ mod tests {
         assert_eq!(
             error,
             "Microsoft Graph returned limited information for a direct user member; verify delegated User.Read.All tenant-admin consent and the signed-in user's permission to read group members, then sign in again"
+        );
+    }
+
+    #[test]
+    fn direct_user_refresh_distinguishes_a_truly_empty_group_from_disabled_only_users() {
+        let tenant_id = Uuid::new_v4();
+        let group_id = Uuid::new_v4();
+        let disabled_user = Uuid::new_v4();
+        let mut empty_graph = MicrosoftGraphClient::with_parts(
+            "client",
+            tenant_id,
+            FakeHttp::with_responses(vec![response(200, r#"{"value":[]}"#)]),
+            MemoryTokenStore::default(),
+        );
+
+        assert!(empty_graph
+            .direct_user_members_with_token(group_id, "synthetic-access")
+            .unwrap()
+            .is_empty());
+
+        let mut disabled_graph = MicrosoftGraphClient::with_parts(
+            "client",
+            tenant_id,
+            FakeHttp::with_responses(vec![response(
+                200,
+                &format!(
+                    r#"{{"value":[{{"id":"{disabled_user}","displayName":"Disabled","mail":"disabled@example.test","accountEnabled":false}}]}}"#
+                ),
+            )]),
+            MemoryTokenStore::default(),
+        );
+
+        assert_eq!(
+            disabled_graph
+                .direct_user_members_with_token(group_id, "synthetic-access")
+                .unwrap_err(),
+            GRAPH_DISABLED_ONLY_USERS_ERROR
         );
     }
 

@@ -1,6 +1,5 @@
 use std::{fs, path::PathBuf, thread, time::Duration};
 
-use chrono::NaiveDate;
 use dms_core::{
     ControlUpdate, DmsError, WorkflowEventType, Workspace, METADATA_DIRECTORY, METADATA_FILENAME,
 };
@@ -65,10 +64,7 @@ fn document_control_is_persisted_independently_from_source_locator() {
                 title: Some("New hire onboarding".to_owned()),
                 document_number: Some(Some("PR-001".to_owned())),
                 document_type: Some(Some("procedure".to_owned())),
-                owner: Some(Some("Quality team".to_owned())),
-                effective_date: Some(Some(
-                    NaiveDate::from_ymd_opt(2026, 8, 11).expect("effective date"),
-                )),
+                ..ControlUpdate::default()
             },
         )
         .expect("update control data");
@@ -88,10 +84,7 @@ fn document_control_is_persisted_independently_from_source_locator() {
     assert_eq!(stored.relative_path, relative_path);
     assert_eq!(stored.control.title, "New hire onboarding");
     assert_eq!(stored.control.document_number.as_deref(), Some("PR-001"));
-    assert_eq!(
-        stored.control.effective_date,
-        NaiveDate::from_ymd_opt(2026, 8, 11)
-    );
+    assert!(stored.control.owner.is_none());
     assert_eq!(updated.id, stored.id);
     let history = workspace
         .workflow_history(document.id)
@@ -112,7 +105,7 @@ fn document_control_is_persisted_independently_from_source_locator() {
 }
 
 #[test]
-fn schema_v8_migration_defaults_effective_date_to_unset() {
+fn schema_v11_migration_preserves_legacy_owner_without_assigning_authority() {
     let (edit_root, _publish_root, mut workspace) = initialized_workspace();
     let document = add_markdown_document(&mut workspace, &edit_root, "Legacy.md");
     workspace.save().expect("current metadata");
@@ -124,29 +117,27 @@ fn schema_v8_migration_defaults_effective_date_to_unset() {
     let mut metadata: serde_json::Value =
         serde_json::from_slice(&fs::read(&metadata_path).expect("metadata"))
             .expect("metadata JSON");
-    metadata["schema_version"] = serde_json::Value::from(8);
-    metadata["documents"][document.id.to_string()]["control"]
-        .as_object_mut()
-        .expect("document control")
-        .remove("effective_date");
+    metadata["schema_version"] = serde_json::Value::from(11);
+    metadata["documents"][document.id.to_string()]["control"]["owner"] =
+        serde_json::Value::String("Legacy Quality Team".to_owned());
+    metadata["documents"][document.id.to_string()]["control"]["effective_date"] =
+        serde_json::Value::String("2026-08-11".to_owned());
     fs::write(
         &metadata_path,
         serde_json::to_vec_pretty(&metadata).unwrap(),
     )
     .unwrap();
 
-    let migrated = Workspace::open(edit_root.path()).expect("schema v8 migration");
+    let migrated = Workspace::open(edit_root.path()).expect("schema v11 migration");
+    let control = &migrated.document(document.id).unwrap().control;
+    assert!(control.owner.is_none());
     assert_eq!(
-        migrated
-            .document(document.id)
-            .unwrap()
-            .control
-            .effective_date,
-        None
+        control.legacy_owner_label.as_deref(),
+        Some("Legacy Quality Team")
     );
     assert!(edit_root
         .path()
-        .join(".dms/workspace.v8.json.bak")
+        .join(".dms/workspace.v11.json.bak")
         .is_file());
 }
 

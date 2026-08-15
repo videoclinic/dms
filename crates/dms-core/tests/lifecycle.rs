@@ -5,14 +5,15 @@ use std::{
     path::Path,
 };
 
+use chrono::NaiveDate;
 use dms_core::{
-    AssistanceEvidence, AuthenticatedActor, CandidateRequest, CandidateStatus, ControlUpdate,
-    DeliveryReceipt, DeliveryStatus, DmsError, EntraIdentitySource, EntraPerson, GraphClient,
-    Lifecycle, MarkerStatus, NotificationClient, NotificationKind, NotificationMessage,
-    NotificationSettings, NotificationTransport, PdfExporter, PeriodicReviewResult,
-    PeriodicReviewStatus, PermalinkTarget, ReleaseOutcome, ReleaseVerificationStatus,
-    ReviewDecision, RoleUpdate, SmtpSettings, TargetSelection, Version, WorkflowEventType,
-    WorkflowVerification, Workspace, SCHEMA_VERSION,
+    AssistanceEvidence, AuditReportFilter, AuditReportFormat, AuthenticatedActor, CandidateRequest,
+    CandidateStatus, ControlUpdate, DeliveryReceipt, DeliveryStatus, DmsError, EntraIdentitySource,
+    EntraPerson, GraphClient, Lifecycle, MarkerStatus, NotificationClient, NotificationKind,
+    NotificationMessage, NotificationSettings, NotificationTransport, OwnerReference, PdfExporter,
+    PeriodicReviewResult, PeriodicReviewStatus, PermalinkTarget, ReleaseOutcome,
+    ReleaseVerificationStatus, ReviewDecision, RoleUpdate, SmtpSettings, TargetSelection, Version,
+    WorkflowEventType, WorkflowVerification, Workspace, SCHEMA_VERSION,
 };
 use tempfile::TempDir;
 use uuid::Uuid;
@@ -60,6 +61,7 @@ impl Fixture {
         workspace
             .replace_identity_source(group_id, "DMS workflow", people.clone())
             .expect("identity source");
+        let binding_id = workspace.identity_source().unwrap().binding_id;
         workspace
             .update_workflow_policy(
                 ".",
@@ -87,7 +89,10 @@ impl Fixture {
                 ControlUpdate {
                     title: Some("Employee handbook".to_owned()),
                     document_type: Some(Some("procedure".to_owned())),
-                    owner: Some(Some("People team".to_owned())),
+                    owner: Some(Some(OwnerReference {
+                        binding_id,
+                        object_id: editor_id,
+                    })),
                     ..ControlUpdate::default()
                 },
             )
@@ -122,7 +127,10 @@ impl Fixture {
             document_id: self.document_id,
             selection,
             changelog: "Clarify onboarding responsibilities".to_owned(),
+            effective_date: NaiveDate::from_ymd_opt(2025, 8, 15).unwrap(),
             requester_object_id: self.requester_id,
+            staged_owner_object_id: None,
+            staged_editor_object_id: None,
             review_override_reason: None,
             assistance: None,
         }
@@ -611,6 +619,10 @@ fn approved_release_is_atomic_mirrors_tree_persists_chain_and_refuses_overwrite(
         .workspace
         .review_permalink(fixture.document_id, review_id)
         .expect("review permalink");
+    graph.people.iter_mut().for_each(|person| {
+        person.display_name = format!("{} renamed", person.display_name);
+        person.email = format!("renamed-{}", person.email);
+    });
 
     let mut no_notification = FakeNotifier::default();
     let mut failed_exporter = FakeExporter {
@@ -660,6 +672,34 @@ fn approved_release_is_atomic_mirrors_tree_persists_chain_and_refuses_overwrite(
         .expect("release");
     assert_eq!(outcome.release.version, Version::V1_0);
     assert_eq!(
+        outcome.release.effective_date,
+        Some(NaiveDate::from_ymd_opt(2025, 8, 15).unwrap())
+    );
+    assert_eq!(
+        outcome
+            .release
+            .control
+            .as_ref()
+            .map(|control| &control.title),
+        Some(&"Employee handbook".to_owned())
+    );
+    assert_eq!(
+        outcome
+            .release
+            .owner
+            .as_ref()
+            .map(|owner| owner.display_name.as_str()),
+        Some("Eva Editor")
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .document_review_schedule(fixture.document_id)
+            .unwrap()
+            .next_due_date,
+        NaiveDate::from_ymd_opt(2026, 8, 15)
+    );
+    assert_eq!(
         outcome.release.relative_pdf_path,
         Path::new("Policies/Handbook_V1.0_internal.pdf")
     );
@@ -675,6 +715,24 @@ fn approved_release_is_atomic_mirrors_tree_persists_chain_and_refuses_overwrite(
             .unwrap(),
         WorkflowVerification::Valid
     );
+    fixture
+        .workspace
+        .update_control(
+            fixture.document_id,
+            ControlUpdate {
+                title: Some("Renamed current profile".to_owned()),
+                ..ControlUpdate::default()
+            },
+        )
+        .unwrap();
+    let audit = fixture
+        .workspace
+        .preview_audit_report(AuditReportFormat::Csv, &AuditReportFilter::default())
+        .unwrap();
+    assert!(String::from_utf8(audit)
+        .unwrap()
+        .lines()
+        .any(|line| { line.contains("release") && line.contains("Employee handbook") }));
 
     let renamed = fixture
         .workspace
@@ -718,6 +776,252 @@ fn approved_release_is_atomic_mirrors_tree_persists_chain_and_refuses_overwrite(
             .submit_candidate(manual, &mut graph, &mut notifier),
         Err(DmsError::InvalidTargetVersion) | Err(DmsError::VersionAlreadyReleased(_))
     ));
+}
+
+#[test]
+fn staged_owner_and_editor_apply_only_after_successful_release_commit() {
+    let mut fixture = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    let mut graph = fixture.graph();
+    let mut request = fixture.candidate_request(TargetSelection::NextMajor);
+    request.staged_owner_object_id = Some(fixture.approver_id);
+    request.staged_editor_object_id = Some(fixture.requester_id);
+    let mut notifier = FakeNotifier::accepted();
+    fixture
+        .workspace
+        .submit_candidate(request, &mut graph, &mut notifier)
+        .expect("staged handover candidate");
+    fixture
+        .workspace
+        .decide_review(
+            fixture.document_id,
+            ReviewDecision::Approved,
+            None,
+            &mut graph,
+            &mut notifier,
+        )
+        .expect("approve staged handover");
+
+    let mut failed_exporter = FakeExporter {
+        fail: Some("Office conversion failed".to_owned()),
+    };
+    assert!(matches!(
+        fixture.workspace.release_candidate(
+            fixture.document_id,
+            None,
+            &mut graph,
+            &mut notifier,
+            &mut failed_exporter,
+        ),
+        Err(DmsError::ExportFailed(_))
+    ));
+    assert_eq!(
+        fixture
+            .workspace
+            .document(fixture.document_id)
+            .unwrap()
+            .control
+            .owner
+            .map(|owner| owner.object_id),
+        Some(fixture.editor_id)
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .effective_workflow_roles(fixture.document_id)
+            .unwrap()
+            .editor
+            .unwrap()
+            .object_id,
+        fixture.editor_id
+    );
+
+    let mut exporter = FakeExporter::successful();
+    let outcome = fixture
+        .workspace
+        .release_candidate(
+            fixture.document_id,
+            None,
+            &mut graph,
+            &mut notifier,
+            &mut exporter,
+        )
+        .expect("commit staged handover");
+    assert_eq!(
+        outcome.release.owner.as_ref().map(|owner| owner.object_id),
+        Some(fixture.approver_id)
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .document(fixture.document_id)
+            .unwrap()
+            .control
+            .owner
+            .map(|owner| owner.object_id),
+        Some(fixture.approver_id)
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .effective_workflow_roles(fixture.document_id)
+            .unwrap()
+            .editor
+            .unwrap()
+            .object_id,
+        fixture.requester_id
+    );
+}
+
+#[test]
+fn schema_v11_migration_maps_effective_date_to_current_release_and_open_candidate() {
+    let mut fixture = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    let mut graph = approve_first_release(&mut fixture);
+    let mut notifier = FakeNotifier::accepted();
+    let mut exporter = FakeExporter::successful();
+    fixture
+        .workspace
+        .release_candidate(
+            fixture.document_id,
+            None,
+            &mut graph,
+            &mut notifier,
+            &mut exporter,
+        )
+        .expect("initial release");
+    fixture
+        .workspace
+        .begin_revision(fixture.document_id)
+        .expect("minor revision");
+    fs::write(
+        &fixture.source_path,
+        "# Handbook\n\nVersion: 1.1\n\nVertraulichkeitsstufe: Internal\n",
+    )
+    .unwrap();
+    fixture
+        .workspace
+        .submit_candidate(
+            fixture.candidate_request(TargetSelection::NextMinor),
+            &mut graph,
+            &mut notifier,
+        )
+        .expect("minor candidate");
+    fixture
+        .workspace
+        .release_candidate(
+            fixture.document_id,
+            None,
+            &mut graph,
+            &mut notifier,
+            &mut exporter,
+        )
+        .expect("minor release");
+    fixture
+        .workspace
+        .begin_revision(fixture.document_id)
+        .expect("next revision");
+    fs::write(
+        &fixture.source_path,
+        "# Handbook\n\nVersion: 2.0\n\nVertraulichkeitsstufe: Internal\n",
+    )
+    .unwrap();
+    fixture
+        .workspace
+        .submit_candidate(
+            fixture.candidate_request(TargetSelection::NextMajor),
+            &mut graph,
+            &mut notifier,
+        )
+        .expect("open candidate");
+    let original_due_date = fixture
+        .workspace
+        .document_review_schedule(fixture.document_id)
+        .unwrap()
+        .next_due_date;
+    fixture.workspace.save().unwrap();
+
+    let metadata_path = fixture.workspace.edit_root.join(".dms/workspace.json");
+    let mut metadata: serde_json::Value =
+        serde_json::from_slice(&fs::read(&metadata_path).unwrap()).unwrap();
+    metadata["schema_version"] = serde_json::Value::from(11);
+    let document = &mut metadata["documents"][fixture.document_id.to_string()];
+    document["control"]["owner"] = serde_json::Value::String("Legacy Quality".to_owned());
+    document["control"]["effective_date"] = serde_json::Value::String("2025-08-15".to_owned());
+    for release in document["releases"].as_array_mut().unwrap() {
+        release.as_object_mut().unwrap().remove("effective_date");
+        release.as_object_mut().unwrap().remove("control");
+        release.as_object_mut().unwrap().remove("owner");
+    }
+    let candidate = document["candidates"]
+        .as_array_mut()
+        .unwrap()
+        .last_mut()
+        .unwrap();
+    candidate.as_object_mut().unwrap().remove("effective_date");
+    candidate["metadata"]["control"]["owner"] =
+        serde_json::Value::String("Legacy Quality".to_owned());
+    candidate["metadata"]["control"]["effective_date"] =
+        serde_json::Value::String("2025-08-15".to_owned());
+    fs::write(
+        &metadata_path,
+        serde_json::to_vec_pretty(&metadata).unwrap(),
+    )
+    .unwrap();
+
+    let migrated = Workspace::open(&fixture.workspace.edit_root).expect("schema v11 migration");
+    let current = migrated
+        .current_release(fixture.document_id)
+        .unwrap()
+        .expect("current release");
+    assert_eq!(current.effective_date, NaiveDate::from_ymd_opt(2025, 8, 15));
+    assert!(current.control.is_none());
+    let releases = migrated.releases(fixture.document_id).unwrap();
+    assert_eq!(
+        releases
+            .iter()
+            .find(|release| release.version == Version::V1_0)
+            .unwrap()
+            .effective_date,
+        None
+    );
+    assert_eq!(
+        releases
+            .iter()
+            .find(|release| release.version == Version { major: 1, minor: 1 })
+            .unwrap()
+            .effective_date,
+        NaiveDate::from_ymd_opt(2025, 8, 15)
+    );
+    let candidate = migrated
+        .active_candidate(fixture.document_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        candidate.effective_date,
+        NaiveDate::from_ymd_opt(2025, 8, 15)
+    );
+    assert!(candidate.metadata.control.owner.is_none());
+    assert_eq!(
+        candidate.metadata.control.legacy_owner_label.as_deref(),
+        Some("Legacy Quality")
+    );
+    assert_eq!(
+        migrated
+            .document_review_schedule(fixture.document_id)
+            .unwrap()
+            .next_due_date,
+        original_due_date
+    );
+    assert!(fixture
+        .workspace
+        .edit_root
+        .join(".dms/workspace.v11.json.bak")
+        .is_file());
 }
 
 #[test]
@@ -1013,7 +1317,10 @@ fn approved_candidate_is_invalidated_by_control_or_source_changes() {
         .update_control(
             fixture.document_id,
             ControlUpdate {
-                owner: Some(Some("Compliance team".to_owned())),
+                owner: Some(Some(OwnerReference {
+                    binding_id: fixture.workspace.identity_source().unwrap().binding_id,
+                    object_id: fixture.approver_id,
+                })),
                 ..ControlUpdate::default()
             },
         )

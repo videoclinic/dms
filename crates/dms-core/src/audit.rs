@@ -478,7 +478,10 @@ impl Workspace {
                 rows.push(AuditRow {
                     record_type: "release",
                     document_id: document.id,
-                    title: document.control.title.clone(),
+                    title: release.control.as_ref().map_or_else(
+                        || "<legacy title unrecorded>".to_owned(),
+                        |control| control.title.clone(),
+                    ),
                     relative_path: portable_path(&release.relative_pdf_path)?,
                     timestamp: Some(release.released_at),
                     event_type: if release.withdrawn {
@@ -492,7 +495,7 @@ impl Workspace {
                     confidentiality: release.confidentiality.type_id.clone(),
                     version: release.version.to_string(),
                     target_mode: target_mode_text(release.mode).to_owned(),
-                    detail: release.changelog.clone(),
+                    detail: release_detail(release),
                     content_digest: release.pdf_digest.clone(),
                     predecessor_hash: release.approval_chain_head.clone().unwrap_or_default(),
                     evidence_hash: release.workflow_chain_head.clone(),
@@ -509,6 +512,20 @@ impl Workspace {
         });
         Ok(rows)
     }
+}
+
+fn release_detail(release: &super::ReleaseRecord) -> String {
+    let effective_date = release
+        .effective_date
+        .map_or_else(|| "unrecorded".to_owned(), |date| date.to_string());
+    let owner = release
+        .owner
+        .as_ref()
+        .map_or("unrecorded", |owner| owner.display_name.as_str());
+    format!(
+        "{} | effective_date={} | owner={}",
+        release.changelog, effective_date, owner
+    )
 }
 
 fn normalize_filter(filter: &AuditReportFilter) -> Result<AuditReportFilter> {

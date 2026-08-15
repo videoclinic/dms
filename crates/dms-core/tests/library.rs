@@ -87,7 +87,6 @@ fn batch_add_is_atomic_and_unregister_reassociate_preserve_document_identity() {
             ControlUpdate {
                 title: Some("Employee handbook".into()),
                 document_number: Some(Some("HR-001".into())),
-                owner: Some(Some("People team".into())),
                 ..ControlUpdate::default()
             },
         )

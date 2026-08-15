@@ -19,12 +19,16 @@ The following hold:
    `<edit-root>/.dms/exports/`. The report contains the workflow history
    (events, hashes, timestamps, comments), the release history (version,
    relative path, confidentiality, checksum, workflow-chain head, and
-   approval-chain head when approval was required), and the
+   approval-chain head when approval was required, recorded effective date, and
+   immutable release-time title/number/type/owner snapshot when captured), and the
    current classification summary. Every review request is included regardless
    of its outcome, with its changelog, requested target version, target-version
    mode, decision outcome, and any decision comment. Direct minor releases and
    their approver-notification delivery attempts are included. Periodic-review
-   requests/results are included for each applicable release cycle.
+   requests/results are included for each applicable release cycle. A later
+   mutable-profile rename or Entra display-name/email change does not relabel
+   historical candidate or release rows. Legacy releases that predate a captured
+   field report it as unrecorded rather than substituting current data.
 3. Reports do not embed source-draft content or released PDF bytes. They
    carry identifying metadata and SHA-256 digests so a separate copy of the
    document can be matched against a recorded checksum.

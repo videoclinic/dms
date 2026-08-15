@@ -80,10 +80,21 @@ macOS.
   returns to the singleton Library activity with the same stable document
   selected, preserves an unchanged Library view without reloading, and retains
   Notes drafts and confirmation state when restoration succeeds or fails.
+- Document-profile editing submits an eligible owner object ID and never edits an
+  effective date. Candidate submission owns the required effective date and may
+  stage eligible owner/editor replacements that apply only with a successful
+  release. Current-release and history views use immutable release snapshots;
+  review schedule remains a separate mutable surface.
+- Literal `<owner>` / `<editor>` placeholders appear only after a successful
+  direct-member refresh with zero enabled users. They are display-only unresolved
+  state, never fabricated identities; every missing-binding, tenant, Graph,
+  inaccessible-group, and disabled-only result fails closed.
 - Note mutations call `dms-core`, save the workspace metadata, retain failed
   form drafts for retry, and clear the composer only after a successful save.
-- The Releases pane lists every recorded release with its verification status,
-  filters by document title, and exposes per-release and workspace-wide
+- The Releases pane lists every recorded release with its immutable title,
+  profile/owner snapshot, effective date, and verification status; legacy
+  omissions are visibly unrecorded rather than replaced by current metadata. It
+  filters by captured title and exposes per-release and workspace-wide
   verification actions. It never edits, repairs, or replaces release bytes.
 - The Audit & Reports pane generates filtered CSV/PDF reports, lists report
   evidence with filter-before-pagination, and exposes read-only verification and

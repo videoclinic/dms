@@ -210,14 +210,14 @@ phase also adds an intentional test delivery.
 | 9k.1 | Runtime Entra configuration and SMTP app-password setup | done (`cargo fmt --all -- --check`; `cargo test --workspace`; `cargo clippy --workspace --all-targets -- -D warnings`; 60 desktop UI tests; generated CAP-0010/CAP-0021 HTML and PNG checks; capability-link and Markdown-table checks; `git diff --check`) | Schema v11 removes workspace tenant ID/display while preserving the library group binding, cache, roles, and historical evidence; desktop runtime Graph construction obtains the public-client/tenant configuration from app-global settings and fails closed for invalid overrides; Configuration shows read-only environment-managed Entra fields and group-only library binding; SMTP app passwords are write-only OS credentials, retained on blank input, deleted for `mailto:`, and absent from workspace metadata, snapshots, IPC responses, errors, and wireframes |
 | 9k.1.1 | Document Notes return navigation | done (`cargo fmt --all -- --check`; workspace tests; Clippy with warnings denied; 73 frontend tests; regenerated CAP-0003 HTML and 1440×1100 PNG; exact-return, stable-ID fallback, failure-retention, and visual browser QA; strict repository links; 54 Markdown tables; DOX pass; `git diff --check`) | **Back to Library** restores the same stable document without duplicating or reloading the Library activity, falls back through stable-ID resolution when the Library changed, leaves Notes open, and preserves Notes compose/edit/delete state on success and failure |
 | 9k.2 | Entra identity-source overview | done (workspace format/test/Clippy gate; 14 focused configuration UI tests; encoded host-browser URL coverage; regenerated and visually inspected 1440×1100 CAP-0021 HTML/PNG; 21-entry manifest; strict links; 41 Markdown tables; DOX pass; `git diff --check`) | `cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0; CAP-0021 and its generated HTML/PNG show public-client ID, tenant ID, and a host-browser group-page control; `git diff --check` exits 0 |
-| 9k.3 | Release-bound control data and immutable owner identity | pending | Schema-v11 fixture migrates without inventing historical release or owner identity; a successful empty Graph result produces only the literal `<owner>` / `<editor>` placeholders while a Graph failure still fails closed; a later successful real-person refresh permits an operator-selected release-bound Owner/Editor replacement without rewriting past evidence; new candidate/release tests prove immutable control/effective-date snapshots and effective-date-based scheduling; owner/editor/approver references remain object-ID based across name/email changes; `cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && node --test crates/dms-desktop/ui/library.test.mjs` exits 0; regenerated CAP-0002/CAP-0015/CAP-0017 wireframes agree with their manifest entries; CAP-0019/CAP-0021 identity links pass; `git diff --check` exits 0 |
+| 9k.3 | Release-bound control data and immutable owner identity | done (`cargo fmt --all -- --check`; workspace tests; Clippy with warnings denied; 16 focused Library UI tests; 9 focused Maintenance UI tests; regenerated and visually inspected CAP-0002/CAP-0015/CAP-0017 HTML/PNG; 21-entry manifest; changed-document links; DOX pass; `git diff --check`) | Schema-v11 fixture migrates without inventing historical release or owner identity; a successful empty Graph result produces only the literal `<owner>` / `<editor>` placeholders while a Graph failure still fails closed; a later successful real-person refresh permits an operator-selected release-bound Owner/Editor replacement without rewriting past evidence; candidate/release/audit/maintenance tests prove immutable control, owner, and effective-date snapshots plus effective-date-based scheduling; owner/editor/approver references remain object-ID based across name/email changes; release maintenance and audit use stored release evidence rather than mutable profile/cache fallbacks |
 | 9k.4 | Library filtering, recursive folder counters, interaction, width, and shipped icons | pending | Core and UI tests prove identical recursive `~` draft, `+` applicable-not-controlled, and `!` unsupported counts beside each folder in tree and list views; all-on session-wide **Draft documents** / **Available to add** / **Unsupported files** toggles filter every folder and search result before pagination without changing counters; candidate form selects `Next minor` by default; a table-folder click opens that folder without a double-click; the centre/details splitter is pointer- and keyboard-usable with bounded session-only width; runtime and wireframes use app-local SVGs rather than a font dependency; `node --test crates/dms-desktop/ui/app.test.mjs crates/dms-desktop/ui/library.test.mjs` and full Rust/frontend gates exit 0; regenerated CAP-0002/CAP-0006/CAP-0015 wireframes match their manifest entries; `git diff --check` exits 0 |
 | 9k.5 | Workflow tree and SMTP identity/test configuration | pending | Workflow renders an accessible folder tree with all direct role assignments visibly marked; schema-v12 SMTP settings migrate to separate login user and RFC 5322 `From` mailbox without exposing the password; a fake-backed SMTP test addresses that `From` mailbox and a saved credential renders only `***`; Rust/frontend gates and regenerated CAP-0010/CAP-0019 wireframes pass; `git diff --check` exits 0 |
 | 9l | Windows external operator smokes + CAP promotion | pending | Licensed Office release smoke passes on Windows; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated Node-runtime action annotations; CAP statuses distinguish Windows-host evidence from existing CI coverage and make no untested macOS-installed-Office claim; CHG status is done and the record is archived |
 
-**Current phase:** 9k.2 complete. Phase 9k.3 is the next dependency-ready phase
-and remains pending. It must pass before Phase 9k.4 and Phase 9k.5, before Phase
-9l can start. macOS remains a supported runtime target with existing CI coverage,
+**Current phase:** 9k.3 complete. Phase 9k.4 is the next dependency-ready phase;
+Phase 9k.5 remains pending behind it before Phase 9l can start. macOS remains a
+supported runtime target with existing CI coverage,
 but an external macOS operator smoke is not a Phase 9l gate.
 
 Mark a phase `in-progress` only while it is being executed, `done (<evidence>)`
@@ -748,7 +748,7 @@ candidate/release snapshots, and review schedule; an explicit effective-date
 input during candidate creation; object-ID-based owner/editor/approver identity;
 stable historical release/audit views; updated CAPs and regenerated wireframes;
 and a Phase 9l checkpoint based on that model.
-**Status:** pending — queued behind the independent Entra overview phase.
+**Status:** in-progress — executing from the Phase 9k.2 checkpoint.
 
 ### Current state
 
@@ -912,6 +912,25 @@ and a Phase 9l checkpoint based on that model.
 
 **Verification gate:**
 `cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && node --test crates/dms-desktop/ui/library.test.mjs` exits 0; the v11→v12 fixture retains the migration backup, maps only authoritative effective dates, preserves legacy owner text without assigning an object ID, preserves existing due dates and chain verification, and invents no release snapshot; a successful empty Graph response displays only literal `<owner>` / `<editor>` placeholders while failed Graph states fail closed; focused policy/lifecycle/maintenance/audit/CLI tests prove owner/editor/approver authority is object-ID based across name/email changes, a real-person handover applies only in the successful release transaction without rewriting historic evidence, new releases snapshot profile/owner/effective date, and review schedules start from that date; the owner form submits only an eligible object ID and the candidate form selects `next_minor` by default; `node generate.mjs` exits 0 in `docs/product/wireframes/`; the three regenerated HTML/PNG pairs remain in `manifest.json`; CAP/ADR/privacy/architecture links resolve; and `git diff --check` exits 0.
+
+**Gate evidence (2026-08-15):**
+
+- The exact Rust/Library command above exited 0: every workspace test passed,
+  Clippy emitted no denied warning, and all 16 focused Library UI tests passed.
+- All 9 focused Maintenance UI tests passed after release rows were changed to
+  render stored title/profile/owner/effective-date evidence and explicit
+  `unrecorded` legacy omissions.
+- `schema_v11_migration_maps_effective_date_to_current_release_and_open_candidate`,
+  `schema_v11_migration_preserves_legacy_owner_without_assigning_authority`,
+  `staged_owner_and_editor_apply_only_after_successful_release_commit`, and
+  `approved_release_is_atomic_mirrors_tree_persists_chain_and_refuses_overwrite`
+  passed as part of the workspace gate.
+- `node generate.mjs` exited 0. CAP-0002, CAP-0015, and CAP-0017 each retain one
+  manifest row and a non-empty HTML/PNG pair; all three PNGs passed visual review.
+  CAP-0015 visibly separates mutable profile, immutable current-release snapshot,
+  and mutable review schedule in its initial viewport.
+- A direct filesystem check resolved every relative link in the changed CAP,
+  ADR, architecture, and privacy files. `git diff --check` exited 0.
 
 ## Out of scope — Phase 9k.3
 

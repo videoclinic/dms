@@ -5,7 +5,7 @@
 | ID | CAP-0015 |
 | Status | not implemented |
 | Storage | `<edit-root>/.dms/` |
-| Tests | Partial phases 9e–9f.5 evidence: [current-release and local lifecycle core tests](../../../crates/dms-core/tests/lifecycle.rs), [schema-v9 effective-date and canonical before/after evidence tests](../../../crates/dms-core/tests/workspace.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [shell and independent-pane scrolling tests](../../../crates/dms-desktop/ui/app.test.mjs), [Library document-control, lifecycle, and evidence-action tests](../../../crates/dms-desktop/ui/library.test.mjs), [document-type catalogue tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
+| Tests | Partial phases 9e–9f.5 and 9k.3 evidence: [release-snapshot, migration, identity-stability, and atomic-handover core tests](../../../crates/dms-core/tests/lifecycle.rs), [document-profile and legacy-owner migration tests](../../../crates/dms-core/tests/workspace.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [Library document-control, release-profile, placeholder, and lifecycle tests](../../../crates/dms-desktop/ui/library.test.mjs), [document-type catalogue tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 
@@ -17,10 +17,8 @@ When implemented, the following must hold:
    - **document number** (optional control identifier, unique in the workspace)
    - **document type** (from a workspace catalogue, e.g. policy, procedure,
      form, record, other)
-   - **owner** (display name of the maintaining operator)
-   - **effective date** of the current released version (set on release;
-     empty while never released)
-   - **next review due date** (computed and maintained by CAP-0017)
+   - **owner** (the selected eligible person's current-group binding and immutable
+     Entra object ID; refreshed name/email are presentation only)
    These values are not imported from or synchronized with Office built-in or
    custom document properties, or Markdown front matter. The draft filename stem
    supplies the title's one-time default only when the document is added; it is
@@ -65,15 +63,17 @@ When implemented, the following must hold:
 9. Workspace catalogues for **document type** support add/rename/disable with
    the same reference-protection rule as confidentiality types (CAP-0008 /
    CAP-0013): types referenced by documents or history cannot be hard-deleted.
-10. Document-control-data edits are recorded as
+10. Document-profile edits are recorded as
     `document_control_data_changed` events with before/after values. Changing
-    title, document number, document type, owner, or effective date while
+    title, document number, document type, or owner while
     content review is open or after approval invalidates that request/approval.
     Changing the document's effective confidentiality through CAP-0008 has the
     same invalidation effect. Review-schedule changes do not invalidate content
-    approval but remain auditable.
+    approval but remain auditable. Effective date is not mutable profile data.
 11. The CAP-0006 selection pane and any expanded document-control-data form show
-    document control data, current released version (with a recent release list
+    mutable document profile, current released version (with its immutable
+    release-time profile, Owner snapshot, required candidate effective date, and
+    a recent release list
     when space allows),
     next review due (with **overdue** highlight when past due and not obsolete),
     lifecycle state, effective confidentiality with its source and
@@ -89,15 +89,17 @@ When implemented, the following must hold:
     these sections exceed the available window height, the selection pane
     scrolls independently under CAP-0006; its scroll never moves Library or
     application navigation.
-12. Title, document type, and owner are required before review submission.
+12. Title, document type, a resolved eligible owner, and a candidate effective
+    date are required before review submission.
     Document number, when set, is trimmed and case-insensitively unique across
     active, unregistered, and obsolete records; a historical number is not
     silently reused. Date validation rejects a next-review date earlier than
-    its effective date.
+    the release effective date used to anchor that schedule.
 13. Draft source files are working copies, not application-versioned source
     archives. Renaming or reassociating a source file updates only its stored
     locator and the filesystem-derived **Source file** display; it does not
-    change the document's title, number, type, owner, dates, lifecycle state,
+    change the document's title, number, type, owner, release dates, review
+    schedule, lifecycle state,
     or history. Office document properties and Markdown front matter are likewise
     not authoritative for document control data. The application restores draft
     content only from an operator workspace backup; released PDFs and their
@@ -107,6 +109,17 @@ When implemented, the following must hold:
     from the CAP-0006 selection pane (single selection) when preconditions hold;
     disabled states explain why. They are not offered as multi-select batch
     actions unless a future CAP explicitly allows bulk obsolescence.
+15. A candidate may stage a replacement Owner and responsible Editor selected
+    from currently eligible people. Their object-ID references apply atomically
+    only after PDF export and release metadata save succeed. Export or save
+    failure leaves the prior owner and routing state unchanged. Release history
+    retains the candidate-time display snapshots even if Entra later changes a
+    person's name or email.
+16. A non-empty schema-v11 free-text owner migrates only to a display-only legacy
+    label and never assigns authority by matching text. The current non-withdrawn
+    v11 release receives the stored effective date when one exists; earlier or
+    withdrawn releases remain visibly unrecorded. Existing review due dates,
+    candidates, versions, paths, digests, and workflow evidence are preserved.
 
 ## Non-goals
 

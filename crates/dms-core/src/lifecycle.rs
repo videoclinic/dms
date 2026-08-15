@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use quick_xml::{events::Event as XmlEvent, Reader};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -80,6 +80,8 @@ pub struct ConfidentialitySnapshot {
 pub struct CandidateMetadataSnapshot {
     pub control: DocumentControl,
     pub confidentiality: ConfidentialitySnapshot,
+    #[serde(default)]
+    pub owner: Option<PersonSnapshot>,
     pub editor: PersonSnapshot,
     pub approver: PersonSnapshot,
 }
@@ -236,6 +238,12 @@ pub struct ReleaseCandidate {
     pub assistance: Option<AssistanceEvidence>,
     pub requester: PersonSnapshot,
     pub metadata: CandidateMetadataSnapshot,
+    #[serde(default)]
+    pub effective_date: Option<NaiveDate>,
+    #[serde(default)]
+    pub staged_owner: Option<super::OwnerReference>,
+    #[serde(default)]
+    pub staged_editor: Option<super::WorkflowRoleRef>,
     pub source_digest: String,
     pub source_path: PathBuf,
     pub created_at: DateTime<Utc>,
@@ -264,9 +272,15 @@ pub struct ReleaseRecord {
     pub approval_chain_head: Option<String>,
     pub workflow_chain_head: String,
     pub confidentiality: ConfidentialitySnapshot,
+    #[serde(default)]
+    pub owner: Option<PersonSnapshot>,
     pub editor: PersonSnapshot,
     pub approver: PersonSnapshot,
     pub requester: PersonSnapshot,
+    #[serde(default)]
+    pub effective_date: Option<NaiveDate>,
+    #[serde(default)]
+    pub control: Option<DocumentControl>,
     pub released_at: DateTime<Utc>,
     pub withdrawn: bool,
 }
@@ -398,7 +412,10 @@ pub struct CandidateRequest {
     pub document_id: Uuid,
     pub selection: TargetSelection,
     pub changelog: String,
+    pub effective_date: NaiveDate,
     pub requester_object_id: Uuid,
+    pub staged_owner_object_id: Option<Uuid>,
+    pub staged_editor_object_id: Option<Uuid>,
     pub review_override_reason: Option<String>,
     pub assistance: Option<AssistanceEvidence>,
 }
@@ -547,7 +564,59 @@ impl Workspace {
             .ok_or(DmsError::NotificationSettingsRequired)?;
         self.ensure_document_can_start_candidate(request.document_id)?;
         let document = self.document(request.document_id)?.clone();
-        validate_release_control(&document.control)?;
+        if request.staged_owner_object_id.is_some() != request.staged_editor_object_id.is_some() {
+            return Err(DmsError::InvalidConfiguration(
+                "staged owner and editor must be supplied together".to_owned(),
+            ));
+        }
+        let binding_id = self
+            .identity_source()
+            .ok_or(DmsError::IdentitySourceRequired)?
+            .binding_id;
+        let staged_owner = request
+            .staged_owner_object_id
+            .map(|object_id| super::OwnerReference {
+                binding_id,
+                object_id,
+            });
+        if let Some(reference) = staged_owner {
+            self.require_eligible_owner(reference)?;
+        }
+        let staged_editor =
+            request
+                .staged_editor_object_id
+                .map(|object_id| super::WorkflowRoleRef {
+                    binding_id,
+                    object_id,
+                });
+        let confidentiality = self.effective_confidentiality(request.document_id)?;
+        let roles = self.effective_workflow_roles(request.document_id)?;
+        let mut control = document.control.clone();
+        if let Some(owner) = staged_owner {
+            control.owner = Some(owner);
+            control.legacy_owner_label = None;
+        }
+        validate_release_control(&control)?;
+        let owner = self.person_snapshot(
+            control
+                .owner
+                .expect("release control validation requires an owner")
+                .object_id,
+            tenant_id,
+        )?;
+        let metadata = CandidateMetadataSnapshot {
+            control,
+            confidentiality: ConfidentialitySnapshot {
+                type_id: confidentiality.type_id,
+                label: confidentiality.label,
+            },
+            owner: Some(owner),
+            editor: match staged_editor {
+                Some(editor) => self.person_snapshot(editor.object_id, tenant_id)?,
+                None => self.role_snapshot(roles.editor, tenant_id)?,
+            },
+            approver: self.role_snapshot(roles.approver, tenant_id)?,
+        };
         let version = self.resolve_target_version(request.document_id, request.selection)?;
         let current = self.current_release(request.document_id)?;
         let approval_required = current
@@ -562,7 +631,6 @@ impl Workspace {
         let source_path = self.edit_root.join(&document.relative_path);
         let source_digest = sha256_file(&source_path)?;
         let requester = self.person_snapshot(request.requester_object_id, tenant_id)?;
-        let metadata = self.candidate_metadata(request.document_id, tenant_id)?;
         let review_id = approval_required.then(Uuid::new_v4);
         let mut candidate = ReleaseCandidate {
             id: Uuid::new_v4(),
@@ -574,6 +642,9 @@ impl Workspace {
             assistance: request.assistance.clone(),
             requester,
             metadata,
+            effective_date: Some(request.effective_date),
+            staged_owner,
+            staged_editor,
             source_digest,
             source_path: document.relative_path.clone(),
             created_at: Utc::now(),
@@ -855,16 +926,13 @@ impl Workspace {
                 "candidate is not ready for release".to_owned(),
             ));
         }
-        if !candidate.approval_required {
-            self.refresh_eligible_people(graph)?;
-            if self.document(document_id)?.active_candidate_id != Some(candidate_id) {
-                self.save()?;
-                return Err(DmsError::CandidateInvalidated);
-            }
-            let refreshed = self.candidate_metadata(document_id, tenant_id)?;
-            candidate.metadata.editor = refreshed.editor;
-            candidate.metadata.approver = refreshed.approver;
-            self.candidate_mut(document_id, candidate_id)?.metadata = candidate.metadata.clone();
+        let effective_date = candidate
+            .effective_date
+            .ok_or_else(|| DmsError::InvalidConfiguration("candidate effective date".to_owned()))?;
+        self.refresh_eligible_people(graph)?;
+        if self.document(document_id)?.active_candidate_id != Some(candidate_id) {
+            self.save()?;
+            return Err(DmsError::CandidateInvalidated);
         }
         if self
             .ensure_candidate_current(document_id, &candidate, tenant_id)
@@ -958,9 +1026,12 @@ impl Workspace {
                 approval_chain_head: candidate.approval_event_hash.clone(),
                 workflow_chain_head: placeholder_chain,
                 confidentiality: candidate.metadata.confidentiality.clone(),
+                owner: candidate.metadata.owner.clone(),
                 editor: candidate.metadata.editor.clone(),
                 approver: candidate.metadata.approver.clone(),
                 requester: candidate.requester.clone(),
+                effective_date: Some(effective_date),
+                control: Some(candidate.metadata.control.clone()),
                 released_at: Utc::now(),
                 withdrawn: false,
             };
@@ -987,8 +1058,15 @@ impl Workspace {
                 document.releases.push(release.clone());
                 document.active_candidate_id = None;
                 document.lifecycle = Lifecycle::Released;
+                if let Some(owner) = candidate.staged_owner {
+                    document.control.owner = Some(owner);
+                    document.control.legacy_owner_label = None;
+                }
+                if let Some(editor) = candidate.staged_editor {
+                    document.workflow_overrides.editor = Some(editor);
+                }
             }
-            self.schedule_next_review(document_id, release.released_at.date_naive())?;
+            self.schedule_next_review(document_id, effective_date)?;
 
             let mut minor_notification = None;
             if !candidate.approval_required {
@@ -1605,25 +1683,6 @@ impl Workspace {
         self.person_snapshot(role.object_id, tenant_id)
     }
 
-    fn candidate_metadata(
-        &self,
-        document_id: Uuid,
-        tenant_id: Uuid,
-    ) -> Result<CandidateMetadataSnapshot> {
-        let document = self.document(document_id)?;
-        let confidentiality = self.effective_confidentiality(document_id)?;
-        let roles = self.effective_workflow_roles(document_id)?;
-        Ok(CandidateMetadataSnapshot {
-            control: document.control.clone(),
-            confidentiality: ConfidentialitySnapshot {
-                type_id: confidentiality.type_id,
-                label: confidentiality.label,
-            },
-            editor: self.role_snapshot(roles.editor, tenant_id)?,
-            approver: self.role_snapshot(roles.approver, tenant_id)?,
-        })
-    }
-
     fn active_candidate_id(&self, document_id: Uuid) -> Result<Uuid> {
         self.document(document_id)?
             .active_candidate_id
@@ -1658,7 +1717,41 @@ impl Workspace {
         candidate: &ReleaseCandidate,
         tenant_id: Uuid,
     ) -> Result<()> {
-        if self.candidate_metadata(document_id, tenant_id)? != candidate.metadata {
+        let document = self.document(document_id)?;
+        let mut control = document.control.clone();
+        if let Some(owner) = candidate.staged_owner {
+            self.require_eligible_owner(owner)?;
+            control.owner = Some(owner);
+            control.legacy_owner_label = None;
+        }
+        let confidentiality = self.effective_confidentiality(document_id)?;
+        let roles = self.effective_workflow_roles(document_id)?;
+        let editor = match candidate.staged_editor {
+            Some(editor) => self.person_snapshot(editor.object_id, tenant_id)?,
+            None => self.role_snapshot(roles.editor, tenant_id)?,
+        };
+        let approver = self.role_snapshot(roles.approver, tenant_id)?;
+        let owner = self.person_snapshot(
+            control
+                .owner
+                .ok_or_else(|| DmsError::InvalidConfiguration("owner".to_owned()))?
+                .object_id,
+            tenant_id,
+        )?;
+        let same_identity = |current: &PersonSnapshot, snapshot: &PersonSnapshot| {
+            current.tenant_id == snapshot.tenant_id && current.object_id == snapshot.object_id
+        };
+        if control != candidate.metadata.control
+            || confidentiality.type_id != candidate.metadata.confidentiality.type_id
+            || confidentiality.label != candidate.metadata.confidentiality.label
+            || candidate
+                .metadata
+                .owner
+                .as_ref()
+                .is_none_or(|snapshot| !same_identity(&owner, snapshot))
+            || !same_identity(&editor, &candidate.metadata.editor)
+            || !same_identity(&approver, &candidate.metadata.approver)
+        {
             return Err(DmsError::CandidateInvalidated);
         }
         Ok(())
@@ -2237,8 +2330,6 @@ fn validate_release_control(control: &DocumentControl) -> Result<()> {
         .ok_or_else(|| DmsError::InvalidConfiguration("document type".to_owned()))?;
     control
         .owner
-        .as_deref()
-        .and_then(|owner| (!owner.trim().is_empty()).then_some(owner))
         .ok_or_else(|| DmsError::InvalidConfiguration("owner".to_owned()))?;
     Ok(())
 }

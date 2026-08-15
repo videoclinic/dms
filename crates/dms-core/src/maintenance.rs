@@ -22,6 +22,14 @@ use crate::{
 pub const DEFAULT_REVIEW_INTERVAL_MONTHS: u32 = 12;
 pub const DUE_SOON_DAYS: i64 = 30;
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DocumentReviewSchedule {
+    pub workspace_interval_months: u32,
+    pub interval_months: Option<u32>,
+    pub exemption_reason: Option<String>,
+    pub next_due_date: Option<NaiveDate>,
+}
+
 pub(crate) fn default_review_interval_months() -> u32 {
     DEFAULT_REVIEW_INTERVAL_MONTHS
 }
@@ -212,6 +220,16 @@ impl Workspace {
 
     pub fn default_review_interval_months(&self) -> u32 {
         self.default_review_interval_months
+    }
+
+    pub fn document_review_schedule(&self, document_id: Uuid) -> Result<DocumentReviewSchedule> {
+        let document = self.document(document_id)?;
+        Ok(DocumentReviewSchedule {
+            workspace_interval_months: self.default_review_interval_months,
+            interval_months: document.review_interval_months,
+            exemption_reason: document.review_exemption_reason.clone(),
+            next_due_date: document.next_review_due,
+        })
     }
 
     pub fn set_document_review_interval(

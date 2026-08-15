@@ -54,9 +54,14 @@ When implemented, the following must hold:
    a new request; explicit overrides and nearer folder assignments remain
    unchanged. If Entra membership later makes the selected person ineligible,
    the policy becomes unresolved; the app never selects a replacement itself.
-8. Review requests and released versions snapshot the effective editor and
+8. Owners, editors, and approvers use current-binding references to immutable
+   Entra object IDs; mutable names and email addresses are presentation and
+   notification data only. Review requests and released versions snapshot the effective editor and
    approver Entra tenant/object IDs plus their display name/email at that time.
    Later policy, group, or profile changes do not rewrite historical evidence.
+   A candidate may stage a different eligible editor for the next release; that
+   routing change applies only in the successful atomic release commit and is
+   rolled back with the release when export or save fails.
 9. Recording a review decision requires interactive Entra sign-in. The signed-in
    tenant/object ID must match the review's snapshotted approver and remain
    eligible in the bound group. The application records that authenticated actor

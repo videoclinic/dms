@@ -9,6 +9,7 @@ import {
   createLibraryState,
   confidentialityUpdateRequest,
   documentControlUpdateRequest,
+  documentReviewScheduleRequest,
   entryDocumentId,
   historyTarget,
   lifecycleActionRequest,
@@ -193,9 +194,13 @@ test("library markup separates source Name from DMS Title and keeps actions in t
         title: "Employee handbook",
         document_number: "HR-001",
         document_type: "procedure",
-        owner: "People team",
-        effective_date: "2026-08-11",
+        owner: { kind: "entra", object_id: "owner-1", display_name: "Olivia Owner" },
       },
+      current_owner: { kind: "entra", object_id: "owner-1", display_name: "Olivia Owner" },
+      eligible_people: [
+        { object_id: "owner-1", display_name: "Olivia Owner", email: "owner@example.test" },
+        { object_id: "editor-1", display_name: "Eva Editor", email: "editor@example.test" },
+      ],
       document_types: [{ id: "procedure", label: "Procedure", enabled: true }],
       confidentiality_types: [
         { id: "internal", label: "Internal", enabled: true },
@@ -225,6 +230,19 @@ test("library markup separates source Name from DMS Title and keeps actions in t
         version: "1.2",
         relative_pdf_path: "Policies/Handbook_V1.2_internal.pdf",
         pdf_exists: true,
+        effective_date: "2026-08-11",
+        profile: {
+          title: "Employee handbook",
+          document_number: "HR-001",
+          document_type: "procedure",
+          owner: { kind: "entra", object_id: "owner-1", display_name: "Olivia Owner" },
+        },
+      },
+      review_schedule: {
+        workspace_interval_months: 12,
+        interval_months: 6,
+        exemption_reason: null,
+        next_due_date: "2027-02-11",
       },
       permalink: "dms://open?workspace=ws-1&document=doc-1",
     },
@@ -242,7 +260,13 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /data-library-open-release/);
   assert.match(markup, /Current released PDF · V1\.2/);
   assert.match(markup, /id="library-document-control-form"/);
-  assert.match(markup, /name="effectiveDate" type="date" value="2026-08-11"/);
+  assert.match(markup, /name="ownerObjectId" required/);
+  assert.match(markup, /<option value="owner-1" selected>Olivia Owner/);
+  assert.doesNotMatch(markup, /name="owner"/);
+  assert.match(markup, /Immutable current release profile/);
+  assert.match(markup, /2026-08-11/);
+  assert.match(markup, /id="library-review-schedule-form"/);
+  assert.match(markup, /Next review due: 2027-02-11/);
   assert.match(markup, /<option value="procedure" selected>Procedure<\/option>/);
   assert.match(markup, /id="library-confidentiality-form"/);
   assert.match(markup, /<option value="restricted" selected>Restricted<\/option>/);
@@ -383,8 +407,7 @@ test("document control and confidentiality forms map to narrow document commands
   control.set("title", " Employee handbook ");
   control.set("documentNumber", " HR-001 ");
   control.set("documentType", "procedure");
-  control.set("owner", " People team ");
-  control.set("effectiveDate", "2026-08-11");
+  control.set("ownerObjectId", " owner-1 ");
   assert.deepEqual(documentControlUpdateRequest(control, detail), {
     command: "update_document_control",
     arguments: {
@@ -392,18 +415,36 @@ test("document control and confidentiality forms map to narrow document commands
       title: "Employee handbook",
       documentNumber: "HR-001",
       documentType: "procedure",
-      owner: "People team",
-      effectiveDate: "2026-08-11",
+      ownerObjectId: "owner-1",
     },
   });
-  control.set("effectiveDate", "2026-02-31");
-  assert.throws(() => documentControlUpdateRequest(control, detail), /YYYY-MM-DD/);
+  control.delete("ownerObjectId");
+  assert.throws(() => documentControlUpdateRequest(control, detail), /eligible Microsoft Entra owner/);
 
   const confidentiality = new FormData();
   confidentiality.set("confidentialityTypeId", " restricted ");
   assert.deepEqual(confidentialityUpdateRequest(confidentiality, detail), {
     command: "set_document_confidentiality",
     arguments: { documentId: "doc-1", confidentialityTypeId: "restricted" },
+  });
+
+  const schedule = new FormData();
+  schedule.set("scheduleMode", "override");
+  schedule.set("reviewIntervalMonths", "6");
+  assert.deepEqual(documentReviewScheduleRequest(schedule, detail), {
+    command: "update_document_review_schedule",
+    arguments: {
+      documentId: "doc-1",
+      reviewIntervalMonths: 6,
+      reviewExemptionReason: null,
+    },
+  });
+  schedule.set("scheduleMode", "exempt");
+  schedule.set("reviewExemptionReason", " Retired reference ");
+  assert.deepEqual(documentReviewScheduleRequest(schedule, detail).arguments, {
+    documentId: "doc-1",
+    reviewIntervalMonths: null,
+    reviewExemptionReason: "Retired reference",
   });
 });
 
@@ -446,6 +487,7 @@ test("external lifecycle forms map candidates, decisions, releases, and mail con
   submit.set("manualMinor", "4");
   submit.set("requesterObjectId", "editor-1");
   submit.set("changelog", " Clarify escalation path ");
+  submit.set("effectiveDate", "2026-08-11");
   submit.set("reviewOverrideReason", " Marker retained for review ");
   assert.deepEqual(lifecycleActionRequest("submit_candidate", submit, detail), {
     command: "submit_document_candidate",
@@ -456,7 +498,10 @@ test("external lifecycle forms map candidates, decisions, releases, and mail con
         manualMajor: 2,
         manualMinor: 4,
         changelog: "Clarify escalation path",
+        effectiveDate: "2026-08-11",
         requesterObjectId: "editor-1",
+        stagedOwnerObjectId: null,
+        stagedEditorObjectId: null,
         reviewOverrideReason: "Marker retained for review",
         mailtoConfirmed: false,
       },
@@ -482,6 +527,64 @@ test("external lifecycle forms map candidates, decisions, releases, and mail con
     command: "retry_minor_publication_notification",
     arguments: { documentId: "doc-1", releaseId: "release-1", mailtoConfirmed: true },
   });
+});
+
+test("successful empty identity state renders literal placeholders and blocks lifecycle transitions", () => {
+  const registered = file("Handbook.md", { in_library: { document_id: "doc-1" } }, {
+    id: "doc-1",
+    lifecycle: "draft",
+    control: { title: "Handbook" },
+  });
+  const base = {
+    ...createLibraryState(),
+    folder: snapshot("Policies", [registered]).folder,
+    selection: ["Policies/Handbook.md"],
+    detail: {
+      document_id: "doc-1",
+      source_name: "Handbook.md",
+      relative_path: "Policies/Handbook.md",
+      source_exists: true,
+      source_state: "registered",
+      lifecycle: "draft",
+      control: { title: "Handbook", owner: { kind: "placeholder", label: "<owner>" } },
+      current_owner: { kind: "placeholder", label: "<owner>" },
+      effective_workflow_roles: { editor: { kind: "placeholder", label: "<editor>" }, approver: null },
+      eligible_people: [],
+      eligible_people_state: "successful_empty",
+      requires_identity_handover: true,
+      lifecycle_actions: {},
+    },
+  };
+  const emptyMarkup = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies" } },
+    base,
+  );
+  assert.match(emptyMarkup, /&lt;owner&gt;/);
+  assert.match(emptyMarkup, /Requesting editor/);
+  assert.match(emptyMarkup, /value="&lt;editor&gt;" readonly/);
+  assert.match(emptyMarkup, /Candidate submission and release are blocked/);
+  assert.match(emptyMarkup, /type="submit" disabled>Submit candidate/);
+
+  const populatedMarkup = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies" } },
+    {
+      ...base,
+      detail: {
+        ...base.detail,
+        eligible_people_state: "populated",
+        eligible_people: [
+          { object_id: "owner-1", display_name: "Olivia Owner", email: "owner@example.test" },
+          { object_id: "editor-1", display_name: "Eva Editor", email: "editor@example.test" },
+        ],
+      },
+    },
+  );
+  assert.match(populatedMarkup, /Apply real identities with successful release/);
+  assert.match(populatedMarkup, /name="stagedOwnerObjectId" required/);
+  assert.match(populatedMarkup, /name="stagedEditorObjectId" required/);
+  assert.match(populatedMarkup, /name="targetMode"><option value="next_minor">/);
 });
 
 test("updated document selection refreshes the detail and visible row in place", () => {

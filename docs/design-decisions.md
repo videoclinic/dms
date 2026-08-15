@@ -216,7 +216,10 @@ Capability-local rules stay in their CAP files.
   authenticated Microsoft Entra tenant/object IDs for a review decision,
   revision digest (when applicable), confidentiality snapshot, requested target
   version, target-selection mode, review changelog, optional decision comment,
-  and the operator comment text.
+  requested document-profile and effective-date snapshot, optional staged
+  owner/editor object-ID references, and the operator comment text. Release
+  events retain the committed immutable profile/effective-date snapshot rather
+  than re-reading the mutable profile during later verification.
 - **Why:** A canonical schema is the only way the chain is verifiable later
   and the only way two installations can compare evidence.
 - **Consequences:** Any reader can recompute and verify each event hash and the
@@ -250,6 +253,9 @@ Capability-local rules stay in their CAP files.
 - **Consequences:** Rename/move detection updates the locator only
   (CAP-0013). Path is never the sole foreign key for history. Export still
   derives publish relative segments from the current locator (ADR-0006).
+  Profile title, number, type, and owner remain mutable attributes of the stable
+  document ID, while each release keeps the profile and effective date accepted
+  for that version; a later locator or profile change cannot relabel history.
 
 ## ADR-0016 — Explicit post-release revision cycle
 
@@ -263,7 +269,11 @@ Capability-local rules stay in their CAP files.
   the next cycle.
 - **Consequences:** CAP-0015 owns document control data, next-review-due,
   cancel-review, and obsolete. CAP-0016 owns publish-history navigation and
-  orphan cleanup.
+  orphan cleanup. Candidate creation captures the requested profile and required
+  effective date. Successful export commits that immutable snapshot and derives
+  the review due date from it; failed export changes neither the current release
+  nor any staged owner/editor handover. A staged handover applies to the mutable
+  profile/routing only in the same successful release transaction.
 
 ## ADR-0017 — Versioned `.dms` schema with fail-closed migration
 
@@ -275,7 +285,12 @@ Capability-local rules stay in their CAP files.
   upgrades without corrupting document history.
 - **Consequences:** Every schema change requires a migration fixture and
   old→new verification. The application retains the pre-migration metadata
-  until the migrated store passes parsing and event-chain verification.
+  until the migrated store passes parsing and event-chain verification. The
+  v11→v12 migration preserves free-text owners as display-only
+  `legacy_owner_label`, never resolves them by name or email, and moves a v11
+  effective date only onto an authoritative current non-withdrawn release. It
+  does not invent snapshots for older releases or overwrite an existing review
+  due date; absent historical values remain explicitly unrecorded.
 
 ## ADR-0018 — Claude Desktop is an optional operator-mediated handoff
 
@@ -338,6 +353,13 @@ Capability-local rules stay in their CAP files.
   population. Folder and document policies reference individual immutable Entra
   user object IDs. The desktop app uses interactive delegated sign-in and
   Microsoft Graph on demand; it has no user CRUD or group-membership management.
+  Owner, editor, and approver authority is keyed only by the
+  tenant-scoped Entra object ID under the current group binding; names and
+  email addresses are refreshable display and notification data and never
+  participate in identity equality. The literal `<owner>` and `<editor>`
+  placeholders are not Entra identities; they appear only for routing when a
+  successful direct-member response contains zero eligible users, and they
+  cannot authorize review, decision, notification, or release.
 - **Why:** Microsoft 365 administrators already govern joiners, movers, leavers,
   names, and mail addresses in Entra. Copying that directory into `.dms` would
   create stale identities and another access-management process.
@@ -346,15 +368,24 @@ Capability-local rules stay in their CAP files.
   (`GroupMember.Read.All` and `User.Read.All`, plus `openid profile offline_access`
   for delegated device authorization); tenant admin consent is required for both
   Graph permissions because user profile and `accountEnabled` data are needed to
-  exclude disabled accounts. It does not read SharePoint site permissions, which need
-  `Sites.FullControl.All`, and never treats OneDrive sharing as a roster. The
-  app refreshes membership before role assignment, review submission, and a
+  the disabled accounts. It does not read SharePoint site permissions, which need
+  `Sites.FullControl.All`, and never treats OneDrive sharing as a roster.
+  **Consequences:** The app refreshes membership before role assignment, review submission, and a
   decision; a cached name/email is display-only. An unresolved policy blocks new
   workflow work without silently rewriting the policy. A review decision is
   accepted only when the signed-in tenant/object ID equals the snapshotted
   approver and remains eligible in the group. Filesystem and SharePoint/OneDrive
   ACLs remain the source-file access boundary, and the app does not synchronize
-  document content.
+  document content. A truly successful empty eligible-people response is the
+  only state in which the literal `<owner>` and `<editor>` placeholders are
+  exposed; a missing binding, tenant mismatch, refresh error, disabled-only
+  response, or inaccessible group fail closed without producing those labels.
+  Placeholders never receive a synthetic object ID and remain visible only as
+  unresolved local document/routing state until an operator selects real
+  eligible people after a later nonempty refresh. Owner identity follows the
+  same object-ID rule as editor and approver: a free-text label is display-only
+  legacy state and is never converted into workflow authority by matching a
+  display name or email address.
 
 ## ADR-0022 — One Configuration workspace with task-based routes
 
@@ -397,3 +428,49 @@ Capability-local rules stay in their CAP files.
   inaccessibility. Tokens remain tenant-scoped in OS credential storage.
   Switching a workspace to `mailto:` removes its SMTP credential. Environment
   configuration is a process-level override, not a save target.
+
+## ADR-0025 — Release-bound control data, immutable owner identity, and review schedule separation
+
+- **Decision:** Library document data is split into three durable data domains.
+  The **mutable document profile** stores title, document number, document
+  type, review interval/exemption inputs, and the current owner reference.
+  The **immutable candidate/release snapshot** stores the profile (including
+  the owner tenant/object ID plus its display snapshot), required effective
+  date, confidentiality snapshot, and workflow people. The **mutable review
+  schedule** stores the document's per-record interval/exemption and the
+  next-review-due date derived from the current release's effective date.
+  Owner, editor, and approver authority is keyed only by tenant-scoped Entra
+  object ID under the current group binding; names and email addresses are
+  refreshable display and notification data and never participate in identity
+  equality. Effective date is a required candidate input captured only by a
+  successful release; new releases schedule the next review from that
+  snapshot's effective date. The release record retains its full profile
+  snapshot and a release-effective date so historic releases render from
+  immutable data, not the current mutable profile.
+- **Why:** Free-text owner labels are mutable and not unique; treating them as
+  authority silently assigns workflow power to an unverified account. Mutable
+  effective dates erase ISO-style document-control evidence and let a
+  post-release rename rewrite the date that auditors rely on. Coupling review
+  scheduling to the release timestamp rather than the snapshot hides the
+  contract the schedule actually depends on. Separating the three domains keeps
+  the operator's control-data edits in one place, lets a release preserve the
+  exact authoritative state at that moment, and keys every role decision on an
+  object ID that survives name and email changes.
+- **Consequences:** A document profile change never rewrites a recorded
+  release's profile, effective date, or owner. A review-schedule change
+  invalidates open candidates only when the interval, exemption, or its reason
+  actually changes. A workspace that opens a successful empty eligible-people
+  refresh exposes the literal `<owner>` and `<editor>` placeholders only for
+  routing; a missing binding, tenant mismatch, refresh error, disabled-only
+  response, or inaccessible group still fails closed without producing those
+  labels. Placeholders are not Entra identities, cannot authorize review,
+  decision, notification, or release, and never receive a synthetic object ID.
+  A later real-person refresh may stage explicit Owner and Editor references
+  for the document's next successful release; the current mutable profile and
+  workflow override stay unchanged until that release commits. Pre-v12
+  effective-date omissions and free-text owner labels render as explicit
+  unrecorded/unresolved legacy state rather than being substituted with the
+  current mutable data. Schema migrations move authoritative v11 effective
+  dates into the current non-withdrawn release, preserve a `legacy_owner_label`
+  for the prior free-text value, and never invent a release snapshot for an
+  unrecorded date.

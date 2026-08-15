@@ -165,14 +165,40 @@ function validIsoDate(value) {
   return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+function identityKind(identity) {
+  if (!identity) return "unassigned";
+  if (typeof identity === "string") return identity === "placeholder" ? "placeholder" : "legacy";
+  if (identity.kind) return identity.kind;
+  if (identity.entra || identity.object_id) return "entra";
+  if (identity.placeholder) return "placeholder";
+  if (identity.legacy) return "legacy";
+  return "unresolved";
+}
+
+function identityObjectId(identity) {
+  return identity?.object_id ?? identity?.entra?.object_id ?? identity?.person?.object_id ?? null;
+}
+
+function identityLabel(identity, placeholder = "Not configured") {
+  const kind = identityKind(identity);
+  if (kind === "placeholder") {
+    return identity?.label ?? identity?.placeholder?.label ?? placeholder;
+  }
+  if (kind === "legacy") {
+    return identity?.label ?? identity?.legacy?.label ?? String(identity ?? placeholder);
+  }
+  const person = identity?.person ?? identity?.entra ?? identity;
+  if (person?.display_name) return person.display_name;
+  if (person?.object_id) return `Unresolved · ${person.object_id}`;
+  return placeholder;
+}
+
 export function documentControlUpdateRequest(values, detail) {
   if (!detail?.document_id) throw new Error("A selected document is required.");
   const title = String(values.get("title") ?? "").trim();
-  const effectiveDate = String(values.get("effectiveDate") ?? "").trim();
+  const ownerObjectId = String(values.get("ownerObjectId") ?? "").trim();
   if (!title) throw new Error("Document title cannot be empty.");
-  if (effectiveDate && !validIsoDate(effectiveDate)) {
-    throw new Error("Effective date must use YYYY-MM-DD.");
-  }
+  if (!ownerObjectId) throw new Error("Choose an eligible Microsoft Entra owner.");
   return {
     command: "update_document_control",
     arguments: {
@@ -180,8 +206,31 @@ export function documentControlUpdateRequest(values, detail) {
       title,
       documentNumber: String(values.get("documentNumber") ?? "").trim(),
       documentType: String(values.get("documentType") ?? "").trim(),
-      owner: String(values.get("owner") ?? "").trim(),
-      effectiveDate,
+      ownerObjectId,
+    },
+  };
+}
+
+export function documentReviewScheduleRequest(values, detail) {
+  if (!detail?.document_id) throw new Error("A selected document is required.");
+  const mode = String(values.get("scheduleMode") ?? "").trim();
+  const interval = String(values.get("reviewIntervalMonths") ?? "").trim();
+  const exemptionReason = String(values.get("reviewExemptionReason") ?? "").trim();
+  if (!["inherit", "override", "exempt"].includes(mode)) {
+    throw new Error("Choose a document review schedule.");
+  }
+  if (mode === "override" && (!/^\d+$/.test(interval) || Number(interval) < 1 || Number(interval) > 120)) {
+    throw new Error("Review interval must be a whole number from 1 to 120 months.");
+  }
+  if (mode === "exempt" && !exemptionReason) {
+    throw new Error("A review exemption reason is required.");
+  }
+  return {
+    command: "update_document_review_schedule",
+    arguments: {
+      documentId: detail.document_id,
+      reviewIntervalMonths: mode === "override" ? Number(interval) : null,
+      reviewExemptionReason: mode === "exempt" ? exemptionReason : null,
     },
   };
 }
@@ -209,15 +258,22 @@ export function lifecycleActionRequest(action, values, detail) {
     const targetMode = String(values?.get("targetMode") ?? "").trim();
     const requesterObjectId = String(values?.get("requesterObjectId") ?? "").trim();
     const changelog = String(values?.get("changelog") ?? "").trim();
+    const effectiveDate = String(values?.get("effectiveDate") ?? "").trim();
     const manualMajor = String(values?.get("manualMajor") ?? "").trim();
     const manualMinor = String(values?.get("manualMinor") ?? "").trim();
+    const stagedOwnerObjectId = String(values?.get("stagedOwnerObjectId") ?? "").trim();
+    const stagedEditorObjectId = String(values?.get("stagedEditorObjectId") ?? "").trim();
     if (!["next_minor", "next_major", "manual"].includes(targetMode)) {
       throw new Error("Choose a target version.");
     }
     if (!requesterObjectId) throw new Error("Choose the requesting editor.");
     if (!changelog) throw new Error("A release changelog is required.");
+    if (!validIsoDate(effectiveDate)) throw new Error("Effective date must use YYYY-MM-DD.");
     if (targetMode === "manual" && (!/^\d+$/.test(manualMajor) || !/^\d+$/.test(manualMinor))) {
       throw new Error("Manual target version needs whole major and minor numbers.");
+    }
+    if (detail.requires_identity_handover && (!stagedOwnerObjectId || !stagedEditorObjectId)) {
+      throw new Error("Choose the real Owner and Editor to apply with this release.");
     }
     return {
       command: "submit_document_candidate",
@@ -228,7 +284,10 @@ export function lifecycleActionRequest(action, values, detail) {
           manualMajor: targetMode === "manual" ? Number(manualMajor) : null,
           manualMinor: targetMode === "manual" ? Number(manualMinor) : null,
           changelog,
+          effectiveDate,
           requesterObjectId,
+          stagedOwnerObjectId: stagedOwnerObjectId || null,
+          stagedEditorObjectId: stagedEditorObjectId || null,
           reviewOverrideReason: String(values?.get("reviewOverrideReason") ?? "").trim(),
           mailtoConfirmed: false,
         },
@@ -441,9 +500,19 @@ function lifecyclePanelMarkup(library, detail) {
 function externalLifecycleMarkup(library, detail) {
   const candidate = detail.active_candidate;
   const mailConfirmation = (label) => `<label class="confirmation"><input type="checkbox" name="mailtoConfirmed" value="yes"> I confirm the host mail message for ${escapeHtml(label)} was sent.</label>`;
-  const requesterOptions = (detail.eligible_people ?? [])
+  const peopleOptions = (detail.eligible_people ?? [])
     .map((person) => `<option value="${escapeHtml(person.object_id)}">${escapeHtml(person.display_name)} · ${escapeHtml(person.email)}</option>`)
     .join("");
+  const peopleAvailable = (detail.eligible_people ?? []).length > 0;
+  const placeholderRequestingEditor = detail.eligible_people_state === "successful_empty"
+    ? '<label>Requesting editor<input value="&lt;editor&gt;" readonly aria-readonly="true"></label>'
+    : `<label>Requesting editor<select name="requesterObjectId" required><option value="">Choose person</option>${peopleOptions}</select></label>`;
+  const handover = detail.requires_identity_handover && peopleAvailable
+    ? `<fieldset><legend>Apply real identities with successful release</legend><p class="source-path">These values remain staged through review and failed export. Current document and release identity do not change until release succeeds.</p><label>Owner<select name="stagedOwnerObjectId" required><option value="">Choose person</option>${peopleOptions}</select></label><label>Editor<select name="stagedEditorObjectId" required><option value="">Choose person</option>${peopleOptions}</select></label></fieldset>`
+    : "";
+  const placeholderBlock = detail.requires_identity_handover && !peopleAvailable
+    ? '<p class="library-detail-error" role="status">Candidate submission and release are blocked while &lt;owner&gt; and &lt;editor&gt; remain unresolved. Refresh the identity source after real people are available.</p>'
+    : "";
   const failedSignIn = Boolean(library.approver_sign_in?.challenge && library.detail_error);
   const signIn = library.approver_sign_in?.challenge
     ? failedSignIn
@@ -453,7 +522,7 @@ function externalLifecycleMarkup(library, detail) {
       ? `<p class="source-path">Approver sign-in ready for ${escapeHtml(library.approver_sign_in.actor.display_name)}.</p>`
       : '<button class="button secondary" type="button" data-library-approver-sign-in>Sign in as approver</button>';
   const submit = detail.lifecycle === "draft" && !candidate
-    ? `<form class="lifecycle-action" data-library-lifecycle-form="submit_candidate"><strong>Submit release candidate</strong><label>Target version<select name="targetMode"><option value="next_major">Next major (approval required)</option><option value="next_minor">Next minor</option><option value="manual">Manual target</option></select></label><label>Manual major<input name="manualMajor" inputmode="numeric"></label><label>Manual minor<input name="manualMinor" inputmode="numeric"></label><label>Requesting editor<select name="requesterObjectId" required><option value="">Choose person</option>${requesterOptions}</select></label><label>Changelog<textarea name="changelog" required></textarea></label><label>Review content-check override reason (only when needed)<textarea name="reviewOverrideReason"></textarea></label><button class="button" type="submit">Submit candidate</button></form>`
+    ? `<form class="lifecycle-action" data-library-lifecycle-form="submit_candidate"><strong>Submit release candidate</strong>${placeholderBlock}<label>Target version<select name="targetMode"><option value="next_minor">Next minor</option><option value="next_major">Next major (approval required)</option><option value="manual">Manual target</option></select></label><label>Manual major<input name="manualMajor" inputmode="numeric"></label><label>Manual minor<input name="manualMinor" inputmode="numeric"></label><label>Effective date<input name="effectiveDate" type="date" required></label>${placeholderRequestingEditor}${handover}<label>Changelog<textarea name="changelog" required></textarea></label><label>Review content-check override reason (only when needed)<textarea name="reviewOverrideReason"></textarea></label><button class="button" type="submit" ${detail.requires_identity_handover && !peopleAvailable ? "disabled" : ""}>Submit candidate</button></form>`
     : "";
   const reviewRetry = candidate?.status === "review_delivery_failed"
     ? `<form class="lifecycle-action" data-library-lifecycle-form="retry_review_notification"><strong>Confirm review request delivery</strong><small>The host mail handler opened without advancing the review.</small>${mailConfirmation("the review request")}<button class="button" type="submit">Confirm review message sent</button></form>`
@@ -462,7 +531,7 @@ function externalLifecycleMarkup(library, detail) {
     ? `<form class="lifecycle-action" data-library-lifecycle-form="decide_review"><strong>Record review decision</strong>${signIn}<label>Decision<select name="decision" required><option value="">Choose decision</option><option value="approved">Approve</option><option value="rejected">Reject</option><option value="changes_requested">Request changes</option></select></label><label>Comment<textarea name="comment"></textarea></label><button class="button" type="submit">Record decision</button></form>`
     : "";
   const release = candidate && ((candidate.approval_required && candidate.status === "approved") || (!candidate.approval_required && candidate.status === "draft"))
-    ? `<form class="lifecycle-action" data-library-lifecycle-form="release_candidate"><strong>Export and release ${escapeHtml(`V${candidate.version.major}.${candidate.version.minor}`)}</strong><small>Uses installed Office for .docx or the native print WebView for Markdown.</small><label>Release content-check override reason (only when needed)<textarea name="releaseOverrideReason"></textarea></label><button class="button" type="submit">Export PDF and release</button></form>`
+    ? `<form class="lifecycle-action" data-library-lifecycle-form="release_candidate"><strong>Export and release ${escapeHtml(`V${candidate.version.major}.${candidate.version.minor}`)}</strong><small>Uses installed Office for .docx or the native print WebView for Markdown. The candidate release profile and any staged handover apply only after export and release succeed.</small><label>Release content-check override reason (only when needed)<textarea name="releaseOverrideReason"></textarea></label><button class="button" type="submit" ${candidate.identity_handover_blocked ? "disabled" : ""}>Export PDF and release</button></form>`
     : "";
   const decisionRetry = detail.retryable_decision_candidate
     ? `<form class="lifecycle-action" data-library-lifecycle-form="retry_decision_notification"><strong>Confirm decision notification delivery</strong>${mailConfirmation("the decision outcome")}<button class="button secondary" type="submit">Confirm decision message sent</button></form>`
@@ -501,11 +570,12 @@ function selectionMarkup(library) {
   }
   const confidentiality = detail.effective_confidentiality;
   const roles = detail.effective_workflow_roles;
-  const role = (value) => value?.display_name ?? (value?.object_id ? `Unresolved · ${value.object_id}` : "Not configured");
+  const role = (value, placeholder) => identityLabel(value, placeholder);
   const sourceAvailable = detail.source_exists && detail.source_state === "registered";
   const release = detail.current_release;
+  const releaseProfile = release?.profile ?? release?.document_control_snapshot ?? null;
   const currentReleaseIdentity = release
-    ? `<div class="source-identity"><strong>Current released PDF · V${escapeHtml(release.version)}</strong><span>${escapeHtml(release.relative_pdf_path)}</span><small>${release.pdf_exists ? "Available" : "Missing PDF"}</small></div>`
+    ? `<section class="source-identity current-release-profile"><strong>Current released PDF · V${escapeHtml(release.version)}</strong><span>${escapeHtml(release.relative_pdf_path)}</span><small>${release.pdf_exists ? "Available" : "Missing PDF"}</small><h4>Immutable current release profile</h4>${releaseProfile ? `<dl class="selection-details"><dt>Effective date</dt><dd>${escapeHtml(release.effective_date ?? releaseProfile.effective_date ?? "Unknown")}</dd><dt>Title</dt><dd>${escapeHtml(releaseProfile.title)}</dd><dt>Document number</dt><dd>${escapeHtml(releaseProfile.document_number ?? "Not set")}</dd><dt>Document type</dt><dd>${escapeHtml(releaseProfile.document_type ?? "Not set")}</dd><dt>Owner</dt><dd>${escapeHtml(identityLabel(releaseProfile.owner, "Unknown"))}</dd></dl>` : '<p class="source-path">Unknown · this legacy release has no stored profile or effective date.</p>'}</section>`
     : '<div class="source-identity"><strong>Current released PDF</strong><span>No active release</span></div>';
   const documentTypeOptions = (detail.document_types ?? [])
     .filter((type) => type.enabled || type.id === detail.control.document_type)
@@ -515,9 +585,21 @@ function selectionMarkup(library) {
     .filter((type) => type.enabled || type.id === detail.confidentiality_override)
     .map((type) => `<option value="${escapeHtml(type.id)}" ${type.id === detail.confidentiality_override ? "selected" : ""}>${escapeHtml(type.label)}</option>`)
     .join("");
-  const editor = `<section class="document-control-editor" aria-labelledby="document-control-editor-heading"><h4 id="document-control-editor-heading">Edit document control data</h4><p class="source-path">Applies to ${escapeHtml(detail.source_name)} · ${escapeHtml(detail.relative_path)}</p>${library.detail_error ? `<p class="library-detail-error" role="alert">${escapeHtml(library.detail_error)}</p>` : ""}<form id="library-document-control-form"><div class="document-control-fields"><label>Title<input name="title" required value="${escapeHtml(detail.control.title)}"></label><label>Document number<input name="documentNumber" value="${escapeHtml(detail.control.document_number ?? "")}"></label><label>Document type<select name="documentType"><option value="">Not set</option>${documentTypeOptions}</select></label><label>Owner<input name="owner" value="${escapeHtml(detail.control.owner ?? "")}"></label><label>Effective date<input name="effectiveDate" type="date" value="${escapeHtml(detail.control.effective_date ?? "")}"></label></div><button class="button" type="submit">Save document control</button></form><form id="library-confidentiality-form" class="confidentiality-editor"><label>Confidentiality override<select name="confidentialityTypeId"><option value="">Use inherited folder policy</option>${confidentialityOptions}</select></label><button class="button secondary" type="submit">Apply confidentiality</button></form></section>`;
-  const currentRelease = `${currentReleaseIdentity}${editor}${lifecyclePanelMarkup(library, detail)}`;
-  return `<div class="selection-header"><span class="badge">In library</span><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><h3>${escapeHtml(detail.control.title)}</h3>${detail.control.document_number ? `<p class="document-number">${escapeHtml(detail.control.document_number)}</p>` : ""}<div class="source-identity"><strong>Source file</strong><span>${escapeHtml(detail.source_name)}</span><small>${escapeHtml(detail.relative_path)}</small></div>${currentRelease}<details open><summary>Document control data</summary><dl class="selection-details"><dt>Lifecycle</dt><dd>${escapeHtml(detail.lifecycle)}</dd><dt>Document type</dt><dd>${escapeHtml(detail.control.document_type ?? "Not set")}</dd><dt>Owner</dt><dd>${escapeHtml(detail.control.owner ?? "Not set")}</dd><dt>Confidentiality</dt><dd>${escapeHtml(confidentiality?.label ?? "Not configured")}${confidentiality ? ` · ${escapeHtml(confidentiality.document_override ? "override" : `from ${confidentiality.source_folder}`)}` : ""}</dd><dt>Editor</dt><dd>${escapeHtml(role(roles?.editor))}</dd><dt>Approver</dt><dd>${escapeHtml(role(roles?.approver))}</dd></dl></details><details open><summary>Actions</summary><div class="selection-actions"><button class="button" type="button" data-library-open-source ${sourceAvailable ? "" : "disabled"}>Open source draft</button><button class="button" type="button" data-library-open-release ${release?.pdf_exists ? "" : "disabled"}>Open current released PDF</button><button class="button" type="button" data-library-open-notes>Open notes</button><button class="button secondary" type="button" data-library-open-assistance>Evaluate changes with Claude</button><button class="button secondary" type="button" data-library-copy-permalink>Copy permalink</button><button class="button danger" type="button" data-library-unregister>Unregister</button></div><form id="library-reassociate-form" class="reassociate-form"><label>Reassociate source<input name="path" required value="${escapeHtml(detail.relative_path)}" aria-label="New edit-root-relative source path"></label><button class="button secondary" type="submit">Reassociate</button></form></details><details><summary>Revision cycle</summary><p>No revision cycle is open.</p></details><details><summary>Releases</summary><p>Release evidence remains available from the Releases destination.</p></details>`;
+  const currentOwner = detail.current_owner ?? detail.control.owner;
+  const currentOwnerId = identityObjectId(currentOwner);
+  const ownerOptions = (detail.eligible_people ?? [])
+    .map((person) => `<option value="${escapeHtml(person.object_id)}" ${person.object_id === currentOwnerId ? "selected" : ""}>${escapeHtml(person.display_name)} · ${escapeHtml(person.email)}</option>`)
+    .join("");
+  const ownerSelectable = ownerOptions.length > 0;
+  const unresolvedOwnerOption = !currentOwnerId
+    ? `<option value="" selected disabled>${escapeHtml(identityLabel(currentOwner, "Choose a person"))}</option>`
+    : "";
+  const schedule = detail.review_schedule ?? {};
+  const scheduleMode = schedule.exemption_reason ? "exempt" : schedule.interval_months ? "override" : "inherit";
+  const scheduleMarkup = `<form id="library-review-schedule-form" class="confidentiality-editor"><h4>Document review schedule</h4><p class="source-path">Next review is derived from the current release effective date. An exemption records a reason and creates no due date.</p><label>Schedule<select name="scheduleMode"><option value="inherit" ${scheduleMode === "inherit" ? "selected" : ""}>Use workspace interval (${escapeHtml(schedule.workspace_interval_months ?? "—")} months)</option><option value="override" ${scheduleMode === "override" ? "selected" : ""}>Document interval override</option><option value="exempt" ${scheduleMode === "exempt" ? "selected" : ""}>Exempt document</option></select></label><label>Review interval months<input name="reviewIntervalMonths" type="number" min="1" max="120" value="${escapeHtml(schedule.interval_months ?? "")}"></label><label>Exemption reason<textarea name="reviewExemptionReason">${escapeHtml(schedule.exemption_reason ?? "")}</textarea></label><p class="source-path">Next review due: ${escapeHtml(schedule.next_due_date ?? (schedule.exemption_reason ? "Exempt" : "Unknown until release date is known"))}</p><button class="button secondary" type="submit">Update review schedule</button></form>`;
+  const editor = `<section class="document-control-editor" aria-labelledby="document-control-editor-heading"><h4 id="document-control-editor-heading">Edit document control data</h4><p class="source-path">Applies to ${escapeHtml(detail.source_name)} · ${escapeHtml(detail.relative_path)}</p>${library.detail_error ? `<p class="library-detail-error" role="alert">${escapeHtml(library.detail_error)}</p>` : ""}${ownerSelectable ? "" : '<p class="library-detail-error" role="status">No eligible Microsoft Entra owner is available. Identity placeholders and legacy owner text are display-only.</p>'}<form id="library-document-control-form"><div class="document-control-fields"><label>Title<input name="title" required value="${escapeHtml(detail.control.title)}"></label><label>Document number<input name="documentNumber" value="${escapeHtml(detail.control.document_number ?? "")}"></label><label>Document type<select name="documentType"><option value="">Not set</option>${documentTypeOptions}</select></label><label>Owner<select name="ownerObjectId" required ${ownerSelectable ? "" : "disabled"}>${unresolvedOwnerOption}${ownerOptions}</select></label></div><button class="button" type="submit" ${ownerSelectable ? "" : "disabled"}>Save document control</button></form><form id="library-confidentiality-form" class="confidentiality-editor"><label>Confidentiality override<select name="confidentialityTypeId"><option value="">Use inherited folder policy</option>${confidentialityOptions}</select></label><button class="button secondary" type="submit">Apply confidentiality</button></form></section>`;
+  const currentRelease = `${currentReleaseIdentity}${editor}${scheduleMarkup}${lifecyclePanelMarkup(library, detail)}`;
+  return `<div class="selection-header"><span class="badge">In library</span><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><h3>${escapeHtml(detail.control.title)}</h3>${detail.control.document_number ? `<p class="document-number">${escapeHtml(detail.control.document_number)}</p>` : ""}<div class="source-identity"><strong>Source file</strong><span>${escapeHtml(detail.source_name)}</span><small>${escapeHtml(detail.relative_path)}</small></div>${currentRelease}<details open><summary>Document control data</summary><dl class="selection-details"><dt>Lifecycle</dt><dd>${escapeHtml(detail.lifecycle)}</dd><dt>Document type</dt><dd>${escapeHtml(detail.control.document_type ?? "Not set")}</dd><dt>Owner</dt><dd>${escapeHtml(identityLabel(currentOwner, "Not set"))}</dd><dt>Confidentiality</dt><dd>${escapeHtml(confidentiality?.label ?? "Not configured")}${confidentiality ? ` · ${escapeHtml(confidentiality.document_override ? "override" : `from ${confidentiality.source_folder}`)}` : ""}</dd><dt>Editor</dt><dd>${escapeHtml(role(roles?.editor, "<editor>"))}</dd><dt>Approver</dt><dd>${escapeHtml(role(roles?.approver, "Not configured"))}</dd></dl></details><details open><summary>Actions</summary><div class="selection-actions"><button class="button" type="button" data-library-open-source ${sourceAvailable ? "" : "disabled"}>Open source draft</button><button class="button" type="button" data-library-open-release ${release?.pdf_exists ? "" : "disabled"}>Open current released PDF</button><button class="button" type="button" data-library-open-notes>Open notes</button><button class="button secondary" type="button" data-library-open-assistance>Evaluate changes with Claude</button><button class="button secondary" type="button" data-library-copy-permalink>Copy permalink</button><button class="button danger" type="button" data-library-unregister>Unregister</button></div><form id="library-reassociate-form" class="reassociate-form"><label>Reassociate source<input name="path" required value="${escapeHtml(detail.relative_path)}" aria-label="New edit-root-relative source path"></label><button class="button secondary" type="submit">Reassociate</button></form></details><details><summary>Revision cycle</summary><p>No revision cycle is open.</p></details><details><summary>Releases</summary><p>Release evidence remains available from the Releases destination.</p></details>`;
 }
 
 export function libraryMarkup(workspace, activity, library, error = "") {

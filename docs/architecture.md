@@ -77,10 +77,18 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
   across draft renames and version bumps.
 - Workflow roles select individual, direct user members of the workspace's
   configured Microsoft Entra group. `.dms` records only the group object ID,
-  group label, display cache, and role references to immutable Entra user object
-  IDs. The public-client and tenant IDs are app-global OS-user configuration,
-  not workspace metadata. It does not keep an application-managed user roster. A group may be a Microsoft 365 group when
+  group label, display cache, and role references to immutable Entra user
+  object IDs. The public-client and tenant IDs are app-global OS-user
+  configuration, not workspace metadata. It does not keep an
+  application-managed user roster. A group may be a Microsoft 365 group when
   its membership is exactly the intended workflow population.
+- Owner, editor, and approver authority is keyed only by the tenant-scoped
+  Entra object ID under the current group binding. Names and email addresses
+  are refreshable display and notification data and never participate in
+  identity equality. The literal `<owner>` and `<editor>` placeholders are not
+  Entra identities; they appear only for routing when a successful direct
+  member response contains zero eligible users, and they cannot authorize
+  review, decision, notification, or release.
 - The app refreshes Microsoft Graph membership when assigning a role and before
   workflow authority is applied. Cached display information is presentation
   data only. A missing, disabled, or no-longer-eligible identity leaves the
@@ -112,6 +120,19 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
   filesystem access from other tools.
 - ISO 27001 support is traceable library membership, lifecycle, notes, and
   released-PDF integrity — not organizational certification.
+
+## Document data domains
+
+Each library document persists data across three durable domains. Mixing them
+would either let a later profile edit silently rewrite a recorded release or
+treat a refreshable display string as workflow authority, so the boundaries
+below are part of the contract every adapter honours.
+
+| Domain | What it stores | Mutability | Notes |
+| --- | --- | --- | --- |
+| Mutable document profile | Title, document number, document type, current owner reference, review interval/exemption inputs | Editable in **Edit document control data**; profile edits append canonical before/after evidence and invalidate stale candidates | The owner reference is a tenant-scoped Entra object ID under the current group binding; the cached display name/email is refreshable, never authoritative. Free-text owner labels from earlier schema versions are kept in `legacy_owner_label` as display-only unresolved state and are never converted into workflow authority by label or email matching |
+| Immutable candidate/release snapshot | Profile (title, optional number/type, owner tenant/object ID + display snapshot), required effective date, confidentiality snapshot, workflow people (editor, approver, requester), and approval/review chain head | Snapshotted at candidate creation; never rewritten by later profile edits, lifecycle moves, or display-cache refreshes | New releases schedule the next review from the snapshot's effective date. Pre-v12 releases without a stored effective date render an explicit **unrecorded** state rather than substituting the current mutable profile |
+| Mutable review schedule | Per-document review interval, exemption reason, next-review-due date | Editable through CAP-0015/CAP-0017; changes append evidence but do not invalidate open candidates unless the interval, exemption, or its reason actually changes | The next-review-due date is derived from the current release's stored effective date plus the resolved interval; an exemption suppresses the due date and is auditable |
 
 ## Out of scope (current architecture)
 

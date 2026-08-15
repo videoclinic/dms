@@ -4,7 +4,7 @@
 | --- | --- |
 | ID | CAP-0006 |
 | Status | not implemented |
-| Tests | Partial phases 3, 9b.1, 9e, 9f.1, 9f.2, 9f.5, and 9g evidence: [`dms-core` Library tests](../../../crates/dms-core/tests/library.rs), [local lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [shell, independent-pane scrolling, and permalink-target tests](../../../crates/dms-desktop/ui/app.test.mjs), [hierarchical Library, document-action, and workflow-evidence frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31359360786) |
+| Tests | Partial phases 3, 9b.1, 9e, 9f.1, 9f.2, 9f.5, 9g, and 9k.3 evidence: [`dms-core` Library and lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [shell, independent-pane scrolling, and permalink-target tests](../../../crates/dms-desktop/ui/app.test.mjs), [hierarchical Library, document-control, placeholder, and workflow frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31359360786) |
 
 ## Outcomes (contract — not yet true in runtime)
 
@@ -73,8 +73,9 @@ When implemented, the following must hold:
 5. **In library** document rows keep the exact source file name in **Name** and
    surface enough DMS-managed data to scan the current folder without leaving
    the explorer: lifecycle state, latest released version label, document title,
-   document number (when set), document type, owner, effective confidentiality,
-   next review due with overdue highlight, and a **draft newer than last
+   document number (when set), document type, current owner, effective
+   confidentiality, current release effective date when recorded, next review
+   due with overdue highlight, and a **draft newer than last
    release** indicator when known (CAP-0015). Non-library and unsupported file
    rows show their filesystem name and membership/support state instead. File
    rows are for selection only — they do not host per-row action menus (no
@@ -84,7 +85,8 @@ When implemented, the following must hold:
    - the selected document’s DMS-managed **title** and document number
    - an always-visible **Source file** identity with the exact file name and its
      edit-root-relative folder/path, derived from the filesystem
-   - CAP-0015 **Document control data** and related status (effective
+   - CAP-0015 **Document control data** and related status (mutable profile,
+     immutable current-release profile and effective date, effective
      confidentiality with its source and inherited/overridden status, effective
      editor/approver, current release, draft-newer marker)
    - **document actions** for that selection

@@ -174,6 +174,7 @@ function roleSelectMarkup(snapshot, policy, roleName, rootFolder) {
 
 function identitySourcePreviewMarkup(preview, source) {
   const initialSetup = !source;
+  const successfulEmptySetup = initialSetup && preview.eligible_people.length === 0;
   const initialRoleSelect = (roleName) => {
     const fieldName = roleName === "editor" ? "initialEditorId" : "initialApproverId";
     const label = roleName === "editor" ? "Editor" : "Approver";
@@ -183,14 +184,17 @@ function identitySourcePreviewMarkup(preview, source) {
     ];
     return `<label>${label}<select name="${fieldName}" required ${preview.eligible_people.length > 0 ? "" : "disabled"}>${options.join("")}</select></label>`;
   };
-  const roleMarkup = initialSetup
-    ? `<fieldset><legend>Initial edit-root workflow roles</legend><p>Choose the required workspace defaults from this group. They are saved atomically with the identity source.</p>${initialRoleSelect("editor")}${initialRoleSelect("approver")}</fieldset>`
+  const roleMarkup = successfulEmptySetup
+    ? '<fieldset><legend>Initial edit-root workflow roles</legend><p>No eligible people were returned. New documents use the explicit <code>&lt;editor&gt;</code> placeholder and no approver until a later successful refresh returns assignable people.</p></fieldset>'
+    : initialSetup
+      ? `<fieldset><legend>Initial edit-root workflow roles</legend><p>Choose the required workspace defaults from this group. They are saved atomically with the identity source.</p>${initialRoleSelect("editor")}${initialRoleSelect("approver")}</fieldset>`
     : "";
-  const consequence = initialSetup
+  const consequence = successfulEmptySetup
+    ? "Applying this successful empty binding records the empty people result without inventing Microsoft Entra identities."
+    : initialSetup
     ? "Applying this binding saves the people source and required edit-root roles together."
     : "Applying this binding replaces the current people source, invalidates stale workflow candidates, and leaves existing role references unresolved.";
-  const disabled = initialSetup && preview.eligible_people.length === 0 ? "disabled" : "";
-  return `<section class="card configuration-card"><h3>Preview identity source</h3><dl class="details-grid"><dt>Tenant</dt><dd>${escapeHtml(preview.tenant_display)}</dd><dt>Group</dt><dd>${escapeHtml(preview.group_label)}</dd><dt>Eligible people</dt><dd>${escapeHtml(preview.eligible_people.length)}</dd></dl><p>${consequence}</p><form class="configuration-form" data-configuration-form="identity-source-apply"><input type="hidden" name="previewId" value="${escapeHtml(preview.preview_id)}">${roleMarkup}<label class="configuration-enabled"><input type="checkbox" name="confirmed" required> I confirm this group is the workspace’s people source.</label><button class="button" type="submit" ${disabled}>Apply identity source</button></form></section>`;
+  return `<section class="card configuration-card"><h3>Preview identity source</h3><dl class="details-grid"><dt>Tenant</dt><dd>${escapeHtml(preview.tenant_display)}</dd><dt>Group</dt><dd>${escapeHtml(preview.group_label)}</dd><dt>Eligible people</dt><dd>${escapeHtml(preview.eligible_people.length)}</dd></dl><p>${consequence}</p><form class="configuration-form" data-configuration-form="identity-source-apply"><input type="hidden" name="previewId" value="${escapeHtml(preview.preview_id)}">${roleMarkup}<label class="configuration-enabled"><input type="checkbox" name="confirmed" required> I confirm this group is the workspace’s people source.</label><button class="button" type="submit">Apply identity source</button></form></section>`;
 }
 
 function workflowMarkup(state) {

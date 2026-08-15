@@ -64,9 +64,16 @@ function releaseRowMarkup(row) {
   const withdrawal = row.withdrawn
     ? ""
     : `<form data-release-withdraw-form class="release-withdraw-form"><input type="hidden" name="documentId" value="${escapeHtml(row.document_id)}"><input type="hidden" name="releaseId" value="${escapeHtml(row.release_id)}"><div class="field"><label>Withdrawal reason<input name="reason" required></label></div><label class="confirm-field"><input type="checkbox" name="confirmed" required> Confirm that this release must no longer be current. Its PDF and evidence remain in history.</label><button class="button secondary danger-text" type="submit">Withdraw release</button></form>`;
+  const owner = row.profile?.owner
+    ? `${row.profile.owner.display_name}${row.profile.owner.mail ? ` · ${row.profile.owner.mail}` : ""}`
+    : "Unrecorded";
+  const profile = row.profile
+    ? `<span>Profile ${escapeHtml(row.profile.title)}${row.profile.document_number ? ` · ${escapeHtml(row.profile.document_number)}` : ""}${row.profile.document_type ? ` · ${escapeHtml(row.profile.document_type)}` : ""}</span><span>Owner ${escapeHtml(owner)}</span>`
+    : "<span>Release profile unrecorded</span><span>Owner unrecorded</span>";
   return `<article class="release-row" data-release-id="${escapeHtml(row.release_id)}">
     <div class="release-main"><strong>${escapeHtml(row.document_title)}</strong><span class="badge">V${escapeHtml(row.version)}</span>${stateBadges}<span class="integrity ${integrity}">${escapeHtml(statusLabel(row.verification))}</span></div>
     <div class="release-meta"><span>${escapeHtml(row.relative_pdf_path)}</span><span>${escapeHtml(row.confidentiality_label)}</span><span>${escapeHtml(new Date(row.released_at).toLocaleString())}</span></div>
+    <div class="release-meta"><span>Effective date ${escapeHtml(row.effective_date ?? "Unrecorded")}</span>${profile}</div>
     <div class="release-evidence"><span title="${escapeHtml(row.pdf_digest)}">PDF ${escapeHtml(row.pdf_digest.slice(0, 12))}…</span><span title="${escapeHtml(row.workflow_chain_head)}">workflow ${escapeHtml(row.workflow_chain_head.slice(0, 12))}…</span>${approval}</div>
     <div class="release-actions"><button class="button secondary" type="button" data-release-open="${escapeHtml(row.release_id)}" data-document-id="${escapeHtml(row.document_id)}" ${row.verification === "missing_file" ? "disabled" : ""}>Open PDF</button><button class="button secondary" type="button" data-release-verify="${escapeHtml(row.release_id)}" data-document-id="${escapeHtml(row.document_id)}">Verify this release</button></div>${withdrawal}
   </article>`;

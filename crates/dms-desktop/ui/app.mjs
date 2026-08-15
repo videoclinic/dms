@@ -4,6 +4,7 @@ import {
   confidentialityUpdateRequest,
   createLibraryState,
   documentControlUpdateRequest,
+  documentReviewScheduleRequest,
   entryDocumentId,
   historyTarget,
   lifecycleActionRequest,
@@ -1856,13 +1857,15 @@ async function handleSubmit(event) {
     render(appState);
     return;
   }
-  if (["library-document-control-form", "library-confidentiality-form"].includes(event.target.id)) {
+  if (["library-document-control-form", "library-confidentiality-form", "library-review-schedule-form"].includes(event.target.id)) {
     event.preventDefault();
     try {
       const values = new FormData(event.target);
       const request = event.target.id === "library-document-control-form"
         ? documentControlUpdateRequest(values, appState.library.detail)
-        : confidentialityUpdateRequest(values, appState.library.detail);
+        : event.target.id === "library-review-schedule-form"
+          ? documentReviewScheduleRequest(values, appState.library.detail)
+          : confidentialityUpdateRequest(values, appState.library.detail);
       const detail = await invokeCommand(request.command, {
         editRoot: appState.workspace.edit_root,
         ...request.arguments,

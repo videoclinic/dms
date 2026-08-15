@@ -22,6 +22,18 @@ const release = (overrides = {}) => ({
   pdf_digest: "a".repeat(64),
   confidentiality_id: "internal",
   confidentiality_label: "Internal",
+  effective_date: "2026-08-15",
+  profile: {
+    title: "Employee <Handbook>",
+    document_number: "POL-001",
+    document_type: "Policy",
+    owner: {
+      tenant_id: "tenant-1",
+      object_id: "owner-1",
+      display_name: "Owner <One>",
+      mail: "owner@example.test",
+    },
+  },
   workflow_chain_head: "b".repeat(64),
   approval_chain_head: "c".repeat(64),
   released_at: "2026-08-10T10:00:00Z",
@@ -40,8 +52,25 @@ test("release maintenance filters titles, pages rows, and escapes evidence", () 
   assert.match(markup, /Employee &lt;Handbook&gt;/);
   assert.match(markup, /Verify entire publish tree/);
   assert.match(markup, /Verify this release/);
+  assert.match(markup, /Effective date 2026-08-15/);
+  assert.match(markup, /Profile Employee &lt;Handbook&gt; · POL-001 · Policy/);
+  assert.match(markup, /Owner Owner &lt;One&gt; · owner@example\.test/);
   assert.match(markup, /Page 1 of 2/);
   assert.doesNotMatch(markup, /Employee <Handbook>/);
+});
+
+test("release history labels legacy snapshot omissions without mutable fallbacks", () => {
+  const markup = releaseMaintenanceMarkup(applyReleaseSnapshot(createReleaseState(), {
+    rows: [release({
+      document_title: "<legacy title unrecorded>",
+      effective_date: null,
+      profile: null,
+    })],
+  }));
+  assert.match(markup, /&lt;legacy title unrecorded&gt;/);
+  assert.match(markup, /Effective date Unrecorded/);
+  assert.match(markup, /Release profile unrecorded/);
+  assert.match(markup, /Owner unrecorded/);
 });
 
 test("release integrity failures are visible and verification is described as read-only", () => {

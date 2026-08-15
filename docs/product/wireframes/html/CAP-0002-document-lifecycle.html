@@ -236,7 +236,7 @@ tr:last-child td { border-bottom: 0; }
             <span class="muted">V1.3 released · candidate V1.4 is not occupied</span>
           </div>
         </div>
-        <dl class="kv"><div><dt>Document ID</dt><dd>doc-77a12bce</dd></div><div><dt>Relative draft path</dt><dd>policies/HR/Handbook.docx</dd></div><div><dt>Effective editor / approver</dt><dd>Lukas Roth / Anna Berg</dd></div><div><dt>Workflow identity</dt><dd>Entra group: VC DMS Workflow Users</dd></div><div><dt>Effective confidentiality</dt><dd>Internal (inherited from /policies/HR)</dd></div></dl>
+        <dl class="kv"><div><dt>Document ID</dt><dd>doc-77a12bce</dd></div><div><dt>Relative draft path</dt><dd>policies/HR/Handbook.docx</dd></div><div><dt>Owner</dt><dd>Lukas Roth · object ID 8a1f…</dd></div><div><dt>Effective editor</dt><dd>Lukas Roth · object ID 8a1f…</dd></div><div><dt>Effective approver</dt><dd>Anna Berg · object ID 41c2…</dd></div><div><dt>Workflow identity</dt><dd>Entra group: VC DMS Workflow Users</dd></div><div><dt>Effective confidentiality</dt><dd>Internal (inherited from /policies/HR)</dd></div></dl>
       </section>
       <section class="card">
         <h3 class="card-title">Lifecycle pipeline</h3>
@@ -247,19 +247,26 @@ tr:last-child td { border-bottom: 0; }
       <div class="grid-2">
         <section class="card">
           <h3 class="card-title">Release candidate (required fields)</h3>
-          <dl class="kv"><div><dt>Changelog *</dt><dd>Updated retention table to 24 months.</dd></div><div><dt>Target version *</dt><dd>Minor V1.4 <span class="muted">(selected)</span> · Major V2.0 · Manual V&lt;major&gt;.&lt;minor&gt;</dd></div><div><dt>Manual validation</dt><dd><span class="muted">Greater unused target required when manual is selected</span></dd></div><div><dt>Candidate</dt><dd>V1.4 <span class="muted">(minor release; no approval required)</span></dd></div><div><dt>Draft SHA-256</dt><dd><span class="muted">(computed from current draft bytes before release)</span></dd></div><div><dt>Released by</dt><dd>Lukas Roth <lukas@vc.de> <span class="muted">(snapshotted on release)</span></dd></div><div><dt>Approver notification</dt><dd>Anna Berg <anna@vc.de> · effective approver snapshot</dd></div><div><dt>Approval rule</dt><dd>V1.0 and targets that increase the major component require Entra-verified approval</dd></div></dl>
-          <div class="row gap-2" style="margin-top:0.75rem;flex-wrap:wrap"><button class="btn outline">Preview V2.0 review request</button><button class="btn">Release V1.4 minor version</button></div>
-          <p class="hint">Minor release snapshots the changelog, mode, candidate, and effective approver. It stays in <code>draft</code> until successful atomic export.</p>
+          <dl class="kv"><div><dt>Changelog *</dt><dd>Updated retention table to 24 months.</dd></div><div><dt>Effective date *</dt><dd>2025-08-15 <span class="muted">(captured only by successful release)</span></dd></div><div><dt>Owner *</dt><dd>Lukas Roth · lukas@vc.de · object ID 8a1f…</dd></div><div><dt>Requesting editor *</dt><dd>Lukas Roth · object ID 8a1f…</dd></div><div><dt>Target version *</dt><dd>Next minor V1.4 <span class="muted">(default)</span> · Next major V2.0 · Manual V&lt;major&gt;.&lt;minor&gt;</dd></div><div><dt>Manual validation</dt><dd><span class="muted">Greater unused target required when manual is selected</span></dd></div><div><dt>Candidate</dt><dd>V1.4 <span class="muted">(minor release; no approval required)</span></dd></div><div><dt>Draft SHA-256</dt><dd><span class="muted">(computed from current draft bytes before release)</span></dd></div><div><dt>Released by</dt><dd>Lukas Roth <lukas@vc.de> <span class="muted">(snapshotted on release)</span></dd></div><div><dt>Approver notification</dt><dd>Anna Berg <anna@vc.de> · effective approver snapshot</dd></div><div><dt>Approval rule</dt><dd>V1.0 and targets that increase the major component require Entra-verified approval</dd></div></dl>
+          <form class="stack" style="margin-top:0.75rem">
+            <label class="label">Effective date * <input type="date" value="2025-08-15" required></label>
+            <label class="label">Owner * <select required><option value="8a1f">Lukas Roth · lukas@vc.de</option><option value="41c2">Anna Berg · anna@vc.de</option></select></label>
+            <label class="label">Requesting editor * <select required><option value="8a1f">Lukas Roth · lukas@vc.de</option></select></label>
+            <label class="label">Target * <select required><option value="next_minor" selected>Next minor · V1.4</option><option value="next_major">Next major · V2.0</option><option value="manual">Manual</option></select></label>
+            <div class="row gap-2" style="flex-wrap:wrap"><button class="btn outline">Preview V2.0 review request</button><button class="btn">Release V1.4 minor version</button></div>
+          </form>
+          <p class="hint">A successful empty people import shows literal <code>&lt;owner&gt;</code> and <code>&lt;editor&gt;</code> placeholders here and blocks submission. Minor release snapshots the requested profile, effective date, changelog, mode, editor, and approver; it stays in <code>draft</code> until successful atomic export.</p>
         </section>
         <section class="card">
           <h3 class="card-title">Major approval and minor publication rule</h3>
           <ul class="timeline">
-            <li><strong>V1.4 minor</strong> — direct release; no review request or decision</li>
+            <li><strong>Current V1.3</strong> — effective 2025-08-01; owner Lukas Roth (object ID 8a1f…)</li>
+            <li><strong>V1.4 minor</strong> — direct release; requested effective date and profile become immutable only after export commits</li>
             <li><strong>minor publication notice</strong> — notify Anna after V1.4 atomic export commits</li>
             <li><strong>V2.0 major</strong> — review request, Entra-verified decision, then release</li>
             <li><strong>rejected / changes requested</strong> — major candidate stays unoccupied; optional reason retained</li>
           </ul>
-          <div class="callout warn">A rejected, cancelled, invalidated, or failed-export major review does not consume its candidate. A failed minor export does not consume V1.4 either.</div>
+          <div class="callout warn">A rejected, cancelled, invalidated, or failed-export major review does not consume its candidate. A failed minor export does not consume V1.4 or apply staged Owner/Editor changes.</div>
           <p class="hint">Chain head 5b3a…ffe2 — verify recomputes from canonical body (CAP-0011).</p>
         </section>
       </div>

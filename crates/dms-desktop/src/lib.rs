@@ -13,11 +13,11 @@ use dms_core::{
     DocumentControl, DocumentType, EffectiveConfidentiality, EffectiveWorkflowRoles,
     EntraIdentitySource, EntraPerson, GraphClient, LibraryEntry, LibraryFolder, LibraryFolderNode,
     Lifecycle, LocalLifecycleActions, Note, NotificationClient, NotificationSettings,
-    NotificationTransport, PdfExporter, PeriodicReview, PeriodicReviewMarker, PeriodicReviewResult,
-    PermalinkTarget, PolicyFolder, ReleaseCandidate, ReleaseVerificationStatus, RestoreOutcome,
-    RestoreRequest, ReviewDecision, RoleUpdate, SmtpSettings, SourceState, TargetSelection,
-    Version, WorkflowEvent, WorkflowPolicyAssignment, WorkflowVerification, Workspace,
-    WorkspaceLock, WorkspaceLockStatus,
+    NotificationTransport, OwnerReference, PdfExporter, PeriodicReview, PeriodicReviewMarker,
+    PeriodicReviewResult, PermalinkTarget, PersonSnapshot, PolicyFolder, ReleaseCandidate,
+    ReleaseVerificationStatus, RestoreOutcome, RestoreRequest, ReviewDecision, RoleUpdate,
+    SmtpSettings, SourceState, TargetSelection, Version, WorkflowEvent, WorkflowPolicyAssignment,
+    WorkflowVerification, Workspace, WorkspaceLock, WorkspaceLockStatus,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
@@ -186,6 +186,9 @@ pub struct DocumentSelection {
     pub source_state: SourceState,
     pub lifecycle: Lifecycle,
     pub control: DocumentControl,
+    pub current_owner: serde_json::Value,
+    pub requires_identity_handover: bool,
+    pub review_schedule: DocumentReviewSchedule,
     pub document_types: Vec<DocumentType>,
     pub confidentiality_types: Vec<ConfidentialityType>,
     pub confidentiality_override: Option<String>,
@@ -208,6 +211,24 @@ pub struct CurrentReleaseSelection {
     pub version: String,
     pub relative_pdf_path: String,
     pub pdf_exists: bool,
+    pub effective_date: Option<NaiveDate>,
+    pub profile: Option<ReleaseProfileSelection>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct ReleaseProfileSelection {
+    pub title: String,
+    pub document_number: Option<String>,
+    pub document_type: Option<String>,
+    pub owner: Option<PersonSnapshot>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct DocumentReviewSchedule {
+    pub workspace_interval_months: u32,
+    pub interval_months: Option<u32>,
+    pub exemption_reason: Option<String>,
+    pub next_due_date: Option<NaiveDate>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -228,6 +249,8 @@ pub struct ReleaseRow {
     pub pdf_digest: String,
     pub confidentiality_id: String,
     pub confidentiality_label: String,
+    pub effective_date: Option<NaiveDate>,
+    pub profile: Option<ReleaseProfileSelection>,
     pub workflow_chain_head: String,
     pub approval_chain_head: Option<String>,
     pub released_at: String,
@@ -585,7 +608,10 @@ fn apply_identity_source_to_workspace(
     initial_editor_id: Option<Uuid>,
     initial_approver_id: Option<Uuid>,
 ) -> dms_core::Result<()> {
-    let initial_roles = if workspace.identity_source().is_none() {
+    let successful_empty_initialization =
+        workspace.identity_source().is_none() && people.is_empty();
+    let initial_roles = if workspace.identity_source().is_none() && !successful_empty_initialization
+    {
         Some((
             initial_editor_id.ok_or(DmsError::RequiredRootWorkflowPolicy)?,
             initial_approver_id.ok_or(DmsError::RequiredRootWorkflowPolicy)?,
@@ -767,17 +793,33 @@ fn update_document_control(
     title: String,
     document_number: String,
     document_type: String,
-    owner: String,
-    effective_date: String,
+    owner_object_id: Uuid,
+    state: State<'_, DesktopIntegrations>,
 ) -> Result<DocumentSelection, String> {
-    let effective_date = if effective_date.trim().is_empty() {
-        None
-    } else {
-        Some(
-            NaiveDate::parse_from_str(effective_date.trim(), "%Y-%m-%d")
-                .map_err(|_| "effective date must use YYYY-MM-DD".to_owned())?,
-        )
-    };
+    let mut graph = state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
+    update_document_control_with(
+        &edit_root,
+        document_id,
+        title,
+        document_number,
+        document_type,
+        owner_object_id,
+        &mut *graph,
+    )
+}
+
+fn update_document_control_with<G: GraphClient + ?Sized>(
+    edit_root: &str,
+    document_id: Uuid,
+    title: String,
+    document_number: String,
+    document_type: String,
+    owner_object_id: Uuid,
+    graph: &mut G,
+) -> Result<DocumentSelection, String> {
     let optional_text = |value: String| {
         if value.trim().is_empty() {
             None
@@ -785,8 +827,14 @@ fn update_document_control(
             Some(value)
         }
     };
-    let mut workspace =
-        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .refresh_eligible_people(graph)
+        .map_err(|error| error.to_string())?;
+    let binding_id = workspace
+        .identity_source()
+        .ok_or_else(|| "owner assignment requires an identity source".to_owned())?
+        .binding_id;
     workspace
         .update_control(
             document_id,
@@ -794,13 +842,16 @@ fn update_document_control(
                 title: Some(title),
                 document_number: Some(optional_text(document_number)),
                 document_type: Some(optional_text(document_type)),
-                owner: Some(optional_text(owner)),
-                effective_date: Some(effective_date),
+                owner: Some(Some(OwnerReference {
+                    binding_id,
+                    object_id: owner_object_id,
+                })),
+                ..ControlUpdate::default()
             },
         )
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
-    document_selection(Path::new(&edit_root), document_id)
+    document_selection(Path::new(edit_root), document_id)
 }
 
 #[tauri::command]
@@ -817,6 +868,28 @@ fn set_document_confidentiality(
             document_id,
             (!confidentiality_type_id.is_empty()).then_some(confidentiality_type_id),
         )
+        .map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
+    document_selection(Path::new(&edit_root), document_id)
+}
+
+#[tauri::command]
+fn update_document_review_schedule(
+    edit_root: String,
+    document_id: Uuid,
+    review_interval_months: Option<u32>,
+    review_exemption_reason: Option<String>,
+) -> Result<DocumentSelection, String> {
+    if review_interval_months.is_some() && review_exemption_reason.is_some() {
+        return Err("review interval and exemption cannot both be configured".to_owned());
+    }
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .set_document_review_interval(document_id, review_interval_months)
+        .map_err(|error| error.to_string())?;
+    workspace
+        .set_document_review_exemption(document_id, review_exemption_reason.as_deref())
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
     document_selection(Path::new(&edit_root), document_id)
@@ -938,7 +1011,10 @@ struct CandidateSubmissionInput {
     manual_major: Option<u32>,
     manual_minor: Option<u32>,
     changelog: String,
+    effective_date: String,
     requester_object_id: Uuid,
+    staged_owner_object_id: Option<Uuid>,
+    staged_editor_object_id: Option<Uuid>,
     review_override_reason: String,
     mailto_confirmed: bool,
 }
@@ -961,6 +1037,8 @@ fn submit_document_candidate_with<G: GraphClient, N: NotificationClient>(
     notifier: &mut N,
 ) -> Result<DocumentSelection, String> {
     let selection = target_selection(&input.target_mode, input.manual_major, input.manual_minor)?;
+    let effective_date = NaiveDate::parse_from_str(input.effective_date.trim(), "%Y-%m-%d")
+        .map_err(|_| "effective date must use YYYY-MM-DD".to_owned())?;
     let document_id = input.document_id;
     let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
     workspace
@@ -969,7 +1047,10 @@ fn submit_document_candidate_with<G: GraphClient, N: NotificationClient>(
                 document_id,
                 selection,
                 changelog: input.changelog,
+                effective_date,
                 requester_object_id: input.requester_object_id,
+                staged_owner_object_id: input.staged_owner_object_id,
+                staged_editor_object_id: input.staged_editor_object_id,
                 review_override_reason: optional_text(&input.review_override_reason)
                     .map(str::to_owned),
                 assistance: None,
@@ -1924,6 +2005,16 @@ fn document_selection(edit_root: &Path, document_id: Uuid) -> Result<DocumentSel
             version: release.version.to_string(),
             relative_pdf_path: path_text(&release.relative_pdf_path),
             pdf_exists: workspace.release_pdf_path(document_id, release.id).is_ok(),
+            effective_date: release.effective_date,
+            profile: release
+                .control
+                .as_ref()
+                .map(|control| ReleaseProfileSelection {
+                    title: control.title.clone(),
+                    document_number: control.document_number.clone(),
+                    document_type: control.document_type.clone(),
+                    owner: release.owner.clone(),
+                }),
         });
     let active_candidate = workspace
         .active_candidate(document_id)
@@ -1979,6 +2070,44 @@ fn document_selection(edit_root: &Path, document_id: Uuid) -> Result<DocumentSel
     let workflow_verification = workspace
         .verify_workflow(document_id)
         .map_err(|error| error.to_string())?;
+    let eligible_people = workspace
+        .eligible_people()
+        .into_iter()
+        .cloned()
+        .collect::<Vec<_>>();
+    let empty_identity_success = workspace
+        .identity_source()
+        .is_some_and(|source| source.last_refreshed_at.is_some())
+        && eligible_people.is_empty();
+    let current_owner = if let Some(reference) = document.control.owner {
+        eligible_people
+            .iter()
+            .find(|person| person.object_id == reference.object_id)
+            .map(|person| serde_json::to_value(person).expect("owner snapshot serializes"))
+            .unwrap_or_else(|| {
+                serde_json::json!({
+                    "kind": "entra",
+                    "binding_id": reference.binding_id,
+                    "object_id": reference.object_id,
+                })
+            })
+    } else if let Some(label) = document.control.legacy_owner_label.as_ref() {
+        serde_json::json!({ "kind": "legacy", "label": label })
+    } else if empty_identity_success {
+        serde_json::json!({ "kind": "placeholder", "label": "<owner>" })
+    } else {
+        serde_json::Value::Null
+    };
+    let effective_workflow_roles = workspace.effective_workflow_roles(document_id).ok();
+    let requires_identity_handover = empty_identity_success
+        && (document.control.owner.is_none()
+            || effective_workflow_roles
+                .as_ref()
+                .and_then(|roles| roles.editor.as_ref())
+                .is_none());
+    let persisted_review_schedule = workspace
+        .document_review_schedule(document_id)
+        .map_err(|error| error.to_string())?;
     Ok(DocumentSelection {
         document_id,
         source_name,
@@ -1988,6 +2117,14 @@ fn document_selection(edit_root: &Path, document_id: Uuid) -> Result<DocumentSel
         source_state: document.source_state,
         lifecycle: document.lifecycle,
         control: document.control.clone(),
+        current_owner,
+        requires_identity_handover,
+        review_schedule: DocumentReviewSchedule {
+            workspace_interval_months: persisted_review_schedule.workspace_interval_months,
+            interval_months: persisted_review_schedule.interval_months,
+            exemption_reason: persisted_review_schedule.exemption_reason,
+            next_due_date: persisted_review_schedule.next_due_date,
+        },
         document_types: workspace.document_types().into_iter().cloned().collect(),
         confidentiality_types: workspace
             .confidentiality_types()
@@ -1999,12 +2136,12 @@ fn document_selection(edit_root: &Path, document_id: Uuid) -> Result<DocumentSel
             .map_err(|error| error.to_string())?
             .map(str::to_owned),
         effective_confidentiality: workspace.effective_confidentiality(document_id).ok(),
-        effective_workflow_roles: workspace.effective_workflow_roles(document_id).ok(),
+        effective_workflow_roles,
         current_release,
         active_candidate,
         retryable_decision_candidate,
         retryable_minor_publication,
-        eligible_people: workspace.eligible_people().into_iter().cloned().collect(),
+        eligible_people,
         lifecycle_actions,
         workflow_events,
         workflow_verification,
@@ -2090,13 +2227,26 @@ fn release_maintenance(workspace: &Workspace) -> Result<ReleaseMaintenance, Stri
                 .map_err(|error| error.to_string())?;
             rows.push(ReleaseRow {
                 document_id: document.id,
-                document_title: document.control.title.clone(),
+                document_title: release.control.as_ref().map_or_else(
+                    || "<legacy title unrecorded>".to_owned(),
+                    |control| control.title.clone(),
+                ),
                 release_id: release.id,
                 version: release.version.to_string(),
                 relative_pdf_path: path_text(&release.relative_pdf_path),
                 pdf_digest: release.pdf_digest.clone(),
                 confidentiality_id: release.confidentiality.type_id.clone(),
                 confidentiality_label: release.confidentiality.label.clone(),
+                effective_date: release.effective_date,
+                profile: release
+                    .control
+                    .as_ref()
+                    .map(|control| ReleaseProfileSelection {
+                        title: control.title.clone(),
+                        document_number: control.document_number.clone(),
+                        document_type: control.document_type.clone(),
+                        owner: release.owner.clone(),
+                    }),
                 workflow_chain_head: release.workflow_chain_head.clone(),
                 approval_chain_head: release.approval_chain_head.clone(),
                 released_at: release.released_at.to_rfc3339(),
@@ -2302,6 +2452,7 @@ pub fn run() {
             reassociate_library_document,
             load_document_selection,
             update_document_control,
+            update_document_review_schedule,
             set_document_confidentiality,
             begin_document_revision,
             cancel_document_review,
@@ -2351,6 +2502,31 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct TestGraph {
+        tenant_id: Uuid,
+        people: Vec<EntraPerson>,
+    }
+
+    impl GraphClient for TestGraph {
+        fn tenant_id(&self) -> std::result::Result<Uuid, String> {
+            Ok(self.tenant_id)
+        }
+
+        fn direct_user_members(
+            &mut self,
+            _source: &EntraIdentitySource,
+        ) -> std::result::Result<Vec<EntraPerson>, String> {
+            Ok(self.people.clone())
+        }
+
+        fn authenticated_actor(
+            &mut self,
+            _source: &EntraIdentitySource,
+        ) -> std::result::Result<AuthenticatedActor, String> {
+            Err("interactive sign-in is not configured for this test".to_owned())
+        }
+    }
 
     #[test]
     fn missing_preferences_use_expanded_sidebar_and_no_saved_views() {
@@ -2430,6 +2606,27 @@ mod tests {
             .unwrap();
         assert_eq!(root.editor.unwrap().object_id, editor_id);
         assert_eq!(root.approver.unwrap().object_id, approver_id);
+    }
+
+    #[test]
+    fn first_identity_source_setup_accepts_a_successful_empty_group_without_fake_roles() {
+        let edit_root = tempfile::tempdir().unwrap();
+        let publish_root = tempfile::tempdir().unwrap();
+        let mut workspace = Workspace::init(edit_root.path(), publish_root.path()).unwrap();
+
+        apply_identity_source_to_workspace(
+            &mut workspace,
+            Uuid::new_v4(),
+            "Empty DMS workflow group",
+            Vec::new(),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(workspace.identity_source().is_some());
+        assert!(workspace.eligible_people().is_empty());
+        assert!(workspace.workflow_policies().is_empty());
     }
 
     #[test]
@@ -2938,6 +3135,19 @@ mod tests {
         workspace
             .set_confidentiality_policy(".", "internal")
             .unwrap();
+        let tenant_id = Uuid::new_v4();
+        let owner_object_id = Uuid::new_v4();
+        let owner = EntraPerson::eligible(owner_object_id, "People team", "people@example.test");
+        workspace
+            .replace_identity_source(Uuid::new_v4(), "DMS owners", vec![owner.clone()])
+            .unwrap();
+        workspace
+            .update_workflow_policy(
+                ".",
+                RoleUpdate::replace(owner_object_id),
+                RoleUpdate::replace(owner_object_id),
+            )
+            .unwrap();
         workspace.save().unwrap();
 
         let snapshot = library_snapshot(edit_root.path(), Path::new("Policies")).unwrap();
@@ -2992,34 +3202,26 @@ mod tests {
         );
 
         let root = edit_root.path().to_string_lossy().into_owned();
-        assert!(update_document_control(
-            root.clone(),
+        let mut graph = TestGraph {
+            tenant_id,
+            people: vec![owner],
+        };
+        let updated = update_document_control_with(
+            &root,
             document.id,
             "Employee handbook".into(),
             "HR-001".into(),
             "procedure".into(),
-            "People team".into(),
-            "11/08/2026".into(),
-        )
-        .unwrap_err()
-        .contains("YYYY-MM-DD"));
-        let updated = update_document_control(
-            root.clone(),
-            document.id,
-            "Employee handbook".into(),
-            "HR-001".into(),
-            "procedure".into(),
-            "People team".into(),
-            "2026-08-11".into(),
+            owner_object_id,
+            &mut graph,
         )
         .unwrap();
         assert_eq!(updated.control.title, "Employee handbook");
         assert_eq!(updated.control.document_number.as_deref(), Some("HR-001"));
         assert_eq!(updated.control.document_type.as_deref(), Some("procedure"));
-        assert_eq!(updated.control.owner.as_deref(), Some("People team"));
         assert_eq!(
-            updated.control.effective_date,
-            NaiveDate::from_ymd_opt(2026, 8, 11)
+            updated.control.owner.map(|owner| owner.object_id),
+            Some(owner_object_id)
         );
         assert_eq!(updated.workflow_verification, WorkflowVerification::Valid);
         assert_eq!(
@@ -3452,13 +3654,17 @@ mod tests {
         )
         .unwrap();
         let document = workspace.add_document(&source).unwrap();
+        let binding_id = workspace.identity_source().unwrap().binding_id;
         workspace
             .update_control(
                 document.id,
                 ControlUpdate {
                     title: Some("Employee handbook".to_owned()),
                     document_type: Some(Some("procedure".to_owned())),
-                    owner: Some(Some("People team".to_owned())),
+                    owner: Some(Some(OwnerReference {
+                        binding_id,
+                        object_id: editor_id,
+                    })),
                     ..ControlUpdate::default()
                 },
             )
@@ -3476,7 +3682,10 @@ mod tests {
                 manual_major: None,
                 manual_minor: None,
                 changelog: "Clarify escalation path".to_owned(),
+                effective_date: "2026-08-15".to_owned(),
                 requester_object_id: requester_id,
+                staged_owner_object_id: None,
+                staged_editor_object_id: None,
                 review_override_reason: String::new(),
                 mailto_confirmed: false,
             },
@@ -3517,5 +3726,13 @@ mod tests {
         )
         .unwrap();
         assert!(released.current_release.unwrap().pdf_exists);
+        let maintenance = load_releases(root).unwrap();
+        let release = &maintenance.rows[0];
+        assert_eq!(release.document_title, "Employee handbook");
+        assert_eq!(release.effective_date, NaiveDate::from_ymd_opt(2026, 8, 15));
+        let profile = release.profile.as_ref().unwrap();
+        assert_eq!(profile.title, "Employee handbook");
+        assert_eq!(profile.document_type.as_deref(), Some("procedure"));
+        assert_eq!(profile.owner.as_ref().unwrap().object_id, editor_id);
     }
 }

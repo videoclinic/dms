@@ -26,9 +26,10 @@ persistence.
 - Source paths are canonicalized, must resolve under the configured edit root,
   and are stored relative to it with platform-independent `/` separators in
   metadata and machine-readable output.
-- Source filename/path are locator facts; control data, including effective date,
-  is independent metadata. Each actual control-data edit appends canonical
-  before/after workflow evidence before invalidating stale candidates.
+- Source filename/path are locator facts. Mutable document profile, immutable
+  candidate/release snapshots, and mutable review schedules are separate
+  metadata domains. Each actual profile edit appends canonical before/after
+  workflow evidence before invalidating stale candidates.
 - Folder discovery exposes only edit-root-relative regular files and directories,
   excludes `.dms` and Office temporary sidecars, and never auto-registers or
   auto-reassociates a source.
@@ -46,9 +47,12 @@ persistence.
 - Configuration queries expose only enabled cached people for role pickers and
   return folder workflow assignments with their binding-qualified references;
   workflow inheritance and notification validation remain core-owned rules.
-- Lifecycle candidates snapshot the requesting person, effective editor,
-  effective approver, control data, confidentiality, source digest, target, and
-  changelog. Only committed releases occupy versions.
+- Lifecycle candidates snapshot the requesting person, resolved owner, effective
+  editor and approver, document profile, required effective date,
+  confidentiality, source digest, target, and changelog. Authority comparisons
+  use binding-qualified Entra object IDs, never mutable display names or email.
+  Only committed releases occupy versions. A staged real owner/editor handover
+  applies atomically with a successful release export.
 - Approval-required operations refresh direct-user group membership and verify
   the interactive Entra actor through injected ports; core metadata stores no
   Graph, SMTP, or authentication credentials.
@@ -119,6 +123,11 @@ persistence.
   with a `v7.json.bak` retained during migration.
 - Schema v9 adds the optional document-control effective date, with a
   `v8.json.bak` retained during migration.
+- Schema v12 separates mutable document profile, release-bound effective date
+  and profile/owner snapshots, and mutable review schedule. Its v11 migration
+  retains `v11.json.bak`, preserves legacy owner text without identity inference,
+  maps a stored date only to the current non-withdrawn release and retained open
+  candidates, and leaves older release snapshot omissions unrecorded.
 
 ## Verification
 

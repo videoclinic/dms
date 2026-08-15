@@ -46,6 +46,9 @@
 3. The desktop adapter refreshes the direct enabled user members from Microsoft
    Graph before a workflow role assignment; it persists the display cache and
    refresh timestamp only in `<edit-root>/.dms`.
+   A successful direct-member response with zero eligible users is represented
+   separately from refresh, permission, tenant, inaccessible-group, and
+   disabled-only failures.
 4. An approver sign-in command uses delegated device authorization, resolves
    `/me` to an immutable tenant/object-ID actor, and leaves the actor available
    to the lifecycle adapter. Approval-decision composition remains phase 9k.
@@ -101,16 +104,23 @@ When implemented, the following must hold:
    membership. The delegated app registration has tenant-admin consent for
    `GroupMember.Read.All` and `User.Read.All`; the latter is required to read
    profile fields and `accountEnabled`, so `User.ReadBasic.All` is insufficient.
-6. The application refreshes membership before a person is assigned to a role,
+6. The application refreshes membership before a person is assigned as Owner or to a role,
    before a review request is submitted, and before a review decision is
    recorded. It stores a person’s immutable Entra object ID in a role policy and
    uses cached display name/email only for presentation and notification. A
-   cache is never authorization truth.
-7. A failed refresh, tenant mismatch, inaccessible group, disabled account, or
+   cache is never authorization truth. Owner, editor, approver, requester, and
+   actor equality uses tenant-scoped object ID, never display name or email.
+7. A successful direct-member refresh containing zero eligible users may expose
+   the literal presentation placeholders `<owner>` and `<editor>`. They have no
+   object ID, are never persisted as an Entra identity, approver, actor, or mail
+   recipient, and cannot pass candidate/release validation. A missing binding,
+   failed refresh, tenant mismatch, inaccessible group, disabled-only response, or
    missing role identity is explicit. A policy that can no longer resolve to an
    eligible person is `unresolved`; new review submission and approval decisions
    fail closed until an operator reroutes it. Membership changes never silently
-   rewrite folder/document policies or historical workflow evidence.
+   rewrite folder/document policies or historical workflow evidence. A later
+   successful non-empty refresh requires explicit real-person selections; staged
+   Owner/Editor changes apply only with the next successful release.
 8. A review request snapshots the effective approver’s Entra tenant/object ID,
    display name, and email. A decision requires interactive sign-in; the app
    accepts it only from the snapshotted tenant/object ID while that user remains

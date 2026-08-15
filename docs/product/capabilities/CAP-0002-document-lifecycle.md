@@ -6,7 +6,7 @@
 | Status | not implemented |
 | Draft formats | Markdown (`.md`) and Microsoft Office originals (e.g. `.docx`, `.xlsx`, `.pptx`) |
 | Released format | Versioned, classified PDF only (`*_VMAJOR.MINOR_<confidentiality-type-id>.pdf`) |
-| Tests | Partial phases 9e and 9f.2 evidence: [withdrawal/current-release/version-allocation and local lifecycle-transition core tests](../../../crates/dms-core/tests/lifecycle.rs), [desktop lifecycle adapter tests](../../../crates/dms-desktop/src/lib.rs) |
+| Tests | Partial phases 9e, 9f.2, and 9k.3 evidence: [withdrawal/current-release/version-allocation, release-snapshot, identity-stability, migration, and atomic-handover core tests](../../../crates/dms-core/tests/lifecycle.rs), [desktop lifecycle adapter tests](../../../crates/dms-desktop/src/lib.rs), [Library lifecycle frontend tests](../../../crates/dms-desktop/ui/library.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 
@@ -29,8 +29,10 @@ When implemented, the following must hold:
    is the storage destination for released PDFs; `published` is not a state or
    workflow. The explicit release action is the sole transition that creates a
    released PDF.
-4. Before every release, the editor records a non-empty changelog, the
-   requesting workflow person, and a SHA-256 digest of the current draft. The
+4. Before every release, the editor records a non-empty changelog, a required
+   effective date, the requesting workflow person, and a SHA-256 digest of the
+   current draft. The candidate form defaults its target-version control to
+   **Next minor**; the first release still resolves to `V1.0`. The
    requester identity and email are snapshotted with the release candidate. The
    first release proposes `V1.0`. For every later release, the editor selects
    exactly one target-version mode:
@@ -42,7 +44,10 @@ When implemented, the following must hold:
      components, numerically greater than the current released version, and not
      equal to any committed release version for that document. It may skip
      otherwise-unused values.
-   The candidate snapshots the changelog, target-version mode, and label, and is
+   The candidate snapshots the changelog, effective date, target-version mode,
+   label, mutable document profile, effective confidentiality, and resolved
+   workflow people. It may also stage a newly selected eligible Owner and Editor
+   for application only by the same successful release commit. The candidate is
    not a reservation. `V1.0` and every candidate whose major component is greater
    than the current released major component require approval. A manual target
    follows the same rule from its target's major component. For an approval-required
@@ -98,9 +103,12 @@ When implemented, the following must hold:
     current `approved` approval-required revision. **Release minor version** is
     allowed from a current `draft` minor candidate after all release-time checks.
     Both actions store the source-draft SHA-256 digest, target-version mode and
-    label, changelog, effective confidentiality type, effective editor and
-    approver, effective date, and next-review-due (CAP-0015 / CAP-0017 /
-    CAP-0019) with the immutable release record; an approval-required release
+    label, changelog, immutable profile and owner presentation snapshots,
+    effective confidentiality type, effective editor and approver, effective
+    date, and next-review-due (CAP-0015 / CAP-0017 / CAP-0019) with the immutable
+    release record. Display-name or email changes after candidate submission do
+    not change identity equality, which uses tenant-scoped Entra object IDs. An
+    approval-required release
     additionally stores its approval-chain head. A successfully released minor
     version sends the effective approver a CAP-0010 publication notification for
     that document. Notification failure creates a retryable delivery attempt and

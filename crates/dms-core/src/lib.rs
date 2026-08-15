@@ -5,7 +5,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
@@ -28,7 +28,7 @@ pub use lifecycle::*;
 pub use maintenance::*;
 pub use policies::*;
 
-pub const SCHEMA_VERSION: u32 = 11;
+pub const SCHEMA_VERSION: u32 = 12;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 
@@ -324,15 +324,23 @@ pub enum Lifecycle {
     Obsolete,
 }
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct OwnerReference {
+    pub binding_id: Uuid,
+    pub object_id: Uuid,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct DocumentControl {
     pub title: String,
     pub document_number: Option<String>,
     pub document_type: Option<String>,
-    pub owner: Option<String>,
     #[serde(default)]
-    pub effective_date: Option<NaiveDate>,
+    pub owner: Option<OwnerReference>,
+    #[serde(default)]
+    pub legacy_owner_label: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -350,8 +358,8 @@ pub struct ControlUpdate {
     pub title: Option<String>,
     pub document_number: Option<Option<String>>,
     pub document_type: Option<Option<String>>,
-    pub owner: Option<Option<String>>,
-    pub effective_date: Option<Option<NaiveDate>>,
+    pub owner: Option<Option<OwnerReference>>,
+    pub legacy_owner_label: Option<Option<String>>,
 }
 
 impl Workspace {
@@ -415,12 +423,15 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = matches!(found, 1..=10);
+        let migrated = matches!(found, 1..=11);
         if found == 1 {
             migrate_v1_catalogues(&mut value)?;
         }
         if found <= 10 {
             migrate_v10_identity_source(&mut value);
+        }
+        if found <= 11 {
+            migrate_v11_release_bound_control(&mut value);
         }
         if migrated {
             value["schema_version"] = serde_json::Value::from(SCHEMA_VERSION);
@@ -597,7 +608,7 @@ impl Workspace {
                 document_number: None,
                 document_type: None,
                 owner: None,
-                effective_date: None,
+                legacy_owner_label: None,
             },
             confidentiality_override: None,
             workflow_overrides: DocumentWorkflowOverrides::default(),
@@ -622,6 +633,9 @@ impl Workspace {
         if let Some(Some(type_id)) = update.document_type.as_ref() {
             self.require_enabled_document_type(type_id)?;
         }
+        if let Some(Some(reference)) = update.owner.as_ref() {
+            self.require_eligible_owner(*reference)?;
+        }
         let before = self.document(document_id)?.control.clone();
         let mut after = before.clone();
         if let Some(title) = update.title {
@@ -634,10 +648,10 @@ impl Workspace {
             after.document_type = normalized_optional(document_type.as_deref());
         }
         if let Some(owner) = update.owner {
-            after.owner = normalized_optional(owner.as_deref());
+            after.owner = owner;
         }
-        if let Some(effective_date) = update.effective_date {
-            after.effective_date = effective_date;
+        if let Some(legacy_owner_label) = update.legacy_owner_label {
+            after.legacy_owner_label = normalized_optional(legacy_owner_label.as_deref());
         }
         if before != after {
             self.documents
@@ -648,6 +662,21 @@ impl Workspace {
             self.invalidate_stale_candidates();
         }
         self.document(document_id).cloned()
+    }
+
+    fn require_eligible_owner(&self, reference: OwnerReference) -> Result<()> {
+        let source = self
+            .identity_source
+            .as_ref()
+            .ok_or(DmsError::IdentitySourceRequired)?;
+        if reference.binding_id != source.binding_id {
+            return Err(DmsError::IneligibleEntraPerson(reference.object_id));
+        }
+        self.identity_cache
+            .get(&reference.object_id)
+            .filter(|person| person.account_enabled)
+            .ok_or(DmsError::IneligibleEntraPerson(reference.object_id))?;
+        Ok(())
     }
 
     pub fn add_note(
@@ -867,6 +896,88 @@ fn migrate_v10_identity_source(value: &mut serde_json::Value) {
     };
     source.remove("tenant_id");
     source.remove("tenant_display");
+}
+
+fn migrate_v11_release_bound_control(value: &mut serde_json::Value) {
+    let Some(documents) = value
+        .get_mut("documents")
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return;
+    };
+    for document in documents.values_mut() {
+        let Some(document) = document.as_object_mut() else {
+            continue;
+        };
+        let effective_date = document
+            .get_mut("control")
+            .and_then(serde_json::Value::as_object_mut)
+            .and_then(migrate_v11_control);
+        if let Some(candidates) = document
+            .get_mut("candidates")
+            .and_then(serde_json::Value::as_array_mut)
+        {
+            for candidate in candidates {
+                let Some(candidate) = candidate.as_object_mut() else {
+                    continue;
+                };
+                if candidate
+                    .get("effective_date")
+                    .is_none_or(serde_json::Value::is_null)
+                {
+                    candidate.insert(
+                        "effective_date".to_owned(),
+                        effective_date.clone().unwrap_or(serde_json::Value::Null),
+                    );
+                }
+                if let Some(control) = candidate
+                    .get_mut("metadata")
+                    .and_then(|metadata| metadata.get_mut("control"))
+                    .and_then(serde_json::Value::as_object_mut)
+                {
+                    migrate_v11_control(control);
+                }
+            }
+        }
+        let Some(effective_date) = effective_date.filter(|date| !date.is_null()) else {
+            continue;
+        };
+        if let Some(current_release) = document
+            .get_mut("releases")
+            .and_then(serde_json::Value::as_array_mut)
+            .and_then(|releases| {
+                releases.iter_mut().rev().find(|release| {
+                    !release
+                        .get("withdrawn")
+                        .and_then(serde_json::Value::as_bool)
+                        .unwrap_or(false)
+                })
+            })
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            current_release
+                .entry("effective_date".to_owned())
+                .or_insert(effective_date);
+        }
+    }
+}
+
+fn migrate_v11_control(
+    control: &mut serde_json::Map<String, serde_json::Value>,
+) -> Option<serde_json::Value> {
+    let owner = control.remove("owner").and_then(|owner| {
+        owner
+            .as_str()
+            .map(str::trim)
+            .filter(|owner| !owner.is_empty())
+            .map(str::to_owned)
+    });
+    control.insert("owner".to_owned(), serde_json::Value::Null);
+    control.insert(
+        "legacy_owner_label".to_owned(),
+        owner.map_or(serde_json::Value::Null, serde_json::Value::String),
+    );
+    control.remove("effective_date")
 }
 
 fn canonical_existing_directory(path: &Path, label: &str) -> Result<PathBuf> {

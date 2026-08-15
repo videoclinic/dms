@@ -279,6 +279,34 @@ test("first identity-source preview requires initial edit-root roles", () => {
   assert.match(markup, /Anna Berg/);
 });
 
+test("first successful empty identity-source preview applies explicit placeholder state", () => {
+  let state = applyConfigurationSnapshot(createConfigurationState(), {
+    ...snapshot,
+    identity_source: null,
+    eligible_people: [],
+    workflow_policies: [],
+  });
+  state = openConfigurationSecondary(state, "identity-source");
+  state = {
+    ...state,
+    identity_setup: {
+      preview: {
+        preview_id: "preview-empty",
+        tenant_display: "Example tenant",
+        group_label: "Empty workflow group",
+        eligible_people: [],
+      },
+    },
+  };
+
+  const markup = configurationMarkup(state, assistancePolicy);
+  assert.match(markup, /successful empty binding/);
+  assert.match(markup, /&lt;editor&gt;/);
+  assert.doesNotMatch(markup, /name="initialEditorId"/);
+  assert.doesNotMatch(markup, /name="initialApproverId"/);
+  assert.match(markup, /<button class="button" type="submit">Apply identity source<\/button>/);
+});
+
 test("replacement identity-source preview leaves existing roles unresolved", () => {
   let state = applyConfigurationSnapshot(createConfigurationState(), snapshot);
   state = openConfigurationSecondary(state, "identity-source");

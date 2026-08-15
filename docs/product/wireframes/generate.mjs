@@ -83,7 +83,9 @@ const CAPS = [
         ${kv([
           ["Document ID", "doc-77a12bce"],
           ["Relative draft path", "policies/HR/Handbook.docx"],
-          ["Effective editor / approver", "Lukas Roth / Anna Berg"],
+          ["Owner", "Lukas Roth · object ID 8a1f…"],
+          ["Effective editor", "Lukas Roth · object ID 8a1f…"],
+          ["Effective approver", "Anna Berg · object ID 41c2…"],
           ["Workflow identity", "Entra group: VC DMS Workflow Users"],
           ["Effective confidentiality", "Internal (inherited from /policies/HR)"],
         ])}
@@ -101,7 +103,10 @@ const CAPS = [
           <h3 class="card-title">Release candidate (required fields)</h3>
           ${kv([
             ["Changelog *", "Updated retention table to 24 months."],
-            ["Target version *", "Minor V1.4 <span class=\"muted\">(selected)</span> · Major V2.0 · Manual V&lt;major&gt;.&lt;minor&gt;"],
+            ["Effective date *", "2025-08-15 <span class=\"muted\">(captured only by successful release)</span>"],
+            ["Owner *", "Lukas Roth · lukas@vc.de · object ID 8a1f…"],
+            ["Requesting editor *", "Lukas Roth · object ID 8a1f…"],
+            ["Target version *", "Next minor V1.4 <span class=\"muted\">(default)</span> · Next major V2.0 · Manual V&lt;major&gt;.&lt;minor&gt;"],
             ["Manual validation", "<span class=\"muted\">Greater unused target required when manual is selected</span>"],
             ["Candidate", "V1.4 <span class=\"muted\">(minor release; no approval required)</span>"],
             ["Draft SHA-256", "<span class=\"muted\">(computed from current draft bytes before release)</span>"],
@@ -109,18 +114,25 @@ const CAPS = [
             ["Approver notification", "Anna Berg <anna@vc.de> · effective approver snapshot"],
             ["Approval rule", "V1.0 and targets that increase the major component require Entra-verified approval"],
           ])}
-          <div class="row gap-2" style="margin-top:0.75rem;flex-wrap:wrap"><button class="btn outline">Preview V2.0 review request</button><button class="btn">Release V1.4 minor version</button></div>
-          <p class="hint">Minor release snapshots the changelog, mode, candidate, and effective approver. It stays in <code>draft</code> until successful atomic export.</p>
+          <form class="stack" style="margin-top:0.75rem">
+            <label class="label">Effective date * <input type="date" value="2025-08-15" required></label>
+            <label class="label">Owner * <select required><option value="8a1f">Lukas Roth · lukas@vc.de</option><option value="41c2">Anna Berg · anna@vc.de</option></select></label>
+            <label class="label">Requesting editor * <select required><option value="8a1f">Lukas Roth · lukas@vc.de</option></select></label>
+            <label class="label">Target * <select required><option value="next_minor" selected>Next minor · V1.4</option><option value="next_major">Next major · V2.0</option><option value="manual">Manual</option></select></label>
+            <div class="row gap-2" style="flex-wrap:wrap"><button class="btn outline">Preview V2.0 review request</button><button class="btn">Release V1.4 minor version</button></div>
+          </form>
+          <p class="hint">A successful empty people import shows literal <code>&lt;owner&gt;</code> and <code>&lt;editor&gt;</code> placeholders here and blocks submission. Minor release snapshots the requested profile, effective date, changelog, mode, editor, and approver; it stays in <code>draft</code> until successful atomic export.</p>
         </section>
         <section class="card">
           <h3 class="card-title">Major approval and minor publication rule</h3>
           <ul class="timeline">
-            <li><strong>V1.4 minor</strong> — direct release; no review request or decision</li>
+            <li><strong>Current V1.3</strong> — effective 2025-08-01; owner Lukas Roth (object ID 8a1f…)</li>
+            <li><strong>V1.4 minor</strong> — direct release; requested effective date and profile become immutable only after export commits</li>
             <li><strong>minor publication notice</strong> — notify Anna after V1.4 atomic export commits</li>
             <li><strong>V2.0 major</strong> — review request, Entra-verified decision, then release</li>
             <li><strong>rejected / changes requested</strong> — major candidate stays unoccupied; optional reason retained</li>
           </ul>
-          <div class="callout warn">A rejected, cancelled, invalidated, or failed-export major review does not consume its candidate. A failed minor export does not consume V1.4 either.</div>
+          <div class="callout warn">A rejected, cancelled, invalidated, or failed-export major review does not consume its candidate. A failed minor export does not consume V1.4 or apply staged Owner/Editor changes.</div>
           <p class="hint">Chain head 5b3a…ffe2 — verify recomputes from canonical body (CAP-0011).</p>
         </section>
       </div>`,
@@ -748,6 +760,9 @@ const CAPS = [
         .app[data-cap="CAP-0015"] .content { overflow: hidden; }
         .app[data-cap="CAP-0015"] .document-control-panes { min-height: 0; flex: 1; align-items: stretch; }
         .app[data-cap="CAP-0015"] .document-control-panes > .card { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+        .app[data-cap="CAP-0015"] .control-boundary-summary { display: grid; gap: 0.4rem; margin: 0.75rem 0; }
+        .app[data-cap="CAP-0015"] .control-boundary-summary > div { padding: 0.45rem 0.55rem; border-left: 3px solid var(--border); background: var(--muted); font-size: 0.75rem; }
+        .app[data-cap="CAP-0015"] .control-boundary-summary strong { display: block; color: var(--foreground); }
       `)}
       <div class="grid-explorer-detail document-control-panes">
         <aside class="card tree">
@@ -838,7 +853,7 @@ const CAPS = [
     file: "CAP-0017-periodic-document-review",
     title: "Periodic review",
     nav: "audit",
-    subtitle: "Default interval, per-document exemption, outcomes: confirmed / changes / obsolete. Reuses the document's effective approver.",
+    subtitle: "Review schedule is separate from profile and release evidence: stored effective date plus resolved interval, with explicit exemptions.",
     actions: ["Start periodic review", "Send reminder"],
     body: `
       <div class="grid-2">
@@ -849,15 +864,16 @@ const CAPS = [
               ["Default interval", "12 months"],
               ["Reminder window", "30 days before due"],
               ["Calendar months", "clamped to last valid day"],
+              ["Due-date basis", "Current release effective date + resolved document interval"],
             ])}
           </section>
           <section class="card">
             <h3 class="card-title">Routing</h3>
             ${kv([
-              ["Reviewer", "Effective approver (CAP-0019)"],
-              ["Per-document override", "—"],
+              ["Reviewer", "Effective approver · object ID 41c2… (CAP-0019)"],
+              ["Per-document override", "Backup Config · 6 months"],
             ])}
-            <p class="hint">Periodic review reuses the document's effective approver. Exemption requires a reason comment in the workflow chain.</p>
+            <p class="hint">Periodic review reuses the document's object-ID-anchored effective approver. A document with <code>&lt;owner&gt;</code> or <code>&lt;editor&gt;</code> cannot start review. Exemption requires a reason comment in the workflow chain.</p>
           </section>
         </div>
         <section class="card">
@@ -876,6 +892,7 @@ const CAPS = [
             filterPlaceholder: "e.g. overdue or Acceptable",
             matchingLabel: "documents",
           })}
+          <p class="hint">Each Next due value is calculated from the immutable current-release effective date and the mutable review schedule; month-end dates clamp to the last valid day.</p>
         </section>
       </div>`,
   },
@@ -1162,30 +1179,51 @@ function documentControlDataSelectionPane() {
       <div class="mono" style="margin-top:0.3rem">Handbook.docx</div>
       <div class="muted" style="font-size:0.75rem;margin-top:0.2rem">Folder: policies/HR</div>
     </div>
+    <div class="control-boundary-summary" aria-label="Document control data boundaries">
+      <div><strong>Document profile · mutable</strong>Owner Lukas Roth · title HR Data Privacy Policy</div>
+      <div><strong>Current release · immutable snapshot</strong>V1.3 · effective 2025-08-01 · captured owner 8a1f…</div>
+      <div><strong>Review schedule · mutable</strong>12 months · next due 2026-08-01</div>
+    </div>
     <details class="selection-section" open>
-      <summary>Document control data <span>Managed in DMS Desktop</span></summary>
+      <summary>Document profile <span>Mutable · managed in DMS Desktop</span></summary>
       <div class="selection-section-body">${kv([
         ["Title", "HR Data Privacy Policy"],
         ["Document number", "DOC-014 (unique in workspace)"],
         ["Document type", "policy"],
-        ["Owner", "Lukas Roth"],
-        ["Effective date", "2025-08-01"],
-        ["Next review due", "2026-08-01"],
-        ["Released", "V1.3 (current)"],
-        ["Draft", badge("newer than last release", "warn")],
-        ["Effective editor", "Lukas Roth"],
-        ["Effective approver", "Anna Berg"],
+        ["Owner", "Lukas Roth · lukas@vc.de · object ID 8a1f…"],
+        ["Eligible-person assignment", "Select submits object ID only; name/email are refreshable display data"],
+        ["Legacy owner label", "— <span class=\"muted\">(pre-v12 text would be shown unresolved here)</span>"],
+        ["Effective editor", "Lukas Roth · object ID 8a1f…"],
+        ["Effective approver", "Anna Berg · object ID 41c2…"],
         ["Confidentiality", "Internal (inherited from policies/HR)"],
-      ])}<p class="hint">Stored in workspace metadata under <code>.dms</code>. Not read from or synchronized with Office document properties. Renaming the source file does not change these values.</p></div>
+      ])}<p class="hint">Stored under <code>.dms</code>. Effective date is not editable profile data. Renaming the source or refreshing display names does not change identity authority.</p></div>
     </details>
     <details class="selection-section" open>
-      <summary>Actions <span>16 available</span></summary>
+      <summary>Current release <span>Immutable snapshot</span></summary>
+      <div class="selection-section-body">${kv([
+        ["Released", "V1.3 (current)"],
+        ["Effective date", "2025-08-01"],
+        ["Captured title", "HR Data Privacy Policy"],
+        ["Captured owner", "Lukas Roth · object ID 8a1f…"],
+        ["Draft", badge("newer than last release", "warn")],
+      ])}<button class="btn outline">Open latest released PDF</button><p class="hint">Pre-v12 missing profile or effective-date evidence is labelled <strong>unrecorded</strong>; the mutable profile is never substituted.</p></div>
+    </details>
+    <details class="selection-section" open>
+      <summary>Review schedule <span>Mutable</span></summary>
+      <div class="selection-section-body">${kv([
+        ["Resolved interval", "12 months (workspace default)"],
+        ["Next review due", "2026-08-01"],
+        ["Exemption", "None"],
+      ])}<p class="hint">Due date = current release effective date + resolved interval, clamped to the last valid calendar day.</p></div>
+    </details>
+    <details class="selection-section" open>
+      <summary>Actions <span>17 available</span></summary>
       <div class="selection-section-body stack-btns">
         <button class="btn outline">Open draft</button>
-        <button class="btn outline">Open latest released PDF</button>
         <button class="btn outline">Edit document control data</button>
         <button class="btn outline">Override confidentiality…</button>
-        <button class="btn outline">Submit for review</button>
+        <button class="btn outline">Submit release candidate</button>
+        <button class="btn outline">Apply real Owner / Editor with successful release</button>
         <button class="btn outline">Begin revision</button>
         <button class="btn outline">Cancel review</button>
         <button class="btn danger">Mark obsolete</button>
@@ -1200,6 +1238,16 @@ function documentControlDataSelectionPane() {
       </div>
     </details>
     <details class="selection-section" open>
+      <summary>Submit release candidate <span>Required inputs</span></summary>
+      <div class="selection-section-body stack">
+        <label class="label">Effective date * <input type="date" value="2025-08-15" required></label>
+        <label class="label">Target * <select><option value="next_minor" selected>Next minor · V1.4</option><option value="next_major">Next major · V2.0</option><option value="manual">Manual</option></select></label>
+        <label class="label">Requesting editor * <select><option value="8a1f">Lukas Roth · lukas@vc.de</option></select></label>
+        <p class="hint">For placeholder documents, select real Owner and Editor to stage them. They apply atomically only after successful release; failed export leaves the placeholders unchanged.</p>
+        <button class="btn">Submit candidate</button>
+      </div>
+    </details>
+    <details class="selection-section" open>
       <summary>Revision cycle</summary>
       <div class="selection-section-body">
         <p class="muted" style="font-size:0.85rem;margin:0">The current released PDF remains available while this newer draft is in review. After release, <strong>Begin revision</strong> returns the document to <code>draft</code>; PDFs and history remain preserved.</p>
@@ -1209,8 +1257,8 @@ function documentControlDataSelectionPane() {
     <details class="selection-section" open>
       <summary>Releases <span>4 recorded</span></summary>
       <div class="selection-section-body stack">
-        ${ver("V1.3", "2025-08-01 09:44 UTC", "Substantive / major", "current", "ok")}
-        ${ver("V1.2", "2025-07-12 12:01 UTC", "Cosmetic / minor", "superseded", "muted")}
+        ${ver("V1.3", "effective 2025-08-01 · released 2025-08-01 09:44 UTC · owner 8a1f…", "Substantive / major", "current", "ok")}
+        ${ver("V1.2", "effective 2025-07-12 · released 2025-07-12 12:01 UTC", "Cosmetic / minor", "superseded", "muted")}
         ${ver("V1.1", "2025-06-05 14:30 UTC", "Substantive / major", "superseded", "muted")}
         ${ver("V1.0", "2025-05-09 10:12 UTC", "Cosmetic / minor", "withdrawn", "warn")}
       </div>

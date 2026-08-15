@@ -239,6 +239,9 @@ tr:last-child td { border-bottom: 0; }
     .app[data-cap="CAP-0015"] .content { overflow: hidden; }
     .app[data-cap="CAP-0015"] .document-control-panes { min-height: 0; flex: 1; align-items: stretch; }
     .app[data-cap="CAP-0015"] .document-control-panes > .card { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+    .app[data-cap="CAP-0015"] .control-boundary-summary { display: grid; gap: 0.4rem; margin: 0.75rem 0; }
+    .app[data-cap="CAP-0015"] .control-boundary-summary > div { padding: 0.45rem 0.55rem; border-left: 3px solid var(--border); background: var(--muted); font-size: 0.75rem; }
+    .app[data-cap="CAP-0015"] .control-boundary-summary strong { display: block; color: var(--foreground); }
   </style>
       <div class="grid-explorer-detail document-control-panes">
         <aside class="card tree">
@@ -305,18 +308,31 @@ tr:last-child td { border-bottom: 0; }
       <div class="mono" style="margin-top:0.3rem">Handbook.docx</div>
       <div class="muted" style="font-size:0.75rem;margin-top:0.2rem">Folder: policies/HR</div>
     </div>
+    <div class="control-boundary-summary" aria-label="Document control data boundaries">
+      <div><strong>Document profile · mutable</strong>Owner Lukas Roth · title HR Data Privacy Policy</div>
+      <div><strong>Current release · immutable snapshot</strong>V1.3 · effective 2025-08-01 · captured owner 8a1f…</div>
+      <div><strong>Review schedule · mutable</strong>12 months · next due 2026-08-01</div>
+    </div>
     <details class="selection-section" open>
-      <summary>Document control data <span>Managed in DMS Desktop</span></summary>
-      <div class="selection-section-body"><dl class="kv"><div><dt>Title</dt><dd>HR Data Privacy Policy</dd></div><div><dt>Document number</dt><dd>DOC-014 (unique in workspace)</dd></div><div><dt>Document type</dt><dd>policy</dd></div><div><dt>Owner</dt><dd>Lukas Roth</dd></div><div><dt>Effective date</dt><dd>2025-08-01</dd></div><div><dt>Next review due</dt><dd>2026-08-01</dd></div><div><dt>Released</dt><dd>V1.3 (current)</dd></div><div><dt>Draft</dt><dd><span class="badge warn">newer than last release</span></dd></div><div><dt>Effective editor</dt><dd>Lukas Roth</dd></div><div><dt>Effective approver</dt><dd>Anna Berg</dd></div><div><dt>Confidentiality</dt><dd>Internal (inherited from policies/HR)</dd></div></dl><p class="hint">Stored in workspace metadata under <code>.dms</code>. Not read from or synchronized with Office document properties. Renaming the source file does not change these values.</p></div>
+      <summary>Document profile <span>Mutable · managed in DMS Desktop</span></summary>
+      <div class="selection-section-body"><dl class="kv"><div><dt>Title</dt><dd>HR Data Privacy Policy</dd></div><div><dt>Document number</dt><dd>DOC-014 (unique in workspace)</dd></div><div><dt>Document type</dt><dd>policy</dd></div><div><dt>Owner</dt><dd>Lukas Roth · lukas@vc.de · object ID 8a1f…</dd></div><div><dt>Eligible-person assignment</dt><dd>Select submits object ID only; name/email are refreshable display data</dd></div><div><dt>Legacy owner label</dt><dd>— <span class="muted">(pre-v12 text would be shown unresolved here)</span></dd></div><div><dt>Effective editor</dt><dd>Lukas Roth · object ID 8a1f…</dd></div><div><dt>Effective approver</dt><dd>Anna Berg · object ID 41c2…</dd></div><div><dt>Confidentiality</dt><dd>Internal (inherited from policies/HR)</dd></div></dl><p class="hint">Stored under <code>.dms</code>. Effective date is not editable profile data. Renaming the source or refreshing display names does not change identity authority.</p></div>
     </details>
     <details class="selection-section" open>
-      <summary>Actions <span>16 available</span></summary>
+      <summary>Current release <span>Immutable snapshot</span></summary>
+      <div class="selection-section-body"><dl class="kv"><div><dt>Released</dt><dd>V1.3 (current)</dd></div><div><dt>Effective date</dt><dd>2025-08-01</dd></div><div><dt>Captured title</dt><dd>HR Data Privacy Policy</dd></div><div><dt>Captured owner</dt><dd>Lukas Roth · object ID 8a1f…</dd></div><div><dt>Draft</dt><dd><span class="badge warn">newer than last release</span></dd></div></dl><button class="btn outline">Open latest released PDF</button><p class="hint">Pre-v12 missing profile or effective-date evidence is labelled <strong>unrecorded</strong>; the mutable profile is never substituted.</p></div>
+    </details>
+    <details class="selection-section" open>
+      <summary>Review schedule <span>Mutable</span></summary>
+      <div class="selection-section-body"><dl class="kv"><div><dt>Resolved interval</dt><dd>12 months (workspace default)</dd></div><div><dt>Next review due</dt><dd>2026-08-01</dd></div><div><dt>Exemption</dt><dd>None</dd></div></dl><p class="hint">Due date = current release effective date + resolved interval, clamped to the last valid calendar day.</p></div>
+    </details>
+    <details class="selection-section" open>
+      <summary>Actions <span>17 available</span></summary>
       <div class="selection-section-body stack-btns">
         <button class="btn outline">Open draft</button>
-        <button class="btn outline">Open latest released PDF</button>
         <button class="btn outline">Edit document control data</button>
         <button class="btn outline">Override confidentiality…</button>
-        <button class="btn outline">Submit for review</button>
+        <button class="btn outline">Submit release candidate</button>
+        <button class="btn outline">Apply real Owner / Editor with successful release</button>
         <button class="btn outline">Begin revision</button>
         <button class="btn outline">Cancel review</button>
         <button class="btn danger">Mark obsolete</button>
@@ -331,6 +347,16 @@ tr:last-child td { border-bottom: 0; }
       </div>
     </details>
     <details class="selection-section" open>
+      <summary>Submit release candidate <span>Required inputs</span></summary>
+      <div class="selection-section-body stack">
+        <label class="label">Effective date * <input type="date" value="2025-08-15" required></label>
+        <label class="label">Target * <select><option value="next_minor" selected>Next minor · V1.4</option><option value="next_major">Next major · V2.0</option><option value="manual">Manual</option></select></label>
+        <label class="label">Requesting editor * <select><option value="8a1f">Lukas Roth · lukas@vc.de</option></select></label>
+        <p class="hint">For placeholder documents, select real Owner and Editor to stage them. They apply atomically only after successful release; failed export leaves the placeholders unchanged.</p>
+        <button class="btn">Submit candidate</button>
+      </div>
+    </details>
+    <details class="selection-section" open>
       <summary>Revision cycle</summary>
       <div class="selection-section-body">
         <p class="muted" style="font-size:0.85rem;margin:0">The current released PDF remains available while this newer draft is in review. After release, <strong>Begin revision</strong> returns the document to <code>draft</code>; PDFs and history remain preserved.</p>
@@ -340,8 +366,8 @@ tr:last-child td { border-bottom: 0; }
     <details class="selection-section" open>
       <summary>Releases <span>4 recorded</span></summary>
       <div class="selection-section-body stack">
-        <div class="ver"><div class="row gap-2"><strong>V1.3</strong><span class="badge ok">current</span></div><p class="muted">2025-08-01 09:44 UTC</p><p>Substantive / major</p></div>
-        <div class="ver"><div class="row gap-2"><strong>V1.2</strong><span class="badge muted">superseded</span></div><p class="muted">2025-07-12 12:01 UTC</p><p>Cosmetic / minor</p></div>
+        <div class="ver"><div class="row gap-2"><strong>V1.3</strong><span class="badge ok">current</span></div><p class="muted">effective 2025-08-01 · released 2025-08-01 09:44 UTC · owner 8a1f…</p><p>Substantive / major</p></div>
+        <div class="ver"><div class="row gap-2"><strong>V1.2</strong><span class="badge muted">superseded</span></div><p class="muted">effective 2025-07-12 · released 2025-07-12 12:01 UTC</p><p>Cosmetic / minor</p></div>
         <div class="ver"><div class="row gap-2"><strong>V1.1</strong><span class="badge muted">superseded</span></div><p class="muted">2025-06-05 14:30 UTC</p><p>Substantive / major</p></div>
         <div class="ver"><div class="row gap-2"><strong>V1.0</strong><span class="badge warn">withdrawn</span></div><p class="muted">2025-05-09 10:12 UTC</p><p>Cosmetic / minor</p></div>
       </div>

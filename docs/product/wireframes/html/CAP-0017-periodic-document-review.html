@@ -226,18 +226,18 @@ tr:last-child td { border-bottom: 0; }
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Default interval, per-document exemption, outcomes: confirmed / changes / obsolete. Reuses the document's effective approver.</p>
+      <p class="subtitle">Review schedule is separate from profile and release evidence: stored effective date plus resolved interval, with explicit exemptions.</p>
       
       <div class="grid-2">
         <div class="stack">
           <section class="card">
             <h3 class="card-title">Workspace defaults</h3>
-            <dl class="kv"><div><dt>Default interval</dt><dd>12 months</dd></div><div><dt>Reminder window</dt><dd>30 days before due</dd></div><div><dt>Calendar months</dt><dd>clamped to last valid day</dd></div></dl>
+            <dl class="kv"><div><dt>Default interval</dt><dd>12 months</dd></div><div><dt>Reminder window</dt><dd>30 days before due</dd></div><div><dt>Calendar months</dt><dd>clamped to last valid day</dd></div><div><dt>Due-date basis</dt><dd>Current release effective date + resolved document interval</dd></div></dl>
           </section>
           <section class="card">
             <h3 class="card-title">Routing</h3>
-            <dl class="kv"><div><dt>Reviewer</dt><dd>Effective approver (CAP-0019)</dd></div><div><dt>Per-document override</dt><dd>—</dd></div></dl>
-            <p class="hint">Periodic review reuses the document's effective approver. Exemption requires a reason comment in the workflow chain.</p>
+            <dl class="kv"><div><dt>Reviewer</dt><dd>Effective approver · object ID 41c2… (CAP-0019)</dd></div><div><dt>Per-document override</dt><dd>Backup Config · 6 months</dd></div></dl>
+            <p class="hint">Periodic review reuses the document's object-ID-anchored effective approver. A document with <code>&lt;owner&gt;</code> or <code>&lt;editor&gt;</code> cannot start review. Exemption requires a reason comment in the workflow chain.</p>
           </section>
         </div>
         <section class="card">
@@ -252,6 +252,7 @@ tr:last-child td { border-bottom: 0; }
     <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Rows per page <select aria-label="Table rows per page" style="height:2rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.45rem;font:inherit;color:var(--foreground);background:var(--background)"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
     <div class="row gap-2"><span class="muted">1–5 of 5</span><button class="btn outline" disabled>Previous</button><button class="btn outline" disabled>Next</button></div>
   </div>
+          <p class="hint">Each Next due value is calculated from the immutable current-release effective date and the mutable review schedule; month-end dates clamp to the last valid day.</p>
         </section>
       </div>
     </main>
