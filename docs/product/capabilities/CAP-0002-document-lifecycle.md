@@ -142,10 +142,13 @@ When implemented, the following must hold:
     bulk verify follow CAP-0016. Due-date review of an unchanged current release
     follows CAP-0017.
 19. Before submitting an approval-required review request and again immediately
-    before every release,
-    the application derives the candidate release label from outcome 9 and
-    checks the current source draft for its two canonical visible-content
-    markers:
+    before every release, the application derives the candidate release label
+    from outcome 9 and validates the source metadata that the draft format owns:
+    - an Office draft must contain the two canonical visible-content markers;
+    - a Markdown draft must contain matching flat YAML frontmatter fields. Its
+      generated temporary Word document receives visible fields from the release
+      snapshot under CAP-0007, so the Markdown body need not duplicate them.
+    The canonical values are:
     - `Version: <major>.<minor>` must equal the candidate label without its
       filename `V` prefix (for example, candidate `V2.0` requires
       `Version: 2.0`).
@@ -159,10 +162,12 @@ When implemented, the following must hold:
     every header/footer part, including section-specific footers (including
     unresolved `{VERSION}` / `{CONFIDENTIALITY}` tokens, which do not satisfy
     the gate until export would replace them — the gate reads the draft on
-    disk, not the temp export copy). The Markdown scanner checks rendered body
-    text outside front matter, HTML comments, and fenced or indented code
-    blocks. The CAP-0007 Markdown print-shell footer is export chrome only and
-    does not satisfy this source-draft check by itself. Other draft formats may
+    disk, not the temp export copy). The Markdown scanner requires scalar
+    `version` and `confidentiality` frontmatter fields. Optional `title` and
+    `document_number` fields must match the candidate snapshot when present;
+    duplicate, structured, or malformed controlled fields fail closed.
+    Frontmatter validates the source but never supplies authoritative release
+    values or mutates DMS document control data. Other draft formats may
     not enter review or release until equivalent visible-content coverage is
     implemented and tested alongside CAP-0007.
     A failed check blocks the transition by default and reports the expected and

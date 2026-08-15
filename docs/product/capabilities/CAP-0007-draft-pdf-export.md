@@ -4,8 +4,8 @@
 | --- | --- |
 | ID | CAP-0007 |
 | Status | not implemented |
-| Mechanism | Installed Microsoft Office for Office drafts; local CommonMark HTML print shell + native WebView PDF API for Markdown |
-| Tests | Partial phase-5 evidence: [`dms-desktop` adapter/unit tests](../../../crates/dms-desktop/src/export.rs) cover Markdown chrome and Office placeholder fill with a fake Office exporter; [Windows/macOS native WebView PDF smoke](https://github.com/videoclinic/dms/actions/runs/31367938246) covers the real Markdown print path only |
+| Mechanism | Installed Microsoft Word for Office drafts and Markdown converted into a temporary DOCX from the workspace Word-template asset |
+| Tests | Partial phase-5 and CHG-0004 Phase-1 evidence: [`dms-desktop` adapter/unit tests](../../../crates/dms-desktop/src/export.rs) cover Office temporary-copy field fill; the operator Vorlage opens and exports through Windows Word with visible title, number, version, and confidentiality fields. The former WebView smoke proves only the superseded path and is not evidence for the target Markdown route. |
 
 ## Outcomes (contract — not yet true in runtime)
 
@@ -15,8 +15,8 @@ When implemented, the following must hold:
    not a manual “export yourself and pick a file” step as the primary path:
    - Office drafts use Microsoft Office desktop apps already installed on the
      machine (Windows and macOS).
-   - Markdown (`.md`) drafts render locally as CommonMark HTML inside an app
-     print shell and use the native WebView PDF API on the host OS.
+   - Markdown (`.md`) drafts are assembled into a temporary DOCX from the active
+     workspace Word-template asset and exported by installed Microsoft Word.
 2. Export writes only to the computed publish path for the new version
    (`<publish-root>/<relative-parent>/<stem>_VMAJOR.MINOR_<confidentiality-type-id>.pdf`).
    The confidentiality type ID is the effective type at release, snapshotted in
@@ -34,48 +34,45 @@ When implemented, the following must hold:
 5. The source draft file is not deleted or replaced by the export.
 6. After a successful export, CAP-0004 checksum runs on the produced PDF bytes.
 7. Format-specific adapters are an implementation detail behind one export
-   interface: Office may use Windows COM or macOS AppleScript/Office automation;
-   Markdown uses the print shell plus native WebView PDF APIs. The operator
-   outcome is the same on both supported OS.
+   interface. Office drafts use Windows COM or macOS AppleScript/Office
+   automation directly. Markdown first uses the existing Rust CommonMark and
+   OOXML stack to create a temporary DOCX from the active workspace template,
+   then uses the same installed-Word PDF adapter. The operator outcome is the
+   same on both supported OS.
 8. Export first writes to a temporary file in the target publish directory.
    Before commit, the app verifies that the result is non-empty and has a valid
    PDF header, computes its SHA-256 digest, and atomically renames it to the
    final versioned path. Failure removes the temporary file when possible and
    does not commit a version or release record.
 9. Both adapters receive one **export chrome** map built only from the release
-   context in `.dms` (not from Office document properties or Markdown front
-   matter — CAP-0015):
+   context in `.dms` (not from source Office properties or Markdown frontmatter
+   — CAP-0015):
    - candidate version label without the filename `V` prefix (for example `2.0`)
    - effective confidentiality **display label** and stable type **ID**
      (CAP-0008 snapshot at release)
-   - optional DMS title and document number when the print shell shows them
-10. **Markdown print shell (Option A).** Markdown export does not route through
-    Word or a `.docx` template at runtime. The app:
-    - strips YAML front matter before CommonMark rendering (front matter is not
-      control data and is not PDF body content)
-    - wraps the body HTML in a shipped print shell (`shell.html` + `print.css` +
-      logo asset) that mirrors the corporate Vorlage chrome: header logo, A4 page
-      size and margins, and a footer with page indicator plus the canonical
-      captions `Vertraulichkeitsstufe: <display label>` and
-      `Version: <major>.<minor>`
-    - substitutes footer/header values only from the export chrome map
-    - loads the shell from an app-local asset base URL so relative logo/CSS paths
-      resolve, then prints via the native WebView PDF API
-    CAP-0002 source-draft marker checks remain on the Markdown body; the print
-    shell may repeat the same captions on every PDF page and must not be the
-    only place those values exist for the review/release gate.
-11. **Office placeholder fill.** When an Office draft (or its section
-    headers/footers) contains the literal tokens `{CONFIDENTIALITY}` or
-    `{VERSION}`, export works on a temporary copy and replaces them with the
-    export chrome display label and version label respectively, across body,
-    tables, text boxes, and every header/footer part, before invoking Office
-    PDF export. Tokens already replaced with concrete values are left unchanged.
-    The original draft on disk is never modified by this step.
-12. Shipped default print-shell assets are derived from the operator Vorlage
-    layout (logo, margins, footer column structure). Pixel-perfect match to
-    Word is not required; readable corporate chrome on every PDF page is.
-    Workspace override of those assets is out of scope for v1 unless a later
-    CAP adds it.
+   - DMS title and optional document number when the template exposes them
+10. **Workspace Markdown template.** One optional `.docx` below the edit root is
+    registered as the active workspace Markdown export-template asset. `.dms`
+    stores its stable ID, relative path, validation digest, and contract version.
+    The asset is reusable across Markdown documents and excluded from controlled
+    document lifecycle, notes, release history, and permalinks. Markdown review
+    and release fail closed when no valid template is configured.
+11. **Template and field fill.** The template preserves its styles, page setup,
+    headers, footers, relationships, and media while providing unambiguous body
+    insertion/style prototypes for headings, paragraphs, lists, and tables.
+    Generated temporary DOCX custom properties `DMS_TITLE`,
+    `DMS_DOCUMENT_NUMBER`, `DMS_VERSION`, and `DMS_CONFIDENTIALITY` are filled
+    from export chrome. Word `DOCPROPERTY` fields expose those values in the
+    template and are refreshed before PDF export. The literal tokens `{TITLE}`,
+    `{DOCUMENT_NUMBER}`, `{VERSION}`, and `{CONFIDENTIALITY}` remain supported in
+    temporary Office copies and custom-property values. The source Office draft,
+    Markdown source, and imported template are never modified during release.
+12. Markdown frontmatter is parsed as source metadata before body conversion.
+    `version` and `confidentiality` are required and must match the candidate
+    snapshot; optional `title` and `document_number` must match when present.
+    Frontmatter never overwrites `.dms` control data and is not emitted as body
+    content. The generated DOCX and PDF always receive controlled values from the
+    release snapshot.
 
 ## Non-goals
 
@@ -83,9 +80,10 @@ When implemented, the following must hold:
 - Server-side or cloud conversion services
 - Pixel-perfect guarantee beyond what the selected local exporter produces
 - Requiring identical Office build numbers across Windows and macOS
-- Converting Markdown through Word solely to reuse a `.docx` template
-- Treating Office properties or Markdown front matter as authority for chrome
-  values
+- A second WebView, HTML, altChunk, Pandoc, LibreOffice, or cloud fallback for
+  Markdown conversion
+- Treating source Office properties or Markdown frontmatter as authority for
+  controlled output field values
 
 ## Links
 - Wireframe (HTML): [`../wireframes/html/CAP-0007-draft-pdf-export.html`](../wireframes/html/CAP-0007-draft-pdf-export.html)

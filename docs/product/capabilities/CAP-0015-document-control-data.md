@@ -20,9 +20,10 @@ When implemented, the following must hold:
    - **owner** (the selected eligible person's current-group binding and immutable
      Entra object ID; refreshed name/email are presentation only)
    These values are not imported from or synchronized with Office built-in or
-   custom document properties, or Markdown front matter. The draft filename stem
-   supplies the title's one-time default only when the document is added; it is
-   not a continuing metadata source.
+   custom document properties, or Markdown frontmatter. CAP-0002 may validate
+   matching Markdown frontmatter before review/release, but it never mutates
+   these values. The draft filename stem supplies the title's one-time default
+   only when the document is added; it is not a continuing metadata source.
 2. Document control data for the **currently selected library document** is
    shown on the **same CAP-0006 library page** in the selection pane (right
    column), together with document actions for that selection. The pane keeps
@@ -102,8 +103,9 @@ When implemented, the following must hold:
     locator and the filesystem-derived **Source file** display; it does not
     change the document's title, number, type, owner, release dates, review
     schedule, lifecycle state,
-    or history. Office document properties and Markdown front matter are likewise
-    not authoritative for document control data. The application restores draft
+    or history. Office document properties and Markdown frontmatter are likewise
+    not authoritative for document control data, even when checked or filled
+    during CAP-0007 export. The application restores draft
     content only from an operator workspace backup; released PDFs and their
     evidence remain the
     durable application-managed version history.

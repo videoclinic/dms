@@ -213,12 +213,12 @@ phase also adds an intentional test delivery.
 | 9k.3 | Release-bound control data and immutable owner identity | done (`cargo fmt --all -- --check`; workspace tests; Clippy with warnings denied; 16 focused Library UI tests; 9 focused Maintenance UI tests; regenerated and visually inspected CAP-0002/CAP-0015/CAP-0017 HTML/PNG; 21-entry manifest; changed-document links; DOX pass; `git diff --check`) | Schema-v11 fixture migrates without inventing historical release or owner identity; a successful empty Graph result produces only the literal `<owner>` / `<editor>` placeholders while a Graph failure still fails closed; a later successful real-person refresh permits an operator-selected release-bound Owner/Editor replacement without rewriting past evidence; candidate/release/audit/maintenance tests prove immutable control, owner, and effective-date snapshots plus effective-date-based scheduling; owner/editor/approver references remain object-ID based across name/email changes; release maintenance and audit use stored release evidence rather than mutable profile/cache fallbacks |
 | 9k.4 | Library filtering, recursive folder counters, interaction, width, and shipped icons | done (workspace format/test/Clippy gate; 5 focused core Library tests; 82 frontend tests; regenerated and visually inspected CAP-0002/CAP-0006/CAP-0015 HTML/PNG; 21-entry manifest; modified-CAP links and Markdown tables; DOX pass; `git diff --check`) | Core and UI tests prove identical recursive `~` draft, `+` applicable-not-controlled, and `!` unsupported counts beside each folder in tree and list views; all-on session-wide **Draft documents** / **Available to add** / **Unsupported files** toggles filter every folder and search result before pagination without changing counters; candidate form selects `Next minor` by default; a table-folder click opens that folder without a double-click; the centre/details splitter is pointer- and keyboard-usable with bounded session-only width; runtime and wireframes use app-local SVGs rather than a font dependency |
 | 9k.5 | Workflow tree and SMTP identity/test configuration | done (schema-v13 migration and backup test; workspace format/test/Clippy gate; 40 focused Configuration/App frontend tests; regenerated and visually inspected CAP-0010/CAP-0019 HTML/PNG; 21-entry manifest and Markdown-table checks; DOX pass; `git diff --check`) | Workflow renders an accessible folder tree with all direct role assignments visibly marked; schema-v12 SMTP settings migrate to separate login user and RFC 5322 `From` mailbox without exposing the password; a fake-backed SMTP test addresses that `From` mailbox and a saved credential renders only `***`; Rust/frontend gates and regenerated CAP-0010/CAP-0019 wireframes pass; `git diff --check` exits 0 |
-| 9l | Windows external operator smokes + CAP promotion | pending | Licensed Office release smoke passes on Windows; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated Node-runtime action annotations; CAP statuses distinguish Windows-host evidence from existing CI coverage and make no untested macOS-installed-Office claim; CHG status is done and the record is archived |
+| 9l | Windows external operator smokes + CAP promotion | pending — blocked by CHG-0004 | CHG-0004 is done and pushed; licensed Office releases for DOCX and Markdown-through-workspace-template pass on Windows; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated action annotations; CAP statuses distinguish Windows-host evidence from existing CI coverage and make no untested macOS-installed-Office claim; CHG status is done and the record is archived |
 
-**Current phase:** Phase 9k.5 is done and awaits its Git checkpoint.
-Phase 9l remains pending until that checkpoint is pushed. macOS remains a
-supported runtime target with existing CI coverage,
-but an external macOS operator smoke is not a Phase 9l gate.
+**Current phase:** Phase 9k.5 is done and pushed at `202e796`. Phase 9l remains
+pending until CHG-0004 replaces the contradicted WebView Markdown exporter and
+its completion checkpoint is pushed. macOS remains a supported runtime target,
+but an external macOS installed-Word smoke is not a Phase 9l gate.
 
 Mark a phase `in-progress` only while it is being executed, `done (<evidence>)`
 only after its gate passes, and `pending` otherwise.
@@ -1368,7 +1368,7 @@ CI coverage; this phase does not assert external macOS Office evidence.
 **Execution slot:** P0200 (phase-local; the active CHG keeps its immutable
 `CHG-0001-…` filename under the change-record lifecycle)
 **Created:** 2026-08-13
-**Depends on:** `CHG-0001#phase-9k.5`
+**Depends on:** `CHG-0004-markdown-word-template-release`
 **Plan family:** `CHG-0001-tauri-local-dms-bootstrap`
 **Status:** pending — awaits Phase 9k.5 and then a suitable Windows host meeting the entry pre-checks
 

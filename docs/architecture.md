@@ -16,12 +16,12 @@ PDFs under a **publish root**, with integrity checksums.
 | `dms` CLI (Rust) | Headless operator and automation access to the implemented `dms-core` workspace features; no WebView, Tauri runtime, Office automation, Entra flow, or mail transport |
 | Tauri 2 shell (Rust) | Windowing, WebView IPC, format-specific PDF export orchestration, OS integration, registered local-app URI handler (document permalinks), and an adapter over `dms-core` |
 | Frontend (web UI in WebView) | Foldable left menu with hamburger when collapsed; open-activity panes/tabs as quicklinks; one Configuration workspace with persistent Workspace, Document defaults, Workflow, and Notifications routes plus contextual secondary setup; folder-dominant Library workspace with a persistent edit-root-relative tree, Windows Explorer-like Back/Forward/Up and breadcrumb navigation, current-folder child folders + exact source-file names + controlled-document data, and a selection pane that separates filesystem-derived Source file identity from CAP-0015 DMS-managed document control data and single/batch actions; add/remove control, lifecycle, change commentary, approval, release/verify, confidentiality and workflow-role policies, audit export, publish history, copy/resolve document permalinks |
-| Microsoft Office (host-installed) | PDF export engine for Office drafts invoked by the app on release (Word/Excel/PowerPoint as applicable) |
-| Native WebView PDF API | Prints Markdown CommonMark HTML through a shipped print shell (header/footer chrome from release-context export map) to PDF on release |
+| Microsoft Office (host-installed) | PDF export engine for Office drafts and temporary Word documents assembled from Markdown plus the workspace export template |
+| Workspace Word template | One reusable `.docx` asset under the edit root supplies styles, page setup, headers, footers, media, and controlled-field locations for every Markdown release; it is configuration, not a controlled document |
 | Claude Desktop (optional host app) | Operator-mediated, consented handoff for advisory target-version mode and changelog wording; not a callable local model or lifecycle authority |
 | Microsoft Entra ID + Microsoft Graph | App-global public-client and tenant configuration plus a per-workspace group supplies eligible workflow people; delegated interactive sign-in verifies review decisions; never reads or synchronizes document content |
 | OS-user app config | `preferences.json` plus `global-settings.json`; the latter stores only the non-secret Entra public-client ID and tenant ID shared by local libraries |
-| `<edit-root>/.dms/` | Roots config, library registry, DMS-managed document control data, Entra group binding + read-only display cache, SMTP relay settings (no secrets), folder confidentiality and workflow-role policies, notes, approval/release history, evidence hashes, checksums, advisory lock |
+| `<edit-root>/.dms/` | Roots config, library registry, active Markdown export-template identity/relative locator/validation digest, DMS-managed document control data, Entra group binding + read-only display cache, SMTP relay settings (no secrets), folder confidentiality and workflow-role policies, notes, approval/release history, evidence hashes, checksums, advisory lock |
 | Edit root tree | Operator-edited Microsoft Office and Markdown source drafts (library members are a subset) |
 | Publish root tree | Versioned released PDFs in a directory tree mirrored from edit-relative paths |
 
@@ -46,9 +46,10 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
 - On release, the app: snapshots the effective confidentiality type ID, confirms
   the approved target version label → ensures the relative parent path exists under the
   publish root → builds one export chrome map from `.dms` → exports Office
-  drafts via installed Microsoft Office (token-filling `{CONFIDENTIALITY}` /
-  `{VERSION}` on a temp copy when present) or Markdown drafts through a
-  CommonMark HTML print shell plus native WebView PDF API into
+  drafts through installed Microsoft Office, or validates Markdown frontmatter,
+  assembles a temporary DOCX from the configured workspace template and
+  CommonMark body, fills controlled fields from the release snapshot, and
+  exports that DOCX through installed Word → writes
   `<stem>_VMAJOR.MINOR_<confidentiality-type-id>.pdf` → checksums the result.
 - Application-managed version history consists of immutable release PDFs and
   their evidence. Source drafts remain mutable working copies; draft recovery
@@ -64,6 +65,9 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
 - The app reads/writes within those roots and `.dms`, except explicit
   user-chosen import paths that must still resolve under the edit root for
   library membership.
+- A workspace Markdown export template is selected from a `.docx` under the edit
+  root, has a stable template ID and relative locator in `.dms`, and is excluded
+  from document lifecycle, notes, release history, and permalinks.
 - Approval and release are operator actions; the app records process state and
   enforces naming/path rules. `V1.0` and every later candidate that increases
   the major component require Entra-verified approval. A minor candidate releases

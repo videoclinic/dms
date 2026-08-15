@@ -147,9 +147,11 @@ macOS.
 - Load only app-local frontend assets; do not add remote runtime dependencies.
 - PDF adapters write only to the temporary path supplied by `dms-core`; core
   owns the classified final path, digest, atomic rename, and release evidence.
-- Office placeholder fill always operates on a temporary OOXML copy. Native
-  Markdown export uses WebView2 `PrintToPdf` or WKWebView `createPDF`, never an
-  interactive print dialog.
+- Office placeholder fill always operates on a temporary OOXML copy and fills
+  `{TITLE}`, `{DOCUMENT_NUMBER}`, `{VERSION}`, and `{CONFIDENTIALITY}` across XML
+  parts, including Word custom-property values. Until CHG-0004 replaces it,
+  native Markdown export uses WebView2 `PrintToPdf` or WKWebView `createPDF`,
+  never an interactive print dialog.
 
 ## Work Guidance
 

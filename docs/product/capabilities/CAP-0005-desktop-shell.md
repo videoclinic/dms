@@ -51,6 +51,10 @@ When implemented, the following must hold:
     Confidentiality catalogue administration and Microsoft Entra identity-source
     setup are explicit secondary surfaces from Document defaults and Workflow
     respectively; dismissing either returns to its invoking Configuration route.
+    Document defaults also owns import, validation status, replacement, and
+    removal of the workspace's reusable Markdown Word-template asset. The picker
+    accepts one `.docx` below the edit root; the surface shows its exact relative
+    path and whether it currently satisfies CAP-0007's template contract.
     Before a workspace is open, the app exposes only **Set up workspace** for
     choosing the roots; workspace-bound routes are unavailable with an explicit
     explanation, never presented as empty or broken pages.

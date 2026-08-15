@@ -35,7 +35,8 @@ When implemented, the following must hold:
      whose lifecycle is exactly `draft`, `+N` counts visible supported source
      files available to add, and `!N` counts visible unsupported regular files.
      Counts include descendants, omit zero buckets, and exclude `.dms`, Office
-     `~$` sidecars, directories, and controlled non-draft files. Each badge has
+     `~$` sidecars, directories, the configured Markdown export-template asset,
+     and controlled non-draft files. Each badge has
      an accessible text equivalent; visibility controls never change these
      unfiltered values.
    - A current-folder toolbar exposes **Back**, **Forward**, and **Up** controls
@@ -57,7 +58,10 @@ When implemented, the following must hold:
      internal `.dms` content and Office lock/temp sidecars defined by CAP-0013.
      A file row's **Name** is always the exact filesystem file name, including
      its extension. Each file row states whether it is **In library**, **Not in
-     library** (a supported source draft), or not a supported draft. A
+     library** (a supported source draft), **Workspace template** (the configured
+     CAP-0007 asset), or not a supported draft. The template remains visible at
+     its exact edit-root-relative location but is not selectable for document,
+     batch-add, lifecycle, notes, or permalink actions. A
      registered document additionally shows its DMS-managed document title and
      control data in a separate **Title** field; that title never replaces
      the source file name. Primary-click or Enter on a folder row opens that

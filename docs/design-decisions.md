@@ -112,33 +112,28 @@ Capability-local rules stay in their CAP files.
 
 - **Decision:** The application dispatches PDF export by source format. Office
   drafts use preinstalled Microsoft Office desktop apps on Windows and macOS.
-  Markdown (`.md`) drafts are rendered locally as CommonMark HTML inside a
-  shipped **print shell** (HTML/CSS/logo chrome derived from the corporate
-  Vorlage layout) and printed by the native WebView PDF API. Markdown release
-  does **not** convert through Word or a runtime `.docx` template. Both paths
-  share one export interface, one release-context **export chrome** map
-  (version label, confidentiality display label and type ID, optional title /
-  document number) sourced only from `.dms`, and the same versioned target,
-  validation, checksum, and atomic-commit flow. Release does not rely on the
-  operator manually exporting and selecting a PDF. Office drafts may still
-  contain `{CONFIDENTIALITY}` / `{VERSION}` tokens that export replaces on a
-  temporary copy before invoking Office.
-- **Why:** This preserves the established Office release path while letting
-  Markdown release without requiring Office, a bundled browser, or a cloud
-  conversion service, and still produces corporate header/footer chrome aligned
-  with the Vorlage without making Office properties or Markdown front matter
-  authoritative (CAP-0015).
-- **Consequences:** Licensed desktop Office is a runtime dependency only for
-  Office drafts. Office automation may use platform-native mechanisms (for
-  example COM on Windows and AppleScript/Office automation on macOS). Markdown
-  export requires supported native WebView PDF APIs on each OS and a proven
-  print-shell layout (fixed header/footer and page indicators under WebView2
-  and WKWebView). CAP-0002 visible-content markers remain a source-draft check;
-  the Markdown print shell may repeat the canonical captions but does not
-  replace that gate. CI may use test doubles, but platform integration must
-  prove both adapters. No successful version record exists unless the selected
-  exporter produces the valid PDF that the app validates, checksums, and
-  atomically commits.
+  Markdown (`.md`) release validates flat YAML frontmatter, converts the
+  CommonMark body into a temporary DOCX based on one reusable workspace Word
+  template, fills controlled fields from the `.dms` release snapshot, and uses
+  installed Word for PDF export. The template is selected from a `.docx` under
+  the edit root, has a stable workspace-template identity and relative locator,
+  and is excluded from controlled-document lifecycle. Both source paths share
+  one export interface and the same versioned target, PDF validation, checksum,
+  and atomic-commit flow. Release never asks the operator to export and select a
+  PDF manually.
+- **Why:** The operator's Word Vorlage is the canonical corporate layout and is
+  reusable across Markdown documents. One installed-Word path avoids divergent
+  WebView and Word pagination/chrome while keeping source drafts portable and
+  preserving local-only conversion.
+- **Consequences:** Licensed desktop Word is required for Markdown as well as
+  DOCX release. DMS title, document number, candidate version, and effective
+  confidentiality remain authoritative; frontmatter is validated source
+  metadata and never overwrites `.dms` control data. The temporary DOCX retains
+  template styles, page setup, headers, footers, media, and supported field
+  locations, while the source Markdown and template remain unchanged. CI may
+  use deterministic DOCX assembly plus Office test doubles, but supported-host
+  evidence must prove installed Word. No Pandoc, LibreOffice, cloud converter,
+  or parallel WebView release path is part of the product.
 
 ## ADR-0009 — SMTP notification opens local-app approval
 

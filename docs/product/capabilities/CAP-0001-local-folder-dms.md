@@ -33,11 +33,14 @@ When implemented, the following must hold:
    after an explicit confirm, including choosing or confirming the publish root.
 8. `.dms` stores the workspace confidentiality catalogue, document-type
    catalogue, Microsoft Entra group binding, read-only identity display cache,
-   relative folder policies that reference Entra user object IDs, and
-   document-control-data fields required by CAP-0008, CAP-0015, CAP-0019, and
-   CAP-0021. It stores no Entra tenant/client ID, SMTP password, OAuth token,
-   or other credential. The non-secret Entra public-client and tenant IDs are
-   OS-user app-global settings shared by local libraries.
+   relative folder policies that reference Entra user object IDs, one optional
+   Markdown export-template record (stable ID, edit-root-relative `.docx` path,
+   validation digest, and template-contract version), and document-control-data
+   fields required by CAP-0008, CAP-0015, CAP-0019, and CAP-0021. The template
+   record is workspace configuration, not a controlled document. `.dms` stores
+   no Entra tenant/client ID, SMTP password, OAuth token, or other credential.
+   The non-secret Entra public-client and tenant IDs are OS-user app-global
+   settings shared by local libraries.
 9. **Workspace** is the first route inside CAP-0005's Configuration workspace.
    When no workspace is open, the same route is the sole **Set up workspace**
    entry point; it guides the operator through edit-root and publish-root

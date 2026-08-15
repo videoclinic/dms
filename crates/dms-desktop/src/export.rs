@@ -236,6 +236,12 @@ fn fill_xml_placeholders(xml: &str, chrome: &ExportChrome) -> Result<Vec<u8>, St
         &chrome.confidentiality.label,
     );
     replace_across_text_nodes(&mut text_values, "{VERSION}", &chrome.version_label);
+    replace_across_text_nodes(&mut text_values, "{TITLE}", &chrome.title);
+    replace_across_text_nodes(
+        &mut text_values,
+        "{DOCUMENT_NUMBER}",
+        chrome.document_number.as_deref().unwrap_or_default(),
+    );
 
     let mut output = Writer::new(Vec::new());
     let mut text_index = 0;
@@ -620,6 +626,10 @@ mod tests {
                 "word/footer1.xml",
                 "<w:ftr><w:p><w:r><w:t>{VERSION}</w:t></w:r></w:p></w:ftr>",
             ),
+            (
+                "docProps/custom.xml",
+                "<Properties><property>{TITLE}</property><property>{DOCUMENT_NUMBER}</property><property>{VERSION}</property><property>{CONFIDENTIALITY}</property></Properties>",
+            ),
         ] {
             archive
                 .start_file(name, SimpleFileOptions::default())
@@ -700,15 +710,38 @@ mod tests {
         assert_eq!(fs::read(&source).unwrap(), original);
         let packages = packages.borrow();
         assert_eq!(packages.len(), 1);
-        for name in ["word/document.xml", "word/header1.xml", "word/footer1.xml"] {
+        for name in [
+            "word/document.xml",
+            "word/header1.xml",
+            "word/footer1.xml",
+            "docProps/custom.xml",
+        ] {
             let text = zip_text(&packages[0], name);
             assert!(!text.contains("{CONFIDENTIALITY}"));
             assert!(!text.contains("{VERSION}"));
+            assert!(!text.contains("{TITLE}"));
+            assert!(!text.contains("{DOCUMENT_NUMBER}"));
             if name != "word/footer1.xml" {
                 assert!(text.contains("Vertraulich &amp; intern"));
             }
             assert!(text.contains("2.3"));
+            if name == "docProps/custom.xml" {
+                assert!(text.contains("Policy &lt;West&gt;"));
+                assert!(text.contains("POL-007"));
+            }
         }
+    }
+
+    #[test]
+    fn office_placeholder_fill_supports_word_document_property_values() {
+        let xml = "<Properties><property>{TITLE}</property><property>{DOCUMENT_NUMBER}</property><property>{VERSION}</property><property>{CONFIDENTIALITY}</property></Properties>";
+
+        let filled = String::from_utf8(fill_xml_placeholders(xml, &chrome()).unwrap()).unwrap();
+
+        assert_eq!(
+            filled,
+            "<Properties><property>Policy &lt;West&gt;</property><property>POL-007</property><property>2.3</property><property>Vertraulich &amp; intern</property></Properties>"
+        );
     }
 
     #[test]
