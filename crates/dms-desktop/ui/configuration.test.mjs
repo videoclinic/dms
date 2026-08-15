@@ -42,8 +42,6 @@ const snapshot = {
   ],
   identity_source: {
     binding_id: "binding-1",
-    tenant_id: "tenant-1",
-    tenant_display: "Example tenant",
     group_id: "group-1",
     group_label: "DMS workflow",
     last_refreshed_at: "2026-08-11T12:00:00Z",
@@ -175,6 +173,30 @@ test("workflow route configures folder roles and opens identity source in place"
   assert.match(markup, /name="tenantId"[^>]*readonly/);
   assert.match(markup, /Library Entra group/);
   assert.equal(closeConfigurationSecondary(state).secondary, null);
+});
+
+test("identity-source overview shows effective global IDs and opens the encoded group page", () => {
+  let state = applyConfigurationSnapshot(createConfigurationState(), {
+    ...snapshot,
+    identity_source: {
+      ...snapshot.identity_source,
+      group_id: "group/1?scope=direct user",
+    },
+  });
+  state = openConfigurationSecondary(state, "identity-source");
+
+  const markup = configurationMarkup(state, assistancePolicy);
+  assert.match(markup, /Microsoft Entra identity source[\s\S]*<dt>Public client ID<\/dt><dd><code>client-1<\/code><\/dd>/);
+  assert.match(markup, /<dt>Tenant ID<\/dt><dd><code>tenant-1<\/code><\/dd>/);
+  assert.match(markup, /data-open-external="https:\/\/myaccount\.microsoft\.com\/groups\/group%2F1%3Fscope%3Ddirect%20user"/);
+  assert.match(markup, /Open Microsoft 365 group page for Group ID group\/1\?scope=direct user/);
+  assert.doesNotMatch(markup, /target="_blank"/);
+
+  const noSourceMarkup = configurationMarkup({
+    ...state,
+    snapshot: { ...state.snapshot, identity_source: null },
+  }, assistancePolicy);
+  assert.doesNotMatch(noSourceMarkup, /myaccount\.microsoft\.com\/groups/);
 });
 
 test("identity-source challenge opens the host browser without WebView navigation", () => {

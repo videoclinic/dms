@@ -209,18 +209,16 @@ phase also adds an intentional test delivery.
 | 9k | External lifecycle commands and Office export | done (`cargo fmt --all -- --check`; `cargo test --workspace`; Clippy with warnings denied; release desktop build; 60 frontend tests; strict repository links; Markdown table structure; `git diff --check`) | Production submit/review/decision/release commands and Library operator surfaces compose the 9i delivery and 9j Graph adapters with installed Office automation on Windows/macOS; retryable mailto confirmations cover review, decision-outcome, and minor-publication delivery; integration fakes and operator smoke instructions pass |
 | 9k.1 | Runtime Entra configuration and SMTP app-password setup | done (`cargo fmt --all -- --check`; `cargo test --workspace`; `cargo clippy --workspace --all-targets -- -D warnings`; 60 desktop UI tests; generated CAP-0010/CAP-0021 HTML and PNG checks; capability-link and Markdown-table checks; `git diff --check`) | Schema v11 removes workspace tenant ID/display while preserving the library group binding, cache, roles, and historical evidence; desktop runtime Graph construction obtains the public-client/tenant configuration from app-global settings and fails closed for invalid overrides; Configuration shows read-only environment-managed Entra fields and group-only library binding; SMTP app passwords are write-only OS credentials, retained on blank input, deleted for `mailto:`, and absent from workspace metadata, snapshots, IPC responses, errors, and wireframes |
 | 9k.1.1 | Document Notes return navigation | done (`cargo fmt --all -- --check`; workspace tests; Clippy with warnings denied; 73 frontend tests; regenerated CAP-0003 HTML and 1440×1100 PNG; exact-return, stable-ID fallback, failure-retention, and visual browser QA; strict repository links; 54 Markdown tables; DOX pass; `git diff --check`) | **Back to Library** restores the same stable document without duplicating or reloading the Library activity, falls back through stable-ID resolution when the Library changed, leaves Notes open, and preserves Notes compose/edit/delete state on success and failure |
-| 9k.2 | Entra identity-source overview | pending | `cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0; CAP-0021 and its generated HTML/PNG show public-client ID, tenant ID, and a host-browser group-page control; `git diff --check` exits 0 |
+| 9k.2 | Entra identity-source overview | done (workspace format/test/Clippy gate; 14 focused configuration UI tests; encoded host-browser URL coverage; regenerated and visually inspected 1440×1100 CAP-0021 HTML/PNG; 21-entry manifest; strict links; 41 Markdown tables; DOX pass; `git diff --check`) | `cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0; CAP-0021 and its generated HTML/PNG show public-client ID, tenant ID, and a host-browser group-page control; `git diff --check` exits 0 |
 | 9k.3 | Release-bound control data and immutable owner identity | pending | Schema-v11 fixture migrates without inventing historical release or owner identity; a successful empty Graph result produces only the literal `<owner>` / `<editor>` placeholders while a Graph failure still fails closed; a later successful real-person refresh permits an operator-selected release-bound Owner/Editor replacement without rewriting past evidence; new candidate/release tests prove immutable control/effective-date snapshots and effective-date-based scheduling; owner/editor/approver references remain object-ID based across name/email changes; `cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && node --test crates/dms-desktop/ui/library.test.mjs` exits 0; regenerated CAP-0002/CAP-0015/CAP-0017 wireframes agree with their manifest entries; CAP-0019/CAP-0021 identity links pass; `git diff --check` exits 0 |
 | 9k.4 | Library filtering, recursive folder counters, interaction, width, and shipped icons | pending | Core and UI tests prove identical recursive `~` draft, `+` applicable-not-controlled, and `!` unsupported counts beside each folder in tree and list views; all-on session-wide **Draft documents** / **Available to add** / **Unsupported files** toggles filter every folder and search result before pagination without changing counters; candidate form selects `Next minor` by default; a table-folder click opens that folder without a double-click; the centre/details splitter is pointer- and keyboard-usable with bounded session-only width; runtime and wireframes use app-local SVGs rather than a font dependency; `node --test crates/dms-desktop/ui/app.test.mjs crates/dms-desktop/ui/library.test.mjs` and full Rust/frontend gates exit 0; regenerated CAP-0002/CAP-0006/CAP-0015 wireframes match their manifest entries; `git diff --check` exits 0 |
 | 9k.5 | Workflow tree and SMTP identity/test configuration | pending | Workflow renders an accessible folder tree with all direct role assignments visibly marked; schema-v12 SMTP settings migrate to separate login user and RFC 5322 `From` mailbox without exposing the password; a fake-backed SMTP test addresses that `From` mailbox and a saved credential renders only `***`; Rust/frontend gates and regenerated CAP-0010/CAP-0019 wireframes pass; `git diff --check` exits 0 |
 | 9l | Windows external operator smokes + CAP promotion | pending | Licensed Office release smoke passes on Windows; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated Node-runtime action annotations; CAP statuses distinguish Windows-host evidence from existing CI coverage and make no untested macOS-installed-Office claim; CHG status is done and the record is archived |
 
-**Current phase:** 9k.2 — pending Entra identity-source overview.
-Phase 9k.1.1 local verification is complete. Phase 9k.2 is now the lowest-slot
-dependency-ready plan and must pass before Phase 9k.3, Phase 9k.4, and Phase
-9k.5, before Phase 9l can start. macOS remains a supported runtime
-target with existing CI coverage, but an external macOS operator smoke is not a
-Phase 9l gate.
+**Current phase:** 9k.2 complete. Phase 9k.3 is the next dependency-ready phase
+and remains pending. It must pass before Phase 9k.4 and Phase 9k.5, before Phase
+9l can start. macOS remains a supported runtime target with existing CI coverage,
+but an external macOS operator smoke is not a Phase 9l gate.
 
 Mark a phase `in-progress` only while it is being executed, `done (<evidence>)`
 only after its gate passes, and `pending` otherwise.
@@ -577,7 +575,7 @@ tests); `crates/dms-desktop/ui/app.mjs` (`handleClick`); and
 wireframe; a tested desktop identity-source overview that displays the effective
 global IDs and opens the bound group page through the existing host-browser
 boundary.
-**Status:** pending — queued after Document Notes return navigation.
+**Status:** done — local implementation and verification complete.
 
 **Steps:**
 
@@ -603,16 +601,36 @@ boundary.
    `validate_external_url` accepts HTTPS URLs and the shared click handler maps
    the control to `open_external_url`.
 4. Extend `configuration.test.mjs` from its current populated identity-source
-   fixture. Assert the overview exposes the Public client ID and Tenant ID,
-   emits exactly the expected encoded My Account group URL through
-   `data-open-external`, and does not add a `target="_blank"` WebView link.
-   Keep the no-source state free of a fabricated group-page control.
+   fixture. Keep that fixture schema-v11 accurate by retaining only group data
+   in `identity_source`, with the effective client/tenant IDs supplied by
+   `global_entra_configuration`. Assert the overview exposes the Public client
+   ID and Tenant ID, emits exactly the expected encoded My Account group URL
+   through `data-open-external`, and does not add a `target="_blank"` WebView
+   link. Keep the no-source state free of a fabricated group-page control.
 5. Run the phase gate and inspect the CAP/HTML/PNG output before marking the
    phase done. Record the exact passing evidence in this CHG, then leave Phase
    9l pending for its Windows-only external pre-checks.
 
 **Verification gate:**
 `cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0; the populated UI fixture proves both global IDs and the exact encoded `data-open-external` group URL without `target="_blank"`; `node generate.mjs` exits 0 in `docs/product/wireframes/`; the regenerated CAP-0021 HTML, PNG, and manifest agree; and `git diff --check` exits 0.
+
+### Phase 9k.2 completion evidence
+
+- The Rust format, workspace test, and warnings-denied Clippy gate exits 0; all
+  14 focused Configuration UI tests pass.
+- The schema-v11 frontend fixture keeps effective client/tenant IDs in
+  `global_entra_configuration` and only group data in `identity_source`. The
+  populated overview test proves the exact encoded Microsoft My Account URL,
+  host-browser data hook, accessible Group ID label, and absence of WebView
+  `target="_blank"`; the no-source state renders no group-page control.
+- `node generate.mjs` exits 0. CAP-0021's HTML and 1440×1100 PNG visibly show
+  the Public client ID, Tenant ID, library group, Group ID action, and last
+  refresh without clipping or overlap. The manifest inventories 21 non-empty
+  HTML/PNG pairs.
+- Strict repository links report zero issues; 41 Markdown tables pass structural
+  validation; the DOX pass updates the desktop adapter contract; and
+  `git diff --check` exits 0. No live Microsoft 365 or Windows-host evidence was
+  attempted or claimed.
 
 ## Out of scope — Phase 9k.2
 

@@ -213,8 +213,11 @@ function identitySourceMarkup(state) {
   const people = state.snapshot.eligible_people;
   const setup = state.identity_setup;
   const global = state.snapshot.global_entra_configuration;
+  const groupPageUrl = source
+    ? `https://myaccount.microsoft.com/groups/${encodeURIComponent(source.group_id)}`
+    : "";
   const details = source
-    ? `<dl class="details-grid"><dt>Group</dt><dd>${escapeHtml(source.group_label)}</dd><dt>Group ID</dt><dd>${escapeHtml(source.group_id)}</dd><dt>Last refresh</dt><dd>${escapeHtml(source.last_refreshed_at ?? "Not yet refreshed")}</dd></dl>`
+    ? `<dl class="details-grid"><dt>Public client ID</dt><dd><code>${escapeHtml(global?.client_id ?? "Not configured")}</code></dd><dt>Tenant ID</dt><dd><code>${escapeHtml(global?.tenant_id ?? "Not configured")}</code></dd><dt>Group</dt><dd>${escapeHtml(source.group_label)}</dd><dt>Group ID</dt><dd><button class="button secondary" type="button" data-open-external="${escapeHtml(groupPageUrl)}" aria-label="Open Microsoft 365 group page for Group ID ${escapeHtml(source.group_id)}"><code>${escapeHtml(source.group_id)}</code></button></dd><dt>Last refresh</dt><dd>${escapeHtml(source.last_refreshed_at ?? "Not yet refreshed")}</dd></dl>`
     : '<p class="status">No Microsoft Entra identity source is configured.</p>';
   const rows = people.length === 0
     ? '<p class="subtle">No eligible people are cached.</p>'

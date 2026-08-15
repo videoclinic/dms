@@ -99,13 +99,17 @@ macOS.
   defaults, Workflow, and Notifications routes. Confidentiality catalogue and
   identity-source management are in-place secondary surfaces. Folder role
   pickers refresh then use the core-owned eligible-person cache. The identity
-  surface accepts administrator-supplied tenant/group IDs, drives delegated
-  device authorization, previews and explicitly applies a binding, and refreshes
-  direct enabled user members through Microsoft Graph. First setup selects and
-  persists the required edit-root editor and approver atomically with that
-  binding; replacement never remaps existing role references. Desktop-only
-  delegated tokens remain in the OS credential store; credentials never cross
-  the frontend IPC boundary or enter `.dms`.
+  surface accepts administrator-supplied app-global public-client/tenant IDs and
+  a library-bound group ID, drives delegated device authorization, previews and
+  explicitly applies a binding, and refreshes direct enabled user members
+  through Microsoft Graph. First setup selects and persists the required
+  edit-root editor and approver atomically with that binding; replacement never
+  remaps existing role references.
+  The current-source overview shows the effective app-global public-client and
+  tenant IDs alongside the library-bound group; its Group ID control opens the
+  encoded Microsoft My Account group page through the host-browser boundary.
+  Desktop-only delegated tokens remain in the OS credential store; credentials
+  never cross the frontend IPC boundary or enter `.dms`.
 - Claude Desktop assistance remains unavailable unless workspace policy,
   effective confidentiality, a verified current release, and a supported local
   installation all allow it. An oversized preview shows its measured size and

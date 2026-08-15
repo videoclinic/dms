@@ -52,9 +52,13 @@
 5. The public-client and tenant IDs are app-global OS-user configuration.
    Non-empty `DMS_ENTRA_CLIENT_ID` and `DMS_ENTRA_TENANT_ID` process values
    override their stored counterparts and are read-only in Configuration;
-   invalid non-empty values fail closed. Delegated access and refresh tokens
-   are stored only in the OS credential store; `.dms` retains neither tokens,
-   client/tenant IDs, nor client secrets.
+   invalid non-empty values fail closed. The identity-source overview shows
+   these effective IDs with the library-bound group label and object ID. Its
+   Group ID control opens
+   `https://myaccount.microsoft.com/groups/<encoded-group-id>` through the host
+   browser rather than navigating the app WebView. Delegated access and refresh
+   tokens are stored only in the OS credential store; `.dms` retains neither
+   tokens, client/tenant IDs, nor client secrets.
 
 ## Full capability contract (remaining outcomes are not all present)
 
@@ -65,14 +69,17 @@ When implemented, the following must hold:
    and the workspace has an identity-source binding containing one group object
    ID and a display label. The application does not
    create or modify the Entra group.
-2. While a binding exists, **Configuration → Workflow** shows the app-global
-   tenant configuration, group label/object ID, connection state, eligible-person count, and
-   last refresh in a compact current-source summary. **Manage identity source**
-   opens first setup and replacement as a secondary surface from Workflow with a
-   visible return to that route; the identity source has no independent
-   Configuration-navigation entry. The Tenant ID/group object ID form, preview,
-   and replacement warning do not permanently occupy a main Configuration
-   column.
+2. While a binding exists, **Configuration → Workflow** shows the group label,
+   connection state, eligible-person count, and last refresh in a compact
+   summary. **Manage identity source** opens a secondary surface whose
+   current-source overview shows the effective app-global public-client ID and
+   tenant ID separately from the library-bound group label/object ID. Its Group
+   ID is a host-browser control for
+   `https://myaccount.microsoft.com/groups/<encoded-group-id>`. First setup and
+   replacement stay on this secondary surface with a visible return to Workflow;
+   the identity source has no independent Configuration-navigation entry. The
+   global IDs/group object ID form, preview, and replacement warning do not
+   permanently occupy a main Configuration column.
 3. First setup and a later binding replacement require an operator to configure
    the public-client/tenant IDs supplied by Microsoft 365 administration and
    then enter the library group object ID, sign in interactively, preview the
