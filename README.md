@@ -35,8 +35,9 @@ Planned control model:
   persistent tree navigation, breadcrumbs, Back/Forward/Up, and a source-file
   identity distinct from DMS-managed document-control data.
 - Application-driven PDF release: host-installed Microsoft Office exports Office
-  drafts; Markdown renders locally through a CommonMark HTML print shell and
-  native WebView PDF APIs, with header/footer chrome from the release context.
+  drafts; Markdown is assembled locally into a temporary DOCX from the workspace
+  Word template, then exported through installed Word with controlled fields
+  from the release context.
   First release is `V1.0`. For every later release, the editor records a required
   changelog and proposes the next minor, the next major, or a validated manual
   target version. `V1.0` and major-version candidates require approval; a minor

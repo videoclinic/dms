@@ -228,7 +228,7 @@ fn validator_rejects_missing_or_duplicate_body_prototypes() {
         .contains(&"word/header1.xml".to_owned()));
 
     let missing = temp.path().join("missing.docx");
-    rewrite_document_xml(&valid, &missing, |xml| {
+    rewrite_xml_part(&valid, &missing, "word/document.xml", |xml| {
         xml.replace("{Heading 4}", "missing")
     });
     assert!(matches!(
@@ -237,12 +237,33 @@ fn validator_rejects_missing_or_duplicate_body_prototypes() {
     ));
 
     let duplicate = temp.path().join("duplicate.docx");
-    rewrite_document_xml(&valid, &duplicate, |xml| {
+    rewrite_xml_part(&valid, &duplicate, "word/document.xml", |xml| {
         xml.replace("{PARAGRAPH}", "{PARAGRAPH}{PARAGRAPH}")
     });
     assert!(matches!(
         validate_markdown_template(&duplicate),
         Err(DmsError::InvalidMarkdownTemplate(message)) if message.contains("exactly once")
+    ));
+
+    let missing_property = temp.path().join("missing-property.docx");
+    rewrite_xml_part(&valid, &missing_property, "docProps/custom.xml", |xml| {
+        xml.replace("DMS_DOCUMENT_NUMBER", "REMOVED_DOCUMENT_NUMBER")
+    });
+    assert!(matches!(
+        validate_markdown_template(&missing_property),
+        Err(DmsError::InvalidMarkdownTemplate(message)) if message.contains("DMS_DOCUMENT_NUMBER")
+    ));
+
+    let swapped_property = temp.path().join("swapped-property.docx");
+    rewrite_xml_part(&valid, &swapped_property, "docProps/custom.xml", |xml| {
+        xml.replace("{TITLE}", "{SWAP}")
+            .replace("{VERSION}", "{TITLE}")
+            .replace("{SWAP}", "{VERSION}")
+    });
+    assert!(matches!(
+        validate_markdown_template(&swapped_property),
+        Err(DmsError::InvalidMarkdownTemplate(message))
+            if message.contains("DMS_TITLE") && message.contains("{TITLE}")
     ));
 }
 
@@ -370,6 +391,7 @@ fn validate_markdown_template_output(path: &Path) {
         "word/document.xml",
         "word/styles.xml",
         "word/_rels/document.xml.rels",
+        "docProps/custom.xml",
         "word/header1.xml",
         "word/footer1.xml",
         "word/media/fixture.png",
@@ -397,7 +419,12 @@ fn zip_entries(path: &Path) -> BTreeMap<String, Vec<u8>> {
     entries
 }
 
-fn rewrite_document_xml(source: &Path, destination: &Path, rewrite: impl FnOnce(String) -> String) {
+fn rewrite_xml_part(
+    source: &Path,
+    destination: &Path,
+    part_name: &str,
+    rewrite: impl FnOnce(String) -> String,
+) {
     let file = fs::File::open(source).unwrap();
     let mut archive = ZipArchive::new(file).unwrap();
     let mut entries = Vec::new();
@@ -421,7 +448,7 @@ fn rewrite_document_xml(source: &Path, destination: &Path, rewrite: impl FnOnce(
             writer.add_directory(name, options).unwrap();
             continue;
         }
-        if name == "word/document.xml" {
+        if name == part_name {
             let xml = String::from_utf8(bytes).unwrap();
             bytes = rewrite.take().unwrap()(xml).into_bytes();
         }

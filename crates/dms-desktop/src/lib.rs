@@ -1327,7 +1327,6 @@ fn decide_document_review(
 
 #[tauri::command]
 fn release_document_candidate(
-    app: AppHandle,
     edit_root: String,
     document_id: Uuid,
     release_override_reason: String,
@@ -1339,10 +1338,7 @@ fn release_document_candidate(
         .graph
         .lock()
         .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
-    let mut exporter = export::LocalPdfExporter::new(
-        export::InstalledOfficeAutomation,
-        export::NativeWebviewPdfPrinter::new(app),
-    );
+    let mut exporter = export::LocalPdfExporter::new(export::InstalledOfficeAutomation);
     release_document_candidate_with(
         &edit_root,
         document_id,
@@ -2525,18 +2521,6 @@ pub fn run() {
                 .on_open_url(move |_event| focus_main_window(&handle));
             if std::env::var_os("DMS_DESKTOP_SMOKE").is_some() {
                 app.handle().exit(0);
-            } else if std::env::var_os("DMS_DESKTOP_EXPORT_SMOKE").is_some() {
-                let handle = app.handle().clone();
-                std::thread::spawn(move || {
-                    let code = match export::platform_pdf_smoke(handle.clone()) {
-                        Ok(()) => 0,
-                        Err(error) => {
-                            eprintln!("DMS Desktop PDF export smoke failed: {error}");
-                            1
-                        }
-                    };
-                    handle.exit(code);
-                });
             }
             Ok(())
         })
@@ -3803,6 +3787,13 @@ mod tests {
         let publish_root = tempfile::tempdir().unwrap();
         fs::create_dir_all(edit_root.path().join("Policies")).unwrap();
         let mut workspace = Workspace::init(edit_root.path(), publish_root.path()).unwrap();
+        let template_path = edit_root.path().join("Markdown-template.docx");
+        fs::write(
+            &template_path,
+            include_bytes!("../../dms-core/tests/fixtures/markdown-template.docx"),
+        )
+        .unwrap();
+        workspace.import_markdown_template(&template_path).unwrap();
         workspace
             .configure_document_type("procedure", "Procedure", true)
             .unwrap();

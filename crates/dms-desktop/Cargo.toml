@@ -22,7 +22,6 @@ chrono.workspace = true
 dms-core = { path = "../dms-core" }
 keyring.workspace = true
 lettre.workspace = true
-pulldown-cmark.workspace = true
 quick-xml.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -35,15 +34,6 @@ ureq.workspace = true
 url.workspace = true
 uuid.workspace = true
 zip.workspace = true
-
-[target.'cfg(windows)'.dependencies]
-webview2-com.workspace = true
-windows.workspace = true
-
-[target.'cfg(target_os = "macos")'.dependencies]
-block2.workspace = true
-objc2-foundation.workspace = true
-objc2-web-kit.workspace = true
 
 [features]
 default = ["custom-protocol"]

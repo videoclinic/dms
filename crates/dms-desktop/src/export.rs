@@ -2,53 +2,30 @@ use std::{
     fs,
     io::{Read, Write},
     path::Path,
-    sync::mpsc,
-    time::Duration,
 };
 
 #[cfg(any(windows, target_os = "macos"))]
 use std::process::Command;
 
-use dms_core::{ExportChrome, ExportRequest, PdfExporter};
-use pulldown_cmark::{html, Options, Parser};
+use dms_core::{assemble_markdown_docx, ExportChrome, ExportRequest, PdfExporter};
 use quick_xml::{events::Event, Reader, Writer};
-use tauri::{AppHandle, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
-use tempfile::TempDir;
-use uuid::Uuid;
 use zip::{write::SimpleFileOptions, ZipArchive, ZipWriter};
-
-const PRINT_SHELL: &str = include_str!("../ui/print/shell.html");
-const PRINT_CSS: &str = include_str!("../ui/print/print.css");
-const PRINT_LOGO: &[u8] = include_bytes!("../ui/print/logo.svg");
-const WEBVIEW_TIMEOUT: Duration = Duration::from_secs(45);
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PrintDocument {
-    pub html: String,
-    pub css: &'static str,
-    pub logo: &'static [u8],
-}
 
 pub trait OfficeAutomation {
     fn export_pdf(&mut self, source_copy: &Path, output: &Path) -> Result<(), String>;
 }
 
-pub trait WebviewPdfPrinter {
-    fn print_pdf(&mut self, document: &PrintDocument, output: &Path) -> Result<(), String>;
-}
-
-pub struct LocalPdfExporter<O, P> {
+pub struct LocalPdfExporter<O> {
     office: O,
-    markdown: P,
 }
 
-impl<O, P> LocalPdfExporter<O, P> {
-    pub fn new(office: O, markdown: P) -> Self {
-        Self { office, markdown }
+impl<O> LocalPdfExporter<O> {
+    pub fn new(office: O) -> Self {
+        Self { office }
     }
 }
 
-impl<O: OfficeAutomation, P: WebviewPdfPrinter> PdfExporter for LocalPdfExporter<O, P> {
+impl<O: OfficeAutomation> PdfExporter for LocalPdfExporter<O> {
     fn export(&mut self, request: &ExportRequest) -> Result<(), String> {
         let extension = request
             .source_path
@@ -64,9 +41,19 @@ impl<O: OfficeAutomation, P: WebviewPdfPrinter> PdfExporter for LocalPdfExporter
                         request.source_path.display()
                     )
                 })?;
-                let document = render_markdown(&markdown, &request.chrome);
-                self.markdown
-                    .print_pdf(&document, &request.temporary_pdf_path)
+                let template = request.markdown_template_path.as_deref().ok_or_else(|| {
+                    "Markdown export requires a validated workspace Word template".to_owned()
+                })?;
+                let directory = tempfile::tempdir().map_err(|error| {
+                    format!("cannot create Markdown export directory: {error}")
+                })?;
+                let assembled = directory.path().join("assembled.docx");
+                let filled = directory.path().join("release.docx");
+                assemble_markdown_docx(template, &markdown, &assembled)
+                    .map_err(|error| format!("cannot assemble Markdown Word document: {error}"))?;
+                fill_office_placeholders(&assembled, &filled, &request.chrome)?;
+                self.office
+                    .export_pdf(&filled, &request.temporary_pdf_path)
             }
             "docx" => {
                 let directory = tempfile::tempdir()
@@ -95,56 +82,6 @@ fn validate_pdf(path: &Path) -> Result<(), String> {
         ));
     }
     Ok(())
-}
-
-pub fn render_markdown(markdown: &str, chrome: &ExportChrome) -> PrintDocument {
-    let body = strip_yaml_front_matter(markdown);
-    let parser = Parser::new_ext(body, Options::all());
-    let mut body_html = String::new();
-    html::push_html(&mut body_html, parser);
-
-    let document_number = chrome.document_number.as_deref().unwrap_or("");
-    let html = PRINT_SHELL
-        .replace("{{TITLE}}", &escape_html(&chrome.title))
-        .replace("{{DOCUMENT_NUMBER}}", &escape_html(document_number))
-        .replace(
-            "{{CONFIDENTIALITY}}",
-            &escape_html(&chrome.confidentiality.label),
-        )
-        .replace("{{VERSION}}", &escape_html(&chrome.version_label))
-        .replace("{{BODY}}", &body_html);
-    PrintDocument {
-        html,
-        css: PRINT_CSS,
-        logo: PRINT_LOGO,
-    }
-}
-
-fn strip_yaml_front_matter(markdown: &str) -> &str {
-    let normalized = markdown.strip_prefix('\u{feff}').unwrap_or(markdown);
-    let Some(rest) = normalized
-        .strip_prefix("---\n")
-        .or_else(|| normalized.strip_prefix("---\r\n"))
-    else {
-        return normalized;
-    };
-    let mut consumed = 0;
-    for line in rest.split_inclusive('\n') {
-        consumed += line.len();
-        if matches!(line.trim_end_matches(['\r', '\n']), "---" | "...") {
-            return &rest[consumed..];
-        }
-    }
-    normalized
-}
-
-fn escape_html(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
 }
 
 pub fn fill_office_placeholders(
@@ -377,187 +314,22 @@ fn run_office_command(command: &mut Command, application: &str) -> Result<(), St
     Ok(())
 }
 
-#[derive(Clone)]
-pub struct NativeWebviewPdfPrinter {
-    app: AppHandle,
-}
-
-impl NativeWebviewPdfPrinter {
-    pub fn new(app: AppHandle) -> Self {
-        Self { app }
-    }
-}
-
-impl WebviewPdfPrinter for NativeWebviewPdfPrinter {
-    fn print_pdf(&mut self, document: &PrintDocument, output: &Path) -> Result<(), String> {
-        let directory = materialize_print_document(document)?;
-        let html_path = directory.path().join("document.html");
-        let url = tauri::Url::from_file_path(&html_path)
-            .map_err(|_| format!("cannot create file URL for {}", html_path.display()))?;
-        let label = format!("markdown-export-{}", Uuid::new_v4());
-        let (loaded_tx, loaded_rx) = mpsc::sync_channel(1);
-        let window = WebviewWindowBuilder::new(&self.app, label, WebviewUrl::External(url))
-            .visible(false)
-            .on_page_load(move |window, payload| {
-                if payload.event() == tauri::webview::PageLoadEvent::Finished {
-                    let _ = loaded_tx.try_send(window);
-                }
-            })
-            .build()
-            .map_err(|error| format!("cannot create Markdown export WebView: {error}"))?;
-        let loaded = loaded_rx
-            .recv_timeout(WEBVIEW_TIMEOUT)
-            .map_err(|_| "Markdown export WebView did not finish loading".to_owned())?;
-        let result = print_loaded_webview(&loaded, output);
-        let _ = window.close();
-        result
-    }
-}
-
-pub fn platform_pdf_smoke(app: AppHandle) -> Result<(), String> {
-    let chrome = ExportChrome {
-        version_label: "3.2".to_owned(),
-        confidentiality: dms_core::ConfidentialitySnapshot {
-            type_id: "restricted".to_owned(),
-            label: "Vertraulich".to_owned(),
-        },
-        title: "PDF export smoke".to_owned(),
-        document_number: Some("SMOKE-001".to_owned()),
-    };
-    let markdown = [
-        "# First page\n\nNative WebView export smoke.",
-        "<div style=\"break-before: page\"></div>\n\n# Second page\n\nFooter repetition.",
-        "<div style=\"break-before: page\"></div>\n\n# Third page\n\nFinal page.",
-    ]
-    .join("\n\n");
-    let document = render_markdown(&markdown, &chrome);
-    let directory = tempfile::tempdir()
-        .map_err(|error| format!("cannot create PDF smoke directory: {error}"))?;
-    let output = directory.path().join("smoke.pdf");
-    NativeWebviewPdfPrinter::new(app).print_pdf(&document, &output)?;
-    let bytes = fs::read(&output)
-        .map_err(|error| format!("cannot read PDF smoke output {}: {error}", output.display()))?;
-    if bytes.len() <= 4 || &bytes[..4] != b"%PDF" {
-        return Err("native WebView output is not a non-empty PDF".to_owned());
-    }
-    Ok(())
-}
-
-fn materialize_print_document(document: &PrintDocument) -> Result<TempDir, String> {
-    let directory = tempfile::tempdir()
-        .map_err(|error| format!("cannot create Markdown print directory: {error}"))?;
-    fs::write(directory.path().join("document.html"), &document.html)
-        .map_err(|error| format!("cannot write Markdown print document: {error}"))?;
-    fs::write(directory.path().join("print.css"), document.css)
-        .map_err(|error| format!("cannot write Markdown print stylesheet: {error}"))?;
-    fs::write(directory.path().join("logo.svg"), document.logo)
-        .map_err(|error| format!("cannot write Markdown print logo: {error}"))?;
-    Ok(directory)
-}
-
-#[cfg(windows)]
-fn print_loaded_webview(window: &WebviewWindow, output: &Path) -> Result<(), String> {
-    use std::os::windows::ffi::OsStrExt;
-    use webview2_com::{
-        Microsoft::Web::WebView2::Win32::ICoreWebView2_7, PrintToPdfCompletedHandler,
-    };
-    use windows::core::{Error as WindowsError, Interface, HRESULT, PCWSTR};
-
-    let output_wide = output
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    let (result_tx, result_rx) = mpsc::sync_channel(1);
-    window
-        .with_webview(move |platform| {
-            let result = (|| {
-                let controller = platform.controller();
-                let core =
-                    unsafe { controller.CoreWebView2() }.map_err(|error| error.to_string())?;
-                let pdf: ICoreWebView2_7 = core.cast().map_err(|error| error.to_string())?;
-                PrintToPdfCompletedHandler::wait_for_async_operation(
-                    Box::new(move |handler| unsafe {
-                        pdf.PrintToPdf(PCWSTR(output_wide.as_ptr()), None, &handler)?;
-                        Ok(())
-                    }),
-                    Box::new(|status, success| {
-                        status?;
-                        if !success {
-                            return Err(WindowsError::new(
-                                HRESULT(0x80004005u32 as i32),
-                                "WebView2 did not produce a PDF",
-                            ));
-                        }
-                        Ok(())
-                    }),
-                )
-                .map_err(|error| error.to_string())
-            })();
-            let _ = result_tx.send(result);
-        })
-        .map_err(|error| format!("cannot access WebView2: {error}"))?;
-    result_rx
-        .recv_timeout(WEBVIEW_TIMEOUT)
-        .map_err(|_| "WebView2 PDF export timed out".to_owned())?
-}
-
-#[cfg(target_os = "macos")]
-fn print_loaded_webview(window: &WebviewWindow, output: &Path) -> Result<(), String> {
-    use block2::RcBlock;
-    use objc2_foundation::{NSData, NSError};
-    use objc2_web_kit::WKWebView;
-
-    let output = output.to_path_buf();
-    let (result_tx, result_rx) = mpsc::sync_channel(1);
-    window
-        .with_webview(move |platform| {
-            let raw_webview = platform.inner();
-            if raw_webview.is_null() {
-                let _ = result_tx.send(Err("WKWebView handle is null".to_owned()));
-                return;
-            }
-            let webview: &WKWebView = unsafe { &*raw_webview.cast() };
-            let completion = RcBlock::new(move |data: *mut NSData, error: *mut NSError| {
-                let result = if !error.is_null() {
-                    Err(format!("WKWebView PDF export failed: {:?}", unsafe {
-                        &*error
-                    }))
-                } else if data.is_null() {
-                    Err("WKWebView PDF export returned no data".to_owned())
-                } else {
-                    let bytes = unsafe { (&*data).to_vec() };
-                    fs::write(&output, bytes)
-                        .map_err(|error| format!("cannot write WKWebView PDF: {error}"))
-                };
-                let _ = result_tx.send(result);
-            });
-            unsafe {
-                webview.createPDFWithConfiguration_completionHandler(None, &completion);
-            }
-        })
-        .map_err(|error| format!("cannot access WKWebView: {error}"))?;
-    result_rx
-        .recv_timeout(WEBVIEW_TIMEOUT)
-        .map_err(|_| "WKWebView PDF export timed out".to_owned())?
-}
-
-#[cfg(not(any(windows, target_os = "macos")))]
-fn print_loaded_webview(_window: &WebviewWindow, _output: &Path) -> Result<(), String> {
-    Err("native WebView PDF export is supported only on Windows and macOS".to_owned())
-}
-
 #[cfg(test)]
 mod tests {
     use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
     use dms_core::{ConfidentialitySnapshot, ExportChrome};
+    use uuid::Uuid;
 
     use super::*;
+
+    const MARKDOWN_TEMPLATE: &[u8] =
+        include_bytes!("../../dms-core/tests/fixtures/markdown-template.docx");
 
     #[derive(Default)]
     struct FakeOffice {
         copied_packages: Rc<RefCell<Vec<Vec<u8>>>>,
+        invalid_output: bool,
     }
 
     impl OfficeAutomation for FakeOffice {
@@ -565,23 +337,10 @@ mod tests {
             self.copied_packages
                 .borrow_mut()
                 .push(fs::read(source_copy).map_err(|error| error.to_string())?);
-            fs::write(output, b"%PDF-1.7\nOffice fake").map_err(|error| error.to_string())
-        }
-    }
-
-    #[derive(Default)]
-    struct FakePrinter {
-        documents: Rc<RefCell<Vec<PrintDocument>>>,
-        invalid_output: bool,
-    }
-
-    impl WebviewPdfPrinter for FakePrinter {
-        fn print_pdf(&mut self, document: &PrintDocument, output: &Path) -> Result<(), String> {
-            self.documents.borrow_mut().push(document.clone());
             let bytes: &[u8] = if self.invalid_output {
                 b"not a PDF"
             } else {
-                b"%PDF-1.7\nWebView fake"
+                b"%PDF-1.7\nOffice fake"
             };
             fs::write(output, bytes).map_err(|error| error.to_string())
         }
@@ -599,10 +358,15 @@ mod tests {
         }
     }
 
-    fn request(source_path: PathBuf, output: PathBuf) -> ExportRequest {
+    fn request(
+        source_path: PathBuf,
+        output: PathBuf,
+        markdown_template_path: Option<PathBuf>,
+    ) -> ExportRequest {
         ExportRequest {
             document_id: Uuid::new_v4(),
             source_path,
+            markdown_template_path,
             temporary_pdf_path: output.clone(),
             final_pdf_path: output.with_file_name("final.pdf"),
             chrome: chrome(),
@@ -651,45 +415,76 @@ mod tests {
     }
 
     #[test]
-    fn markdown_print_shell_strips_front_matter_and_uses_only_release_chrome() {
-        let document = render_markdown(
-            "---\ntitle: ignored\nconfidentiality: public\n---\n# Body\n\nVisible text.",
-            &chrome(),
-        );
+    fn markdown_assembles_fills_and_dispatches_a_template_backed_docx_to_office() {
+        let directory = tempfile::tempdir().unwrap();
+        let source = directory.path().join("policy.md");
+        let template = directory.path().join("template.docx");
+        let output = directory.path().join("release.tmp");
+        fs::write(
+            &source,
+            "---\ntitle: source title\ndocument_number: SOURCE-1\nversion: 2.3\nconfidentiality: Vertraulich & intern\n---\n# Body\n\nVisible text.",
+        )
+        .unwrap();
+        fs::write(&template, MARKDOWN_TEMPLATE).unwrap();
+        let source_before = fs::read(&source).unwrap();
+        let template_before = fs::read(&template).unwrap();
+        let packages = Rc::new(RefCell::new(Vec::new()));
+        let office = FakeOffice {
+            copied_packages: packages.clone(),
+            invalid_output: false,
+        };
+        let mut exporter = LocalPdfExporter::new(office);
 
-        assert!(!document.html.contains("title: ignored"));
-        assert!(!document.html.contains("confidentiality: public"));
-        assert!(document.html.contains("<h1>Body</h1>"));
-        assert!(document.html.contains("Policy &lt;West&gt;"));
-        assert!(document
-            .html
-            .contains("Vertraulichkeitsstufe: Vertraulich &amp; intern"));
-        assert!(document.html.contains("Version: 2.3"));
-        assert!(document.html.contains("POL-007"));
-        assert!(document.css.contains("@page"));
-        assert!(document.css.contains("position: fixed"));
-        assert!(document.css.contains("counter(page)"));
-        assert_eq!(document.logo, PRINT_LOGO);
+        exporter
+            .export(&request(
+                source.clone(),
+                output.clone(),
+                Some(template.clone()),
+            ))
+            .unwrap();
+
+        assert!(fs::read(&output).unwrap().starts_with(b"%PDF"));
+        assert_eq!(fs::read(&source).unwrap(), source_before);
+        assert_eq!(fs::read(&template).unwrap(), template_before);
+        let packages = packages.borrow();
+        assert_eq!(packages.len(), 1);
+        let document = zip_text(&packages[0], "word/document.xml");
+        assert!(document.contains("Body"));
+        assert!(document.contains("Visible text."));
+        assert!(!document.contains("source title"));
+        assert!(!document.contains("{Heading 1}"));
+        let custom = zip_text(&packages[0], "docProps/custom.xml");
+        assert!(custom.contains("Policy &lt;West&gt;"));
+        assert!(custom.contains("POL-007"));
+        assert!(custom.contains("2.3"));
+        assert!(custom.contains("Vertraulich &amp; intern"));
+        assert_eq!(
+            zip_text(&packages[0], "word/styles.xml"),
+            zip_text(&template_before, "word/styles.xml")
+        );
     }
 
     #[test]
-    fn markdown_dispatches_to_webview_printer_at_the_requested_temporary_path() {
+    fn markdown_export_refuses_a_missing_template_request() {
         let directory = tempfile::tempdir().unwrap();
         let source = directory.path().join("policy.md");
-        let output = directory.path().join("release.tmp");
-        fs::write(&source, "# Policy").unwrap();
-        let documents = Rc::new(RefCell::new(Vec::new()));
-        let printer = FakePrinter {
-            documents: documents.clone(),
+        fs::write(
+            &source,
+            "---\nversion: 2.3\nconfidentiality: Vertraulich & intern\n---\n# Policy",
+        )
+        .unwrap();
+        let packages = Rc::new(RefCell::new(Vec::new()));
+        let mut exporter = LocalPdfExporter::new(FakeOffice {
+            copied_packages: packages.clone(),
             invalid_output: false,
-        };
-        let mut exporter = LocalPdfExporter::new(FakeOffice::default(), printer);
+        });
 
-        exporter.export(&request(source, output.clone())).unwrap();
+        let error = exporter
+            .export(&request(source, directory.path().join("release.tmp"), None))
+            .unwrap_err();
 
-        assert!(fs::read(&output).unwrap().starts_with(b"%PDF"));
-        assert_eq!(documents.borrow().len(), 1);
-        assert!(documents.borrow()[0].html.contains("Version: 2.3"));
+        assert!(error.contains("requires a validated workspace Word template"));
+        assert!(packages.borrow().is_empty());
     }
 
     #[test]
@@ -702,10 +497,13 @@ mod tests {
         let packages = Rc::new(RefCell::new(Vec::new()));
         let office = FakeOffice {
             copied_packages: packages.clone(),
+            invalid_output: false,
         };
-        let mut exporter = LocalPdfExporter::new(office, FakePrinter::default());
+        let mut exporter = LocalPdfExporter::new(office);
 
-        exporter.export(&request(source.clone(), output)).unwrap();
+        exporter
+            .export(&request(source.clone(), output, None))
+            .unwrap();
 
         assert_eq!(fs::read(&source).unwrap(), original);
         let packages = packages.borrow();
@@ -749,10 +547,10 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let source = directory.path().join("policy.xlsx");
         fs::write(&source, b"not used").unwrap();
-        let mut exporter = LocalPdfExporter::new(FakeOffice::default(), FakePrinter::default());
+        let mut exporter = LocalPdfExporter::new(FakeOffice::default());
 
         let error = exporter
-            .export(&request(source, directory.path().join("release.tmp")))
+            .export(&request(source, directory.path().join("release.tmp"), None))
             .unwrap_err();
 
         assert!(error.contains("not implemented for .xlsx"));
@@ -763,17 +561,24 @@ mod tests {
     fn malformed_adapter_output_fails_before_core_can_commit_it() {
         let directory = tempfile::tempdir().unwrap();
         let source = directory.path().join("policy.md");
-        fs::write(&source, "# Policy").unwrap();
-        let mut exporter = LocalPdfExporter::new(
-            FakeOffice::default(),
-            FakePrinter {
-                documents: Rc::default(),
-                invalid_output: true,
-            },
-        );
+        let template = directory.path().join("template.docx");
+        fs::write(
+            &source,
+            "---\nversion: 2.3\nconfidentiality: Vertraulich & intern\n---\n# Policy",
+        )
+        .unwrap();
+        fs::write(&template, MARKDOWN_TEMPLATE).unwrap();
+        let mut exporter = LocalPdfExporter::new(FakeOffice {
+            invalid_output: true,
+            ..FakeOffice::default()
+        });
 
         let error = exporter
-            .export(&request(source, directory.path().join("release.tmp")))
+            .export(&request(
+                source,
+                directory.path().join("release.tmp"),
+                Some(template),
+            ))
             .unwrap_err();
 
         assert!(error.contains("did not produce a valid PDF"));

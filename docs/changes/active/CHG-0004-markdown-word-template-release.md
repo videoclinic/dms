@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | CHG-0004 |
-| Status | in-progress — Phases 1–3 complete; Phase 4 pending |
+| Status | in-progress — Phases 1–4 complete; Phase 5 pending |
 | External request | Direct operator request: “In order to export Markdown files to PDF the idea was to use a Word template like .temp/Vorlage.docx This template could/should be imported into the library for reuse. The frontmatter should be then used in the Word document template as metadata for \"auto-fields\" if possible.” |
 | Affected CAPs | CAP-0001, CAP-0002, CAP-0005, CAP-0006, CAP-0007, CAP-0015 |
 | Decision records | ADR-0008 |
@@ -103,8 +103,8 @@ never overwrites `.dms` control data.
 | --- | --- | --- | --- |
 | 1 | Template field mechanism feasibility | complete | Focused temporary-copy tests prove all four controlled values fill XML custom-property values without mutating the source; a Windows Word smoke using the operator template produces a readable multi-page A4 PDF with visible title, number, version, and confidentiality; the CHG selects `DOCPROPERTY` fields and records only non-secret path, page-count, and checksum evidence |
 | 2 | Workspace template asset, frontmatter, and OOXML contract | complete | Schema-v14 migration preserves every v13 workspace and adds no template implicitly; core tests prove in-root `.docx` import, stable identity, replace/remove, changed-template revalidation, symlink/outside-root refusal, lifecycle exclusion, required/optional frontmatter comparisons, deterministic template validation, CommonMark block insertion, preservation of headers/footers/styles/media/relationships, and valid DOCX packaging; CLI remains headless and does not invoke Word |
-| 3 | Configuration and Library template surfaces | pending | Desktop/frontend tests prove Document defaults import/replace/remove/status controls, clear missing/invalid template errors, and Library exclusion from controlled/available counters and actions; CAP-linked HTML/PNG wireframes render without clipping |
-| 4 | Canonical Word-backed Markdown release | pending | Focused exporter/lifecycle tests prove Markdown → temporary template DOCX → installed-Word adapter → validated PDF; version/confidentiality/title/number come from the release snapshot; frontmatter mismatches block with expected/detected details; export failure leaves no release/version; the original Markdown/template remain byte-identical; WebView Markdown runtime code and smoke are removed |
+| 3 | Configuration and Library template surfaces | complete | Desktop/frontend tests prove Document defaults import/replace/remove/status controls, clear missing/invalid template errors, and Library exclusion from controlled/available counters and actions; CAP-linked HTML/PNG wireframes render without clipping |
+| 4 | Canonical Word-backed Markdown release | complete | Focused exporter/lifecycle tests prove Markdown → temporary template DOCX → installed-Word adapter → validated PDF; version/confidentiality/title/number come from the release snapshot; frontmatter mismatches block with expected/detected details; export failure leaves no release/version; the original Markdown/template remain byte-identical; WebView Markdown runtime code and smoke are removed |
 | 5 | Platform, records, and packaging closeout | pending | Rust format/workspace tests/Clippy, frontend tests, release builds, strict record/link/table checks, and `git diff --check` pass; Windows external smoke releases the A.8.29 Markdown through the imported Vorlage and retains non-secret PDF path/checksum evidence; macOS keeps explicit pending installed-Word evidence unless separately proven; CAP/ADR/architecture/DOX describe only evidenced behaviour |
 
 ## Phase 1 — Template field mechanism feasibility
@@ -238,6 +238,26 @@ never overwrites `.dms` control data.
 5. Add regression coverage for the A.8.29 failure class: frontmatter is accepted
    as the Markdown source marker surface, body duplication is unnecessary, and
    the PDF receives the release snapshot's controlled values.
+
+### Phase 4 evidence — 2026-08-15
+
+- `dms-core` resolves and revalidates the configured template immediately before
+  Markdown export. Missing, changed, or invalid assets fail closed before the
+  exporter runs and leave lifecycle state and version allocation unchanged.
+- The desktop exporter assembles Markdown into a temporary template-backed DOCX,
+  fills title, document number, version, and confidentiality from the `.dms`
+  release snapshot, then invokes the existing installed-Office adapter. Focused
+  tests prove the source Markdown and configured template remain byte-identical.
+- Direct `.docx` export retains its existing temporary-copy Office path. The
+  native WebView Markdown printer, print assets, platform PDF dependencies, and
+  `DMS_DESKTOP_EXPORT_SMOKE` route are removed; Windows/macOS CI now runs the
+  deterministic fake-backed template/Office test.
+- The reusable template contract requires `docProps/custom.xml` with exactly one
+  placeholder for each `DMS_TITLE`, `DMS_DOCUMENT_NUMBER`, `DMS_VERSION`, and
+  `DMS_CONFIDENTIALITY` property.
+- `cargo fmt --all -- --check`, `cargo test --workspace`,
+  `cargo clippy --workspace --all-targets -- -D warnings`, and all 84 frontend
+  tests pass. Installed-Word PDF evidence remains exclusively a Phase 5 gate.
 
 ## Phase 5 — Platform, records, and packaging closeout
 

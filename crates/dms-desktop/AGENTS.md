@@ -11,7 +11,7 @@ macOS.
 | --- | --- |
 | `src/` | Tauri startup, IPC commands, `dms-core` adapter, OS user preferences |
 | `src/assistance.rs` | Supported-location detection and process launch for Claude Desktop on Windows and macOS |
-| `src/export.rs` | `.docx`/Markdown PDF adapters, Office automation, native WebView PDF capture, and format-specific tests |
+| `src/export.rs` | `.docx`/Markdown PDF adapters, temporary OOXML assembly/fill, installed-Office automation, and format-specific tests |
 | `ui/app.mjs` | Workspace setup, static shell, session activities, saved-view persistence, and IPC orchestration |
 | `ui/library.mjs` | Folder-first explorer state, markup, selection rules, search, and sorting |
 | `ui/notes.mjs` | Per-document note activity state, create/edit/delete markup, and confirmation flow |
@@ -19,7 +19,6 @@ macOS.
 | `ui/reports.mjs` | Audit-report generation filters, recent-report history, verification state, paging, and host actions |
 | `ui/assistance.mjs` | Workspace policy form plus document-scoped payload preview, consent, handoff, and editable response draft |
 | `ui/configuration.mjs` | Routed workspace/default/workflow/notification state, Markdown Word-template controls, secondary catalogue/identity surfaces, and mutation requests |
-| `ui/print/` | Shipped app-local Markdown print shell, stylesheet, and logo |
 | `ui/*.test.mjs` | Framework-free shell and Library interaction tests |
 | `capabilities/` | Tauri window permissions |
 | `icons/` | SVG source and derived PNG/Windows application icons |
@@ -157,9 +156,9 @@ macOS.
   owns the classified final path, digest, atomic rename, and release evidence.
 - Office placeholder fill always operates on a temporary OOXML copy and fills
   `{TITLE}`, `{DOCUMENT_NUMBER}`, `{VERSION}`, and `{CONFIDENTIALITY}` across XML
-  parts, including Word custom-property values. Until CHG-0004 replaces it,
-  native Markdown export uses WebView2 `PrintToPdf` or WKWebView `createPDF`,
-  never an interactive print dialog.
+  parts, including Word custom-property values. Markdown export first assembles
+  the CommonMark body into a second temporary DOCX from the validated workspace
+  template, then follows the same installed-Word PDF path as `.docx` drafts.
 
 ## Work Guidance
 
@@ -172,7 +171,6 @@ macOS.
 - `cargo test -p dms-desktop`
 - `node --test crates/dms-desktop/ui/*.test.mjs`
 - `DMS_DESKTOP_SMOKE=1 cargo run -p dms-desktop`
-- `DMS_DESKTOP_EXPORT_SMOKE=1 cargo run -p dms-desktop` on Windows and macOS
 - `.github/workflows/desktop-platform-smoke.yml` on Windows and macOS
 
 ## Child DOX Index

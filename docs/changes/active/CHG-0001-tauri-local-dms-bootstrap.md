@@ -131,8 +131,9 @@ macOS** that:
 - On release: app snapshots effective confidentiality type, commits the approved
   target version only after successful atomic export,
   mirrors tree under publish root, builds export chrome from `.dms`, exports
-  Office drafts via preinstalled Office (temp-copy token fill) or Markdown
-  drafts through a CommonMark HTML print shell plus native WebView PDF APIs to
+  Office drafts via preinstalled Office (temp-copy token fill) or assembles
+  Markdown into a temporary DOCX from the configured workspace Word template
+  before using the same installed-Word export path to
   `<stem>_VMAJOR.MINOR_<confidentiality-type-id>.pdf`, checksums it
 - Keeps editable source drafts in place after release
 - Attaches notes; verifies released PDF checksums
@@ -1330,15 +1331,12 @@ a fake-backed, explicitly targeted SMTP test-delivery command and UI.
   remain audit evidence and never occupy a version (ADR-0007).
 - Path mapping: `publish_abs = publish_root / relative_parent / versioned_name`
   (ADR-0006).
-- PDF export: one format dispatcher with Office adapters (Windows COM / macOS
-  automation) and Markdown print-shell + native WebView PDF adapters (ADR-0008
-  Option A). Shared export chrome comes only from `.dms` release context.
-  Ship default `shell.html` / `print.css` / logo derived from the corporate
-  Vorlage; do not route Markdown through Word. CI uses fakes when platform
-  export is unavailable; phase 5 must still spike fixed header/footer + page
-  indicators on WebView2 and WKWebView. The installed-Office adapter exists but
-  is not yet constructed by a production desktop lifecycle command; phase 9i
-  owns that wiring and its licensed-host evidence.
+- PDF export: one format dispatcher uses installed-Office adapters (Windows COM /
+  macOS automation) for `.docx` drafts and for temporary DOCX packages assembled
+  from Markdown plus the configured workspace Word template (ADR-0008). Shared
+  export chrome comes only from `.dms`; Markdown frontmatter is validation-only
+  source metadata. CI proves deterministic assembly and fake-backed Office
+  dispatch, while licensed-host evidence remains a Phase 9l gate.
 
 ## Phase 9 audit findings
 
@@ -1414,9 +1412,10 @@ claim; and CHG closure matches the recorded evidence.
 3. Use the Library review action to complete interactive approver sign-in, record
    a decision as an eligible approver, and confirm any `mailto:` decision notice.
 4. Release the approved candidate on the licensed Windows Office host for `.docx`
-   and release a Markdown candidate through the native WebView print path; verify
-   the versioned PDFs and workflow evidence. Exercise a direct minor release and
-   confirm its publication notice the same way.
+   and release a Markdown candidate through the configured workspace Word
+   template and installed-Word path; verify the versioned PDFs and workflow
+   evidence. Exercise a direct minor release and confirm its publication notice
+   the same way.
 5. Use the evidence panel to verify each delivery attempt and retry control. The
    resulting configured Entra, delivery, and licensed-Office observations are
    Phase 9l acceptance evidence; never place tenant credentials in the record.
@@ -1430,9 +1429,10 @@ external smoke as phase evidence.
 1. A Windows host is available outside WSL with the Phase 9k.1 checkpoint or a
    later `main` checkout and an activated, licensed Office installation that can
    export a controlled `.docx` to PDF.
-2. The Windows host has a disposable DMS workspace with explicit edit and publish roots,
-   a controlled `.docx` draft, and permission to inspect and remove its generated
-   PDF evidence.
+2. The Windows host has a disposable DMS workspace with explicit edit and publish
+   roots, a controlled `.docx` draft, a controlled Markdown draft, the validated
+   operator Word template configured under Document defaults, and permission to
+   inspect and remove generated PDF evidence.
 3. An Entra administrator can apply the intended tenant/group binding, and two
    direct enabled group members can complete delegated sign-in: one requester and
    one eligible approver. The interactive actor must be able to record a decision.
@@ -1454,8 +1454,8 @@ external smoke as phase evidence.
   schema-v7 report evidence, CLI/desktop adapters, and the Audit & Reports
   operator surface. External installed-Office and Entra smokes are unrelated to
   this local export capability.
-- CI exercises the real native WebView Markdown PDF path, desktop startup, and
-  NSIS/DMG packaging. It does not exercise installed Office, a configured
+- CI exercises fake-backed Markdown template assembly and Office dispatch,
+  desktop startup, and NSIS/DMG packaging. It does not exercise installed Office, a configured
   Microsoft Graph tenant/group, interactive Entra sign-in, SMTP, or host-mail
   delivery; production code has live delegated Graph and notification adapters,
   while external service and installed-Office smokes remain phase 9l gates.

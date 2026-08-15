@@ -30,22 +30,3 @@ tauri-plugin-single-instance = { version = "2.4.3", features = ["deep-link"] }
 ureq = "3.4.0"
 url = "2.5.8"
 zip = { version = "2.4.2", default-features = false, features = ["deflate"] }
-
-[workspace.dependencies.block2]
-version = "0.6.2"
-
-[workspace.dependencies.objc2-foundation]
-version = "0.3.2"
-default-features = false
-features = ["std", "NSData", "NSError"]
-
-[workspace.dependencies.objc2-web-kit]
-version = "0.3.2"
-default-features = false
-features = ["std", "block2", "WKPDFConfiguration", "WKWebView"]
-
-[workspace.dependencies.webview2-com]
-version = "0.38.2"
-
-[workspace.dependencies.windows]
-version = "0.61.3"

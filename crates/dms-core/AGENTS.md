@@ -70,6 +70,10 @@ persistence.
   in-root non-symlink `.docx`. It is configuration rather than a controlled
   document, is excluded from Library file rows and counters, and preserves all
   non-body OOXML package parts during deterministic CommonMark body assembly.
+  Its strict contract includes the four `DMS_*` custom properties with one
+  release-value placeholder each. Markdown release passes only a configured,
+  present, unchanged, valid template path to the export adapter; rejection does
+  not call the adapter or commit release evidence.
 - Workflow evidence is append-only, SHA-256 predecessor-linked, newest-first at
   the public history boundary, and validated whenever workspace metadata opens
   or saves.

@@ -469,6 +469,7 @@ pub struct ExportChrome {
 pub struct ExportRequest {
     pub document_id: Uuid,
     pub source_path: PathBuf,
+    pub markdown_template_path: Option<PathBuf>,
     pub temporary_pdf_path: PathBuf,
     pub final_pdf_path: PathBuf,
     pub chrome: ExportChrome,
@@ -985,6 +986,13 @@ impl Workspace {
         self.candidate_mut(document_id, candidate_id)?
             .content_overrides = candidate.content_overrides.clone();
 
+        let markdown_template_path = source_path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
+            .then(|| self.markdown_template_path_for_export())
+            .transpose()?;
+
         let relative_path = release_relative_path(
             &self.document(document_id)?.relative_path,
             candidate.version,
@@ -1005,6 +1013,7 @@ impl Workspace {
         let export_request = ExportRequest {
             document_id,
             source_path,
+            markdown_template_path,
             temporary_pdf_path: temporary_path.clone(),
             final_pdf_path: final_path.clone(),
             chrome: ExportChrome {

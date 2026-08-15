@@ -1079,14 +1079,10 @@ dependencies = [
 name = "dms-desktop"
 version = "0.1.0"
 dependencies = [
- "block2",
  "chrono",
  "dms-core",
  "keyring",
  "lettre",
- "objc2-foundation",
- "objc2-web-kit",
- "pulldown-cmark",
  "quick-xml 0.37.5",
  "serde",
  "serde_json",
@@ -1099,8 +1095,6 @@ dependencies = [
  "ureq",
  "url",
  "uuid",
- "webview2-com",
- "windows",
  "zip",
 ]
 

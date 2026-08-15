@@ -43,10 +43,8 @@ jobs:
         run: cargo run -p dms-desktop
         env:
           DMS_DESKTOP_SMOKE: "1"
-      - name: Export multi-page Markdown through the native WebView PDF API
-        run: cargo run -p dms-desktop
-        env:
-          DMS_DESKTOP_EXPORT_SMOKE: "1"
+      - name: Exercise Markdown template assembly and fake-backed Office export
+        run: cargo test -p dms-desktop export::tests::markdown_assembles_fills_and_dispatches_a_template_backed_docx_to_office -- --exact
       - name: Build installable desktop package
         uses: tauri-apps/tauri-action@v1
         with:

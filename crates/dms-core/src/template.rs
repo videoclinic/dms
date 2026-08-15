@@ -22,6 +22,7 @@ const REQUIRED_PARTS: &[&str] = &[
     "word/document.xml",
     "word/styles.xml",
     "word/_rels/document.xml.rels",
+    "docProps/custom.xml",
 ];
 const PARAGRAPH_PROTOTYPES: &[(&str, &str)] = &[
     ("heading1", "{Heading 1}"),
@@ -171,6 +172,38 @@ impl Workspace {
             current_sha256: Some(current_sha256),
             detail: None,
         })
+    }
+
+    pub(crate) fn markdown_template_path_for_export(&self) -> Result<PathBuf> {
+        let template = self.markdown_template.as_ref().ok_or_else(|| {
+            DmsError::InvalidMarkdownTemplate(
+                "no Markdown Word template is configured; select one under Configuration → Document defaults"
+                    .to_owned(),
+            )
+        })?;
+        let validation = self
+            .markdown_template_validation()
+            .expect("configured template has a validation result");
+        if validation.state != MarkdownTemplateValidationState::Valid {
+            let state = match validation.state {
+                MarkdownTemplateValidationState::Valid => unreachable!(),
+                MarkdownTemplateValidationState::Changed => {
+                    "configured template has changed; replace it under Configuration → Document defaults"
+                }
+                MarkdownTemplateValidationState::Missing => {
+                    "configured template file is missing; select a replacement under Configuration → Document defaults"
+                }
+                MarkdownTemplateValidationState::Invalid => {
+                    "configured template is invalid; select a replacement under Configuration → Document defaults"
+                }
+            };
+            let message = validation
+                .detail
+                .filter(|detail| !state.contains(detail))
+                .map_or_else(|| state.to_owned(), |detail| format!("{state}: {detail}"));
+            return Err(DmsError::InvalidMarkdownTemplate(message));
+        }
+        Ok(self.edit_root.join(&template.relative_path))
     }
 
     pub(crate) fn is_markdown_template_path(&self, relative_path: &Path) -> bool {
@@ -362,6 +395,72 @@ fn load_template(path: &Path) -> Result<LoadedTemplate> {
     let document_xml = String::from_utf8(document_bytes.clone()).map_err(|error| {
         DmsError::InvalidMarkdownTemplate(format!("word/document.xml is not UTF-8: {error}"))
     })?;
+    let custom_xml = String::from_utf8(
+        entries
+            .iter()
+            .find(|entry| entry.name == "docProps/custom.xml")
+            .expect("required part checked")
+            .bytes
+            .clone(),
+    )
+    .map_err(|error| {
+        DmsError::InvalidMarkdownTemplate(format!("docProps/custom.xml is not UTF-8: {error}"))
+    })?;
+    for (property, token) in [
+        ("DMS_TITLE", "{TITLE}"),
+        ("DMS_DOCUMENT_NUMBER", "{DOCUMENT_NUMBER}"),
+        ("DMS_VERSION", "{VERSION}"),
+        ("DMS_CONFIDENTIALITY", "{CONFIDENTIALITY}"),
+    ] {
+        let marker = format!("name=\"{property}\"");
+        let markers = custom_xml.match_indices(&marker).collect::<Vec<_>>();
+        if markers.is_empty() {
+            return Err(DmsError::InvalidMarkdownTemplate(format!(
+                "custom property {property} is missing"
+            )));
+        }
+        if markers.len() != 1 {
+            return Err(DmsError::InvalidMarkdownTemplate(format!(
+                "custom property {property} must occur exactly once; found {}",
+                markers.len()
+            )));
+        }
+        let marker_offset = markers[0].0;
+        let opening_offset = custom_xml[..marker_offset].rfind('<').ok_or_else(|| {
+            DmsError::InvalidMarkdownTemplate(format!(
+                "custom property {property} has no opening element"
+            ))
+        })?;
+        let opening_end = custom_xml[marker_offset..]
+            .find('>')
+            .map(|offset| marker_offset + offset + 1)
+            .ok_or_else(|| {
+                DmsError::InvalidMarkdownTemplate(format!(
+                    "custom property {property} has an incomplete opening element"
+                ))
+            })?;
+        let element_name = custom_xml[opening_offset + 1..]
+            .split(|character: char| character.is_whitespace() || character == '>')
+            .next()
+            .unwrap_or_default();
+        let closing = format!("</{element_name}>");
+        let property_end = custom_xml[opening_end..]
+            .find(&closing)
+            .map(|offset| opening_end + offset)
+            .ok_or_else(|| {
+                DmsError::InvalidMarkdownTemplate(format!(
+                    "custom property {property} has no closing element"
+                ))
+            })?;
+        let count = custom_xml[opening_end..property_end]
+            .match_indices(token)
+            .count();
+        if count != 1 {
+            return Err(DmsError::InvalidMarkdownTemplate(format!(
+                "custom property {property} must contain placeholder {token} exactly once; found {count}"
+            )));
+        }
+    }
 
     let mut paragraphs = BTreeMap::new();
     let mut spans = Vec::new();

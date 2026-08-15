@@ -19,6 +19,8 @@ use tempfile::TempDir;
 use uuid::Uuid;
 use zip::{write::SimpleFileOptions, ZipWriter};
 
+const MARKDOWN_TEMPLATE: &[u8] = include_bytes!("fixtures/markdown-template.docx");
+
 struct Fixture {
     _temp: TempDir,
     workspace: Workspace,
@@ -38,6 +40,11 @@ impl Fixture {
         let publish_root = temp.path().join("publish");
         fs::create_dir_all(edit_root.join("Policies")).expect("edit root");
         let mut workspace = Workspace::init(&edit_root, &publish_root).expect("workspace init");
+        let template_path = edit_root.join("Markdown-template.docx");
+        fs::write(&template_path, MARKDOWN_TEMPLATE).expect("template fixture");
+        workspace
+            .import_markdown_template(&template_path)
+            .expect("Markdown template");
         workspace
             .configure_document_type("procedure", "Procedure", true)
             .expect("document type");
@@ -244,11 +251,23 @@ impl PdfExporter for FakeExporter {
                 .and_then(|value| value.to_str()),
             Some("pdf")
         );
+        assert!(request
+            .markdown_template_path
+            .as_ref()
+            .is_some_and(|path| path.is_file()));
         if let Some(error) = self.fail.clone() {
             return Err(error);
         }
         fs::write(&request.temporary_pdf_path, b"%PDF-1.7\nfake export")
             .map_err(|error| error.to_string())
+    }
+}
+
+struct UnexpectedExporter;
+
+impl PdfExporter for UnexpectedExporter {
+    fn export(&mut self, _request: &dms_core::ExportRequest) -> std::result::Result<(), String> {
+        panic!("export must not run without a valid configured Markdown template")
     }
 }
 
@@ -294,6 +313,70 @@ fn release_first(fixture: &mut Fixture) -> (FakeGraph, ReleaseOutcome) {
         )
         .expect("release");
     (graph, outcome)
+}
+
+fn assert_markdown_template_release_error(fixture: &mut Fixture, expected: &str) {
+    let mut graph = approve_first_release(fixture);
+    let error = fixture
+        .workspace
+        .release_candidate(
+            fixture.document_id,
+            None,
+            &mut graph,
+            &mut FakeNotifier::default(),
+            &mut UnexpectedExporter,
+        )
+        .unwrap_err();
+    assert!(
+        matches!(&error, DmsError::InvalidMarkdownTemplate(message) if message.contains(expected)),
+        "unexpected error: {error}"
+    );
+    let candidate = fixture.workspace.candidates(fixture.document_id).unwrap()[0];
+    assert_eq!(candidate.status, CandidateStatus::Approved);
+    assert!(candidate.export_failures.is_empty());
+    assert!(fixture
+        .workspace
+        .releases(fixture.document_id)
+        .unwrap()
+        .is_empty());
+}
+
+#[test]
+fn markdown_release_requires_an_unchanged_valid_configured_template() {
+    let source = "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal";
+
+    let mut unconfigured = Fixture::new(source, NotificationTransport::Smtp);
+    unconfigured.workspace.remove_markdown_template();
+    assert_markdown_template_release_error(&mut unconfigured, "no Markdown Word template");
+
+    let mut missing = Fixture::new(source, NotificationTransport::Smtp);
+    let missing_path = missing
+        .workspace
+        .edit_root
+        .join(&missing.workspace.markdown_template().unwrap().relative_path);
+    fs::remove_file(missing_path).unwrap();
+    assert_markdown_template_release_error(&mut missing, "template file is missing");
+
+    let mut changed = Fixture::new(source, NotificationTransport::Smtp);
+    let changed_path = changed
+        .workspace
+        .edit_root
+        .join(&changed.workspace.markdown_template().unwrap().relative_path);
+    fs::OpenOptions::new()
+        .append(true)
+        .open(changed_path)
+        .unwrap()
+        .write_all(b"changed")
+        .unwrap();
+    assert_markdown_template_release_error(&mut changed, "template has changed");
+
+    let mut invalid = Fixture::new(source, NotificationTransport::Smtp);
+    let invalid_path = invalid
+        .workspace
+        .edit_root
+        .join(&invalid.workspace.markdown_template().unwrap().relative_path);
+    fs::write(invalid_path, b"not a DOCX package").unwrap();
+    assert_markdown_template_release_error(&mut invalid, "template is invalid");
 }
 
 #[test]
