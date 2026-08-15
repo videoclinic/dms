@@ -18,6 +18,8 @@ persistence.
 | `src/lifecycle.rs` | Version candidates, Entra/notification/export ports, content conformance, review decisions, release commits, and hash-chained evidence |
 | `src/maintenance.rs` | Release checksum verification, workspace review defaults, periodic-review scheduling and transitions, and full-workspace ZIP backup with SHA-256 manifest |
 | `src/policies.rs` | Folder-policy tree, confidentiality inheritance, Entra display binding, and workflow-role resolution |
+| `src/frontmatter.rs` | Strict flat Markdown control-field parsing and expected/detected comparison |
+| `src/template.rs` | Reusable workspace Word-template identity, validation, and deterministic CommonMark-to-OOXML assembly |
 | `tests/` | Domain, migration-fixture, and persistence behaviour tests |
 
 ## Local Contracts
@@ -58,10 +60,16 @@ persistence.
 - Approval-required operations refresh direct-user group membership and verify
   the interactive Entra actor through injected ports; core metadata stores no
   Graph, SMTP, or authentication credentials.
-- Review and release content checks scan rendered Markdown and visible DOCX
-  body/header/footer text; unsupported formats fail closed. Overrides require a
-  reason and remain bound to the checked digest, target, confidentiality, and
-  phase in the workflow chain.
+- Review and release content checks require scalar Markdown frontmatter
+  `version` and `confidentiality`, compare optional `title` and
+  `document_number` when present, and scan visible DOCX body/header/footer text;
+  unsupported formats fail closed. Overrides require a reason and remain bound
+  to the checked digest, target, confidentiality, and phase in the workflow
+  chain.
+- One optional stable workspace Word-template asset may reference an ordinary
+  in-root non-symlink `.docx`. It is configuration rather than a controlled
+  document, is excluded from Library file rows and counters, and preserves all
+  non-body OOXML package parts during deterministic CommonMark body assembly.
 - Workflow evidence is append-only, SHA-256 predecessor-linked, newest-first at
   the public history boundary, and validated whenever workspace metadata opens
   or saves.
@@ -133,6 +141,8 @@ persistence.
 - Schema v13 separates the SMTP authentication login user from its RFC 5322
   `From` mailbox. Its v12 migration copies the legacy sender to both fields and
   retains `v12.json.bak`; SMTP passwords remain outside core metadata.
+- Schema v14 adds the optional Markdown Word-template record without assigning
+  an implicit asset. Its v13 migration retains `v13.json.bak`.
 
 ## Verification
 

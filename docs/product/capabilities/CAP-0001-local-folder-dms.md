@@ -6,7 +6,7 @@
 | Status | not implemented |
 | Primary platform | Windows and macOS (Tauri) |
 | Storage | Hidden `.dms/` under the edit root |
-| Tests | Partial phases 9a–9f.5.2 evidence: [`dms-core` workspace tests](../../../crates/dms-core/tests/workspace.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [setup frontend tests](../../../crates/dms-desktop/ui/app.test.mjs), [Configuration frontend tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
+| Tests | Partial phases 9a–9f.5.2 and CHG-0004 Phase 2 evidence: [`dms-core` workspace tests](../../../crates/dms-core/tests/workspace.rs), [schema-v14 and workspace-template tests](../../../crates/dms-core/tests/markdown_template.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [setup frontend tests](../../../crates/dms-desktop/ui/app.test.mjs), [Configuration frontend tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 

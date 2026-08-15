@@ -5,7 +5,7 @@
 | ID | CAP-0015 |
 | Status | not implemented |
 | Storage | `<edit-root>/.dms/` |
-| Tests | Partial phases 9e–9f.5, 9k.3, and 9k.4 evidence: [release-snapshot, migration, identity-stability, and atomic-handover core tests](../../../crates/dms-core/tests/lifecycle.rs), [document-profile and legacy-owner migration tests](../../../crates/dms-core/tests/workspace.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [Library document-control, bounded details-pane, release-profile, placeholder, and lifecycle tests](../../../crates/dms-desktop/ui/library.test.mjs), [document-type catalogue tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
+| Tests | Partial phases 9e–9f.5, 9k.3, 9k.4, and CHG-0004 Phase 2 evidence: [release-snapshot, frontmatter comparison, migration, identity-stability, and atomic-handover core tests](../../../crates/dms-core/tests/lifecycle.rs), [document-profile and legacy-owner migration tests](../../../crates/dms-core/tests/workspace.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [Library document-control, bounded details-pane, release-profile, placeholder, and lifecycle tests](../../../crates/dms-desktop/ui/library.test.mjs), [document-type catalogue tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 

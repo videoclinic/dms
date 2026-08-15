@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | CHG-0004 |
-| Status | in-progress — Phase 1 complete; Phase 2 pending |
+| Status | in-progress — Phases 1–2 complete; Phase 3 pending |
 | External request | Direct operator request: “In order to export Markdown files to PDF the idea was to use a Word template like .temp/Vorlage.docx This template could/should be imported into the library for reuse. The frontmatter should be then used in the Word document template as metadata for \"auto-fields\" if possible.” |
 | Affected CAPs | CAP-0001, CAP-0002, CAP-0005, CAP-0006, CAP-0007, CAP-0015 |
 | Decision records | ADR-0008 |
@@ -102,7 +102,7 @@ never overwrites `.dms` control data.
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
 | 1 | Template field mechanism feasibility | complete | Focused temporary-copy tests prove all four controlled values fill XML custom-property values without mutating the source; a Windows Word smoke using the operator template produces a readable multi-page A4 PDF with visible title, number, version, and confidentiality; the CHG selects `DOCPROPERTY` fields and records only non-secret path, page-count, and checksum evidence |
-| 2 | Workspace template asset, frontmatter, and OOXML contract | pending | Schema-v14 migration preserves every v13 workspace and adds no template implicitly; core tests prove in-root `.docx` import, stable identity, replace/remove, changed-template revalidation, symlink/outside-root refusal, lifecycle exclusion, required/optional frontmatter comparisons, deterministic template validation, CommonMark block insertion, preservation of headers/footers/styles/media/relationships, and valid DOCX packaging; CLI remains headless and does not invoke Word |
+| 2 | Workspace template asset, frontmatter, and OOXML contract | complete | Schema-v14 migration preserves every v13 workspace and adds no template implicitly; core tests prove in-root `.docx` import, stable identity, replace/remove, changed-template revalidation, symlink/outside-root refusal, lifecycle exclusion, required/optional frontmatter comparisons, deterministic template validation, CommonMark block insertion, preservation of headers/footers/styles/media/relationships, and valid DOCX packaging; CLI remains headless and does not invoke Word |
 | 3 | Configuration and Library template surfaces | pending | Desktop/frontend tests prove Document defaults import/replace/remove/status controls, clear missing/invalid template errors, and Library exclusion from controlled/available counters and actions; CAP-linked HTML/PNG wireframes render without clipping |
 | 4 | Canonical Word-backed Markdown release | pending | Focused exporter/lifecycle tests prove Markdown → temporary template DOCX → installed-Word adapter → validated PDF; version/confidentiality/title/number come from the release snapshot; frontmatter mismatches block with expected/detected details; export failure leaves no release/version; the original Markdown/template remain byte-identical; WebView Markdown runtime code and smoke are removed |
 | 5 | Platform, records, and packaging closeout | pending | Rust format/workspace tests/Clippy, frontend tests, release builds, strict record/link/table checks, and `git diff --check` pass; Windows external smoke releases the A.8.29 Markdown through the imported Vorlage and retains non-secret PDF path/checksum evidence; macOS keeps explicit pending installed-Word evidence unless separately proven; CAP/ADR/architecture/DOX describe only evidenced behaviour |
@@ -170,6 +170,27 @@ never overwrites `.dms` control data.
 8. Implement the smallest direct OOXML assembler using existing
    `pulldown-cmark`, `quick-xml`, and `zip` dependencies. Do not implement a
    parallel HTML/altChunk/Pandoc fallback.
+
+### Phase 2 evidence — 2026-08-15
+
+- Schema v14 stores one optional stable template ID, edit-root-relative path,
+  SHA-256, and template-contract version. The v13 migration retains
+  `workspace.v13.json.bak` and leaves the template unset.
+- Core import/revalidation tests prove stable replacement identity,
+  changed/missing/invalid state reporting, in-root regular-file enforcement,
+  symlink and outside-root refusal, removal, persistence, and exclusion from
+  document registration and Library rows/counters.
+- Markdown lifecycle tests require scalar `version` and `confidentiality`
+  frontmatter and expose expected/detected mismatch evidence for optional
+  `title` and `document_number`; source values never mutate `.dms` control data.
+- The tracked synthetic `markdown-template.docx` fixture contains no proprietary
+  branding. Focused assembler tests cover headings, paragraphs, emphasis, links,
+  ordered/unordered lists, code, and two-column tables; output is byte-stable,
+  XML-well-formed, and preserves every non-body package part including styles,
+  headers, footers, media, and relationships.
+- `cargo fmt --check`, `cargo test --workspace`, and
+  `cargo clippy --workspace --all-targets -- -D warnings` pass. The headless CLI
+  remains free of Word invocation.
 
 ## Phase 3 — Configuration and Library template surfaces
 

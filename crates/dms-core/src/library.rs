@@ -141,6 +141,9 @@ impl Workspace {
                 source,
             })?;
             let relative_path = relative_join(&relative_folder, &name);
+            if self.is_markdown_template_path(&relative_path) {
+                continue;
+            }
             if file_type.is_dir() {
                 entries.push(LibraryEntry {
                     name,
@@ -221,6 +224,9 @@ impl Workspace {
         source_path: &Path,
     ) -> Result<Document> {
         let (absolute_path, relative_path) = self.resolve_source_path(source_path)?;
+        if self.is_markdown_template_path(&relative_path) {
+            return Err(DmsError::TemplateLifecycleExcluded(relative_path));
+        }
         if !is_supported_source(&absolute_path) {
             return Err(DmsError::UnsupportedSource(absolute_path));
         }
@@ -261,7 +267,7 @@ impl Workspace {
     ) -> Result<(Vec<LibraryFolderNode>, HashMap<PathBuf, FolderCounters>)> {
         let mut folders = Vec::new();
         let mut counters = HashMap::new();
-        let root_counters = Self::collect_library_inventory(
+        let root_counters = self.collect_library_inventory(
             &self.edit_root,
             Path::new("."),
             registered,
@@ -284,6 +290,7 @@ impl Workspace {
     }
 
     fn collect_library_inventory(
+        &self,
         folder: &Path,
         relative_folder: &Path,
         registered: &HashMap<PathBuf, &Document>,
@@ -315,11 +322,14 @@ impl Workspace {
                 source,
             })?;
             let relative_path = relative_join(relative_folder, &name);
+            if self.is_markdown_template_path(&relative_path) {
+                continue;
+            }
             if file_type.is_dir() {
                 if is_metadata_path(&relative_path) {
                     continue;
                 }
-                let child_counters = Self::collect_library_inventory(
+                let child_counters = self.collect_library_inventory(
                     &path,
                     &relative_path,
                     registered,

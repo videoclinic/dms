@@ -6,7 +6,7 @@
 | Status | not implemented |
 | Draft formats | Markdown (`.md`) and Microsoft Office originals (e.g. `.docx`, `.xlsx`, `.pptx`) |
 | Released format | Versioned, classified PDF only (`*_VMAJOR.MINOR_<confidentiality-type-id>.pdf`) |
-| Tests | Partial phases 9e, 9f.2, 9k.3, and 9k.4 evidence: [withdrawal/current-release/version-allocation, release-snapshot, identity-stability, migration, and atomic-handover core tests](../../../crates/dms-core/tests/lifecycle.rs), [desktop lifecycle adapter tests](../../../crates/dms-desktop/src/lib.rs), [Library lifecycle and candidate-default frontend tests](../../../crates/dms-desktop/ui/library.test.mjs) |
+| Tests | Partial phases 9e, 9f.2, 9k.3, 9k.4, and CHG-0004 Phase 2 evidence: [withdrawal/current-release/version-allocation, release-snapshot, frontmatter conformance, identity-stability, migration, and atomic-handover core tests](../../../crates/dms-core/tests/lifecycle.rs), [desktop lifecycle adapter tests](../../../crates/dms-desktop/src/lib.rs), [Library lifecycle and candidate-default frontend tests](../../../crates/dms-desktop/ui/library.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 

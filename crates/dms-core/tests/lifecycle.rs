@@ -82,7 +82,7 @@ impl Fixture {
             .expect("notification settings");
 
         let source_path = edit_root.join("Policies/Handbook.md");
-        fs::write(&source_path, markdown).expect("source");
+        fs::write(&source_path, markdown_with_control_frontmatter(markdown)).expect("source");
         let document = workspace.add_document(&source_path).expect("document");
         workspace
             .update_control(
@@ -135,6 +135,24 @@ impl Fixture {
             review_override_reason: None,
             assistance: None,
         }
+    }
+}
+
+fn markdown_with_control_frontmatter(markdown: &str) -> String {
+    if markdown.starts_with("---\n") {
+        return markdown.to_owned();
+    }
+    let version = markdown
+        .lines()
+        .find_map(|line| line.strip_prefix("Version: "));
+    let confidentiality = markdown
+        .lines()
+        .find_map(|line| line.strip_prefix("Vertraulichkeitsstufe: "));
+    match (version, confidentiality) {
+        (Some(version), Some(confidentiality)) => {
+            format!("---\nversion: {version}\nconfidentiality: {confidentiality}\n---\n{markdown}")
+        }
+        _ => markdown.to_owned(),
     }
 }
 
@@ -318,7 +336,9 @@ fn local_lifecycle_actions_append_canonical_evidence_and_apply_transitions() {
 
     fs::write(
         &fixture.source_path,
-        "# Handbook\n\nVersion: 2.0\n\nVertraulichkeitsstufe: Internal\n",
+        markdown_with_control_frontmatter(
+            "# Handbook\n\nVersion: 2.0\n\nVertraulichkeitsstufe: Internal\n",
+        ),
     )
     .unwrap();
     fixture
@@ -901,7 +921,9 @@ fn schema_v11_migration_maps_effective_date_to_current_release_and_open_candidat
         .expect("minor revision");
     fs::write(
         &fixture.source_path,
-        "# Handbook\n\nVersion: 1.1\n\nVertraulichkeitsstufe: Internal\n",
+        markdown_with_control_frontmatter(
+            "# Handbook\n\nVersion: 1.1\n\nVertraulichkeitsstufe: Internal\n",
+        ),
     )
     .unwrap();
     fixture
@@ -928,7 +950,9 @@ fn schema_v11_migration_maps_effective_date_to_current_release_and_open_candidat
         .expect("next revision");
     fs::write(
         &fixture.source_path,
-        "# Handbook\n\nVersion: 2.0\n\nVertraulichkeitsstufe: Internal\n",
+        markdown_with_control_frontmatter(
+            "# Handbook\n\nVersion: 2.0\n\nVertraulichkeitsstufe: Internal\n",
+        ),
     )
     .unwrap();
     fixture
@@ -1050,7 +1074,9 @@ fn minor_release_skips_review_and_notification_failure_does_not_reverse_commit()
         .unwrap();
     fs::write(
         &fixture.source_path,
-        "# Handbook\n\nVersion: 1.1\n\nVertraulichkeitsstufe: Internal\n",
+        markdown_with_control_frontmatter(
+            "# Handbook\n\nVersion: 1.1\n\nVertraulichkeitsstufe: Internal\n",
+        ),
     )
     .unwrap();
 
@@ -1142,7 +1168,9 @@ fn withdrawal_preserves_history_falls_back_to_prior_release_and_advances_version
         .unwrap();
     fs::write(
         &fixture.source_path,
-        "# Handbook\n\nVersion: 1.1\n\nVertraulichkeitsstufe: Internal\n",
+        markdown_with_control_frontmatter(
+            "# Handbook\n\nVersion: 1.1\n\nVertraulichkeitsstufe: Internal\n",
+        ),
     )
     .unwrap();
     fixture
@@ -1243,7 +1271,9 @@ fn withdrawal_preserves_history_falls_back_to_prior_release_and_advances_version
         .unwrap();
     fs::write(
         &fixture.source_path,
-        "# Handbook\n\nVersion: 1.2\n\nVertraulichkeitsstufe: Internal\n",
+        markdown_with_control_frontmatter(
+            "# Handbook\n\nVersion: 1.2\n\nVertraulichkeitsstufe: Internal\n",
+        ),
     )
     .unwrap();
     let next = fixture
@@ -1391,7 +1421,7 @@ fn marker_scanners_ignore_non_rendered_markdown_scan_docx_surfaces_and_fail_clos
     let markdown = temp.path().join("policy.md");
     fs::write(
         &markdown,
-        "---\nVersion: 9.9\n---\n<!-- Vertraulichkeitsstufe: Public -->\n```text\nVersion: 8.8\n```\n**Version:** 1.0\n**Vertraulichkeitsstufe:** Internal\n",
+        "---\nversion: 1.0\nconfidentiality: Internal\n---\n<!-- Vertraulichkeitsstufe: Public -->\n```text\nVersion: 8.8\n```\n**Version:** 9.9\n**Vertraulichkeitsstufe:** Public\n",
     )
     .unwrap();
     let markdown_check = dms_core::scan_content_markers(&markdown, Version::V1_0, "Internal")
@@ -1401,23 +1431,28 @@ fn marker_scanners_ignore_non_rendered_markdown_scan_docx_surfaces_and_fail_clos
 
     let missing = temp.path().join("missing.md");
     fs::write(&missing, "# No controlled markers\n").unwrap();
-    let missing_check =
-        dms_core::scan_content_markers(&missing, Version::V1_0, "Internal").unwrap();
-    assert_eq!(missing_check.version.status, MarkerStatus::Missing);
-    assert_eq!(missing_check.confidentiality.status, MarkerStatus::Missing);
+    assert!(matches!(
+        dms_core::scan_content_markers(&missing, Version::V1_0, "Internal"),
+        Err(DmsError::InvalidMarkdownFrontmatter(_))
+    ));
 
     let conflicting = temp.path().join("conflicting.md");
     fs::write(
         &conflicting,
-        "Version: 1.0\nVersion: 2.0\nVertraulichkeitsstufe: Internal\n",
+        "---\nversion: 1.0\nversion: 2.0\nconfidentiality: Internal\n---\n",
     )
     .unwrap();
-    let conflicting_check =
-        dms_core::scan_content_markers(&conflicting, Version::V1_0, "Internal").unwrap();
-    assert_eq!(conflicting_check.version.status, MarkerStatus::Conflicting);
+    assert!(matches!(
+        dms_core::scan_content_markers(&conflicting, Version::V1_0, "Internal"),
+        Err(DmsError::InvalidMarkdownFrontmatter(_))
+    ));
 
     let mismatch = temp.path().join("mismatch.md");
-    fs::write(&mismatch, "Version: 9.9\nVertraulichkeitsstufe: Public\n").unwrap();
+    fs::write(
+        &mismatch,
+        "---\nversion: 9.9\nconfidentiality: Public\n---\n",
+    )
+    .unwrap();
     let mismatch_check =
         dms_core::scan_content_markers(&mismatch, Version::V1_0, "Internal").unwrap();
     assert_eq!(mismatch_check.version.status, MarkerStatus::Mismatch);
@@ -1473,6 +1508,34 @@ fn marker_scanners_ignore_non_rendered_markdown_scan_docx_surfaces_and_fail_clos
         dms_core::scan_content_markers(&unsupported, Version::V1_0, "Internal"),
         Err(DmsError::UnsupportedContentScanner(_))
     ));
+}
+
+#[test]
+fn markdown_frontmatter_reports_optional_control_mismatches_with_expected_and_detected_values() {
+    let mut fixture = Fixture::new(
+        "---\ntitle: Wrong title\ndocument_number: WRONG-9\nversion: 1.0\nconfidentiality: Internal\n---\n# Handbook\n",
+        NotificationTransport::Smtp,
+    );
+    let mut graph = fixture.graph();
+    let error = fixture
+        .workspace
+        .submit_candidate(
+            fixture.candidate_request(TargetSelection::NextMajor),
+            &mut graph,
+            &mut FakeNotifier::accepted(),
+        )
+        .unwrap_err();
+    let DmsError::ContentConformanceFailed(check) = error else {
+        panic!("unexpected error: {error}");
+    };
+    let title = check.title.expect("title verdict");
+    assert_eq!(title.status, MarkerStatus::Mismatch);
+    assert_eq!(title.expected, "Employee handbook");
+    assert_eq!(title.detected, ["Wrong title"]);
+    let document_number = check.document_number.expect("document number verdict");
+    assert_eq!(document_number.status, MarkerStatus::Mismatch);
+    assert_eq!(document_number.expected, "");
+    assert_eq!(document_number.detected, ["WRONG-9"]);
 }
 
 #[test]

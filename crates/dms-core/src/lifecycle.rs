@@ -208,12 +208,24 @@ pub struct MarkerVerdict {
 pub struct ContentCheck {
     pub version: MarkerVerdict,
     pub confidentiality: MarkerVerdict,
+    #[serde(default)]
+    pub title: Option<MarkerVerdict>,
+    #[serde(default)]
+    pub document_number: Option<MarkerVerdict>,
 }
 
 impl ContentCheck {
     pub fn passes(&self) -> bool {
         self.version.status == MarkerStatus::Match
             && self.confidentiality.status == MarkerStatus::Match
+            && self
+                .title
+                .as_ref()
+                .is_none_or(|verdict| verdict.status == MarkerStatus::Match)
+            && self
+                .document_number
+                .as_ref()
+                .is_none_or(|verdict| verdict.status == MarkerStatus::Match)
     }
 }
 
@@ -667,10 +679,12 @@ impl Workspace {
         };
 
         if approval_required {
-            let check = scan_content_markers(
+            let check = scan_content_conformance(
                 &source_path,
                 version,
                 &candidate.metadata.confidentiality.label,
+                Some(&candidate.metadata.control.title),
+                Some(candidate.metadata.control.document_number.as_deref()),
             )?;
             self.accept_or_reject_content_check(
                 request.document_id,
@@ -954,10 +968,12 @@ impl Workspace {
         let source_path = self
             .edit_root
             .join(&self.document(document_id)?.relative_path);
-        let check = scan_content_markers(
+        let check = scan_content_conformance(
             &source_path,
             candidate.version,
             &candidate.metadata.confidentiality.label,
+            Some(&candidate.metadata.control.title),
+            Some(candidate.metadata.control.document_number.as_deref()),
         )?;
         self.accept_or_reject_content_check(
             document_id,
@@ -1974,16 +1990,41 @@ pub fn scan_content_markers(
     version: Version,
     confidentiality_label: &str,
 ) -> Result<ContentCheck> {
+    scan_content_conformance(source_path, version, confidentiality_label, None, None)
+}
+
+fn scan_content_conformance(
+    source_path: &Path,
+    version: Version,
+    confidentiality_label: &str,
+    title: Option<&str>,
+    document_number: Option<Option<&str>>,
+) -> Result<ContentCheck> {
     let extension = source_path
         .extension()
         .and_then(|extension| extension.to_str())
         .map(str::to_ascii_lowercase)
         .ok_or_else(|| DmsError::UnsupportedContentScanner(source_path.to_path_buf()))?;
+    if extension == "md" {
+        let markdown = fs::read_to_string(source_path).map_err(|source| DmsError::Io {
+            path: source_path.to_path_buf(),
+            source,
+        })?;
+        let check = super::check_markdown_frontmatter(
+            &markdown,
+            title.unwrap_or_default(),
+            document_number.flatten(),
+            &format!("{}.{}", version.major, version.minor),
+            confidentiality_label,
+        )?;
+        return Ok(ContentCheck {
+            version: check.version,
+            confidentiality: check.confidentiality,
+            title: title.and(check.title),
+            document_number: document_number.and(check.document_number),
+        });
+    }
     let sections = match extension.as_str() {
-        "md" => vec![(
-            "markdown body".to_owned(),
-            markdown_visible_text(source_path)?,
-        )],
         "docx" => docx_visible_text(source_path)?,
         _ => {
             return Err(DmsError::UnsupportedContentScanner(
@@ -2018,6 +2059,8 @@ pub fn scan_content_markers(
             confidentialities,
             confidentiality_locations,
         ),
+        title: None,
+        document_number: None,
     })
 }
 

@@ -3758,7 +3758,7 @@ mod tests {
         let source = edit_root.path().join("Policies/Handbook.md");
         fs::write(
             &source,
-            "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+            "---\nversion: 1.0\nconfidentiality: Internal\n---\n# Handbook\n",
         )
         .unwrap();
         let document = workspace.add_document(&source).unwrap();

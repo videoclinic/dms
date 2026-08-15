@@ -13,22 +13,26 @@ use uuid::Uuid;
 mod assistance;
 mod audit;
 mod catalogues;
+mod frontmatter;
 mod integrity;
 mod library;
 mod lifecycle;
 mod maintenance;
 mod policies;
+mod template;
 
 pub use assistance::*;
 pub use audit::*;
 pub use catalogues::*;
+pub use frontmatter::*;
 pub use integrity::*;
 pub use library::*;
 pub use lifecycle::*;
 pub use maintenance::*;
 pub use policies::*;
+pub use template::*;
 
-pub const SCHEMA_VERSION: u32 = 13;
+pub const SCHEMA_VERSION: u32 = 14;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 
@@ -160,6 +164,16 @@ pub enum DmsError {
     UnsupportedContentScanner(PathBuf),
     #[error("DOCX content is invalid: {0}")]
     InvalidDocx(String),
+    #[error("Markdown frontmatter is invalid: {0}")]
+    InvalidMarkdownFrontmatter(String),
+    #[error("Markdown Word template is invalid: {0}")]
+    InvalidMarkdownTemplate(String),
+    #[error("Markdown Word template path is a symbolic link: {0}")]
+    MarkdownTemplateSymlink(PathBuf),
+    #[error("Markdown Word template is registered as a controlled document: {0}")]
+    TemplateIsControlledDocument(PathBuf),
+    #[error("Markdown Word template cannot participate in document lifecycle: {0}")]
+    TemplateLifecycleExcluded(PathBuf),
     #[error("workflow comment is invalid: {0}")]
     InvalidWorkflowComment(String),
     #[error("PDF export failed: {0}")]
@@ -279,6 +293,8 @@ pub struct Workspace {
     pub(crate) workspace_events: Vec<WorkflowEvent>,
     #[serde(default = "default_lock_stale_after_hours")]
     pub(crate) lock_stale_after_hours: u32,
+    #[serde(default)]
+    pub(crate) markdown_template: Option<MarkdownTemplateAsset>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -398,6 +414,7 @@ impl Workspace {
             claude_assistance: ClaudeAssistancePolicy::default(),
             workspace_events: Vec::new(),
             lock_stale_after_hours: default_lock_stale_after_hours(),
+            markdown_template: None,
         };
         workspace.save()?;
         Ok(workspace)
@@ -423,7 +440,7 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = matches!(found, 1..=12);
+        let migrated = matches!(found, 1..=13);
         if found == 1 {
             migrate_v1_catalogues(&mut value)?;
         }
@@ -506,6 +523,7 @@ impl Workspace {
         if self.lock_stale_after_hours == 0 {
             return Err(DmsError::InvalidLockStaleness);
         }
+        self.validate_markdown_template_record()?;
         for type_id in &self.claude_assistance.allowed_confidentiality_type_ids {
             if !self.confidentiality_types.contains_key(type_id) {
                 return Err(DmsError::UnknownConfidentialityType(type_id.clone()));
@@ -582,6 +600,9 @@ impl Workspace {
 
     pub fn add_document(&mut self, source_path: &Path) -> Result<Document> {
         let (absolute_path, relative_path) = self.resolve_source_path(source_path)?;
+        if self.is_markdown_template_path(&relative_path) {
+            return Err(DmsError::TemplateLifecycleExcluded(relative_path));
+        }
         if !is_supported_source(&absolute_path) {
             return Err(DmsError::UnsupportedSource(absolute_path));
         }

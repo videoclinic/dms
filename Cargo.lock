@@ -1064,6 +1064,7 @@ dependencies = [
  "chrono",
  "lettre",
  "pdf-extract",
+ "pulldown-cmark",
  "quick-xml 0.37.5",
  "serde",
  "serde_json",
