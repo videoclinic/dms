@@ -95,4 +95,5 @@ When implemented, the following must hold:
 - Integrity: [`CAP-0004-release-integrity.md`](CAP-0004-release-integrity.md)
 - Classification: [`CAP-0008-confidentiality-classification.md`](CAP-0008-confidentiality-classification.md)
 - Document control data: [`CAP-0015-document-control-data.md`](CAP-0015-document-control-data.md)
+- Markdown Word-template implementation receipt: [`../../changes/archive/CHG-0004-markdown-word-template-release.md`](../../changes/archive/CHG-0004-markdown-word-template-release.md)
 - Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)

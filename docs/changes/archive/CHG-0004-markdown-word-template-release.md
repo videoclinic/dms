@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | CHG-0004 |
-| Status | in-progress — Phases 1–4 complete; Phase 5 in progress |
+| Status | done — all five phases verified |
 | External request | Direct operator request: “In order to export Markdown files to PDF the idea was to use a Word template like .temp/Vorlage.docx This template could/should be imported into the library for reuse. The frontmatter should be then used in the Word document template as metadata for \"auto-fields\" if possible.” |
 | Affected CAPs | CAP-0001, CAP-0002, CAP-0005, CAP-0006, CAP-0007, CAP-0015 |
 | Decision records | ADR-0008 |
@@ -105,7 +105,7 @@ never overwrites `.dms` control data.
 | 2 | Workspace template asset, frontmatter, and OOXML contract | complete | Schema-v14 migration preserves every v13 workspace and adds no template implicitly; core tests prove in-root `.docx` import, stable identity, replace/remove, changed-template revalidation, symlink/outside-root refusal, lifecycle exclusion, required/optional frontmatter comparisons, deterministic template validation, CommonMark block insertion, preservation of headers/footers/styles/media/relationships, and valid DOCX packaging; CLI remains headless and does not invoke Word |
 | 3 | Configuration and Library template surfaces | complete | Desktop/frontend tests prove Document defaults import/replace/remove/status controls, clear missing/invalid template errors, and Library exclusion from controlled/available counters and actions; CAP-linked HTML/PNG wireframes render without clipping |
 | 4 | Canonical Word-backed Markdown release | complete | Focused exporter/lifecycle tests prove Markdown → temporary template DOCX → installed-Word adapter → validated PDF; version/confidentiality/title/number come from the release snapshot; frontmatter mismatches block with expected/detected details; export failure leaves no release/version; the original Markdown/template remain byte-identical; WebView Markdown runtime code and smoke are removed |
-| 5 | Platform, records, and packaging closeout | in progress | Rust format/workspace tests/Clippy, frontend tests, release builds, strict record/link/table checks, and `git diff --check` pass; template import remains inside the edit root across canonical Windows and macOS temporary-path aliases while still rejecting symlinked paths; Windows external smoke releases the A.8.29 Markdown through the imported Vorlage and retains non-secret PDF path/checksum evidence; macOS keeps explicit pending installed-Word evidence unless separately proven; CAP/ADR/architecture/DOX describe only evidenced behaviour |
+| 5 | Platform, records, and packaging closeout | complete | Rust format/workspace tests/Clippy, frontend tests, release builds, strict record/link/table checks, and `git diff --check` pass; template import remains inside the edit root across canonical Windows and macOS temporary-path aliases while still rejecting symlinked paths; Windows external smoke releases the A.8.29 Markdown through the imported Vorlage and retains non-secret PDF path/checksum evidence; macOS keeps explicit pending installed-Word evidence unless separately proven; CAP/ADR/architecture/DOX describe only evidenced behaviour |
 
 ## Phase 1 — Template field mechanism feasibility
 
@@ -298,8 +298,9 @@ never overwrites `.dms` control data.
   with warnings denied, all 84 frontend tests, Linux and native Windows workspace
   release builds, strict Markdown links, Markdown tables, the 21-entry wireframe
   inventory, and `git diff --check` pass.
-- Latest-checkpoint Windows/macOS CI and NSIS/DMG packaging remain the final
-  closeout gate. Installed-Word evidence on macOS remains explicitly pending.
+- GitHub Actions run `31899336597` passes the latest checkpoint on Windows and
+  macOS, including fake-backed Markdown/Office coverage and NSIS/DMG packaging.
+  Installed-Word evidence on macOS remains explicitly pending.
 
 ## Risks and stop conditions
 
