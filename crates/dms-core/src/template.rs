@@ -578,10 +578,14 @@ fn enclosing_element(
 }
 
 fn refuse_symlink_path(edit_root: &Path, requested: &Path) -> Result<()> {
+    let lexical_root = requested
+        .ancestors()
+        .find(|ancestor| fs::canonicalize(ancestor).is_ok_and(|canonical| canonical == edit_root))
+        .ok_or_else(|| DmsError::OutsideEditRoot(requested.to_path_buf()))?;
     let relative = requested
-        .strip_prefix(edit_root)
-        .map_err(|_| DmsError::OutsideEditRoot(requested.to_path_buf()))?;
-    let mut current = edit_root.to_path_buf();
+        .strip_prefix(lexical_root)
+        .expect("lexical root is an ancestor");
+    let mut current = lexical_root.to_path_buf();
     for component in relative.components() {
         if !matches!(component, Component::Normal(_)) {
             return Err(DmsError::InvalidRelativePath(relative.to_path_buf()));

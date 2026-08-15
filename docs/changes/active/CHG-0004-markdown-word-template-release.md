@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | CHG-0004 |
-| Status | in-progress — Phases 1–4 complete; Phase 5 pending |
+| Status | in-progress — Phases 1–4 complete; Phase 5 in progress |
 | External request | Direct operator request: “In order to export Markdown files to PDF the idea was to use a Word template like .temp/Vorlage.docx This template could/should be imported into the library for reuse. The frontmatter should be then used in the Word document template as metadata for \"auto-fields\" if possible.” |
 | Affected CAPs | CAP-0001, CAP-0002, CAP-0005, CAP-0006, CAP-0007, CAP-0015 |
 | Decision records | ADR-0008 |
@@ -105,7 +105,7 @@ never overwrites `.dms` control data.
 | 2 | Workspace template asset, frontmatter, and OOXML contract | complete | Schema-v14 migration preserves every v13 workspace and adds no template implicitly; core tests prove in-root `.docx` import, stable identity, replace/remove, changed-template revalidation, symlink/outside-root refusal, lifecycle exclusion, required/optional frontmatter comparisons, deterministic template validation, CommonMark block insertion, preservation of headers/footers/styles/media/relationships, and valid DOCX packaging; CLI remains headless and does not invoke Word |
 | 3 | Configuration and Library template surfaces | complete | Desktop/frontend tests prove Document defaults import/replace/remove/status controls, clear missing/invalid template errors, and Library exclusion from controlled/available counters and actions; CAP-linked HTML/PNG wireframes render without clipping |
 | 4 | Canonical Word-backed Markdown release | complete | Focused exporter/lifecycle tests prove Markdown → temporary template DOCX → installed-Word adapter → validated PDF; version/confidentiality/title/number come from the release snapshot; frontmatter mismatches block with expected/detected details; export failure leaves no release/version; the original Markdown/template remain byte-identical; WebView Markdown runtime code and smoke are removed |
-| 5 | Platform, records, and packaging closeout | pending | Rust format/workspace tests/Clippy, frontend tests, release builds, strict record/link/table checks, and `git diff --check` pass; Windows external smoke releases the A.8.29 Markdown through the imported Vorlage and retains non-secret PDF path/checksum evidence; macOS keeps explicit pending installed-Word evidence unless separately proven; CAP/ADR/architecture/DOX describe only evidenced behaviour |
+| 5 | Platform, records, and packaging closeout | in progress | Rust format/workspace tests/Clippy, frontend tests, release builds, strict record/link/table checks, and `git diff --check` pass; template import remains inside the edit root across canonical Windows and macOS temporary-path aliases while still rejecting symlinked paths; Windows external smoke releases the A.8.29 Markdown through the imported Vorlage and retains non-secret PDF path/checksum evidence; macOS keeps explicit pending installed-Word evidence unless separately proven; CAP/ADR/architecture/DOX describe only evidenced behaviour |
 
 ## Phase 1 — Template field mechanism feasibility
 
@@ -262,14 +262,16 @@ never overwrites `.dms` control data.
 ## Phase 5 — Platform, records, and packaging closeout
 
 1. Run all local workspace, frontend, records, wireframe, and package gates.
-2. Build the native Windows application and release the controlled A.8.29
+2. Run workspace tests on Windows and macOS and treat canonical path aliases as
+   the same edit-root boundary without weakening symlink refusal.
+3. Build the native Windows application and release the controlled A.8.29
    Markdown using the imported operator Vorlage and installed Word.
-3. Verify PDF page count, visible template chrome, title/number/version/
+4. Verify PDF page count, visible template chrome, title/number/version/
    confidentiality fields, filename, SHA-256, publish-tree placement, and release
    evidence without retaining document content in the CHG.
-4. Update CAP statuses conservatively: record Windows evidence and keep macOS
+5. Update CAP statuses conservatively: record Windows evidence and keep macOS
    installed-Word evidence explicit if unavailable.
-5. Mark this CHG done and archive it. CHG-0001 Phase 9l may resume only from that
+6. Mark this CHG done and archive it. CHG-0001 Phase 9l may resume only from that
    pushed checkpoint.
 
 ## Risks and stop conditions
