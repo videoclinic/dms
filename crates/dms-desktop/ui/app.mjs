@@ -14,6 +14,7 @@ import {
   normalizeLibraryPath,
   resizeLibraryDetailWidth,
   selectedEntries,
+  bindReviewScheduleForm,
   toggleLibrarySelection,
   toggleLibraryVisibility,
   toggleTreeFolder,
@@ -521,6 +522,7 @@ function render(state) {
   foot.innerHTML = state.workspace
     ? `<strong>${escapeHtml(state.workspace.workspace_id)}</strong><br>edit: ${escapeHtml(state.workspace.edit_root)}<br>publish: ${escapeHtml(state.workspace.publish_root)}`
     : "No workspace open";
+  bindReviewScheduleForm(document.querySelector("#library-review-schedule-form"));
 }
 
 function openDestination(destination) {

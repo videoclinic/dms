@@ -94,7 +94,9 @@ macOS.
   effective date. Candidate submission owns the required effective date and may
   stage eligible owner/editor replacements that apply only with a successful
   release. Current-release and history views use immutable release snapshots;
-  review schedule remains a separate mutable surface.
+  review schedule remains a separate mutable surface. The schedule form shows
+  interval months only for a document override and exemption reason only for
+  exemption; Update stays disabled until values differ from the saved schedule.
 - Literal `<owner>` / `<editor>` placeholders appear only after a successful
   direct-member refresh with zero enabled users. They are display-only unresolved
   state, never fabricated identities; every missing-binding, tenant, Graph,

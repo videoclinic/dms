@@ -278,6 +278,113 @@ export function documentReviewScheduleRequest(values, detail) {
   };
 }
 
+/** Current document schedule as the form's baseline (mode + mode-specific fields). */
+export function reviewScheduleBaseline(detail) {
+  const schedule = detail?.review_schedule ?? {};
+  if (schedule.exemption_reason) {
+    return {
+      mode: "exempt",
+      intervalMonths: "",
+      exemptionReason: String(schedule.exemption_reason),
+    };
+  }
+  if (schedule.interval_months != null && schedule.interval_months !== "") {
+    return {
+      mode: "override",
+      intervalMonths: String(schedule.interval_months),
+      exemptionReason: "",
+    };
+  }
+  return { mode: "inherit", intervalMonths: "", exemptionReason: "" };
+}
+
+/** Read live form controls (including disabled fields FormData would omit). */
+export function reviewScheduleFormValues(form) {
+  const mode = String(form?.elements?.scheduleMode?.value ?? "").trim();
+  const interval = String(form?.elements?.reviewIntervalMonths?.value ?? "").trim();
+  const exemptionReason = String(form?.elements?.reviewExemptionReason?.value ?? "").trim();
+  return { mode, intervalMonths: interval, exemptionReason };
+}
+
+export function reviewScheduleIsDirty(formOrValues, detail) {
+  const baseline = reviewScheduleBaseline(detail);
+  const current =
+    formOrValues && typeof formOrValues === "object" && formOrValues.elements
+      ? reviewScheduleFormValues(formOrValues)
+      : {
+          mode: String(formOrValues?.get?.("scheduleMode") ?? formOrValues?.mode ?? "").trim(),
+          intervalMonths: String(
+            formOrValues?.get?.("reviewIntervalMonths") ?? formOrValues?.intervalMonths ?? "",
+          ).trim(),
+          exemptionReason: String(
+            formOrValues?.get?.("reviewExemptionReason") ?? formOrValues?.exemptionReason ?? "",
+          ).trim(),
+        };
+  if (current.mode !== baseline.mode) return true;
+  if (current.mode === "override" && current.intervalMonths !== baseline.intervalMonths) {
+    return true;
+  }
+  if (current.mode === "exempt" && current.exemptionReason !== baseline.exemptionReason) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Show interval/exemption only for the matching schedule mode and enable Update
+ * only when the form differs from the document's saved schedule.
+ */
+export function syncReviewScheduleForm(form) {
+  if (!form) return;
+  const mode = String(form.elements.scheduleMode?.value ?? "inherit");
+  const intervalWrap = form.querySelector('[data-review-schedule-field="interval"]');
+  const exemptionWrap = form.querySelector('[data-review-schedule-field="exemption"]');
+  const intervalInput = form.elements.reviewIntervalMonths;
+  const exemptionInput = form.elements.reviewExemptionReason;
+  const submit = form.querySelector('button[type="submit"]');
+
+  const showInterval = mode === "override";
+  const showExemption = mode === "exempt";
+  if (intervalWrap) intervalWrap.hidden = !showInterval;
+  if (exemptionWrap) exemptionWrap.hidden = !showExemption;
+  if (intervalInput) {
+    intervalInput.disabled = !showInterval;
+    intervalInput.required = showInterval;
+  }
+  if (exemptionInput) {
+    exemptionInput.disabled = !showExemption;
+    exemptionInput.required = showExemption;
+  }
+
+  const baseline = {
+    mode: form.dataset.baselineMode ?? "inherit",
+    intervalMonths: form.dataset.baselineInterval ?? "",
+    exemptionReason: form.dataset.baselineExemption ?? "",
+  };
+  const current = reviewScheduleFormValues(form);
+  let dirty = current.mode !== baseline.mode;
+  if (!dirty && current.mode === "override") {
+    dirty = current.intervalMonths !== baseline.intervalMonths;
+  }
+  if (!dirty && current.mode === "exempt") {
+    dirty = current.exemptionReason !== baseline.exemptionReason;
+  }
+  if (submit) submit.disabled = !dirty;
+}
+
+export function bindReviewScheduleForm(form) {
+  if (!form) return;
+  if (form.dataset.reviewScheduleBound === "1") {
+    syncReviewScheduleForm(form);
+    return;
+  }
+  form.dataset.reviewScheduleBound = "1";
+  const onChange = () => syncReviewScheduleForm(form);
+  form.addEventListener("change", onChange);
+  form.addEventListener("input", onChange);
+  syncReviewScheduleForm(form);
+}
+
 export function confidentialityUpdateRequest(values, detail) {
   if (!detail?.document_id) throw new Error("A selected document is required.");
   return {
@@ -670,8 +777,9 @@ function selectionMarkup(library) {
     ? `<option value="" selected disabled>${escapeHtml(identityLabel(currentOwner, "Choose a person"))}</option>`
     : "";
   const schedule = detail.review_schedule ?? {};
-  const scheduleMode = schedule.exemption_reason ? "exempt" : schedule.interval_months ? "override" : "inherit";
-  const scheduleMarkup = `<form id="library-review-schedule-form" class="confidentiality-editor"><h4>Document review schedule</h4><p class="source-path">Next review is derived from the current release effective date. An exemption records a reason and creates no due date.</p><label>Schedule<select name="scheduleMode"><option value="inherit" ${scheduleMode === "inherit" ? "selected" : ""}>Use workspace interval (${escapeHtml(schedule.workspace_interval_months ?? "—")} months)</option><option value="override" ${scheduleMode === "override" ? "selected" : ""}>Document interval override</option><option value="exempt" ${scheduleMode === "exempt" ? "selected" : ""}>Exempt document</option></select></label><label>Review interval months<input name="reviewIntervalMonths" type="number" min="1" max="120" value="${escapeHtml(schedule.interval_months ?? "")}"></label><label>Exemption reason<textarea name="reviewExemptionReason">${escapeHtml(schedule.exemption_reason ?? "")}</textarea></label><p class="source-path">Next review due: ${escapeHtml(schedule.next_due_date ?? (schedule.exemption_reason ? "Exempt" : "Unknown until release date is known"))}</p><button class="button secondary" type="submit">Update review schedule</button></form>`;
+  const scheduleBaseline = reviewScheduleBaseline(detail);
+  const scheduleMode = scheduleBaseline.mode;
+  const scheduleMarkup = `<form id="library-review-schedule-form" class="confidentiality-editor" data-baseline-mode="${escapeHtml(scheduleBaseline.mode)}" data-baseline-interval="${escapeHtml(scheduleBaseline.intervalMonths)}" data-baseline-exemption="${escapeHtml(scheduleBaseline.exemptionReason)}"><h4>Document review schedule</h4><p class="source-path">Next review is derived from the current release effective date. An exemption records a reason and creates no due date.</p><label>Schedule<select name="scheduleMode"><option value="inherit" ${scheduleMode === "inherit" ? "selected" : ""}>Use workspace interval (${escapeHtml(schedule.workspace_interval_months ?? "—")} months)</option><option value="override" ${scheduleMode === "override" ? "selected" : ""}>Document interval override</option><option value="exempt" ${scheduleMode === "exempt" ? "selected" : ""}>Exempt document</option></select></label><label data-review-schedule-field="interval"${scheduleMode === "override" ? "" : " hidden"}>Review interval months<input name="reviewIntervalMonths" type="number" min="1" max="120" value="${escapeHtml(schedule.interval_months ?? "")}"${scheduleMode === "override" ? " required" : " disabled"}></label><label data-review-schedule-field="exemption"${scheduleMode === "exempt" ? "" : " hidden"}>Exemption reason<textarea name="reviewExemptionReason"${scheduleMode === "exempt" ? " required" : " disabled"}>${escapeHtml(schedule.exemption_reason ?? "")}</textarea></label><p class="source-path">Next review due: ${escapeHtml(schedule.next_due_date ?? (schedule.exemption_reason ? "Exempt" : "Unknown until release date is known"))}</p><button class="button secondary" type="submit" disabled>Update review schedule</button></form>`;
   const editor = `<section class="document-control-editor" aria-labelledby="document-control-editor-heading"><h4 id="document-control-editor-heading">Edit document control data</h4><p class="source-path">Applies to ${escapeHtml(detail.source_name)} · ${escapeHtml(detail.relative_path)}</p>${library.detail_error ? `<p class="library-detail-error" role="alert">${escapeHtml(library.detail_error)}</p>` : ""}${ownerSelectable ? "" : '<p class="library-detail-error" role="status">No eligible Microsoft Entra owner is available. Identity placeholders and legacy owner text are display-only.</p>'}<form id="library-document-control-form"><div class="document-control-fields"><label>Title<input name="title" required value="${escapeHtml(detail.control.title)}"></label><label>Document number<input name="documentNumber" value="${escapeHtml(detail.control.document_number ?? "")}"></label><label>Document type<select name="documentType"><option value="">Not set</option>${documentTypeOptions}</select></label><label>Owner<select name="ownerObjectId" required ${ownerSelectable ? "" : "disabled"}>${unresolvedOwnerOption}${ownerOptions}</select></label></div><button class="button" type="submit" ${ownerSelectable ? "" : "disabled"}>Save document control</button></form><form id="library-confidentiality-form" class="confidentiality-editor"><label>Confidentiality override<select name="confidentialityTypeId"><option value="">Use inherited folder policy</option>${confidentialityOptions}</select></label><button class="button secondary" type="submit">Apply confidentiality</button></form></section>`;
   const currentRelease = `${currentReleaseIdentity}${editor}${scheduleMarkup}${lifecyclePanelMarkup(library, detail)}`;
   return `<div class="selection-header"><span class="badge">In library</span><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><h3>${escapeHtml(detail.control.title)}</h3>${detail.control.document_number ? `<p class="document-number">${escapeHtml(detail.control.document_number)}</p>` : ""}<div class="source-identity"><strong>Source file</strong><span>${escapeHtml(detail.source_name)}</span><small>${escapeHtml(detail.relative_path)}</small></div>${currentRelease}<details open><summary>Document control data</summary><dl class="selection-details"><dt>Lifecycle</dt><dd>${escapeHtml(detail.lifecycle)}</dd><dt>Document type</dt><dd>${escapeHtml(detail.control.document_type ?? "Not set")}</dd><dt>Owner</dt><dd>${escapeHtml(identityLabel(currentOwner, "Not set"))}</dd><dt>Confidentiality</dt><dd>${escapeHtml(confidentiality?.label ?? "Not configured")}${confidentiality ? ` · ${escapeHtml(confidentiality.document_override ? "override" : `from ${confidentiality.source_folder}`)}` : ""}</dd><dt>Editor</dt><dd>${escapeHtml(role(roles?.editor, "<editor>"))}</dd><dt>Approver</dt><dd>${escapeHtml(role(roles?.approver, "Not configured"))}</dd></dl></details><details open><summary>Actions</summary><div class="selection-actions"><button class="button" type="button" data-library-open-source ${sourceAvailable ? "" : "disabled"}>Open source draft</button><button class="button" type="button" data-library-open-release ${release?.pdf_exists ? "" : "disabled"}>Open current released PDF</button><button class="button" type="button" data-library-open-notes>Open notes</button><button class="button secondary" type="button" data-library-open-assistance>Evaluate changes with Claude</button><button class="button secondary" type="button" data-library-copy-permalink>Copy permalink</button><button class="button danger" type="button" data-library-unregister>Unregister</button></div><form id="library-reassociate-form" class="reassociate-form"><label>Reassociate source<input name="path" required value="${escapeHtml(detail.relative_path)}" aria-label="New edit-root-relative source path"></label><button class="button secondary" type="submit">Reassociate</button></form></details><details><summary>Revision cycle</summary><p>No revision cycle is open.</p></details><details><summary>Releases</summary><p>Release evidence remains available from the Releases destination.</p></details>`;

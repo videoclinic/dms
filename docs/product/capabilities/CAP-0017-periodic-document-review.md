@@ -5,14 +5,18 @@
 | ID | CAP-0017 |
 | Status | implemented |
 | Storage | `<edit-root>/.dms/` |
-| Tests | Phases 7, 9b, 9k.3, and 9l evidence: [effective-date schedule, migration, and periodic-review core tests](../../../crates/dms-core/tests/lifecycle.rs), [CLI command tests](../../../crates/dms-cli/tests/cli.rs), [desktop schedule adapter tests](../../../crates/dms-desktop/src/lib.rs), and [desktop periodic-review tests](../../../crates/dms-desktop/ui/maintenance.test.mjs) |
+| Tests | Phases 7, 9b, 9k.3, and 9l evidence: [effective-date schedule, migration, and periodic-review core tests](../../../crates/dms-core/tests/lifecycle.rs), [CLI command tests](../../../crates/dms-cli/tests/cli.rs), [desktop schedule adapter tests](../../../crates/dms-desktop/src/lib.rs), [desktop periodic-review tests](../../../crates/dms-desktop/ui/maintenance.test.mjs), and [Library review-schedule form tests](../../../crates/dms-desktop/ui/library.test.mjs) |
 
 ## Outcomes
 
 1. Review schedule is mutable state separate from both the document profile and
    immutable release snapshots. The workspace defines a positive default review interval in months. A
    document may override the interval or be review-exempt; setting an exemption
-   requires a reason comment recorded in the workflow event chain.
+   requires a reason comment recorded in the workflow event chain. In the Library
+   selection pane, **Review interval months** is shown only for a document
+   interval override and **Exemption reason** only for exemption; **Update
+   review schedule** stays disabled until the form differs from the document's
+   saved schedule.
 2. A successful release computes the next-review-due date from the candidate's
    required effective date captured by that release and the document interval.
    Completing a periodic review

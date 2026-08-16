@@ -22,6 +22,8 @@ import {
   normalizeLibraryPath,
   paginateLibraryEntries,
   resizeLibraryDetailWidth,
+  reviewScheduleBaseline,
+  reviewScheduleIsDirty,
   selectedEntries,
   sortLibraryEntries,
   toggleLibrarySelection,
@@ -377,6 +379,14 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /Immutable current release profile/);
   assert.match(markup, /2026-08-11/);
   assert.match(markup, /id="library-review-schedule-form"/);
+  assert.match(markup, /data-baseline-mode="override"/);
+  assert.match(markup, /data-baseline-interval="6"/);
+  assert.match(markup, /data-review-schedule-field="interval"/);
+  assert.doesNotMatch(markup, /data-review-schedule-field="interval"[^>]* hidden/);
+  assert.match(markup, /data-review-schedule-field="exemption" hidden/);
+  assert.match(markup, /name="reviewExemptionReason" disabled/);
+  assert.match(markup, /Update review schedule<\/button>/);
+  assert.match(markup, /type="submit" disabled/);
   assert.match(markup, /Next review due: 2027-02-11/);
   assert.match(markup, /<option value="procedure" selected>Procedure<\/option>/);
   assert.match(markup, /id="library-confidentiality-form"/);
@@ -592,6 +602,103 @@ test("document control and confidentiality forms map to narrow document commands
     reviewIntervalMonths: null,
     reviewExemptionReason: "Retired reference",
   });
+});
+
+test("review schedule fields are mode-gated and Update is dirty-only", () => {
+  const detail = {
+    review_schedule: {
+      workspace_interval_months: 12,
+      interval_months: 6,
+      exemption_reason: null,
+      next_due_date: "2027-02-11",
+    },
+  };
+  assert.deepEqual(reviewScheduleBaseline(detail), {
+    mode: "override",
+    intervalMonths: "6",
+    exemptionReason: "",
+  });
+  const unchanged = new FormData();
+  unchanged.set("scheduleMode", "override");
+  unchanged.set("reviewIntervalMonths", "6");
+  assert.equal(reviewScheduleIsDirty(unchanged, detail), false);
+
+  const changedInterval = new FormData();
+  changedInterval.set("scheduleMode", "override");
+  changedInterval.set("reviewIntervalMonths", "9");
+  assert.equal(reviewScheduleIsDirty(changedInterval, detail), true);
+
+  const inherit = new FormData();
+  inherit.set("scheduleMode", "inherit");
+  assert.equal(reviewScheduleIsDirty(inherit, detail), true);
+
+  const exemptDetail = {
+    review_schedule: {
+      workspace_interval_months: 12,
+      interval_months: null,
+      exemption_reason: "Legacy",
+      next_due_date: null,
+    },
+  };
+  assert.deepEqual(reviewScheduleBaseline(exemptDetail), {
+    mode: "exempt",
+    intervalMonths: "",
+    exemptionReason: "Legacy",
+  });
+  const exemptSame = new FormData();
+  exemptSame.set("scheduleMode", "exempt");
+  exemptSame.set("reviewExemptionReason", "Legacy");
+  assert.equal(reviewScheduleIsDirty(exemptSame, exemptDetail), false);
+  exemptSame.set("reviewExemptionReason", "Changed");
+  assert.equal(reviewScheduleIsDirty(exemptSame, exemptDetail), true);
+
+  const inheritMarkup = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies" } },
+    {
+      ...createLibraryState(),
+      tree: snapshot("Policies").tree,
+      folder: snapshot("Policies", [
+        file("Handbook.md", { in_library: { document_id: "doc-2" } }, {
+          id: "doc-2",
+          lifecycle: "draft",
+          control: { title: "Handbook", document_number: null },
+        }),
+      ]).folder,
+      selection: ["Policies/Handbook.md"],
+      detail: {
+        document_id: "doc-2",
+        source_name: "Handbook.md",
+        relative_path: "Policies/Handbook.md",
+        source_exists: true,
+        source_state: "registered",
+        lifecycle: "draft",
+        control: { title: "Handbook", document_number: null, document_type: null, owner: null },
+        current_owner: null,
+        eligible_people: [],
+        document_types: [],
+        confidentiality_types: [],
+        confidentiality_override: null,
+        effective_confidentiality: null,
+        effective_workflow_roles: null,
+        current_release: null,
+        review_schedule: {
+          workspace_interval_months: 12,
+          interval_months: null,
+          exemption_reason: null,
+          next_due_date: null,
+        },
+        lifecycle_actions: {},
+        workflow_events: [],
+        workflow_verification: "valid",
+      },
+    },
+  );
+  assert.match(inheritMarkup, /data-baseline-mode="inherit"/);
+  assert.match(inheritMarkup, /data-review-schedule-field="interval" hidden/);
+  assert.match(inheritMarkup, /data-review-schedule-field="exemption" hidden/);
+  assert.match(inheritMarkup, /name="reviewIntervalMonths"[^>]* disabled/);
+  assert.match(inheritMarkup, /type="submit" disabled/);
 });
 
 test("lifecycle actions require reasons and confirmations and map to narrow commands", () => {
