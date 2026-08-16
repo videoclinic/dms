@@ -20,6 +20,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
+| [CHG-0015](active/CHG-0015-fixed-foldable-actions-footer.md) | Fixed foldable Actions footer | in-progress | CAP-0006, CAP-0015 |
 
 ## Archive
 

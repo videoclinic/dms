@@ -293,7 +293,7 @@ button { cursor: pointer; }
 .pagination-row .button:disabled { cursor: default; opacity: .4; }
 .library-splitter { width: 7px; flex: 0 0 7px; cursor: col-resize; touch-action: none; background: #eef2f4; border-left: 1px solid #dfe5ea; border-right: 1px solid #dfe5ea; }
 .library-splitter:hover, .library-splitter:focus-visible { background: #a9c0cf; outline: none; }
-.selection-pane { width: 420px; min-width: 280px; max-width: 640px; min-height: 0; flex: 0 0 auto; padding: 18px; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; background: #fbfcfd; }
+.selection-pane { width: 420px; min-width: 280px; max-width: 640px; min-height: 0; flex: 0 0 auto; display: flex; flex-direction: column; padding: 18px; overflow: hidden; background: #fbfcfd; }
 .selection-pane h3 { margin: 8px 0 4px; font-size: 18px; overflow-wrap: anywhere; }
 .selection-pane p { color: #61717d; line-height: 1.45; }
 .selection-empty { margin-top: 26px; text-align: center; }
@@ -302,14 +302,21 @@ button { cursor: pointer; }
 .source-path, .document-number { margin: 3px 0 15px; color: #657581; font-size: 12px; overflow-wrap: anywhere; }
 .source-identity { display: grid; gap: 3px; margin: 12px 0 4px; padding: 10px 0; }
 .source-identity small { color: #61717d; overflow-wrap: anywhere; }
+.selection-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .selection-pane details.selection-section { padding: 8px 0; border-top: 1px solid #dfe5ea; }
-.selection-pane .selection-actions-block { padding: 8px 0; border-top: 1px solid #dfe5ea; }
-.selection-pane .selection-actions-block > .selection-section-title {
-  min-height: 32px;
-  margin: 0;
-  padding: 4px 2px;
-  font-size: inherit;
-  font-weight: 750;
+.selection-pane details.selection-actions-footer {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 50%;
+  overflow: hidden;
+  padding: 8px 0 0;
+}
+.selection-pane details.selection-actions-footer > .selection-section-body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 .selection-pane details.selection-section > summary {
   display: flex;

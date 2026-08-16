@@ -425,11 +425,30 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /data-library-open-notes/);
   assert.match(markup, /data-library-copy-permalink/);
   assert.match(markup, /data-library-unregister/);
-  assert.match(markup, /<h4 class="selection-section-title">Actions<\/h4>/);
-  assert.doesNotMatch(markup, /id="library-reassociate-form"/);
+  assert.match(markup, /class="selection-scroll"/);
+  assert.equal((markup.match(/class="selection-scroll"/g) || []).length, 1);
+  assert.match(
+    markup,
+    /class="selection-scroll">[\s\S]*<\/div><details class="selection-section selection-actions-footer" data-library-section="actions" open/,
+  );
+  const scrollBody = markup.match(/class="selection-scroll">([\s\S]*)<\/div><details class="selection-section selection-actions-footer/)[1];
+  const actionsFooter = markup.match(/<details class="selection-section selection-actions-footer"[\s\S]*$/)[0];
+  assert.match(scrollBody, /data-library-section="control"/);
+  assert.match(scrollBody, /data-library-section="schedule"/);
+  assert.match(scrollBody, /data-library-section="revision"/);
+  assert.match(scrollBody, /data-library-section="releases"/);
+  assert.doesNotMatch(scrollBody, /data-library-open-source|data-library-open-release|data-library-open-notes|data-library-copy-permalink|data-library-unregister|id="library-reassociate-form"/);
+  assert.match(actionsFooter, /data-library-section="actions" open/);
+  assert.match(actionsFooter, /selection-section-chevron/);
+  assert.match(actionsFooter, /data-library-open-source/);
+  assert.match(actionsFooter, /data-library-open-release/);
+  assert.match(actionsFooter, /data-library-open-notes/);
+  assert.match(actionsFooter, /data-library-copy-permalink/);
+  assert.match(actionsFooter, /data-library-unregister/);
+  assert.doesNotMatch(actionsFooter, /id="library-reassociate-form"/);
+  assert.doesNotMatch(markup, /selection-actions-block/);
   assert.match(markup, /data-library-section="control"/);
   assert.match(markup, /data-library-section="schedule"/);
-  assert.doesNotMatch(markup, /data-library-section="actions"/);
   assert.match(markup, /data-library-section="revision"/);
   assert.match(markup, /data-library-section="releases"/);
   assert.match(markup, /selection-section-chevron/);
@@ -441,21 +460,25 @@ test("library markup separates source Name from DMS Title and keeps actions in t
 test("selection section folds stay open or closed across document switches", () => {
   let library = createLibraryState();
   assert.equal(selectionSectionOpen(library, "control"), true);
+  assert.equal(selectionSectionOpen(library, "actions"), true);
   library = setSelectionSectionOpen(library, "control", false);
   library = setSelectionSectionOpen(library, "schedule", false);
   library = setSelectionSectionOpen(library, "releases", false);
   library = setSelectionSectionOpen(library, "revision", true);
+  library = setSelectionSectionOpen(library, "actions", false);
   library = toggleLibrarySelection(library, "Policies/A.md");
   assert.equal(selectionSectionOpen(library, "control"), false);
   assert.equal(selectionSectionOpen(library, "schedule"), false);
   assert.equal(selectionSectionOpen(library, "releases"), false);
   assert.equal(selectionSectionOpen(library, "revision"), true);
+  assert.equal(selectionSectionOpen(library, "actions"), false);
   library = applyDocumentSelection(library, {
     document_id: "doc-a",
     lifecycle: "draft",
     control: { title: "A" },
   });
   assert.equal(selectionSectionOpen(library, "control"), false);
+  assert.equal(selectionSectionOpen(library, "actions"), false);
   const registered = file("Handbook.md", { in_library: { document_id: "doc-1" } }, {
     id: "doc-1",
     lifecycle: "draft",
@@ -506,6 +529,7 @@ test("selection section folds stay open or closed across document switches", () 
   assert.match(markup, /data-library-section="schedule"(?! open)/);
   assert.match(markup, /data-library-section="revision" open/);
   assert.match(markup, /data-library-section="releases"(?! open)/);
+  assert.match(markup, /data-library-section="actions"(?! open)/);
 });
 
 test("library file actions map only to host-mediated document commands", () => {
@@ -1040,11 +1064,13 @@ test("lost source rows use italic state, dedicated filter, and reassociate-focus
   assert.match(markup, /\?1/);
   assert.match(markup, /Reassociate source/);
   assert.match(markup, /Most actions stay disabled until you reassociate the source/);
-  assert.match(
-    markup,
-    /data-library-section="control"[\s\S]*id="library-reassociate-form"[\s\S]*data-library-section="schedule"/,
-  );
-  assert.doesNotMatch(markup, /data-library-section="actions"/);
+  const lostScroll = markup.match(/class="selection-scroll">([\s\S]*)<\/div><details class="selection-section selection-actions-footer/)[1];
+  const lostFooter = markup.match(/<details class="selection-section selection-actions-footer"[\s\S]*$/)[0];
+  assert.match(lostScroll, /data-library-section="control"/);
+  assert.match(lostScroll, /data-library-section="schedule"/);
+  assert.doesNotMatch(lostScroll, /id="library-reassociate-form"/);
+  assert.match(lostFooter, /data-library-section="actions" open/);
+  assert.match(lostFooter, /id="library-reassociate-form"/);
   assert.doesNotMatch(markup, /must leave the library/);
   assert.match(markup, /data-reassociate-browse>Browse…/);
   assert.match(markup, /class="directory-field"/);

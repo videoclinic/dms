@@ -85,8 +85,11 @@ macOS.
   names. For one selected library document it groups **Document control data**,
   **Document review schedule**, **Revision cycle**, and **Releases** into
   frameless independently foldable sections with a visible disclosure chevron
-  and Expand/Collapse cue on each summary. **Actions** is a non-foldable block
-  immediately after Document control data. **Reassociate source** appears in
+  and Expand/Collapse cue on each summary. Those topics live in the pane's main
+  document-detail scroller. **Actions** is a separately foldable disclosure
+  docked at the bottom of the pane, expanded by default, using the same chevron
+  and cue; its open/closed state is session-only alongside the other sections.
+  **Reassociate source** appears in
   Actions only for a single Lost source document, with a path field plus native
   **Browse…** limited to `.md` / `.docx` / `.xlsx` / `.pptx` (no All-files
   filter). Location and registration are checked only on **Reassociate source**;

@@ -18,6 +18,7 @@ export const DEFAULT_SELECTION_OPEN = {
   schedule: true,
   revision: true,
   releases: true,
+  actions: true,
 };
 
 export function selectionSectionOpen(library, key) {
@@ -919,10 +920,14 @@ function externalLifecycleMarkup(library, detail) {
   return `${submit}${reviewRetry}${decision}${release}${decisionRetry}${minorRetry}`;
 }
 
+function selectionScroll(body, footer = "") {
+  return `<div class="selection-scroll">${body}</div>${footer}`;
+}
+
 function selectionMarkup(library) {
   const selected = selectedEntries(library);
   if (selected.length === 0) {
-    return '<div class="selection-empty"><h3>Selection</h3><p>Select a folder or file to see its identity and available actions.</p></div>';
+    return selectionScroll('<div class="selection-empty"><h3>Selection</h3><p>Select a folder or file to see its identity and available actions.</p></div>');
   }
   if (selected.length > 1) {
     const allAddable = selected.every((entry) => membershipKind(entry) === "not_in_library");
@@ -931,22 +936,22 @@ function selectionMarkup(library) {
       return membership === "in_library" || membership === "lost_source";
     });
     const identities = selected.slice(0, 5).map((entry) => `<li>${escapeHtml(entry.name)}</li>`).join("");
-    return `<div class="selection-header"><span class="badge">${selected.length} selected</span><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><ul class="identity-list">${identities}</ul><div class="selection-actions">${allAddable ? `<button class="button" type="button" data-library-add>Add ${selected.length} documents to library</button>` : ""}${allRegistered ? `<button class="button danger" type="button" data-library-unregister>Unregister ${selected.length} documents</button>` : ""}${!allAddable && !allRegistered ? "<p>Mixed selections have no common action.</p>" : ""}</div>`;
+    return selectionScroll(`<div class="selection-header"><span class="badge">${selected.length} selected</span><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><ul class="identity-list">${identities}</ul><div class="selection-actions">${allAddable ? `<button class="button" type="button" data-library-add>Add ${selected.length} documents to library</button>` : ""}${allRegistered ? `<button class="button danger" type="button" data-library-unregister>Unregister ${selected.length} documents</button>` : ""}${!allAddable && !allRegistered ? "<p>Mixed selections have no common action.</p>" : ""}</div>`);
   }
   const entry = selected[0];
   if (entry.kind === "folder") {
-    return `<h3>${escapeHtml(entry.name)}</h3><p class="source-path">${escapeHtml(normalizeLibraryPath(entry.relative_path))}</p><button class="button" type="button" data-library-open-selected>Open folder</button>`;
+    return selectionScroll(`<h3>${escapeHtml(entry.name)}</h3><p class="source-path">${escapeHtml(normalizeLibraryPath(entry.relative_path))}</p><button class="button" type="button" data-library-open-selected>Open folder</button>`);
   }
   const membership = membershipKind(entry);
   if (membership === "not_in_library") {
-    return `<span class="badge">Not in library</span><h3>${escapeHtml(entry.name)}</h3><p class="source-path">${escapeHtml(normalizeLibraryPath(entry.relative_path))}</p><button class="button" type="button" data-library-add>Add to library</button>`;
+    return selectionScroll(`<span class="badge">Not in library</span><h3>${escapeHtml(entry.name)}</h3><p class="source-path">${escapeHtml(normalizeLibraryPath(entry.relative_path))}</p><button class="button" type="button" data-library-add>Add to library</button>`);
   }
   if (membership === "unsupported") {
-    return `<span class="badge muted">Unsupported draft</span><h3>${escapeHtml(entry.name)}</h3><p class="source-path">${escapeHtml(normalizeLibraryPath(entry.relative_path))}</p><p>This file remains visible but cannot be registered.</p>`;
+    return selectionScroll(`<span class="badge muted">Unsupported draft</span><h3>${escapeHtml(entry.name)}</h3><p class="source-path">${escapeHtml(normalizeLibraryPath(entry.relative_path))}</p><p>This file remains visible but cannot be registered.</p>`);
   }
   const detail = library.detail;
   if (!detail || detail.document_id !== entryDocumentId(entry)) {
-    return `<h3>${escapeHtml(entry.document?.control?.title ?? entry.name)}</h3><p class="source-path">${escapeHtml(entry.name)}<br>${escapeHtml(normalizeLibraryPath(entry.relative_path))}</p><p>Loading document control data…</p>`;
+    return selectionScroll(`<h3>${escapeHtml(entry.document?.control?.title ?? entry.name)}</h3><p class="source-path">${escapeHtml(entry.name)}<br>${escapeHtml(normalizeLibraryPath(entry.relative_path))}</p><p>Loading document control data…</p>`);
   }
   const confidentiality = detail.effective_confidentiality;
   const roles = detail.effective_workflow_roles;
@@ -985,8 +990,8 @@ function selectionMarkup(library) {
     ? '<p class="source-path">Document control and confidentiality changes are unavailable while the source is Lost source. Reassociate the source first.</p>'
     : `<div class="document-control-editor" aria-labelledby="document-control-editor-heading"><h4 id="document-control-editor-heading">Edit document control data</h4><p class="source-path">Applies to ${escapeHtml(detail.source_name)} · ${escapeHtml(detail.relative_path)}</p>${library.detail_error ? `<p class="library-detail-error" role="alert">${escapeHtml(library.detail_error)}</p>` : ""}${ownerSelectable ? "" : '<p class="library-detail-error" role="status">No eligible Microsoft Entra owner is available. Identity placeholders and legacy owner text are display-only.</p>'}<form id="library-document-control-form"><div class="document-control-fields"><label>Title<input name="title" required value="${escapeHtml(detail.control.title)}"></label><label>Document number<input name="documentNumber" value="${escapeHtml(detail.control.document_number ?? "")}"></label><label>Document type<select name="documentType"><option value="">Not set</option>${documentTypeOptions}</select></label><label>Owner<select name="ownerObjectId" required ${ownerSelectable ? "" : "disabled"}>${unresolvedOwnerOption}${ownerOptions}</select></label></div><button class="button" type="submit" ${ownerSelectable ? "" : "disabled"}>Save document control</button></form><form id="library-confidentiality-form" class="confidentiality-editor"><label>Confidentiality override<select name="confidentialityTypeId"><option value="">Use inherited folder policy</option>${confidentialityOptions}</select></label><button class="button secondary" type="submit">Apply confidentiality</button></form></div>`;
   const openAttr = (key) => (selectionSectionOpen(library, key) ? " open" : "");
-  const section = (key, title, body) =>
-    `<details class="selection-section" data-library-section="${key}"${openAttr(key)}><summary><span class="selection-section-chevron" aria-hidden="true"></span><span class="selection-section-title">${title}</span><span class="selection-section-hint" aria-hidden="true"></span></summary><div class="selection-section-body">${body}</div></details>`;
+  const section = (key, title, body, extraClass = "") =>
+    `<details class="selection-section${extraClass ? ` ${extraClass}` : ""}" data-library-section="${key}"${openAttr(key)}><summary><span class="selection-section-chevron" aria-hidden="true"></span><span class="selection-section-title">${title}</span><span class="selection-section-hint" aria-hidden="true"></span></summary><div class="selection-section-body">${body}</div></details>`;
   const controlSummary = `<dl class="selection-details"><dt>Document type</dt><dd>${escapeHtml(detail.control.document_type ?? "Not set")}</dd><dt>Owner</dt><dd>${escapeHtml(identityLabel(currentOwner, "Not set"))}</dd><dt>Confidentiality</dt><dd>${escapeHtml(confidentiality?.label ?? "Not configured")}${confidentiality ? ` · ${escapeHtml(confidentiality.document_override ? "override" : `from ${confidentiality.source_folder}`)}` : ""}</dd><dt>Editor</dt><dd>${escapeHtml(role(roles?.editor, "<editor>"))}</dd><dt>Approver</dt><dd>${escapeHtml(role(roles?.approver, "Not configured"))}</dd></dl>`;
   const controlBody = `${controlSummary}${editor}`;
   const reassociatePath = library.reassociate_path || detail.relative_path;
@@ -997,7 +1002,7 @@ function selectionMarkup(library) {
     ? `${reassociateError}<p class="source-path">Choose another supported file under the edit root.</p><form id="library-reassociate-form" class="reassociate-form"><label for="library-reassociate-path">Reassociate source</label><div class="directory-field"><input id="library-reassociate-path" name="path" required value="${escapeHtml(reassociatePath)}" aria-label="New edit-root-relative source path"><button class="button secondary" type="button" data-reassociate-browse>Browse…</button></div><button class="button secondary" type="submit">Reassociate source</button></form>`
     : "";
   const actionsBody = `<div class="selection-actions"><button class="button" type="button" data-library-open-source ${sourceAvailable ? "" : "disabled"}>Open source draft</button><button class="button" type="button" data-library-open-release ${release?.pdf_exists ? "" : "disabled"}>Open current released PDF</button><button class="button" type="button" data-library-open-notes>Open notes</button><button class="button secondary" type="button" data-library-open-assistance ${sourceLost ? "disabled" : ""}>Evaluate changes with Claude</button><button class="button secondary" type="button" data-library-copy-permalink>Copy permalink</button><button class="button danger" type="button" data-library-unregister>Unregister</button></div>${reassociateMarkup}`;
-  const actionsBlock = `<section class="selection-actions-block"><h4 class="selection-section-title">Actions</h4><div class="selection-section-body">${actionsBody}</div></section>`;
+  const actionsFooter = section("actions", "Actions", actionsBody, "selection-actions-footer");
   const releasesBody = currentReleaseIdentity
     || '<p class="source-path">No release evidence is recorded for this document.</p>';
   const membershipBadge = sourceLost
@@ -1009,7 +1014,10 @@ function selectionMarkup(library) {
   const lostBanner = sourceLost
     ? '<p class="library-detail-error" role="status">The draft file is not at the stored path. Most actions stay disabled until you reassociate the source.</p>'
     : "";
-  return `<div class="selection-header"><div class="selection-header-badges">${membershipBadge}${lifecycleBadge}</div><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><h3>${escapeHtml(detail.control.title)}</h3>${detail.control.document_number ? `<p class="document-number">${escapeHtml(detail.control.document_number)}</p>` : ""}${lostBanner}<div class="source-identity"><strong>Source file</strong><span>${escapeHtml(detail.source_name)}</span><small>${escapeHtml(detail.relative_path)}</small></div>${section("control", "Document control data", controlBody)}${actionsBlock}${section("schedule", "Document review schedule", scheduleMarkup)}${section("revision", "Revision cycle", sourceLost ? '<p class="source-path">Revision cycle actions are unavailable while the source is Lost source.</p>' : lifecyclePanelMarkup(library, detail))}${section("releases", "Releases", releasesBody)}`;
+  return selectionScroll(
+    `<div class="selection-header"><div class="selection-header-badges">${membershipBadge}${lifecycleBadge}</div><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><h3>${escapeHtml(detail.control.title)}</h3>${detail.control.document_number ? `<p class="document-number">${escapeHtml(detail.control.document_number)}</p>` : ""}${lostBanner}<div class="source-identity"><strong>Source file</strong><span>${escapeHtml(detail.source_name)}</span><small>${escapeHtml(detail.relative_path)}</small></div>${section("control", "Document control data", controlBody)}${section("schedule", "Document review schedule", scheduleMarkup)}${section("revision", "Revision cycle", sourceLost ? '<p class="source-path">Revision cycle actions are unavailable while the source is Lost source.</p>' : lifecyclePanelMarkup(library, detail))}${section("releases", "Releases", releasesBody)}`,
+    actionsFooter,
+  );
 }
 
 export function libraryMarkup(workspace, activity, library, error = "") {

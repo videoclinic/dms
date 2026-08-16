@@ -189,9 +189,25 @@ test("shell and Library panes contain scrolling without moving navigation", () =
   assert.match(styles, /\.main-content\s*\{[^}]*min-height:\s*0[^}]*overflow:\s*auto/);
   assert.match(styles, /#expanded-groups\s*\{[^}]*overflow-y:\s*auto/);
   assert.match(styles, /\.library-grid\s*\{[^}]*overflow:\s*hidden/);
-  for (const selector of ["folder-tree", "table-scroll", "selection-pane"]) {
+  for (const selector of ["folder-tree", "table-scroll"]) {
     assert.match(styles, new RegExp(`\\.${selector}\\s*\\{[^}]*overflow:\\s*auto`));
   }
+  assert.match(
+    styles,
+    /\.selection-pane\s*\{[^}]*display:\s*flex[^}]*flex-direction:\s*column[^}]*overflow:\s*hidden/,
+  );
+  assert.doesNotMatch(styles, /\.selection-pane\s*\{[^}]*overflow:\s*auto/);
+  assert.match(styles, /\.selection-scroll\s*\{[^}]*flex:\s*1 1 auto[^}]*overflow:\s*auto/);
+  assert.match(styles, /\.selection-actions-footer\s*\{[^}]*max-height:\s*50%/);
+  assert.doesNotMatch(styles, /\.selection-actions-footer\s*\{[^}]*position:\s*(?:sticky|fixed)/);
+  assert.match(
+    styles,
+    /\.selection-actions-footer[^{]*\{[^}]*overflow:\s*hidden/,
+  );
+  assert.match(
+    styles,
+    /\.selection-actions-footer[^{]*\.selection-section-body\s*\{[^}]*overflow:\s*auto/,
+  );
 });
 
 test("opening a workspace acquires its lock and switches only after releasing the prior lock", async () => {

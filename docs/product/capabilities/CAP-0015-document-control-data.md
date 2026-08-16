@@ -83,24 +83,28 @@
     next review due (with **overdue** highlight when past due and not obsolete),
     lifecycle state, effective confidentiality with its source and
     inherited/overridden status (CAP-0008), and effective editor/approver
-    (CAP-0019). For exactly one selected document, the pane groups **Document
-    control data**, **Document review schedule**, **Revision cycle**, and
-    **Releases** into independently foldable, frameless
-    sections (no surrounding card frames around those topics). Each section
-    summary shows a disclosure chevron and Expand/Collapse cue so foldability is
-    visible. **Actions** is a non-foldable block immediately after Document
-    control data and before Document review schedule. The document
+    (CAP-0019). For exactly one selected document, the pane's main
+    document-detail scroller groups **Document control data**, **Document
+    review schedule**, **Revision cycle**, and **Releases** into independently
+    foldable, frameless sections (no surrounding card frames around those
+    topics). Each section summary shows a disclosure chevron and Expand/Collapse
+    cue so foldability is visible. **Actions** is a separately foldable
+    disclosure docked at the bottom of the pane, outside that scroller, expanded
+    by default, using the same chevron and cue. Document actions, including
+    Lost-source reassociate when applicable, sit in that footer. The document
     identity, lifecycle badge, and Source file identity remain visible while any
-    section is folded. Fold open/closed state is session-only Library UI state
-    shared across document switches in the open Library activity; it is not
-    stored in `.dms`, preferences, or saved views. Document actions sit in that
-    pinned Actions block. When a
+    section is folded. Fold open/closed state, including Actions, is
+    session-only Library UI state shared across document switches in the open
+    Library activity; it is not stored in `.dms`, preferences, or saved views.
+    When a
     current released version exists, **Open latest released PDF**
     opens only that release record's recorded PDF; it is unavailable for a
     never-released document or when the current release file is missing. When
-    these sections exceed the available window height, the selection pane
-    scrolls independently under CAP-0006; its scroll never moves Library or
-    application navigation. CAP-0006's bounded session splitter may widen this
+    the main detail sections exceed the available window height, only that
+    scroller moves under CAP-0006; it never moves Library or application
+    navigation or the Actions summary. An expanded Actions body may scroll
+    independently and is capped so it cannot cover the main details. CAP-0006's
+    bounded session splitter may widen this
     pane without changing its field rules, independent-scroll contract, or
     persisted document data.
 12. Title, document type, a resolved eligible owner, and a candidate effective

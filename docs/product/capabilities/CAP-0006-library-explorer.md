@@ -45,11 +45,14 @@
      name. Up is unavailable at the root. Tree selection, breadcrumb, current
      folder heading, and centre contents stay synchronized.
    - The current-folder toolbar stays available while pane content scrolls.
-     The folder tree, centre contents, and right selection/details pane are
-     separate vertical scroll regions. Exhaustive document control data,
-     lifecycle forms, release history, or workflow evidence in the right pane
-     never moves the toolbar, folder tree, centre contents, main activity
-     header, or application sidebar.
+     The folder tree and centre contents remain independent vertical scroll
+     regions. The right selection/details pane is a bounded column: its main
+     document-detail region scrolls independently, and for exactly one
+     registered document a bottom-docked Actions disclosure stays outside that
+     scroller. Exhaustive document control data, lifecycle forms, release
+     history, or workflow evidence in the right pane never moves the toolbar,
+     folder tree, centre contents, main activity header, application sidebar,
+     or the Actions summary.
    - A Windows Explorer-like **Refresh** icon in the path toolbar, immediately
      before the breadcrumb, re-enumerates the edit-root structure after external
      filesystem changes. It never adds a file to the library or changes a
@@ -112,13 +115,15 @@
    CAP-0015 owns field rules and revision/obsolescence semantics; CAP-0006 owns
    navigation, selection, and pane placement. Its **Document control data**,
    **Document review schedule**, **Revision cycle**, and **Releases** sections
-   are independently foldable and frameless as defined by CAP-0015; each
-   summary exposes a disclosure chevron plus Expand/Collapse cue. **Actions**
-   is a non-foldable block immediately under Document control data. The
+   live in the pane's main document-detail scroller and are independently
+   foldable and frameless as defined by CAP-0015; each summary exposes a
+   disclosure chevron plus Expand/Collapse cue. **Actions** is an independently
+   foldable disclosure docked at the bottom of the pane, outside that scroller,
+   expanded by default, using the same chevron and Expand/Collapse cue. The
    selection header (including lifecycle badge) and Source file identity remain
    visible. Section fold
-   open/closed state is session-only and survives document switches within the
-   Library activity. The centre/details divider is pointer- and
+   open/closed state, including Actions, is session-only and survives document
+   switches within the Library activity. The centre/details divider is pointer- and
    keyboard-resizable for the active Library session between 280 and 640 pixels
    while leaving at least 360 pixels for the directory table; Escape during a
    drag restores its starting width. Width is not persisted in workspace
