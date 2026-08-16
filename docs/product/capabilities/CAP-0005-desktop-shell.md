@@ -157,4 +157,4 @@ When implemented, the following must hold:
 - Privacy: [`../../privacy.md`](../../privacy.md)
 - ADR-0002: [`../../design-decisions.md`](../../design-decisions.md)
 - Permalinks: [`CAP-0020-document-permalinks.md`](CAP-0020-document-permalinks.md)
-- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
+- Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)

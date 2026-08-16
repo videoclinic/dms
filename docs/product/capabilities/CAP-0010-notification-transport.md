@@ -3,13 +3,11 @@
 | Field | Value |
 | --- | --- |
 | ID | CAP-0010 |
-| Status | not implemented |
+| Status | implemented |
 | Transports | Configured SMTP relay (ADR-0009) and host default mail handler via `mailto:` (ADR-0012) |
-| Tests | Partial Phases 9i, 9k, and 9k.5 fake-backed evidence: [core lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [notification adapter tests](../../../crates/dms-desktop/src/notify.rs), [Library request tests](../../../crates/dms-desktop/ui/library.test.mjs), and [Configuration transport/test tests](../../../crates/dms-desktop/ui/configuration.test.mjs); configured external delivery remains Phase 9l work |
+| Tests | Phases 9i, 9k, and 9k.5 fake-backed evidence plus Phase 9l configured SMTP acceptance: [core lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [notification adapter tests](../../../crates/dms-desktop/src/notify.rs), [Library request tests](../../../crates/dms-desktop/ui/library.test.mjs), and [Configuration transport/test tests](../../../crates/dms-desktop/ui/configuration.test.mjs); configured Windows SMTP review, decision, and minor-publication delivery is recorded in [CHG-0001](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md) |
 
-## Outcomes (contract — not yet true in runtime)
-
-When implemented, the following must hold:
+## Outcomes
 
 1. **Configuration → Notifications** stores the selected notification transport
    (`smtp` or `mailto`) and the non-secret SMTP relay settings. SMTP stores a
@@ -149,4 +147,4 @@ Open document:
 - Workflow-role routing: [`CAP-0019-inherited-workflow-role-routing.md`](CAP-0019-inherited-workflow-role-routing.md)
 - Privacy: [`../../privacy.md`](../../privacy.md)
 - ADR-0009, ADR-0012, ADR-0020: [`../../design-decisions.md`](../../design-decisions.md)
-- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
+- Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)

@@ -77,8 +77,8 @@ source-file access-control boundary.
   DMS with its client, tenant, and group IDs.
 - [Product capabilities](docs/product/README.md) — current capability contracts
   and wireframe index.
-- [Active change record](docs/changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
-  — implementation scope, phases, and verification gates.
+- [Bootstrap implementation receipt](docs/changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)
+  — completed implementation scope, phases, and verification evidence.
 
 ## Development status
 

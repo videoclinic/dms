@@ -512,6 +512,41 @@ test("failed approver challenge offers a same-surface restart", () => {
   assert.doesNotMatch(activeMarkup, /Previous sign-in failed/);
 });
 
+test("authenticated approver readiness does not claim an unavailable display name", () => {
+  const registered = file("Handbook.md", { in_library: { document_id: "doc-1" } }, {
+    id: "doc-1",
+    lifecycle: "draft",
+    control: { title: "Employee handbook", document_number: null },
+  });
+  const markup = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies" } },
+    {
+      ...createLibraryState(),
+      tree: snapshot("Policies").tree,
+      folder: snapshot("Policies", [registered]).folder,
+      selection: ["Policies/Handbook.md"],
+      approver_sign_in: { actor: { tenant_id: "tenant-1", object_id: "person-1" } },
+      detail: {
+        document_id: "doc-1",
+        lifecycle: "draft",
+        control: { title: "Employee handbook", document_number: null },
+        active_candidate: { status: "in_review", approval_required: true },
+        eligible_people: [],
+        lifecycle_actions: {},
+        workflow_events: [],
+        workflow_verification: "valid",
+        document_types: [],
+        confidentiality_types: [],
+      },
+    },
+  );
+
+  assert.match(markup, /Approver sign-in ready\./);
+  assert.match(markup, /verify this actor against the assigned approver/);
+  assert.doesNotMatch(markup, /ready for \./);
+});
+
 test("document control and confidentiality forms map to narrow document commands", () => {
   const detail = { document_id: "doc-1" };
   const control = new FormData();

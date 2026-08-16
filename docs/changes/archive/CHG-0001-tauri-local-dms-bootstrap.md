@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | CHG-0001 |
-| Status | in-progress |
+| Status | done |
 | External request | Direct operator request: develop a https://tauri.app/ application primarily for Windows for document version control to comply with ISO 27001 requirements. Drafts are original Microsoft Office tools; final approved and released documents are PDFs. No database; operator maintains release and approval process. Document details stored in hidden local directories per folder (e.g. `.dms`). Git-based VCS not mandatory. User can make notes. Released PDFs are checksummed. Refinements: (1) file explorer of controlled library with add/remove; library members are versioned as `*_vMAJOR.MINOR.pdf` on release while Office draft remains editable; (2) persist edit root and publish root; reconstruct mirrored directory tree under publish root on release; (3) PDF export and file versioning are performed by the application using preinstalled Microsoft Office; (4) macOS support is required in addition to Windows; (5) approval notification email contains a URI that opens the installed app to the requested document; (6) responsible editor and approver are assignable at root, folder, subfolder, or individual-document level with inheritance; (7) the person who requested approval receives notification of the recorded approval outcome; (8) distinguish automatic, current-session activity panes from explicit operator bookmarks and make their placement, creation, persistence, restoration, and removal clear in the CAPs and wireframes; (9) "working with folders would be the more dominent part of using DMS Desktop so the folder structure should become more present in the ui. also navigating through the folders in the library view should be more windows explorer like for convinience of the user"; (10) show the exact Office source filename separately from DMS-managed document control data, do not source that data from Office properties, and do not change it when the source file is renamed; (11) name activity panes with their task and referenced folder/document; document labels include title and document number; navigating to an already-open task and document reuses that pane. |
 | Follow-up request | Direct operator request: extend the supported file format with markdown files including PDF export |
 | Follow-up request | Direct operator request: CAP-0016 should enable to open the files. the view should also allow to select how many changes are seen in the bale before pagination beginns. also a search for "Doc" should be possible (as filter). The "Doc" title should be adjusted to the corresponding masterdata file name "Title" (if this is the sense); also in other wireframes the naming of the column missmatch the masterdata naming convention; check and fix this too |
@@ -214,12 +214,11 @@ phase also adds an intentional test delivery.
 | 9k.3 | Release-bound control data and immutable owner identity | done (`cargo fmt --all -- --check`; workspace tests; Clippy with warnings denied; 16 focused Library UI tests; 9 focused Maintenance UI tests; regenerated and visually inspected CAP-0002/CAP-0015/CAP-0017 HTML/PNG; 21-entry manifest; changed-document links; DOX pass; `git diff --check`) | Schema-v11 fixture migrates without inventing historical release or owner identity; a successful empty Graph result produces only the literal `<owner>` / `<editor>` placeholders while a Graph failure still fails closed; a later successful real-person refresh permits an operator-selected release-bound Owner/Editor replacement without rewriting past evidence; candidate/release/audit/maintenance tests prove immutable control, owner, and effective-date snapshots plus effective-date-based scheduling; owner/editor/approver references remain object-ID based across name/email changes; release maintenance and audit use stored release evidence rather than mutable profile/cache fallbacks |
 | 9k.4 | Library filtering, recursive folder counters, interaction, width, and shipped icons | done (workspace format/test/Clippy gate; 5 focused core Library tests; 82 frontend tests; regenerated and visually inspected CAP-0002/CAP-0006/CAP-0015 HTML/PNG; 21-entry manifest; modified-CAP links and Markdown tables; DOX pass; `git diff --check`) | Core and UI tests prove identical recursive `~` draft, `+` applicable-not-controlled, and `!` unsupported counts beside each folder in tree and list views; all-on session-wide **Draft documents** / **Available to add** / **Unsupported files** toggles filter every folder and search result before pagination without changing counters; candidate form selects `Next minor` by default; a table-folder click opens that folder without a double-click; the centre/details splitter is pointer- and keyboard-usable with bounded session-only width; runtime and wireframes use app-local SVGs rather than a font dependency |
 | 9k.5 | Workflow tree and SMTP identity/test configuration | done (schema-v13 migration and backup test; workspace format/test/Clippy gate; 40 focused Configuration/App frontend tests; regenerated and visually inspected CAP-0010/CAP-0019 HTML/PNG; 21-entry manifest and Markdown-table checks; DOX pass; `git diff --check`) | Workflow renders an accessible folder tree with all direct role assignments visibly marked; schema-v12 SMTP settings migrate to separate login user and RFC 5322 `From` mailbox without exposing the password; a fake-backed SMTP test addresses that `From` mailbox and a saved credential renders only `***`; Rust/frontend gates and regenerated CAP-0010/CAP-0019 wireframes pass; `git diff --check` exits 0 |
-| 9l | Windows external operator smokes + CAP promotion | pending — blocked by CHG-0004 | CHG-0004 is done and pushed; licensed Office releases for DOCX and Markdown-through-workspace-template pass on Windows; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated action annotations; CAP statuses distinguish Windows-host evidence from existing CI coverage and make no untested macOS-installed-Office claim; CHG status is done and the record is archived |
+| 9l | Windows external operator smokes + CAP promotion | done (licensed Windows Word DOCX and template-backed Markdown releases; delegated approver decision; configured SMTP acceptance; matching release SHA-256 evidence; 87 frontend tests; full workspace format/test/Clippy and records/link/table gates) | CHG-0004 is done and pushed; licensed Office releases for DOCX and Markdown-through-workspace-template pass on Windows; configured Entra group + interactive decision and notification smokes pass; full Rust/frontend/records/link gates pass without deprecated action annotations; CAP statuses distinguish Windows-host evidence from existing CI coverage and make no untested macOS-installed-Office claim; CHG status is done and the record is archived |
 
-**Current phase:** Phase 9k.5 is done and pushed at `202e796`. Phase 9l remains
-pending until CHG-0004 replaces the contradicted WebView Markdown exporter and
-its completion checkpoint is pushed. macOS remains a supported runtime target,
-but an external macOS installed-Word smoke is not a Phase 9l gate.
+**Current phase:** All phases are complete. Phase 9l used the pushed CHG-0004
+checkpoint `49ead02`. macOS remains a supported runtime target, but external
+macOS installed-Word evidence was not asserted by this change.
 
 Mark a phase `in-progress` only while it is being executed, `done (<evidence>)`
 only after its gate passes, and `pending` otherwise.
@@ -263,8 +262,7 @@ persisting or returning it.
 **Created:** 2026-08-13
 **Depends on:** `CHG-0001#phase-9k` (`7b7402b`)
 **Plan family:** `CHG-0001-tauri-local-dms-bootstrap`
-**Status:** done — local implementation and verification complete; Phase 9l
-retains the external operator-smoke and CAP-promotion evidence.
+**Status:** done — local implementation and Phase 9l external evidence complete
 
 ### Phase 9k.1 fresh-session context
 
@@ -1368,7 +1366,7 @@ CI coverage; this phase does not assert external macOS Office evidence.
 **Created:** 2026-08-13
 **Depends on:** `CHG-0004-markdown-word-template-release`
 **Plan family:** `CHG-0001-tauri-local-dms-bootstrap`
-**Status:** pending — awaits Phase 9k.5 and then a suitable Windows host meeting the entry pre-checks
+**Status:** done — Windows identity, notification, and Office gates passed
 
 ### Phase 9l fresh-session context
 
@@ -1443,32 +1441,75 @@ external smoke as phase evidence.
 5. The operator can retain non-secret Windows-host evidence: exported PDF path
    and checksum, workflow-history delivery outcomes, Entra actor verification, and
    command/test output. Never record tokens, relay credentials, or tenant secrets.
+
+### Phase 9l entry evidence — 2026-08-15
+
+- `main` and `origin/main` are synchronized at `49ead02`; the native Windows
+  release build runs outside WSL and activated Word has already exported the
+  controlled Markdown smoke to a validated four-page A4 PDF.
+- The disposable workspace has explicit edit/publish roots, one controlled
+  `.docx`, one controlled Markdown draft, and the validated contract-v1 operator
+  Word template configured under Document defaults.
+- The configured Entra source exposes 13 eligible direct members and distinct
+  effective editor/approver assignments; delegated interactive actor verification
+  remains part of the active lifecycle smoke rather than a configuration claim.
+- SMTP settings and the workspace-scoped write-only OS credential are present.
+  The production SMTP test adapter received relay acceptance code `250` without
+  exposing the credential or relay diagnostic.
+- The operator authorized retaining only the non-secret paths, checksums,
+  workflow outcomes, actor-verification result, and command output required by
+  this gate.
+- The first delegated decision attempt authenticated the available operator but
+  failed closed because that actor did not match the candidate's snapshotted
+  approver. The disposable review was cancelled, root workflow roles were
+  reassigned to distinct direct members with the authenticated operator as
+  approver, and replacement DOCX and Markdown major candidates completed review.
+  Review requests and decision notices received configured SMTP acceptance.
+- The operator smoke exposed three one-time-actor presentation defects: readiness
+  text referenced an unavailable display name, failed decisions retained consumed
+  frontend actor state, and successful decisions retained stale frontend actor
+  state for a later document. Focused regressions require identity-neutral
+  readiness text and clear actor state after every decision attempt. The rebuilt
+  native Windows app confirmed that successful decision state no longer renders
+  stale readiness.
+- Installed Word released the controlled Markdown draft as
+  `81_ISO 27001.2024\8.29 Sicherheitsprüfung mit GitHub Dependabot_V1.0_20-internal.pdf`
+  and then directly as `..._V1.1_20-internal.pdf`. Both are four-page A4 PDF 1.7
+  files. Their recorded and actual SHA-256 values match:
+  `cc16188af25baf0bb7be4a247ca26775692341fe731649933ea60512edbdfed3`
+  and `338762526d99e001e3422ec6b86d5539f2208cd57736d5cc35f40a3adad840b7`.
+  The direct minor publication notice received configured SMTP acceptance.
+- Installed Word released the controlled DOCX draft as
+  `02_Anleitungen + Prozesse - IT\20250826 Anleitung iPhone Vorbereitung_V1.0_10-public.pdf`.
+  It is a one-page A4 PDF 1.7 file, and its recorded and actual SHA-256 values
+  match `97253dd553ccbc45fd801d33a34a6e350d52bd89467068eeb8e4958cce2798d9`.
+- CAP-0001, CAP-0002, CAP-0006, CAP-0010, CAP-0015, CAP-0017, CAP-0019,
+  and CAP-0021 now state the implemented runtime outcomes proven by repository
+  tests and Phase 9l operator evidence. CAP-0007 remains `not implemented`
+  because no external macOS installed-Word evidence was asserted.
 - Phase 9 was expected to be promotion-only, but the CAP audit found unresolved
   runtime and operator prerequisites across distinct subsystems. Phases 9a–9j
   make those prerequisites independently gated instead of promoting partial
   capabilities or treating one packaging run as product completion.
-- Phase 9a closes desktop workspace setup without promoting CAP-0001: the
-  remaining live Entra/configuration and release-path outcomes still depend on
-  phases 9f–9j. CAP-0001 now links the partial executable setup evidence.
+- Phase 9a closed desktop workspace setup without prematurely promoting
+  CAP-0001. Later phases completed its Entra, Configuration, and release paths;
+  Phase 9l supplied the final Windows operator evidence.
 - Phase 9c closes CAP-0012 with core-owned deterministic report semantics,
   schema-v7 report evidence, CLI/desktop adapters, and the Audit & Reports
   operator surface. External installed-Office and Entra smokes are unrelated to
   this local export capability.
 - CI exercises fake-backed Markdown template assembly and Office dispatch,
-  desktop startup, and NSIS/DMG packaging. It does not exercise installed Office, a configured
-  Microsoft Graph tenant/group, interactive Entra sign-in, SMTP, or host-mail
-  delivery; production code has live delegated Graph and notification adapters,
-  while external service and installed-Office smokes remain phase 9l gates.
-- CAP-0005 and CAP-0006 have substantial partial executable evidence but remain
-  `not implemented`: host-mediated source/release opening is present, while the
-  full Configuration and lifecycle IPC surfaces remain absent. Their evidence
-  fields must describe the proven subset without promoting the whole contract.
+  desktop startup, and NSIS/DMG packaging. Phase 9l separately proved installed
+  Windows Word, a configured Microsoft Graph tenant/group, interactive Entra
+  decisions, and SMTP delivery. No external macOS installed-Word claim was made.
+- CAP-0006 was promoted after its full Configuration and lifecycle IPC surfaces
+  and Phase 9l operator evidence passed. CAP-0005 retains its bounded status.
 - Phase 9b closes the local periodic-review result, cancellation, and reminder
   paths. Core evidence refreshes current approver eligibility, preserves the
   due date on cancellation, and records every reminder delivery attempt without
   duplicating the request or changing lifecycle state. CLI/Tauri/frontend
-  commands require explicit confirmation; live Entra and notification delivery
-  remain phase 9i prerequisites, so CAP-0017 is not promoted yet.
+  commands require explicit confirmation. Phase 9l completed the live Entra and
+  notification prerequisites, so CAP-0017 is promoted.
 - Phase 9b.1 corrects two phase-3/shell gaps reported during phase-9 use. The
   Library now renders nested branches with independent expand/collapse controls
   and keeps current-folder ancestors expanded. Navigation clears only a narrow

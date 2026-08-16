@@ -100,7 +100,7 @@ are repeated inside each phase; the list here is the loading checklist.
   (`Implemented subset` items 1, 4, 5)
 - `crates/dms-desktop/AGENTS.md` (Configuration route contract lines 95-103)
 - Related CHG for context only (not modified):
-  `docs/changes/active/CHG-0001-tauri-local-dms-bootstrap.md` Phase 9k.1 (line
+  `docs/changes/archive/CHG-0001-tauri-local-dms-bootstrap.md` Phase 9k.1 (line
   174) and phase 9l (line 175)
 
 ## Scope
@@ -569,5 +569,5 @@ locally without pushing.
 ## Links
 
 - Capability contract: [`../../product/capabilities/CAP-0021-microsoft-entra-workflow-identity.md`](../../product/capabilities/CAP-0021-microsoft-entra-workflow-identity.md)
-- Related CHG: [`CHG-0001`](../active/CHG-0001-tauri-local-dms-bootstrap.md) phase 9k.1 (runtime Entra configuration) and phase 9l (Windows external smokes, pending)
+- Related CHG: [`CHG-0001`](CHG-0001-tauri-local-dms-bootstrap.md) phase 9k.1 (runtime Entra configuration) and completed phase 9l Windows external smokes
 - AGENTS contract: [`../../../crates/dms-desktop/AGENTS.md`](../../../crates/dms-desktop/AGENTS.md) Configuration route (lines 95-103)

@@ -45,4 +45,4 @@ When implemented, the following must hold:
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
 - Architecture: [`../../architecture.md`](../../architecture.md)
 - ADR-0011: [`../../design-decisions.md`](../../design-decisions.md)
-- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
+- Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)

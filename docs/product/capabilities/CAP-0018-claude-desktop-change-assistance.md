@@ -68,4 +68,4 @@ When implemented, the following must hold:
 - Privacy: [`../../privacy.md`](../../privacy.md)
 - ADR-0018: [`../../design-decisions.md`](../../design-decisions.md)
 - Anthropic local MCP documentation: <https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop>
-- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
+- Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)

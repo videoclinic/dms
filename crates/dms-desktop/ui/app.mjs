@@ -82,6 +82,25 @@ export function finishFormSubmission(form, submitter) {
   if (submitter?.isConnected) submitter.disabled = false;
 }
 
+export function lifecycleFailureLibraryState(library, lifecycleAction, error, draft) {
+  return {
+    ...library,
+    approver_sign_in: lifecycleAction === "decide_review" ? null : library.approver_sign_in,
+    detail_error: String(error),
+    lifecycle_drafts: {
+      ...library.lifecycle_drafts,
+      [lifecycleAction]: draft,
+    },
+  };
+}
+
+export function lifecycleSuccessLibraryState(library, lifecycleAction, detail) {
+  const updated = applyDocumentSelection(library, detail, true);
+  return lifecycleAction === "decide_review"
+    ? { ...updated, approver_sign_in: null }
+    : updated;
+}
+
 export function defaultPreferences() {
   return { sidebar_expanded: true, saved_views: [], recent_libraries: [] };
 }
@@ -1957,20 +1976,13 @@ async function handleSubmit(event) {
       });
       appState = {
         ...appState,
-        library: applyDocumentSelection(appState.library, detail, true),
+        library: lifecycleSuccessLibraryState(appState.library, lifecycleAction, detail),
         error: "",
       };
     } catch (error) {
       appState = {
         ...appState,
-        library: {
-          ...appState.library,
-          detail_error: String(error),
-          lifecycle_drafts: {
-            ...appState.library.lifecycle_drafts,
-            [lifecycleAction]: draft,
-          },
-        },
+        library: lifecycleFailureLibraryState(appState.library, lifecycleAction, error, draft),
       };
     }
     render(appState);

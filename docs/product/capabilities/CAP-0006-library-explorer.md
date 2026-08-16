@@ -3,12 +3,10 @@
 | Field | Value |
 | --- | --- |
 | ID | CAP-0006 |
-| Status | not implemented |
-| Tests | Partial phases 3, 9b.1, 9e, 9f.1, 9f.2, 9f.5, 9g, 9k.3, 9k.4, and CHG-0004 Phases 2–3 evidence: [`dms-core` Library and lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [`dms-core` recursive Library counter tests](../../../crates/dms-core/tests/library.rs), [template-asset exclusion tests](../../../crates/dms-core/tests/markdown_template.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [shell, direct folder activation, bounded splitter, and permalink-target tests](../../../crates/dms-desktop/ui/app.test.mjs), [hierarchical Library, file-visibility, counter, icon, document-control, placeholder, and workflow frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31359360786) |
+| Status | implemented |
+| Tests | Phases 3, 9b.1, 9e, 9f.1, 9f.2, 9f.5, 9g, 9k.3, 9k.4, and 9l plus CHG-0004 Phases 2–3 evidence: [`dms-core` Library and lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [`dms-core` recursive Library counter tests](../../../crates/dms-core/tests/library.rs), [template-asset exclusion tests](../../../crates/dms-core/tests/markdown_template.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [shell, direct folder activation, bounded splitter, and permalink-target tests](../../../crates/dms-desktop/ui/app.test.mjs), [hierarchical Library, file-visibility, counter, icon, document-control, placeholder, and workflow frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31359360786) |
 
-## Outcomes (contract — not yet true in runtime)
-
-When implemented, the following must hold:
+## Outcomes
 
 1. The primary library surface is a **folder-dominant, edit-root-relative
    view** of the accessible directory and file structure below the edit root.
@@ -235,4 +233,4 @@ When implemented, the following must hold:
 - Periodic review: [`CAP-0017-periodic-document-review.md`](CAP-0017-periodic-document-review.md)
 - Claude handoff: [`CAP-0018-claude-desktop-change-assistance.md`](CAP-0018-claude-desktop-change-assistance.md)
 - Permalinks: [`CAP-0020-document-permalinks.md`](CAP-0020-document-permalinks.md)
-- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
+- Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)

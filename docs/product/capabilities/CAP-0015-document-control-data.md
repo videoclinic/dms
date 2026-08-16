@@ -3,13 +3,11 @@
 | Field | Value |
 | --- | --- |
 | ID | CAP-0015 |
-| Status | not implemented |
+| Status | implemented |
 | Storage | `<edit-root>/.dms/` |
-| Tests | Partial phases 9e–9f.5, 9k.3, 9k.4, and CHG-0004 Phase 2 evidence: [release-snapshot, frontmatter comparison, migration, identity-stability, and atomic-handover core tests](../../../crates/dms-core/tests/lifecycle.rs), [document-profile and legacy-owner migration tests](../../../crates/dms-core/tests/workspace.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [Library document-control, bounded details-pane, release-profile, placeholder, and lifecycle tests](../../../crates/dms-desktop/ui/library.test.mjs), [document-type catalogue tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
+| Tests | Phases 9e–9f.5, 9k.3, 9k.4, and 9l plus CHG-0004 Phase 2 evidence: [release-snapshot, frontmatter comparison, migration, identity-stability, and atomic-handover core tests](../../../crates/dms-core/tests/lifecycle.rs), [document-profile and legacy-owner migration tests](../../../crates/dms-core/tests/workspace.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [Library document-control, bounded details-pane, release-profile, placeholder, and lifecycle tests](../../../crates/dms-desktop/ui/library.test.mjs), [document-type catalogue tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
 
-## Outcomes (contract — not yet true in runtime)
-
-When implemented, the following must hold:
+## Outcomes
 
 1. Each library document stores DMS-managed **document control data** under
    `<edit-root>/.dms/`, separate from the source file:
@@ -147,4 +145,4 @@ When implemented, the following must hold:
 - Periodic review: [`CAP-0017-periodic-document-review.md`](CAP-0017-periodic-document-review.md)
 - Workflow-role routing: [`CAP-0019-inherited-workflow-role-routing.md`](CAP-0019-inherited-workflow-role-routing.md)
 - ADR-0004, ADR-0013, ADR-0015, ADR-0016: [`../../design-decisions.md`](../../design-decisions.md)
-- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
+- Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)

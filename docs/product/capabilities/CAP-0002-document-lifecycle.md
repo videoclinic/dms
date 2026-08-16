@@ -3,14 +3,12 @@
 | Field | Value |
 | --- | --- |
 | ID | CAP-0002 |
-| Status | not implemented |
+| Status | implemented |
 | Draft formats | Markdown (`.md`) and Microsoft Office originals (e.g. `.docx`, `.xlsx`, `.pptx`) |
 | Released format | Versioned, classified PDF only (`*_VMAJOR.MINOR_<confidentiality-type-id>.pdf`) |
-| Tests | Partial phases 9e, 9f.2, 9k.3, 9k.4, and CHG-0004 Phase 2 evidence: [withdrawal/current-release/version-allocation, release-snapshot, frontmatter conformance, identity-stability, migration, and atomic-handover core tests](../../../crates/dms-core/tests/lifecycle.rs), [desktop lifecycle adapter tests](../../../crates/dms-desktop/src/lib.rs), [Library lifecycle and candidate-default frontend tests](../../../crates/dms-desktop/ui/library.test.mjs) |
+| Tests | Phases 9e, 9f.2, 9k.3, 9k.4, and 9l plus CHG-0004 Phase 2 evidence: [withdrawal/current-release/version-allocation, release-snapshot, frontmatter conformance, identity-stability, migration, and atomic-handover core tests](../../../crates/dms-core/tests/lifecycle.rs), [desktop lifecycle adapter tests](../../../crates/dms-desktop/src/lib.rs), [Library lifecycle and candidate-default frontend tests](../../../crates/dms-desktop/ui/library.test.mjs) |
 
-## Outcomes (contract — not yet true in runtime)
-
-When implemented, the following must hold:
+## Outcomes
 
 1. Only documents **in the library** (CAP-0006) participate in versioning and
    release. Uncontrolled files under the edit root are invisible to lifecycle
@@ -221,4 +219,4 @@ When implemented, the following must hold:
 - Claude Desktop assistance: [`CAP-0018-claude-desktop-change-assistance.md`](CAP-0018-claude-desktop-change-assistance.md)
 - Workflow-role routing: [`CAP-0019-inherited-workflow-role-routing.md`](CAP-0019-inherited-workflow-role-routing.md)
 - Workflow identity: [`CAP-0021-microsoft-entra-workflow-identity.md`](CAP-0021-microsoft-entra-workflow-identity.md)
-- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
+- Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)

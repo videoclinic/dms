@@ -3,12 +3,12 @@
 | Field | Value |
 | --- | --- |
 | ID | CAP-0021 |
-| Status | partial — Phase 9j live identity-source setup, refresh, and sign-in |
+| Status | implemented |
 | Authority | Microsoft Entra ID group |
 | Storage | `<edit-root>/.dms/` group binding and display cache; OS-user app-global Entra settings; OS credential store token cache |
-| Tests | [Core policy and schema migration tests](../../../crates/dms-core/tests/policies.rs), [desktop Graph and configuration tests](../../../crates/dms-desktop/src/graph.rs), [configuration UI tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
+| Tests | [Core policy and schema migration tests](../../../crates/dms-core/tests/policies.rs), [desktop Graph, approver-identity, and configuration tests](../../../crates/dms-desktop/src/graph.rs), [lifecycle decision tests](../../../crates/dms-core/tests/lifecycle.rs), [Library approver frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [configuration UI tests](../../../crates/dms-desktop/ui/configuration.test.mjs), and [Phase 9l configured Windows evidence](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md) |
 
-## Implemented subset
+## Operational details
 
 1. **Configuration → Workflow → Manage identity source** uses a distinct
    app-global public-client/tenant configuration card plus a per-library group
@@ -51,7 +51,7 @@
    disabled-only failures.
 4. An approver sign-in command uses delegated device authorization, resolves
    `/me` to an immutable tenant/object-ID actor, and leaves the actor available
-   to the lifecycle adapter. Approval-decision composition remains phase 9k.
+   for one lifecycle decision.
 5. The public-client and tenant IDs are app-global OS-user configuration.
    Non-empty `DMS_ENTRA_CLIENT_ID` and `DMS_ENTRA_TENANT_ID` process values
    override their stored counterparts and are read-only in Configuration;
@@ -63,9 +63,7 @@
    tokens are stored only in the OS credential store; `.dms` retains neither
    tokens, client/tenant IDs, nor client secrets.
 
-## Full capability contract (remaining outcomes are not all present)
-
-When implemented, the following must hold:
+## Outcomes
 
 1. Before a workspace can configure workflow roles or submit a review, app-global
    configuration provides a valid Microsoft Entra public-client ID and tenant ID,
@@ -157,8 +155,8 @@ When implemented, the following must hold:
 - Architecture: [`../../architecture.md`](../../architecture.md)
 - Privacy: [`../../privacy.md`](../../privacy.md)
 - ADR-0021, ADR-0024: [`../../design-decisions.md`](../../design-decisions.md)
-- Progress: [`CHG-0001`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
-  owns the broader Tauri bootstrap and remaining phase 9l integration evidence;
+- Implementation receipt: [`CHG-0001`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)
+  records the broader Tauri bootstrap and Phase 9l integration evidence;
   archived [`CHG-0002`](../../changes/archive/CHG-0002-entra-configuration-ux-fixes.md)
   records the completed Entra configuration UX corrections; archived
   [`CHG-0003`](../../changes/archive/CHG-0003-retry-safe-entra-identity-application.md)

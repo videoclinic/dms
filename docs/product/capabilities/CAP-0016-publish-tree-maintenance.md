@@ -62,4 +62,4 @@ When implemented, the following must hold:
 - Integrity: [`CAP-0004-release-integrity.md`](CAP-0004-release-integrity.md)
 - Document control data: [`CAP-0015-document-control-data.md`](CAP-0015-document-control-data.md)
 - ADR-0006, ADR-0007: [`../../design-decisions.md`](../../design-decisions.md)
-- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
+- Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)

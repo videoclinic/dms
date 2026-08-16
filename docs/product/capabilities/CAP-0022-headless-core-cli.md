@@ -49,4 +49,4 @@ The CLI provides explicit, local operations over the shared `dms-core` library:
 - Library membership: [`CAP-0006-library-explorer.md`](CAP-0006-library-explorer.md)
 - Notes: [`CAP-0003-document-notes.md`](CAP-0003-document-notes.md)
 - Document control data: [`CAP-0015-document-control-data.md`](CAP-0015-document-control-data.md)
-- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
+- Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)

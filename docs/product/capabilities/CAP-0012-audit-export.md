@@ -62,4 +62,4 @@ The following hold:
 - Privacy: [`../../privacy.md`](../../privacy.md)
 - ADR-0013, ADR-0014: [`../../design-decisions.md`](../../design-decisions.md)
 - Periodic review: [`CAP-0017-periodic-document-review.md`](CAP-0017-periodic-document-review.md)
-- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
+- Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)

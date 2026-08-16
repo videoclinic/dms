@@ -3,14 +3,12 @@
 | Field | Value |
 | --- | --- |
 | ID | CAP-0019 |
-| Status | not implemented |
+| Status | implemented |
 | Identity source | Microsoft Entra workspace group (CAP-0021) |
 | Storage | `<edit-root>/.dms/` routing policies and identity references |
-| Tests | Partial Phases 2, 9f.4, 9j, and 9k.5 evidence: [core policy tests](../../../crates/dms-core/tests/policies.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), and [semantic workflow-tree tests](../../../crates/dms-desktop/ui/configuration.test.mjs); configured external operator smoke remains Phase 9l work |
+| Tests | Phases 2, 9f.4, 9j, 9k.5, and 9l evidence: [core policy tests](../../../crates/dms-core/tests/policies.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), and [semantic workflow-tree tests](../../../crates/dms-desktop/ui/configuration.test.mjs); the configured Windows role-snapshot and authenticated-approver smoke is recorded in [CHG-0001](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md) |
 
-## Outcomes (contract — not yet true in runtime)
-
-When implemented, the following must hold:
+## Outcomes
 
 1. The workspace uses the configured Microsoft Entra group from CAP-0021 as its
    read-only people source. A routing policy references an immutable Entra user
@@ -90,6 +88,6 @@ When implemented, the following must hold:
 - Workflow identity: [`CAP-0021-microsoft-entra-workflow-identity.md`](CAP-0021-microsoft-entra-workflow-identity.md)
 - Privacy: [`../../privacy.md`](../../privacy.md)
 - ADR-0019, ADR-0021: [`../../design-decisions.md`](../../design-decisions.md)
-- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md);
+- Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md);
   archived [`CHG-0003`](../../changes/archive/CHG-0003-retry-safe-entra-identity-application.md)
   records atomic first-binding root-role setup.

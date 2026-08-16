@@ -49,4 +49,4 @@ The document-notes workflow provides the following behaviour:
 
 - Privacy: [`../../privacy.md`](../../privacy.md)
 - Document control data: [`CAP-0015-document-control-data.md`](CAP-0015-document-control-data.md)
-- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
+- Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)

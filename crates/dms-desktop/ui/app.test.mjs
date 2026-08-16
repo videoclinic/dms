@@ -12,6 +12,8 @@ import {
   createInitialState,
   defaultPreferences,
   finishFormSubmission,
+  lifecycleFailureLibraryState,
+  lifecycleSuccessLibraryState,
   notesLibraryReturnTarget,
   openActivity,
   permalinkActivity,
@@ -38,6 +40,45 @@ test("an active form submission suppresses duplicate IPC dispatch", () => {
   assert.equal(submitter.disabled, false);
   assert.equal(beginFormSubmission(form, submitter), true);
   finishFormSubmission(form, submitter);
+});
+
+test("a failed decision consumes the one-time approver sign-in in frontend state", () => {
+  const library = {
+    detail_error: "",
+    approver_sign_in: { actor: { tenant_id: "tenant-1", object_id: "person-1" } },
+    lifecycle_drafts: {},
+  };
+
+  const failedDecision = lifecycleFailureLibraryState(
+    library,
+    "decide_review",
+    "actor mismatch",
+    { reason: "", confirmed: false },
+  );
+  assert.equal(failedDecision.approver_sign_in, null);
+  assert.equal(failedDecision.detail_error, "actor mismatch");
+
+  const failedRelease = lifecycleFailureLibraryState(
+    library,
+    "release_candidate",
+    "export failed",
+    { reason: "", confirmed: false },
+  );
+  assert.deepEqual(failedRelease.approver_sign_in, library.approver_sign_in);
+});
+
+test("a successful decision also clears the one-time approver sign-in", () => {
+  const library = {
+    ...createInitialState().library,
+    approver_sign_in: { actor: { tenant_id: "tenant-1", object_id: "person-1" } },
+  };
+  const detail = { document_id: "doc-1", relative_path: "Policies/Handbook.md" };
+
+  const decided = lifecycleSuccessLibraryState(library, "decide_review", detail);
+  assert.equal(decided.approver_sign_in, null);
+
+  const released = lifecycleSuccessLibraryState(library, "release_candidate", detail);
+  assert.deepEqual(released.approver_sign_in, library.approver_sign_in);
 });
 
 function documentActivity(task) {

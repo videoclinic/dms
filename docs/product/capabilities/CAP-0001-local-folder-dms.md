@@ -3,14 +3,12 @@
 | Field | Value |
 | --- | --- |
 | ID | CAP-0001 |
-| Status | not implemented |
+| Status | implemented |
 | Primary platform | Windows and macOS (Tauri) |
 | Storage | Hidden `.dms/` under the edit root |
-| Tests | Partial phases 9a–9f.5.2 and CHG-0004 Phase 2 evidence: [`dms-core` workspace tests](../../../crates/dms-core/tests/workspace.rs), [schema-v14 and workspace-template tests](../../../crates/dms-core/tests/markdown_template.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [setup frontend tests](../../../crates/dms-desktop/ui/app.test.mjs), [Configuration frontend tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
+| Tests | Phases 9a–9l and CHG-0004 Phase 2 evidence: [`dms-core` workspace tests](../../../crates/dms-core/tests/workspace.rs), [schema-v14 and workspace-template tests](../../../crates/dms-core/tests/markdown_template.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [setup frontend tests](../../../crates/dms-desktop/ui/app.test.mjs), [Configuration frontend tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
 
-## Outcomes (contract — not yet true in runtime)
-
-When implemented, the following must hold:
+## Outcomes
 
 1. Operator configures a DMS workspace with two rooted paths:
    - **edit root** — tree where Office and Markdown source drafts are edited
@@ -72,4 +70,4 @@ When implemented, the following must hold:
 - Architecture: [`../../architecture.md`](../../architecture.md)
 - Workflow identity: [`CAP-0021-microsoft-entra-workflow-identity.md`](CAP-0021-microsoft-entra-workflow-identity.md)
 - ADR-0001, ADR-0006, ADR-0009, ADR-0010, ADR-0015, ADR-0021: [`../../design-decisions.md`](../../design-decisions.md)
-- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
+- Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)

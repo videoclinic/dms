@@ -64,4 +64,4 @@ When implemented, the following must hold:
 - Storage: [`CAP-0001-local-folder-dms.md`](CAP-0001-local-folder-dms.md)
 - Privacy: [`../../privacy.md`](../../privacy.md)
 - ADR-0001, ADR-0014, ADR-0017: [`../../design-decisions.md`](../../design-decisions.md)
-- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
+- Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)

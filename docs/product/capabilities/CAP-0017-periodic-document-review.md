@@ -3,13 +3,11 @@
 | Field | Value |
 | --- | --- |
 | ID | CAP-0017 |
-| Status | not implemented |
+| Status | implemented |
 | Storage | `<edit-root>/.dms/` |
-| Tests | Partial phases 7, 9b, and 9k.3 evidence: [effective-date schedule, migration, and periodic-review core tests](../../../crates/dms-core/tests/lifecycle.rs), [CLI command tests](../../../crates/dms-cli/tests/cli.rs), [desktop schedule adapter tests](../../../crates/dms-desktop/src/lib.rs), and [desktop periodic-review tests](../../../crates/dms-desktop/ui/maintenance.test.mjs) |
+| Tests | Phases 7, 9b, 9k.3, and 9l evidence: [effective-date schedule, migration, and periodic-review core tests](../../../crates/dms-core/tests/lifecycle.rs), [CLI command tests](../../../crates/dms-cli/tests/cli.rs), [desktop schedule adapter tests](../../../crates/dms-desktop/src/lib.rs), and [desktop periodic-review tests](../../../crates/dms-desktop/ui/maintenance.test.mjs) |
 
-## Outcomes (contract — not yet true in runtime)
-
-When implemented, the following must hold:
+## Outcomes
 
 1. Review schedule is mutable state separate from both the document profile and
    immutable release snapshots. The workspace defines a positive default review interval in months. A
@@ -71,4 +69,4 @@ When implemented, the following must hold:
 - Evidence: [`CAP-0011-approval-evidence.md`](CAP-0011-approval-evidence.md)
 - Document control data: [`CAP-0015-document-control-data.md`](CAP-0015-document-control-data.md)
 - Integrity: [`CAP-0004-release-integrity.md`](CAP-0004-release-integrity.md)
-- Progress: [`../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/active/CHG-0001-tauri-local-dms-bootstrap.md)
+- Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)
