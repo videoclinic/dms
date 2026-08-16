@@ -39,12 +39,14 @@
    separate top-level navigation destination. CAP-0006 owns navigation and
    selection; this CAP owns fields, validation, revision/obsolescence actions,
    and audit events. Action labels do not repeat the document identity.
-3. After a successful release, the document remains `released` for the current
-   version. Starting the next change cycle is an explicit **Begin revision**
-   action that returns the document to `draft` while retaining the released
-   PDF and history. The source draft stays the editable working file.
-4. While a newer draft exists after a release (or after Begin revision), the
-   explorer surfaces **released version label** and **draft is newer than last
+3. After a successful release, the document is `released` while the current
+   draft bytes still match that release's source digest. When the draft changes
+   (digest no longer matches the latest non-withdrawn release) or the document
+   was never released, lifecycle is `draft`. Released PDFs and history remain.
+   The source draft stays the editable working file. There is no **Begin
+   revision** control.
+4. While a newer draft exists after a release, the explorer surfaces
+   **released version label** and **draft is newer than last
    release** when current draft bytes differ from the approved source-draft
    digest stored on the last successful release record.
 5. The **current released version** is the latest non-withdrawn release
@@ -118,14 +120,14 @@
     operator workspace backup; released PDFs and their evidence remain the
     durable application-managed version history.
 14. **Create release candidate** (when the document is an idle draft with no
-    active candidate), **Begin revision**, **Mark obsolete**, and **Cancel
-    review** are available from the CAP-0006 selection pane (single selection)
-    when preconditions hold; disabled states explain why. In **Revision cycle**,
-    the candidate form is listed first when available, shows the resolved
-    effective target version for Next minor / Next major / Manual, and keeps
-    Manual major/minor disabled unless Manual target is selected. Canonical
-    workflow evidence is a single foldable disclosure in that section (no
-    separate **View workflow evidence** control). These actions are not offered
+    active candidate), **Mark obsolete**, and **Cancel review** are available
+    from the CAP-0006 selection pane (single selection) when preconditions hold;
+    disabled states explain why. In **Revision cycle**, the candidate form is
+    listed first when available, shows the resolved effective target version for
+    Next minor / Next major / Manual, and keeps Manual major/minor disabled
+    unless Manual target is selected. Canonical workflow evidence is a single
+    foldable disclosure in that section. There is no **Begin revision** action:
+    Draft/Released follows CAP-0002 digest rules. These actions are not offered
     as multi-select batch actions unless a future CAP explicitly allows bulk
     obsolescence.
 15. A candidate may stage a replacement Owner and responsible Editor selected

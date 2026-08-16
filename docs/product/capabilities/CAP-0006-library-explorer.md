@@ -134,8 +134,8 @@
    - **Override confidentiality** (CAP-0008) for the selected document; the
      action selects or clears that document's explicit type and is unavailable
      for multi-select
-   - **Submit for review**, **Begin revision**, **Cancel review**, **Release**
-     when the lifecycle allows (CAP-0002 / CAP-0015)
+   - **Create release candidate**, **Cancel review**, **Release** when the
+     lifecycle allows (CAP-0002 / CAP-0015)
    - **Mark obsolete** (CAP-0015)
    - **Notes** (CAP-0003)
    - **Workflow chain / evidence** (CAP-0011)

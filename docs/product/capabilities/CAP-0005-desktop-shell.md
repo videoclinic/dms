@@ -19,7 +19,8 @@ When implemented, the following must hold:
 3. Core DMS commands are invokable from the UI via the Tauri backend: configure
    roots, open workspace, library add/remove, directory navigation, selection
    pane (Source file identity + document control data + document/batch actions),
-   lifecycle transitions (including begin revision, cancel review, obsolete),
+   lifecycle transitions (cancel review, obsolete; Draft/Released follows draft
+   digest vs latest release),
    review notification and decision, notes, confidentiality and document-type
    policy, document-control-data edit, release (version + format-specific PDF export),
    verify checksum, publish history,

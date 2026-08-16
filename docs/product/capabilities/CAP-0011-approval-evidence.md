@@ -61,7 +61,9 @@ When implemented, the following must hold:
      the effective approver snapshotted for a direct minor release
    - `release_withdrawn` — release record removed from the active current set; PDF preserved
    - `review_cancelled` — author (or operator) cancelled an open review
-   - `revision_begun` — released document returned to `draft` for the next cycle
+   - `revision_begun` — historical only; earlier product versions returned a
+     released document to `draft` via an explicit Begin revision action
+     (current product uses digest-driven Draft/Released instead)
    - `document_obsoleted` — document moved to terminal `obsolete` state
    - `document_control_data_changed` — any editable document-control-data field changed
    - `content_conformance_overridden` — operator accepted a failed version or

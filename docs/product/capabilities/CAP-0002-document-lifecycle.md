@@ -136,9 +136,11 @@
 16. The release and approval history of a document is queryable by date range,
     approver, and confidentiality type, and is exportable as documented in
     CAP-0012.
-17. After release, further content change uses **Begin revision** (CAP-0015),
-    which returns the document to `draft` without deleting released PDFs.
-    A new review/release cycle is required before the next versioned PDF.
+17. After release, further content change is automatic: when the draft digest no
+    longer matches the latest non-withdrawn release source digest, the document
+    becomes `draft` without a **Begin revision** action (CAP-0015 / ADR-0016).
+    Never-released registered documents remain `draft`. A new review/release
+    cycle is required before the next versioned PDF.
 18. Cancel-review, obsolescence, document control data, and current-version
     supersession follow CAP-0015. Publish-tree listing, orphan handling, and
     bulk verify follow CAP-0016. Due-date review of an unchanged current release

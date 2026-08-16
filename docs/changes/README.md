@@ -36,6 +36,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 | [CHG-0009](archive/CHG-0009-selection-pane-foldable-topics.md) | Selection pane foldable topics | done | CAP-0006, CAP-0015 |
 | [CHG-0010](archive/CHG-0010-selection-fold-affordance-schedule.md) | Selection fold affordance and review schedule section | done | CAP-0006, CAP-0015 |
 | [CHG-0011](archive/CHG-0011-revision-cycle-candidate-clarity.md) | Revision cycle candidate clarity | done | CAP-0002, CAP-0006, CAP-0015 |
+| [CHG-0012](archive/CHG-0012-digest-driven-draft-lifecycle.md) | Digest-driven draft lifecycle (drop Begin revision) | done | CAP-0002, CAP-0006, CAP-0011, CAP-0015, CAP-0017 |
 
 ## Related
 

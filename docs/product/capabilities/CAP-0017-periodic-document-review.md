@@ -38,9 +38,10 @@
 6. The approver records one result with a required comment:
    - **confirmed current** keeps the current release and version, records the
      review, and advances the next-review-due date;
-   - **changes required** records the review and invokes CAP-0015 **Begin
-     revision** while the last release remains current until superseded or
-     withdrawn;
+   - **changes required** records the review; the document stays `released`
+     until the operator changes the draft (digest mismatch → `draft` per
+     CAP-0015 / ADR-0016) while the last release remains current until
+     superseded or withdrawn;
    - **obsolete** records the review and invokes CAP-0015 obsolescence.
 7. If the released PDF is missing or its checksum no longer matches its release
    record, periodic review is blocked until the integrity problem is resolved.

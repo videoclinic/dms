@@ -259,23 +259,29 @@ Capability-local rules stay in their CAP files.
   document ID, while each release keeps the profile and effective date accepted
   for that version; a later locator or profile change cannot relabel history.
 
-## ADR-0016 — Explicit post-release revision cycle
+## ADR-0016 — Digest-driven post-release draft cycle
 
-- **Decision:** A successful release leaves the document in `released` until
-  the operator chooses **Begin revision**, which returns it to `draft` for the
-  next change cycle. Released PDFs are never overwritten; the next release
-  creates a new versioned file. Obsolescence is a separate terminal control
-  state that blocks further review/release.
-- **Why:** ISO-style controlled documents need a clear “current released” vs
-  “work in progress for next version” distinction and a deliberate start to
-  the next cycle.
+- **Decision:** A successful release leaves the document in `released` while the
+  current draft bytes still match that release's recorded source digest. There
+  is no **Begin revision** action. A registered document is `draft` when it has
+  no non-withdrawn release, or when the current draft digest differs from the
+  latest non-withdrawn release source digest. Open content review, approved
+  candidates, and obsolete remain explicit workflow states. Released PDFs are
+  never overwritten; the next release creates a new versioned file.
+  Obsolescence is a separate terminal control state that blocks further
+  review/release.
+- **Why:** Operators edit the working draft outside the app; lifecycle must
+  reflect whether the draft still matches the current released content without a
+  separate manual “start next cycle” step.
 - **Consequences:** CAP-0015 owns document control data, next-review-due,
-  cancel-review, and obsolete. CAP-0016 owns publish-history navigation and
-  orphan cleanup. Candidate creation captures the requested profile and required
-  effective date. Successful export commits that immutable snapshot and derives
-  the review due date from it; failed export changes neither the current release
-  nor any staged owner/editor handover. A staged handover applies to the mutable
-  profile/routing only in the same successful release transaction.
+  cancel-review, obsolete, and digest-driven Draft/Released reconciliation.
+  CAP-0016 owns publish-history navigation and orphan cleanup. Candidate
+  creation captures the requested profile and required effective date.
+  Successful export commits that immutable snapshot and derives the review due
+  date from it; failed export changes neither the current release nor any staged
+  owner/editor handover. A staged handover applies to the mutable profile/routing
+  only in the same successful release transaction. Historical `revision_begun`
+  events remain valid evidence from earlier product versions.
 
 ## ADR-0017 — Versioned `.dms` schema with fail-closed migration
 
