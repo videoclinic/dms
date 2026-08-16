@@ -84,16 +84,17 @@
     lifecycle state, effective confidentiality with its source and
     inherited/overridden status (CAP-0008), and effective editor/approver
     (CAP-0019). For exactly one selected document, the pane groups **Document
-    control data**, **Document review schedule**, **Actions**,
-    **Revision cycle**, and **Releases** into independently foldable, frameless
+    control data**, **Document review schedule**, **Revision cycle**, and
+    **Releases** into independently foldable, frameless
     sections (no surrounding card frames around those topics). Each section
     summary shows a disclosure chevron and Expand/Collapse cue so foldability is
-    visible. The document
+    visible. **Actions** is a non-foldable block immediately after Document
+    control data and before Document review schedule. The document
     identity, lifecycle badge, and Source file identity remain visible while any
     section is folded. Fold open/closed state is session-only Library UI state
     shared across document switches in the open Library activity; it is not
-    stored in `.dms`, preferences, or saved views. Document actions sit in the
-    same pane under the document control data and review-schedule blocks. When a
+    stored in `.dms`, preferences, or saved views. Document actions sit in that
+    pinned Actions block. When a
     current released version exists, **Open latest released PDF**
     opens only that release record's recorded PDF; it is unavailable for a
     never-released document or when the current release file is missing. When

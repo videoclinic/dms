@@ -22,17 +22,22 @@ When implemented, the following must hold:
    **Lost source** in the folder of that stored path (CAP-0006). Lifecycle and
    other source-dependent transitions refuse until the operator reassociates the
    source, restores the file to the stored path, or unregisters the document.
-3. **Reassociate source.** From a Lost source (or an explicit rename/repath)
-   selection, the operator chooses a different supported source file under the
-   edit root. Success:
+3. **Reassociate source.** Selection-pane reassociate is Lost-source-only and
+   lives in the pinned **Actions** block. The operator uses a path field plus
+   native **Browse…** that can select only supported drafts (`.md`, `.docx`,
+   `.xlsx`, `.pptx`). Location and registration are validated only when the
+   operator presses **Reassociate source**. Success:
    - updates only the surviving document's relative locator and restores
      registered source presence;
    - appends a canonical `source_reassociated` workflow event recording
      `old-folder/old-name => new-folder/new-name` (edit-root-relative, `/`
      separators);
    - never changes CAP-0015 document control data by itself.
-4. **Reassociate onto a path already in the library.** When the chosen file is
-   already a **registered** library document (the target):
+4. **Reassociate onto a path already in the library.** Desktop **Actions**
+   refuse an already-registered target and do not absorb or merge audit
+   history from this control. `Workspace::reassociate_document` and the CLI
+   keep absorb: when the chosen file is already a **registered** library
+   document (the target):
    - the operator is told that the target document must leave the library;
    - the surviving identity is the document being reassociated;
    - the target's canonical workflow events are incorporated into the surviving

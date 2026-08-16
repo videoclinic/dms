@@ -303,6 +303,14 @@ button { cursor: pointer; }
 .source-identity { display: grid; gap: 3px; margin: 12px 0 4px; padding: 10px 0; }
 .source-identity small { color: #61717d; overflow-wrap: anywhere; }
 .selection-pane details.selection-section { padding: 8px 0; border-top: 1px solid #dfe5ea; }
+.selection-pane .selection-actions-block { padding: 8px 0; border-top: 1px solid #dfe5ea; }
+.selection-pane .selection-actions-block > .selection-section-title {
+  min-height: 32px;
+  margin: 0;
+  padding: 4px 2px;
+  font-size: inherit;
+  font-weight: 750;
+}
 .selection-pane details.selection-section > summary {
   display: flex;
   align-items: center;

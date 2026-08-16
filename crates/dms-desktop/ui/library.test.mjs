@@ -423,10 +423,11 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /data-library-open-notes/);
   assert.match(markup, /data-library-copy-permalink/);
   assert.match(markup, /data-library-unregister/);
-  assert.match(markup, /id="library-reassociate-form"/);
+  assert.match(markup, /<h4 class="selection-section-title">Actions<\/h4>/);
+  assert.doesNotMatch(markup, /id="library-reassociate-form"/);
   assert.match(markup, /data-library-section="control"/);
   assert.match(markup, /data-library-section="schedule"/);
-  assert.match(markup, /data-library-section="actions"/);
+  assert.doesNotMatch(markup, /data-library-section="actions"/);
   assert.match(markup, /data-library-section="revision"/);
   assert.match(markup, /data-library-section="releases"/);
   assert.match(markup, /selection-section-chevron/);
@@ -1037,6 +1038,12 @@ test("lost source rows use italic state, dedicated filter, and reassociate-focus
   assert.match(markup, /\?1/);
   assert.match(markup, /Reassociate source/);
   assert.match(markup, /Most actions stay disabled until you reassociate the source/);
+  assert.match(
+    markup,
+    /data-library-section="control"[\s\S]*id="library-reassociate-form"[\s\S]*data-library-section="schedule"/,
+  );
+  assert.doesNotMatch(markup, /data-library-section="actions"/);
+  assert.doesNotMatch(markup, /must leave the library/);
   library = toggleLibraryVisibility(library, "show_moved_documents");
   assert.deepEqual(filterLibraryEntries(library.folder.entries, library).map((entry) => entry.name), [
     "Draft.md",

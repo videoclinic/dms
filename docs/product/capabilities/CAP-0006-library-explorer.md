@@ -111,11 +111,12 @@
    - **document actions** for that selection
    CAP-0015 owns field rules and revision/obsolescence semantics; CAP-0006 owns
    navigation, selection, and pane placement. Its **Document control data**,
-   **Document review schedule**, **Actions**, **Revision cycle**, and
-   **Releases** sections are independently
-   foldable and frameless as defined by CAP-0015; each summary exposes a
-   disclosure chevron plus Expand/Collapse cue. The selection header (including
-   lifecycle badge) and Source file identity remain visible. Section fold
+   **Document review schedule**, **Revision cycle**, and **Releases** sections
+   are independently foldable and frameless as defined by CAP-0015; each
+   summary exposes a disclosure chevron plus Expand/Collapse cue. **Actions**
+   is a non-foldable block immediately under Document control data. The
+   selection header (including lifecycle badge) and Source file identity remain
+   visible. Section fold
    open/closed state is session-only and survives document switches within the
    Library activity. The centre/details divider is pointer- and
    keyboard-resizable for the active Library session between 280 and 640 pixels
@@ -149,8 +150,8 @@
    - **Workflow chain / evidence** (CAP-0011)
    - **Verify release integrity** (CAP-0004)
    - **Start periodic review** when due rules allow (CAP-0017)
-   - **Reassociate source** when the selected document is **Lost source** or
-     when an in-root rename/repath is allowed (CAP-0013)
+   - **Reassociate source** when the selected document is **Lost source**
+     (CAP-0013)
    - **Unregister** (this CAP)
    - **Copy permalink** (CAP-0020) — clipboard receives the stable
      workspace+document URI; never a path- or version-based link
