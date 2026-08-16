@@ -103,9 +103,13 @@
    - **document actions** for that selection
    CAP-0015 owns field rules and revision/obsolescence semantics; CAP-0006 owns
    navigation, selection, and pane placement. Its **Document control data**,
-   **Actions**, **Revision cycle**, and **Releases** sections are independently
-   foldable as defined by CAP-0015; the selection header and Source file
-   identity remain visible. The centre/details divider is pointer- and
+   **Document review schedule**, **Actions**, **Revision cycle**, and
+   **Releases** sections are independently
+   foldable and frameless as defined by CAP-0015; each summary exposes a
+   disclosure chevron plus Expand/Collapse cue. The selection header (including
+   lifecycle badge) and Source file identity remain visible. Section fold
+   open/closed state is session-only and survives document switches within the
+   Library activity. The centre/details divider is pointer- and
    keyboard-resizable for the active Library session between 280 and 640 pixels
    while leaving at least 360 pixels for the directory table; Escape during a
    drag restores its starting width. Width is not persisted in workspace
