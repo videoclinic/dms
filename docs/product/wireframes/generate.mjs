@@ -786,9 +786,8 @@ const CAPS = [
         .app[data-cap="CAP-0015"] .content { overflow: hidden; }
         .app[data-cap="CAP-0015"] .document-control-panes { min-height: 0; flex: 1; align-items: stretch; }
         .app[data-cap="CAP-0015"] .document-control-panes > .card { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
-        .app[data-cap="CAP-0015"] .control-boundary-summary { display: grid; gap: 0.4rem; margin: 0.75rem 0; }
-        .app[data-cap="CAP-0015"] .control-boundary-summary > div { padding: 0.45rem 0.55rem; border-left: 3px solid var(--border); background: var(--muted); font-size: 0.75rem; }
-        .app[data-cap="CAP-0015"] .control-boundary-summary strong { display: block; color: var(--foreground); }
+        .app[data-cap="CAP-0015"] .source-identity-plain { margin: 0.55rem 0 0.35rem; padding: 0.35rem 0; }
+        .app[data-cap="CAP-0015"] .source-identity-plain .label { font-size: 0.75rem; color: var(--muted-foreground); }
         .app[data-cap="CAP-0015"] .list-card table { table-layout: fixed; }
         .app[data-cap="CAP-0015"] .list-card th:nth-child(1) { width: 1.5rem; }
         .app[data-cap="CAP-0015"] .list-card th:nth-child(2) { width: 5.9rem; }
@@ -1206,99 +1205,94 @@ function configurationNavigation(cap) {
 }
 function documentControlDataSelectionPane() {
   // CAP-0015 owns this shared selection-pane content; CAP-0006 owns its placement.
+  // Frameless foldable topics with visible disclosure cues; open/closed is session-only.
   return `<aside class="card detail-pane" aria-label="Scrollable document selection details">
     <div class="row between mb">
-      <h3 class="card-title" style="margin:0">HR Data Privacy Policy</h3>
-      ${badge("in_review", "info")}
+      <div class="row gap-2">${badge("In library", "muted")}${badge("in_review", "info")}</div>
+      <button class="btn outline">Clear</button>
     </div>
+    <h3 class="card-title" style="margin:0">HR Data Privacy Policy</h3>
     <p class="muted">Document number: <span class="mono">DOC-014</span></p>
-    <div style="border:1px solid var(--border);border-radius:calc(var(--radius) - 2px);padding:0.65rem 0.75rem;background:var(--muted)">
+    <div class="source-identity-plain">
       <div class="label">Source file <span style="font-weight:400">· from filesystem</span></div>
       <div class="mono" style="margin-top:0.3rem">Handbook.docx</div>
       <div class="muted" style="font-size:0.75rem;margin-top:0.2rem">Folder: policies/HR</div>
     </div>
-    <div class="control-boundary-summary" aria-label="Document control data boundaries">
-      <div><strong>Document profile · mutable</strong>Owner Lukas Roth · title HR Data Privacy Policy</div>
-      <div><strong>Current release · immutable snapshot</strong>V1.3 · effective 2025-08-01 · captured owner 8a1f…</div>
-      <div><strong>Review schedule · mutable</strong>12 months · next due 2026-08-01</div>
-    </div>
+    <p class="hint">Fold open/closed state is session-only and kept when switching documents. Chevron + Expand/Collapse mark each topic as foldable.</p>
     <details class="selection-section" open>
-      <summary>Document profile <span>Mutable · managed in DMS Desktop</span></summary>
+      <summary><span class="selection-section-title">Document control data</span><span class="selection-section-meta">Mutable · managed in DMS Desktop</span></summary>
       <div class="selection-section-body">${kv([
         ["Title", "HR Data Privacy Policy"],
         ["Document number", "DOC-014 (unique in workspace)"],
         ["Document type", "policy"],
         ["Owner", "Lukas Roth · lukas@vc.de · object ID 8a1f…"],
         ["Eligible-person assignment", "Select submits object ID only; name/email are refreshable display data"],
-        ["Legacy owner label", "— <span class=\"muted\">(pre-v12 text would be shown unresolved here)</span>"],
+        ["Legacy owner label", '— <span class="muted">(pre-v12 text would be shown unresolved here)</span>'],
         ["Effective editor", "Lukas Roth · object ID 8a1f…"],
         ["Effective approver", "Anna Berg · object ID 41c2…"],
         ["Confidentiality", "Internal (inherited from policies/HR)"],
-      ])}<p class="hint">Stored under <code>.dms</code>. Effective date is not editable profile data. Renaming the source or refreshing display names does not change identity authority.</p></div>
+      ])}<p class="hint">Stored under <code>.dms</code>. Effective date is not editable profile data.</p>
+      <div class="stack" style="margin-top:0.75rem">
+        <label class="label">Title <input value="HR Data Privacy Policy"></label>
+        <label class="label">Owner <select><option>Lukas Roth · lukas@vc.de</option></select></label>
+        <button class="btn">Save document control</button>
+      </div></div>
     </details>
     <details class="selection-section" open>
-      <summary>Current release <span>Immutable snapshot</span></summary>
-      <div class="selection-section-body">${kv([
-        ["Released", "V1.3 (current)"],
-        ["Effective date", "2025-08-01"],
-        ["Captured title", "HR Data Privacy Policy"],
-        ["Captured owner", "Lukas Roth · object ID 8a1f…"],
-        ["Draft", badge("newer than last release", "warn")],
-      ])}<button class="btn outline">Open latest released PDF</button><p class="hint">Pre-v12 missing profile or effective-date evidence is labelled <strong>unrecorded</strong>; the mutable profile is never substituted.</p></div>
-    </details>
-    <details class="selection-section" open>
-      <summary>Review schedule <span>Mutable</span></summary>
+      <summary><span class="selection-section-title">Document review schedule</span><span class="selection-section-meta">Mutable</span></summary>
       <div class="selection-section-body">${kv([
         ["Resolved interval", "12 months (workspace default)"],
         ["Next review due", "2026-08-01"],
         ["Exemption", "None"],
-      ])}<p class="hint">Due date = current release effective date + resolved interval, clamped to the last valid calendar day.</p></div>
+      ])}<p class="hint">Due date = current release effective date + resolved interval. Schedule changes do not invalidate content approval.</p>
+      <div class="stack" style="margin-top:0.75rem">
+        <label class="label">Schedule <select><option selected>Use workspace interval (12 months)</option><option>Document interval override</option><option>Exempt document</option></select></label>
+        <button class="btn outline" disabled>Update review schedule</button>
+      </div></div>
     </details>
     <details class="selection-section" open>
-      <summary>Actions <span>17 available</span></summary>
+      <summary><span class="selection-section-title">Actions</span></summary>
       <div class="selection-section-body stack-btns">
-        <button class="btn outline">Open draft</button>
-        <button class="btn outline">Edit document control data</button>
-        <button class="btn outline">Override confidentiality…</button>
-        <button class="btn outline">Submit release candidate</button>
-        <button class="btn outline">Apply real Owner / Editor with successful release</button>
-        <button class="btn outline">Begin revision</button>
-        <button class="btn outline">Cancel review</button>
-        <button class="btn danger">Mark obsolete</button>
-        <button class="btn outline">Notes</button>
-        <button class="btn outline">Workflow chain</button>
-        <button class="btn outline">Verify integrity</button>
-        <button class="btn outline">Periodic review</button>
-        <button class="btn outline">Rename / reassociate</button>
+        <button class="btn outline">Open source draft</button>
+        <button class="btn outline">Open current released PDF</button>
+        <button class="btn outline">Open notes</button>
+        <button class="btn outline">Evaluate changes with Claude</button>
         <button class="btn outline">Copy permalink</button>
-        <button class="btn outline">Claude handoff</button>
+        <button class="btn outline">Reassociate source</button>
         <button class="btn danger">Unregister</button>
       </div>
     </details>
     <details class="selection-section" open>
-      <summary>Submit release candidate <span>Required inputs</span></summary>
+      <summary><span class="selection-section-title">Revision cycle</span></summary>
       <div class="selection-section-body stack">
+        <p class="muted" style="font-size:0.85rem;margin:0">The current released PDF remains available while this newer draft is in review. After release, <strong>Begin revision</strong> returns the document to <code>draft</code>; PDFs and history remain preserved.</p>
         <label class="label">Effective date * <input type="date" value="2025-08-15" required></label>
         <label class="label">Target * <select><option value="next_minor" selected>Next minor · V1.4</option><option value="next_major">Next major · V2.0</option><option value="manual">Manual</option></select></label>
         <label class="label">Requesting editor * <select><option value="8a1f">Lukas Roth · lukas@vc.de</option></select></label>
-        <p class="hint">For placeholder documents, select real Owner and Editor to stage them. They apply atomically only after successful release; failed export leaves the placeholders unchanged.</p>
         <button class="btn">Submit candidate</button>
-      </div>
-    </details>
-    <details class="selection-section" open>
-      <summary>Revision cycle</summary>
-      <div class="selection-section-body">
-        <p class="muted" style="font-size:0.85rem;margin:0">The current released PDF remains available while this newer draft is in review. After release, <strong>Begin revision</strong> returns the document to <code>draft</code>; PDFs and history remain preserved.</p>
+        <button class="btn outline">Begin revision</button>
+        <button class="btn outline">Cancel review</button>
+        <button class="btn danger">Mark obsolete</button>
+        <button class="btn outline">View workflow evidence</button>
         <p class="hint">Document-control-data changes while a review is open invalidate that review. Copy permalink uses workspace + document IDs only.</p>
       </div>
     </details>
     <details class="selection-section" open>
-      <summary>Releases <span>4 recorded</span></summary>
+      <summary><span class="selection-section-title">Releases</span><span class="selection-section-meta">4 recorded</span></summary>
       <div class="selection-section-body stack">
+        ${kv([
+          ["Current released PDF", "V1.3 · policies/HR/…_V1.3_internal.pdf"],
+          ["Effective date", "2025-08-01"],
+          ["Captured title", "HR Data Privacy Policy"],
+          ["Captured owner", "Lukas Roth · object ID 8a1f…"],
+          ["Draft", badge("newer than last release", "warn")],
+        ])}
+        <button class="btn outline">Open latest released PDF</button>
         ${ver("V1.3", "effective 2025-08-01 · released 2025-08-01 09:44 UTC · owner 8a1f…", "Substantive / major", "current", "ok")}
         ${ver("V1.2", "effective 2025-07-12 · released 2025-07-12 12:01 UTC", "Cosmetic / minor", "superseded", "muted")}
         ${ver("V1.1", "2025-06-05 14:30 UTC", "Substantive / major", "superseded", "muted")}
         ${ver("V1.0", "2025-05-09 10:12 UTC", "Cosmetic / minor", "withdrawn", "warn")}
+        <p class="hint">Pre-v12 missing profile or effective-date evidence is labelled <strong>unrecorded</strong>; the mutable profile is never substituted.</p>
       </div>
     </details>
   </aside>`;
@@ -1529,12 +1523,38 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .detail-pane .kv > div { grid-template-columns: 7.5rem 1fr; gap: 0.45rem; font-size: 0.8rem; }
 .detail-pane .doc-title { font-size: 1rem; margin-bottom: 0.15rem; }
 .selection-section { margin-top: 0.8rem; border-top: 1px solid var(--border); padding-top: 0.65rem; }
-.selection-section summary { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; cursor: default; font-size: 0.88rem; font-weight: 600; list-style: none; }
+.selection-section summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+  list-style: none;
+  min-height: 1.75rem;
+  padding: 0.15rem 0.2rem;
+  border-radius: calc(var(--radius) - 2px);
+}
 .selection-section summary::-webkit-details-marker { display: none; }
-.selection-section summary::after { content: "⌄"; color: var(--muted-foreground); font-size: 0.9rem; }
-.selection-section:not([open]) summary::after { content: "›"; }
-.selection-section summary span { margin-left: auto; color: var(--muted-foreground); font-size: 0.7rem; font-weight: 500; }
-.selection-section-body { margin-top: 0.65rem; }
+.selection-section summary::before {
+  content: "▸";
+  flex: 0 0 1rem;
+  color: var(--muted-foreground);
+  font-size: 0.85rem;
+  text-align: center;
+}
+.selection-section[open] summary::before { content: "▾"; }
+.selection-section summary::after {
+  content: "Expand";
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.selection-section[open] summary::after { content: "Collapse"; }
+.selection-section-title { min-width: 0; }
+.selection-section-meta { color: var(--muted-foreground); font-size: 0.7rem; font-weight: 500; }
+.selection-section-body { margin-top: 0.65rem; padding-left: 1.35rem; }
 .batch-selection-demo { display: grid; grid-template-columns: minmax(0, 1fr) 18.5rem; gap: 0.85rem; align-items: start; margin-top: 0.25rem; }
 .batch-detail-pane { min-height: 0; }
 .selection-bar { display: flex; flex-wrap: nowrap; align-items: center; gap: 0.4rem; margin-bottom: 0.75rem; padding: 0.5rem 0.65rem; border: 1px solid color-mix(in oklch, var(--info) 28%, var(--border)); background: color-mix(in oklch, var(--info) 8%, white); border-radius: calc(var(--radius) - 2px); font-size: 0.8rem; overflow-x: auto; }
