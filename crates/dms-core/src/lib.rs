@@ -599,6 +599,14 @@ impl Workspace {
     }
 
     pub fn add_document(&mut self, source_path: &Path) -> Result<Document> {
+        self.add_document_inner(source_path, true)
+    }
+
+    pub(crate) fn add_document_inner(
+        &mut self,
+        source_path: &Path,
+        sync_frontmatter: bool,
+    ) -> Result<Document> {
         let (absolute_path, relative_path) = self.resolve_source_path(source_path)?;
         if self.is_markdown_template_path(&relative_path) {
             return Err(DmsError::TemplateLifecycleExcluded(relative_path));
@@ -619,7 +627,11 @@ impl Workspace {
                 return Err(DmsError::DocumentAlreadyRegistered(relative_path));
             }
             existing.source_state = SourceState::Registered;
-            return Ok(existing.clone());
+            let document = existing.clone();
+            if sync_frontmatter {
+                self.sync_markdown_control_frontmatter(document.id)?;
+            }
+            return Ok(document);
         }
         let title = source_title(&absolute_path)?;
         let document = Document {
@@ -647,6 +659,9 @@ impl Workspace {
             periodic_reviews: Vec::new(),
         };
         self.documents.insert(document.id, document.clone());
+        if sync_frontmatter {
+            self.sync_markdown_control_frontmatter(document.id)?;
+        }
         Ok(document)
     }
 
@@ -684,6 +699,7 @@ impl Workspace {
                 .control = after.clone();
             self.append_control_change_event(document_id, before, after)?;
             self.invalidate_stale_candidates();
+            self.sync_markdown_control_frontmatter(document_id)?;
         }
         self.document(document_id).cloned()
     }

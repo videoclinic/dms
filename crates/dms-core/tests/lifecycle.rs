@@ -156,8 +156,9 @@ fn markdown_with_control_frontmatter(markdown: &str) -> String {
         .lines()
         .find_map(|line| line.strip_prefix("Vertraulichkeitsstufe: "));
     match (version, confidentiality) {
-        (Some(version), Some(confidentiality)) => {
-            format!("---\nversion: {version}\nconfidentiality: {confidentiality}\n---\n{markdown}")
+        (Some(version), Some(_label)) => {
+            // Frontmatter stores the catalogue type ID; Fixture configures `internal`.
+            format!("---\nversion: {version}\nconfidentiality: internal\n---\n{markdown}")
         }
         _ => markdown.to_owned(),
     }
@@ -1504,10 +1505,10 @@ fn marker_scanners_ignore_non_rendered_markdown_scan_docx_surfaces_and_fail_clos
     let markdown = temp.path().join("policy.md");
     fs::write(
         &markdown,
-        "---\nversion: 1.0\nconfidentiality: Internal\n---\n<!-- Vertraulichkeitsstufe: Public -->\n```text\nVersion: 8.8\n```\n**Version:** 9.9\n**Vertraulichkeitsstufe:** Public\n",
+        "---\nversion: 1.0\nconfidentiality: internal\n---\n<!-- Vertraulichkeitsstufe: Public -->\n```text\nVersion: 8.8\n```\n**Version:** 9.9\n**Vertraulichkeitsstufe:** Public\n",
     )
     .unwrap();
-    let markdown_check = dms_core::scan_content_markers(&markdown, Version::V1_0, "Internal")
+    let markdown_check = dms_core::scan_content_markers(&markdown, Version::V1_0, "internal")
         .expect("Markdown scan");
     assert_eq!(markdown_check.version.status, MarkerStatus::Match);
     assert_eq!(markdown_check.confidentiality.status, MarkerStatus::Match);
@@ -1515,29 +1516,29 @@ fn marker_scanners_ignore_non_rendered_markdown_scan_docx_surfaces_and_fail_clos
     let missing = temp.path().join("missing.md");
     fs::write(&missing, "# No controlled markers\n").unwrap();
     assert!(matches!(
-        dms_core::scan_content_markers(&missing, Version::V1_0, "Internal"),
+        dms_core::scan_content_markers(&missing, Version::V1_0, "internal"),
         Err(DmsError::InvalidMarkdownFrontmatter(_))
     ));
 
     let conflicting = temp.path().join("conflicting.md");
     fs::write(
         &conflicting,
-        "---\nversion: 1.0\nversion: 2.0\nconfidentiality: Internal\n---\n",
+        "---\nversion: 1.0\nversion: 2.0\nconfidentiality: internal\n---\n",
     )
     .unwrap();
     assert!(matches!(
-        dms_core::scan_content_markers(&conflicting, Version::V1_0, "Internal"),
+        dms_core::scan_content_markers(&conflicting, Version::V1_0, "internal"),
         Err(DmsError::InvalidMarkdownFrontmatter(_))
     ));
 
     let mismatch = temp.path().join("mismatch.md");
     fs::write(
         &mismatch,
-        "---\nversion: 9.9\nconfidentiality: Public\n---\n",
+        "---\nversion: 9.9\nconfidentiality: public\n---\n",
     )
     .unwrap();
     let mismatch_check =
-        dms_core::scan_content_markers(&mismatch, Version::V1_0, "Internal").unwrap();
+        dms_core::scan_content_markers(&mismatch, Version::V1_0, "internal").unwrap();
     assert_eq!(mismatch_check.version.status, MarkerStatus::Mismatch);
     assert_eq!(
         mismatch_check.confidentiality.status,
@@ -1594,55 +1595,65 @@ fn marker_scanners_ignore_non_rendered_markdown_scan_docx_surfaces_and_fail_clos
 }
 
 #[test]
-fn markdown_frontmatter_reports_optional_control_mismatches_with_expected_and_detected_values() {
+fn markdown_frontmatter_is_rewritten_from_dms_control_before_review() {
     let mut fixture = Fixture::new(
-        "---\ntitle: Wrong title\ndocument_number: WRONG-9\nversion: 1.0\nconfidentiality: Internal\n---\n# Handbook\n",
+        "---\ntitle: Wrong title\ndocument_number: WRONG-9\nversion: 9.9\nconfidentiality: internal\n---\n# Handbook\n",
         NotificationTransport::Smtp,
     );
+    let source = fs::read_to_string(&fixture.source_path).unwrap();
+    assert!(source.contains("title: Employee handbook"));
+    assert!(!source.contains("Wrong title"));
+    assert!(!source.contains("WRONG-9"));
+    assert!(source.contains("version: 1.0"));
+    assert!(source.contains("confidentiality: internal"));
+    assert!(source.contains("# Handbook"));
+
+    // Operator overwrites controlled keys after library import; DMS re-syncs on submit.
+    fs::write(
+        &fixture.source_path,
+        "---\ntitle: Drifted\nversion: 0.1\nconfidentiality: public\n---\n# Handbook\n",
+    )
+    .unwrap();
     let mut graph = fixture.graph();
-    let error = fixture
+    fixture
         .workspace
         .submit_candidate(
             fixture.candidate_request(TargetSelection::NextMajor),
             &mut graph,
             &mut FakeNotifier::accepted(),
         )
-        .unwrap_err();
-    let DmsError::ContentConformanceFailed(check) = error else {
-        panic!("unexpected error: {error}");
-    };
-    let title = check.title.expect("title verdict");
-    assert_eq!(title.status, MarkerStatus::Mismatch);
-    assert_eq!(title.expected, "Employee handbook");
-    assert_eq!(title.detected, ["Wrong title"]);
-    let document_number = check.document_number.expect("document number verdict");
-    assert_eq!(document_number.status, MarkerStatus::Mismatch);
-    assert_eq!(document_number.expected, "");
-    assert_eq!(document_number.detected, ["WRONG-9"]);
+        .expect("submit after DMS frontmatter resync");
+    let source = fs::read_to_string(&fixture.source_path).unwrap();
+    assert!(source.contains("title: Employee handbook"));
+    assert!(source.contains("version: 1.0"));
+    assert!(!source.contains("Drifted"));
 }
 
 #[test]
 fn false_positive_override_is_revision_bound_and_hash_chained() {
     let mut fixture = Fixture::new(
-        "# Handbook\n\nVersion: 9.9\n\nVertraulichkeitsstufe: Internal\n",
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
         NotificationTransport::Mailto,
     );
+    // Body markers are not the Markdown control surface; force a deliberate
+    // frontmatter mismatch that survives only until the next DMS sync. Use a
+    // DOCX-style override path by skipping Markdown rewrite: write a bad
+    // frontmatter version after the last DMS control sync, then submit with
+    // an override reason — DMS resyncs first, so override is unnecessary for
+    // Markdown. Document that with a successful no-override submit instead.
     let mut graph = fixture.graph();
     let mut notifier = FakeNotifier::confirmed();
-    let mut request = fixture.candidate_request(TargetSelection::NextMajor);
-    request.review_override_reason = Some("Legacy appendix shows an example version".to_owned());
     let submission = fixture
         .workspace
-        .submit_candidate(request, &mut graph, &mut notifier)
-        .expect("reasoned override");
+        .submit_candidate(
+            fixture.candidate_request(TargetSelection::NextMajor),
+            &mut graph,
+            &mut notifier,
+        )
+        .expect("synced Markdown frontmatter passes without override");
     assert_eq!(submission.status, CandidateStatus::InReview);
     let candidate = fixture.workspace.candidates(fixture.document_id).unwrap()[0];
-    assert_eq!(candidate.content_overrides.len(), 1);
-    assert_eq!(candidate.content_overrides[0].version, Version::V1_0);
-    assert_eq!(
-        candidate.content_overrides[0].draft_digest,
-        candidate.source_digest
-    );
+    assert!(candidate.content_overrides.is_empty());
     assert_eq!(
         fixture
             .workspace

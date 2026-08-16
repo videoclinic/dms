@@ -193,9 +193,12 @@ impl Workspace {
         let mut candidate = self.clone();
         let mut added = Vec::with_capacity(source_paths.len());
         for source_path in source_paths {
-            added.push(candidate.add_document(source_path)?);
+            added.push(candidate.add_document_inner(source_path, false)?);
         }
         *self = candidate;
+        for document in &added {
+            self.sync_markdown_control_frontmatter(document.id)?;
+        }
         Ok(added)
     }
 
@@ -243,7 +246,9 @@ impl Workspace {
             .ok_or(DmsError::DocumentNotFound(document_id))?;
         document.relative_path = relative_path;
         document.source_state = SourceState::Registered;
-        Ok(document.clone())
+        let document = document.clone();
+        self.sync_markdown_control_frontmatter(document.id)?;
+        Ok(document)
     }
 
     pub fn document_permalink(&self, document_id: Uuid) -> Result<String> {

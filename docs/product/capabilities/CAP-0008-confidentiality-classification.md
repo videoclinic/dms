@@ -73,6 +73,10 @@ When implemented, the following must hold:
    approval-required content review is open or after approval but before release,
    the request/approval is invalidated and a new review is required. Historical
    snapshots remain unchanged.
+12. Registered Markdown drafts store the effective type **ID** in frontmatter
+   key `confidentiality` (CAP-0002 / CAP-0007). Office visible markers and
+   export chrome continue to use the display label. PDF filenames always use
+   the type ID.
 
 ## Non-goals
 

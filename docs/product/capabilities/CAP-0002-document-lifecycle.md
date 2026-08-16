@@ -150,8 +150,10 @@
     - `Version: <major>.<minor>` must equal the candidate label without its
       filename `V` prefix (for example, candidate `V2.0` requires
       `Version: 2.0`).
-    - `Vertraulichkeitsstufe: <display label>` must equal the effective
-      confidentiality type's current display label (CAP-0008).
+    - `Vertraulichkeitsstufe: <display label>` (Office drafts) must equal the
+      effective confidentiality type's current display label (CAP-0008).
+    - Markdown frontmatter `confidentiality: <type-id>` must equal the effective
+      confidentiality type's stable ID (CAP-0008), not the display label.
     A marker is absent, malformed, or mismatched when no canonical occurrence
     is found or when multiple occurrences do not all resolve to the expected
     value. Caption matching normalizes surrounding whitespace and casing;
@@ -164,10 +166,15 @@
     `version` and `confidentiality` frontmatter fields. Optional `title` and
     `document_number` fields must match the candidate snapshot when present;
     duplicate, structured, or malformed controlled fields fail closed.
-    Frontmatter validates the source but never supplies authoritative release
-    values or mutates DMS document control data. Additional flat frontmatter
-    scalars may fill non-controlled Word-template `{KEY}` variables under
-    CAP-0007 during temporary DOCX assembly only. Other draft formats may
+    For registered Markdown library members, DMS owns those controlled
+    frontmatter keys: it prefills them from document control and library
+    settings on add/reassociate and overwrites them whenever DMS control data,
+    effective confidentiality, or the candidate target version changes.
+    Frontmatter `confidentiality` stores the catalogue **type ID**; the display
+    label is used for Office markers and export chrome only. Frontmatter never
+    supplies authoritative values into `.dms`. Additional flat
+    frontmatter scalars may fill non-controlled Word-template `{KEY}` variables
+    under CAP-0007 during temporary DOCX assembly only. Other draft formats may
     not enter review or release until equivalent visible-content coverage is
     implemented and tested alongside CAP-0007.
     A failed check blocks the transition by default and reports the expected and

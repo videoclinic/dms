@@ -19,7 +19,8 @@ desktop adapter.
   not reimplement domain rules.
 - `dms-core` has no Tauri, WebView, Office, Entra, or notification dependency.
 - `dms-cli` accepts only explicit workspace and document targets; it never
-  auto-discovers or mutates source drafts.
+  auto-discovers drafts. Core may rewrite controlled Markdown frontmatter on
+  registered library members when CLI invokes those mutations.
 - Metadata writes go through the core store and remain inside `<edit-root>/.dms`.
 - Schema changes require migration fixtures and explicit version handling before
   changing the persisted shape.

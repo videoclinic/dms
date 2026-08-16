@@ -46,10 +46,11 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
 - On release, the app: snapshots the effective confidentiality type ID, confirms
   the approved target version label → ensures the relative parent path exists under the
   publish root → builds one export chrome map from `.dms` → exports Office
-  drafts through installed Microsoft Office, or validates Markdown frontmatter,
-  assembles a temporary DOCX from the configured workspace template and
-  CommonMark body (frontmatter stripped; optional non-controlled frontmatter
-  `{KEY}` variables filled), fills controlled fields from the release snapshot, and
+  drafts through installed Microsoft Office, or validates Markdown frontmatter
+  after projecting controlled keys from `.dms`, assembles a temporary DOCX from
+  the configured workspace template and CommonMark body (frontmatter stripped
+  from body; optional non-controlled frontmatter `{KEY}` variables filled),
+  fills controlled fields from the release snapshot, and
   exports that DOCX through installed Word → writes
   `<stem>_VMAJOR.MINOR_<confidentiality-type-id>.pdf` → checksums the result.
 - Application-managed version history consists of immutable release PDFs and

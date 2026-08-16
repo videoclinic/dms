@@ -127,12 +127,17 @@ Capability-local rules stay in their CAP files.
   preserving local-only conversion.
 - **Consequences:** Licensed desktop Word is required for Markdown as well as
   DOCX release. DMS title, document number, candidate version, and effective
-  confidentiality remain authoritative; frontmatter is validated source
-  metadata and never overwrites `.dms` control data. Extra flat frontmatter
+  confidentiality remain authoritative in `.dms`. For registered Markdown
+  library members DMS also projects those values into controlled frontmatter
+  keys (one-way overwrite; never an import into `.dms`). Frontmatter
+  `confidentiality` stores the catalogue type ID; Word chrome
+  `{CONFIDENTIALITY}` still uses the display label. Extra flat frontmatter
   scalars may define optional non-controlled Word-template `{KEY}` variables
-  filled only into the temporary DOCX. The temporary DOCX retains
+  filled only into the temporary DOCX. Operator reference:
+  `docs/markdown-frontmatter-and-template-variables.md`. The temporary DOCX retains
   template styles, page setup, headers, footers, media, and supported field
-  locations, while the source Markdown and template remain unchanged. CI may
+  locations. Source Markdown may be rewritten only for those controlled
+  frontmatter keys; the imported Word template remains unchanged. CI may
   use deterministic DOCX assembly plus Office test doubles, but supported-host
   evidence must prove installed Word. No Pandoc, LibreOffice, cloud converter,
   or parallel WebView release path is part of the product.

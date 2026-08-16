@@ -1,6 +1,10 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fs, path::Path};
 
-use super::{DmsError, MarkerStatus, MarkerVerdict, Result};
+use uuid::Uuid;
+
+use super::{
+    DmsError, MarkerStatus, MarkerVerdict, Result, SourceState, TargetSelection, Workspace,
+};
 
 /// Controlled export-chrome tokens. Frontmatter may validate these fields but
 /// must not fill the matching Word placeholders; release chrome owns them.
@@ -192,6 +196,236 @@ pub fn check_markdown_frontmatter(
     })
 }
 
+/// Controlled frontmatter values owned by DMS for registered Markdown members.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ControlledMarkdownFields {
+    pub title: String,
+    pub document_number: Option<String>,
+    pub version: String,
+    pub confidentiality: String,
+}
+
+const CONTROLLED_FRONTMATTER_KEYS: &[&str] =
+    &["title", "document_number", "version", "confidentiality"];
+
+/// Rewrite controlled frontmatter keys from DMS values while preserving the body
+/// and any non-controlled flat scalars (template variables).
+pub fn apply_controlled_frontmatter(
+    markdown: &str,
+    controlled: &ControlledMarkdownFields,
+) -> Result<String> {
+    let (mut extras, body) = split_frontmatter_map(markdown)?;
+    for key in CONTROLLED_FRONTMATTER_KEYS {
+        extras.remove(*key);
+    }
+
+    let mut output = String::from("---\n");
+    push_frontmatter_line(&mut output, "title", &controlled.title);
+    if let Some(number) = controlled.document_number.as_deref() {
+        push_frontmatter_line(&mut output, "document_number", number);
+    }
+    push_frontmatter_line(&mut output, "version", &controlled.version);
+    push_frontmatter_line(&mut output, "confidentiality", &controlled.confidentiality);
+    for (key, value) in extras {
+        push_frontmatter_line(&mut output, &key, &value);
+    }
+    output.push_str("---\n");
+    output.push_str(body);
+    Ok(output)
+}
+
+/// Split optional frontmatter into a key map and body. Missing controlled keys
+/// are allowed so DMS can prefill new or incomplete files.
+pub fn split_frontmatter_map(markdown: &str) -> Result<(BTreeMap<String, String>, &str)> {
+    let markdown = markdown.strip_prefix('\u{feff}').unwrap_or(markdown);
+    let Some((opening, rest)) = split_line(markdown) else {
+        return Ok((BTreeMap::new(), markdown));
+    };
+    if opening.trim_end_matches('\r') != "---" {
+        return Ok((BTreeMap::new(), markdown));
+    }
+
+    let mut variables = BTreeMap::new();
+    let mut body_offset = 0;
+    let mut closed = false;
+    for line in rest.split_inclusive('\n') {
+        body_offset += line.len();
+        let line = line.trim_end_matches(['\r', '\n']);
+        if matches!(line, "---" | "...") {
+            closed = true;
+            break;
+        }
+        if line.trim().is_empty() {
+            continue;
+        }
+        if line.starts_with(char::is_whitespace) {
+            return Err(DmsError::InvalidMarkdownFrontmatter(
+                "nested frontmatter values are not supported".to_owned(),
+            ));
+        }
+        let (key, raw_value) = line.split_once(':').ok_or_else(|| {
+            DmsError::InvalidMarkdownFrontmatter(format!(
+                "frontmatter line {line:?} is not a key/value scalar"
+            ))
+        })?;
+        let key = key.trim();
+        if key.is_empty() || key.contains(char::is_whitespace) {
+            return Err(DmsError::InvalidMarkdownFrontmatter(format!(
+                "frontmatter key {key:?} is invalid"
+            )));
+        }
+        let value = parse_scalar(key, raw_value)?;
+        if variables.insert(key.to_owned(), value).is_some() {
+            return Err(DmsError::InvalidMarkdownFrontmatter(format!(
+                "frontmatter key {key} is duplicated"
+            )));
+        }
+    }
+    if !closed {
+        return Err(DmsError::InvalidMarkdownFrontmatter(
+            "frontmatter closing delimiter is missing".to_owned(),
+        ));
+    }
+    Ok((variables, &rest[body_offset..]))
+}
+
+fn push_frontmatter_line(output: &mut String, key: &str, value: &str) {
+    output.push_str(key);
+    output.push_str(": ");
+    output.push_str(&yaml_scalar(value));
+    output.push('\n');
+}
+
+fn yaml_scalar(value: &str) -> String {
+    let needs_quotes = value.is_empty()
+        || value != value.trim()
+        || value.bytes().any(|byte| {
+            matches!(
+                byte,
+                b':' | b'#'
+                    | b'"'
+                    | b'\''
+                    | b'['
+                    | b'{'
+                    | b']'
+                    | b'}'
+                    | b','
+                    | b'&'
+                    | b'*'
+                    | b'!'
+                    | b'|'
+                    | b'>'
+                    | b'<'
+                    | b'%'
+                    | b'@'
+                    | b'`'
+                    | b'\n'
+                    | b'\r'
+            )
+        });
+    if needs_quotes {
+        format!(
+            "\"{}\"",
+            value
+                .replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace('\n', "\\n")
+                .replace('\r', "\\r")
+        )
+    } else {
+        value.to_owned()
+    }
+}
+
+fn is_markdown_source_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
+}
+
+impl Workspace {
+    /// Prefill or overwrite controlled Markdown frontmatter from DMS authority.
+    pub fn sync_markdown_control_frontmatter(&self, document_id: Uuid) -> Result<()> {
+        self.sync_markdown_control_frontmatter_with_version(document_id, None)
+    }
+
+    pub(crate) fn sync_markdown_control_frontmatter_with_version(
+        &self,
+        document_id: Uuid,
+        version_override: Option<&str>,
+    ) -> Result<()> {
+        let document = self.document(document_id)?;
+        if document.source_state != SourceState::Registered {
+            return Ok(());
+        }
+        if !is_markdown_source_path(&document.relative_path) {
+            return Ok(());
+        }
+        let path = self.edit_root.join(&document.relative_path);
+        let source = fs::read_to_string(&path).map_err(|source| DmsError::Io {
+            path: path.clone(),
+            source,
+        })?;
+        let confidentiality = match self.effective_confidentiality(document_id) {
+            Ok(value) => value.type_id,
+            Err(DmsError::MissingConfidentialityPolicy) => return Ok(()),
+            Err(error) => return Err(error),
+        };
+        let version = match version_override {
+            Some(version) => version.to_owned(),
+            None => self.markdown_control_version_label(document_id)?,
+        };
+        let controlled = ControlledMarkdownFields {
+            title: document.control.title.clone(),
+            document_number: document.control.document_number.clone(),
+            version,
+            confidentiality,
+        };
+        let next = apply_controlled_frontmatter(&source, &controlled)?;
+        if next != source {
+            fs::write(&path, next.as_bytes()).map_err(|source| DmsError::Io {
+                path: path.clone(),
+                source,
+            })?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn sync_all_registered_markdown_frontmatter(&self) -> Result<()> {
+        let document_ids = self
+            .documents
+            .values()
+            .filter(|document| {
+                document.source_state == SourceState::Registered
+                    && is_markdown_source_path(&document.relative_path)
+            })
+            .map(|document| document.id)
+            .collect::<Vec<_>>();
+        for document_id in document_ids {
+            self.sync_markdown_control_frontmatter(document_id)?;
+        }
+        Ok(())
+    }
+
+    fn markdown_control_version_label(&self, document_id: Uuid) -> Result<String> {
+        let document = self.document(document_id)?;
+        if let Some(candidate_id) = document.active_candidate_id {
+            if let Some(candidate) = document
+                .candidates
+                .iter()
+                .find(|candidate| candidate.id == candidate_id)
+            {
+                return Ok(format!(
+                    "{}.{}",
+                    candidate.version.major, candidate.version.minor
+                ));
+            }
+        }
+        let version = self.resolve_target_version(document_id, TargetSelection::NextMinor)?;
+        Ok(format!("{}.{}", version.major, version.minor))
+    }
+}
+
 fn split_line(value: &str) -> Option<(&str, &str)> {
     value
         .find('\n')
@@ -313,5 +547,45 @@ mod tests {
         assert!(!check.passes());
         assert_eq!(check.title.unwrap().detected, ["Wrong"]);
         assert_eq!(check.document_number.unwrap().expected, "P-01");
+    }
+
+    #[test]
+    fn apply_controlled_frontmatter_prefills_and_preserves_extras() {
+        let controlled = ControlledMarkdownFields {
+            title: "Policy <A>".to_owned(),
+            document_number: Some("P-1".to_owned()),
+            version: "1.0".to_owned(),
+            confidentiality: "Vertraulich & intern".to_owned(),
+        };
+        let written = apply_controlled_frontmatter("# Body\n", &controlled).unwrap();
+        assert!(written.starts_with("---\n"));
+        assert!(written.contains("title: \"Policy <A>\"") || written.contains("title: Policy"));
+        let (parsed, body) = parse_markdown_frontmatter(&written).unwrap();
+        assert_eq!(parsed.title.as_deref(), Some("Policy <A>"));
+        assert_eq!(parsed.document_number.as_deref(), Some("P-1"));
+        assert_eq!(parsed.version, "1.0");
+        assert_eq!(parsed.confidentiality, "Vertraulich & intern");
+        assert_eq!(body, "# Body\n");
+
+        let merged = apply_controlled_frontmatter(
+            "---\ntitle: Old\nversion: 0.1\nconfidentiality: Internal\nauthor: Ada\n---\n# Keep\n",
+            &ControlledMarkdownFields {
+                title: "New".to_owned(),
+                document_number: None,
+                version: "2.0".to_owned(),
+                confidentiality: "Internal".to_owned(),
+            },
+        )
+        .unwrap();
+        let (parsed, body) = parse_markdown_frontmatter(&merged).unwrap();
+        assert_eq!(parsed.title.as_deref(), Some("New"));
+        assert!(parsed.document_number.is_none());
+        assert_eq!(parsed.version, "2.0");
+        assert_eq!(
+            parsed.variables.get("author").map(String::as_str),
+            Some("Ada")
+        );
+        assert_eq!(body, "# Keep\n");
+        assert!(!merged.contains("document_number:"));
     }
 }

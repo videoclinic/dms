@@ -17,11 +17,15 @@
      form, record, other)
    - **owner** (the selected eligible person's current-group binding and immutable
      Entra object ID; refreshed name/email are presentation only)
-   These values are not imported from or synchronized with Office built-in or
-   custom document properties, or Markdown frontmatter. CAP-0002 may validate
-   matching Markdown frontmatter before review/release, but it never mutates
-   these values. The draft filename stem supplies the title's one-time default
-   only when the document is added; it is not a continuing metadata source.
+   These values are not imported from Office built-in or custom document
+   properties. For registered Markdown library members, DMS is the source of
+   truth for the controlled frontmatter keys `title`, `document_number`,
+   `version`, and `confidentiality`: it prefills them from library defaults and
+   overwrites them when DMS control data, effective confidentiality, or the
+   candidate target version changes. Frontmatter `confidentiality` holds the
+   catalogue type ID (not the display label). Frontmatter never mutates `.dms`
+   control data. The draft filename stem supplies the title's one-time default only
+   when the document is added; it is not a continuing metadata source.
 2. Document control data for the **currently selected library document** is
    shown on the **same CAP-0006 library page** in the selection pane (right
    column), together with document actions for that selection. The pane keeps
@@ -101,11 +105,11 @@
     locator and the filesystem-derived **Source file** display; it does not
     change the document's title, number, type, owner, release dates, review
     schedule, lifecycle state,
-    or history. Office document properties and Markdown frontmatter are likewise
-    not authoritative for document control data, even when checked or filled
-    during CAP-0007 export. The application restores draft
-    content only from an operator workspace backup; released PDFs and their
-    evidence remain the
+    or history. Office document properties are not authoritative for document
+    control data. Registered Markdown drafts receive controlled frontmatter keys
+    written from DMS (CAP-0002 / CAP-0007); that one-way projection never imports
+    frontmatter into `.dms`. The application restores draft content only from an
+    operator workspace backup; released PDFs and their evidence remain the
     durable application-managed version history.
 14. **Begin revision**, **Mark obsolete**, and **Cancel review** are available
     from the CAP-0006 selection pane (single selection) when preconditions hold;

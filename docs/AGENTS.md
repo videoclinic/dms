@@ -13,6 +13,7 @@ privacy, and design decisions for this repository.
 | `privacy.md` | Data classes and local-processing principles |
 | `design-decisions.md` | Cross-cutting ADRs |
 | `entra-client-setup.md` | Operator setup for the DMS Entra public-client registration and delegated Graph consent |
+| `markdown-frontmatter-and-template-variables.md` | Markdown controlled frontmatter keys, optional template variables, and Word chrome tokens |
 | `product/` | CAP index, capability contracts, wireframe references |
 | `changes/` | CHG lifecycle (active/archive) |
 

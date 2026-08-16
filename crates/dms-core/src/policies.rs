@@ -173,6 +173,7 @@ impl Workspace {
         };
         self.confidentiality_types
             .insert(configured.id.clone(), configured.clone());
+        self.sync_all_registered_markdown_frontmatter()?;
         Ok(configured)
     }
 
@@ -189,6 +190,7 @@ impl Workspace {
         };
         self.confidentiality_policies.insert(folder, policy.clone());
         self.invalidate_stale_candidates();
+        self.sync_all_registered_markdown_frontmatter()?;
         Ok(policy)
     }
 
@@ -199,6 +201,7 @@ impl Workspace {
         }
         self.confidentiality_policies.remove(&folder);
         self.invalidate_stale_candidates();
+        self.sync_all_registered_markdown_frontmatter()?;
         Ok(())
     }
 
@@ -216,6 +219,7 @@ impl Workspace {
             .ok_or(DmsError::DocumentNotFound(document_id))?;
         document.confidentiality_override = type_id.map(str::to_owned);
         self.invalidate_stale_candidates();
+        self.sync_markdown_control_frontmatter(document_id)?;
         Ok(())
     }
 

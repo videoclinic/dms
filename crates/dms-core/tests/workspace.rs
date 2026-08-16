@@ -50,10 +50,21 @@ fn workspace_init_persists_canonical_roots_and_stable_id() {
 #[test]
 fn document_control_is_persisted_independently_from_source_locator() {
     let (edit_root, _publish_root, mut workspace) = initialized_workspace();
+    workspace
+        .configure_confidentiality_type("internal", "Internal", true)
+        .expect("type");
+    workspace
+        .set_confidentiality_policy(".", "internal")
+        .expect("policy");
     let document = add_markdown_document(&mut workspace, &edit_root, "procedures/Onboarding.md");
     let relative_path = PathBuf::from("procedures").join("Onboarding.md");
     assert_eq!(document.relative_path, relative_path);
     assert_eq!(document.control.title, "Onboarding");
+    let source_after_add = fs::read_to_string(edit_root.path().join(&relative_path)).unwrap();
+    assert!(source_after_add.contains("title: Onboarding"));
+    assert!(source_after_add.contains("version: 1.0"));
+    assert!(source_after_add.contains("confidentiality: internal"));
+    assert!(source_after_add.contains("# Draft"));
     workspace
         .configure_document_type("procedure", "Procedure", true)
         .expect("document type");
@@ -70,6 +81,11 @@ fn document_control_is_persisted_independently_from_source_locator() {
         )
         .expect("update control data");
     workspace.save().expect("save workspace");
+
+    let source_after_update = fs::read_to_string(edit_root.path().join(&relative_path)).unwrap();
+    assert!(source_after_update.contains("title: New hire onboarding"));
+    assert!(source_after_update.contains("document_number: PR-001"));
+    assert!(source_after_update.contains("# Draft"));
 
     let metadata = fs::read_to_string(
         edit_root

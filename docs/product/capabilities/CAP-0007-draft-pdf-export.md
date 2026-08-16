@@ -68,17 +68,21 @@ When implemented, the following must hold:
     `{DOCUMENT_NUMBER}`, `{VERSION}`, and `{CONFIDENTIALITY}` remain supported in
     temporary Office copies and custom-property values. The source Office draft,
     Markdown source, and imported template are never modified during release.
-12. Markdown frontmatter is parsed as source metadata before body conversion.
-    `version` and `confidentiality` are required and must match the candidate
-    snapshot; optional `title` and `document_number` must match when present.
-    Frontmatter never overwrites `.dms` control data and is not emitted as body
-    content. The generated DOCX and PDF always receive controlled values from the
-    release snapshot for `TITLE`, `DOCUMENT_NUMBER`, `VERSION`, and
-    `CONFIDENTIALITY`. Additional flat ASCII-identifier frontmatter keys act as
-    optional Word-template **variable definitions**: each key `name` fills
-    matching `{NAME}` placeholders (uppercased) in temporary package XML during
-    Markdown→DOCX assembly. Those variables never become document-control data
-    and never override the four reserved controlled tokens.
+12. Markdown frontmatter is managed for registered library members before body
+    conversion. DMS prefills and overwrites controlled keys `title`,
+    `document_number` (when set), `version`, and `confidentiality` from
+    document control, effective library confidentiality **type ID**, and the
+    candidate target version. Non-controlled keys remain operator template
+    variables. Frontmatter never overwrites `.dms` control data. The generated
+    DOCX and PDF always receive controlled chrome values from the release
+    snapshot for `TITLE`, `DOCUMENT_NUMBER`, `VERSION`, and `CONFIDENTIALITY`
+    (chrome confidentiality uses the display label). Additional flat
+    ASCII-identifier frontmatter keys act as optional Word-template **variable
+    definitions**: each key `name` fills matching `{NAME}` placeholders
+    (uppercased) in temporary package XML during Markdown→DOCX assembly. Those
+    variables never become document-control data and never override the four
+    reserved controlled tokens. Operator reference:
+    [`../../markdown-frontmatter-and-template-variables.md`](../../markdown-frontmatter-and-template-variables.md).
 
 ## Non-goals
 

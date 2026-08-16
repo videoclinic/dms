@@ -18,7 +18,7 @@ persistence.
 | `src/lifecycle.rs` | Version candidates, Entra/notification/export ports, content conformance, review decisions, release commits, and hash-chained evidence |
 | `src/maintenance.rs` | Release checksum verification, workspace review defaults, periodic-review scheduling and transitions, and full-workspace ZIP backup with SHA-256 manifest |
 | `src/policies.rs` | Folder-policy tree, confidentiality inheritance, Entra display binding, and workflow-role resolution |
-| `src/frontmatter.rs` | Strict flat Markdown control-field parsing, optional template-variable map, and expected/detected comparison |
+| `src/frontmatter.rs` | Strict flat Markdown parsing, controlled-key rewrite from DMS, optional template-variable map, and expected/detected comparison |
 | `src/template.rs` | Reusable workspace Word-template identity, validation, CommonMark-to-OOXML assembly, and frontmatter variable fill |
 | `tests/` | Domain, migration-fixture, and persistence behaviour tests |
 
@@ -65,7 +65,12 @@ persistence.
   `document_number` when present, and scan visible DOCX body/header/footer text;
   unsupported formats fail closed. Overrides require a reason and remain bound
   to the checked digest, target, confidentiality, and phase in the workflow
-  chain.
+  chain. For registered Markdown members, DMS prefills and overwrites those
+  controlled frontmatter keys from document control, effective confidentiality
+  type ID, and candidate target version (one-way; never imports frontmatter into
+  `.dms`). Sync is skipped until a confidentiality policy exists; policy/type/label
+  changes re-sync all registered Markdown members. Export chrome
+  `{CONFIDENTIALITY}` still uses the display label.
 - One optional stable workspace Word-template asset may reference an ordinary
   in-root non-symlink `.docx`. It is configuration rather than a controlled
   document, is excluded from Library file rows and counters, and preserves all

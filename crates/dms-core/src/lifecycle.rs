@@ -650,6 +650,12 @@ impl Workspace {
             TargetSelection::Manual(_) => TargetVersionMode::Manual,
         };
         let changelog = configured_text(&request.changelog, "release changelog")?;
+        // DMS is authoritative for controlled Markdown frontmatter: rewrite the
+        // candidate target version first so digest and content checks match.
+        self.sync_markdown_control_frontmatter_with_version(
+            request.document_id,
+            Some(&format!("{}.{}", version.major, version.minor)),
+        )?;
         let source_path = self.edit_root.join(&document.relative_path);
         let source_digest = sha256_file(&source_path)?;
         let requester = self.person_snapshot(request.requester_object_id, tenant_id)?;
@@ -683,6 +689,7 @@ impl Workspace {
             let check = scan_content_conformance(
                 &source_path,
                 version,
+                &candidate.metadata.confidentiality.type_id,
                 &candidate.metadata.confidentiality.label,
                 Some(&candidate.metadata.control.title),
                 Some(candidate.metadata.control.document_number.as_deref()),
@@ -972,6 +979,7 @@ impl Workspace {
         let check = scan_content_conformance(
             &source_path,
             candidate.version,
+            &candidate.metadata.confidentiality.type_id,
             &candidate.metadata.confidentiality.label,
             Some(&candidate.metadata.control.title),
             Some(candidate.metadata.control.document_number.as_deref()),
@@ -1257,6 +1265,7 @@ impl Workspace {
             .get_mut(&document_id)
             .expect("document checked above")
             .lifecycle = Lifecycle::Draft;
+        self.sync_markdown_control_frontmatter(document_id)?;
         Ok(())
     }
 
@@ -1347,6 +1356,7 @@ impl Workspace {
             .expect("document checked above");
         document.lifecycle = Lifecycle::Draft;
         document.active_candidate_id = None;
+        self.sync_markdown_control_frontmatter(document_id)?;
         Ok(())
     }
 
@@ -1639,7 +1649,7 @@ impl Workspace {
         Ok(())
     }
 
-    fn resolve_target_version(
+    pub(crate) fn resolve_target_version(
         &self,
         document_id: Uuid,
         selection: TargetSelection,
@@ -1997,14 +2007,22 @@ impl Workspace {
 pub fn scan_content_markers(
     source_path: &Path,
     version: Version,
-    confidentiality_label: &str,
+    confidentiality_value: &str,
 ) -> Result<ContentCheck> {
-    scan_content_conformance(source_path, version, confidentiality_label, None, None)
+    scan_content_conformance(
+        source_path,
+        version,
+        confidentiality_value,
+        confidentiality_value,
+        None,
+        None,
+    )
 }
 
 fn scan_content_conformance(
     source_path: &Path,
     version: Version,
+    confidentiality_type_id: &str,
     confidentiality_label: &str,
     title: Option<&str>,
     document_number: Option<Option<&str>>,
@@ -2024,7 +2042,7 @@ fn scan_content_conformance(
             title.unwrap_or_default(),
             document_number.flatten(),
             &format!("{}.{}", version.major, version.minor),
-            confidentiality_label,
+            confidentiality_type_id,
         )?;
         return Ok(ContentCheck {
             version: check.version,
