@@ -411,6 +411,130 @@ export function bindReviewScheduleForm(form) {
   syncReviewScheduleForm(form);
 }
 
+/** Parse current released MAJOR.MINOR from detail (string or {major,minor}). */
+export function parseCurrentReleaseVersion(detail) {
+  const raw = detail?.current_release?.version;
+  if (raw == null || raw === "") return null;
+  if (typeof raw === "object") {
+    const major = Number(raw.major);
+    const minor = Number(raw.minor);
+    if (!Number.isInteger(major) || !Number.isInteger(minor) || major < 0 || minor < 0) return null;
+    return { major, minor };
+  }
+  const match = String(raw).trim().match(/^(\d+)\.(\d+)$/);
+  if (!match) return null;
+  return { major: Number(match[1]), minor: Number(match[2]) };
+}
+
+export function formatVersionLabel(version) {
+  if (!version || !Number.isInteger(version.major) || !Number.isInteger(version.minor)) return "";
+  return `V${version.major}.${version.minor}`;
+}
+
+/**
+ * Preview versions for Next minor / Next major per CAP-0002.
+ * Never-released documents resolve both modes to V1.0 (first release).
+ * Later next-minor advances the minor component by 1 (V1.0 → V1.1).
+ */
+export function previewTargetVersions(detail) {
+  const current = parseCurrentReleaseVersion(detail);
+  if (!current) {
+    return {
+      current: null,
+      next_minor: { major: 1, minor: 0 },
+      next_major: { major: 1, minor: 0 },
+      first_release: true,
+    };
+  }
+  return {
+    current,
+    next_minor: { major: current.major, minor: current.minor + 1 },
+    next_major: { major: current.major + 1, minor: 0 },
+    first_release: false,
+  };
+}
+
+export function effectiveCandidateTarget(detail, targetMode, manualMajor, manualMinor) {
+  const preview = previewTargetVersions(detail);
+  if (targetMode === "next_minor") return preview.next_minor;
+  if (targetMode === "next_major") return preview.next_major;
+  if (targetMode === "manual") {
+    const major = String(manualMajor ?? "").trim();
+    const minor = String(manualMinor ?? "").trim();
+    if (!/^\d+$/.test(major) || !/^\d+$/.test(minor)) return null;
+    return { major: Number(major), minor: Number(minor) };
+  }
+  return null;
+}
+
+export function candidateTargetHelpText(detail, targetMode, manualMajor, manualMinor) {
+  const target = effectiveCandidateTarget(detail, targetMode, manualMajor, manualMinor);
+  const preview = previewTargetVersions(detail);
+  if (!target) {
+    if (targetMode === "manual") return "Effective target: enter Manual major and minor";
+    return "Effective target: choose a target version";
+  }
+  const label = formatVersionLabel(target);
+  if (preview.first_release && targetMode !== "manual") {
+    return `Effective target: ${label} (first release · approval required)`;
+  }
+  if (targetMode === "next_minor") {
+    return `Effective target: ${label} · stays in draft for direct PDF export`;
+  }
+  if (targetMode === "next_major") {
+    return `Effective target: ${label} · opens approver review after notification`;
+  }
+  const current = preview.current;
+  const approvalRequired = !current
+    ? target.major === 1 && target.minor === 0
+    : target.major > current.major;
+  if (approvalRequired) {
+    return `Effective target: ${label} · opens approver review after notification`;
+  }
+  return `Effective target: ${label} · stays in draft for direct PDF export`;
+}
+
+/** Enable manual fields only for Manual target; refresh effective-target label. */
+export function syncCandidateTargetForm(form) {
+  if (!form) return;
+  const mode = String(form.elements.targetMode?.value ?? "next_minor");
+  const manual = mode === "manual";
+  for (const wrap of form.querySelectorAll("[data-candidate-manual-field]")) {
+    wrap.hidden = !manual;
+  }
+  const majorInput = form.elements.manualMajor;
+  const minorInput = form.elements.manualMinor;
+  if (majorInput) {
+    majorInput.disabled = !manual;
+    majorInput.required = manual;
+  }
+  if (minorInput) {
+    minorInput.disabled = !manual;
+    minorInput.required = manual;
+  }
+  const label = form.querySelector("[data-candidate-effective-target]");
+  if (!label) return;
+  const detail = {
+    current_release: form.dataset.currentReleaseVersion
+      ? { version: form.dataset.currentReleaseVersion }
+      : null,
+  };
+  label.textContent = candidateTargetHelpText(detail, mode, majorInput?.value, minorInput?.value);
+}
+
+export function bindCandidateTargetForm(form) {
+  if (!form) return;
+  if (form.dataset.candidateTargetBound === "1") {
+    syncCandidateTargetForm(form);
+    return;
+  }
+  form.dataset.candidateTargetBound = "1";
+  const onChange = () => syncCandidateTargetForm(form);
+  form.addEventListener("change", onChange);
+  form.addEventListener("input", onChange);
+  syncCandidateTargetForm(form);
+}
+
 export function confidentialityUpdateRequest(values, detail) {
   if (!detail?.document_id) throw new Error("A selected document is required.");
   return {
@@ -702,7 +826,8 @@ function lifecyclePanelMarkup(library, detail) {
     : detail.workflow_verification?.tampered_at
       ? `tampered at ${detail.workflow_verification.tampered_at}`
       : "invalid";
-  return `<div class="lifecycle-panel" aria-label="Revision cycle actions"><div class="lifecycle-actions"><div class="lifecycle-action"><strong>Begin revision</strong>${begin.reason ? `<small>${escapeHtml(begin.reason)}</small>` : ""}<button class="button secondary" type="button" data-library-lifecycle-action="begin_revision" ${begin.available ? "" : "disabled"}>Begin revision</button></div>${form("cancel_review", "Cancel review", cancel.available, cancel.reason)}${form("mark_obsolete", "Mark obsolete", obsolete.available, obsolete.reason)}${externalLifecycleMarkup(library, detail)}</div><button class="button secondary" type="button" data-library-open-evidence>View workflow evidence</button><details class="workflow-evidence" data-library-evidence ${library.evidence_open ? "open" : ""}><summary>Canonical workflow evidence · ${escapeHtml(verification)}</summary>${events}</details></div>`;
+  const external = externalLifecycleMarkup(library, detail);
+  return `<div class="lifecycle-panel" aria-label="Revision cycle actions"><div class="lifecycle-actions">${external}<div class="lifecycle-action"><strong>Begin revision</strong>${begin.reason ? `<small>${escapeHtml(begin.reason)}</small>` : ""}<button class="button secondary" type="button" data-library-lifecycle-action="begin_revision" ${begin.available ? "" : "disabled"}>Begin revision</button></div>${form("cancel_review", "Cancel review", cancel.available, cancel.reason)}${form("mark_obsolete", "Mark obsolete", obsolete.available, obsolete.reason)}</div><details class="workflow-evidence" data-library-evidence ${library.evidence_open ? "open" : ""}><summary>Canonical workflow evidence · ${escapeHtml(verification)}</summary>${events}</details></div>`;
 }
 
 function externalLifecycleMarkup(library, detail) {
@@ -729,8 +854,21 @@ function externalLifecycleMarkup(library, detail) {
     : library.approver_sign_in?.actor
       ? '<p class="source-path">Approver sign-in ready. Recording a decision will verify this actor against the assigned approver.</p>'
       : '<button class="button secondary" type="button" data-library-approver-sign-in>Sign in as approver</button>';
+  const preview = previewTargetVersions(detail);
+  const nextMinorLabel = formatVersionLabel(preview.next_minor);
+  const nextMajorLabel = formatVersionLabel(preview.next_major);
+  const currentReleaseVersion = preview.current
+    ? `${preview.current.major}.${preview.current.minor}`
+    : "";
+  const nextMinorOption = preview.first_release
+    ? `Next minor · ${nextMinorLabel} (first release)`
+    : `Next minor · ${nextMinorLabel}`;
+  const nextMajorOption = preview.first_release
+    ? `Next major · ${nextMajorLabel} (first release · approval required)`
+    : `Next major · ${nextMajorLabel} (approval required)`;
+  const effectiveHelp = candidateTargetHelpText(detail, "next_minor");
   const submit = detail.lifecycle === "draft" && !candidate
-    ? `<form class="lifecycle-action" data-library-lifecycle-form="submit_candidate"><strong>Submit release candidate</strong>${placeholderBlock}<label>Target version<select name="targetMode"><option value="next_minor">Next minor</option><option value="next_major">Next major (approval required)</option><option value="manual">Manual target</option></select></label><label>Manual major<input name="manualMajor" inputmode="numeric"></label><label>Manual minor<input name="manualMinor" inputmode="numeric"></label><label>Effective date<input name="effectiveDate" type="date" required></label>${placeholderRequestingEditor}${handover}<label>Changelog<textarea name="changelog" required></textarea></label><label>Review content-check override reason (only when needed)<textarea name="reviewOverrideReason"></textarea></label><button class="button" type="submit" ${detail.requires_identity_handover && !peopleAvailable ? "disabled" : ""}>Submit candidate</button></form>`
+    ? `<form class="lifecycle-action" data-library-lifecycle-form="submit_candidate" data-current-release-version="${escapeHtml(currentReleaseVersion)}" data-first-release="${preview.first_release ? "1" : "0"}"><strong>Create release candidate</strong><p class="source-path">Records target version, effective date, and changelog for this draft in the workspace. It does not send a file elsewhere. Next minor stays in draft so you can export the PDF next. Next major and first release open approver review after the notification is sent.</p>${placeholderBlock}<label>Target version<select name="targetMode"><option value="next_minor" selected>${escapeHtml(nextMinorOption)}</option><option value="next_major">${escapeHtml(nextMajorOption)}</option><option value="manual">Manual target</option></select></label><p class="source-path" data-candidate-effective-target>${escapeHtml(effectiveHelp)}</p><label data-candidate-manual-field hidden>Manual major<input name="manualMajor" inputmode="numeric" disabled></label><label data-candidate-manual-field hidden>Manual minor<input name="manualMinor" inputmode="numeric" disabled></label><label>Effective date<input name="effectiveDate" type="date" required></label>${placeholderRequestingEditor}${handover}<label>Changelog<textarea name="changelog" required></textarea></label><label>Review content-check override reason (only when needed)<textarea name="reviewOverrideReason"></textarea></label><button class="button" type="submit" ${detail.requires_identity_handover && !peopleAvailable ? "disabled" : ""}>Create release candidate</button></form>`
     : "";
   const reviewRetry = candidate?.status === "review_delivery_failed"
     ? `<form class="lifecycle-action" data-library-lifecycle-form="retry_review_notification"><strong>Confirm review request delivery</strong><small>The host mail handler opened without advancing the review.</small>${mailConfirmation("the review request")}<button class="button" type="submit">Confirm review message sent</button></form>`

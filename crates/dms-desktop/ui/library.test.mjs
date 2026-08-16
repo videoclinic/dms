@@ -6,6 +6,7 @@ import {
   applyLibrarySnapshot,
   breadcrumbSegments,
   buildFolderTree,
+  candidateTargetHelpText,
   clampLibraryDetailWidth,
   createLibraryState,
   confidentialityUpdateRequest,
@@ -21,6 +22,7 @@ import {
   membershipKind,
   normalizeLibraryPath,
   paginateLibraryEntries,
+  previewTargetVersions,
   resizeLibraryDetailWidth,
   reviewScheduleBaseline,
   reviewScheduleIsDirty,
@@ -372,7 +374,19 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /Employee handbook/);
   assert.match(markup, /data-library-open-source/);
   assert.match(markup, /data-library-open-release/);
-  assert.match(markup, /<option value="next_minor">Next minor<\/option><option value="next_major">/);
+  assert.match(markup, /Create release candidate/);
+  assert.match(markup, /Next minor · V1\.3/);
+  assert.match(markup, /Next major · V2\.0 \(approval required\)/);
+  assert.match(markup, /Effective target: V1\.3 · stays in draft for direct PDF export/);
+  assert.match(markup, /data-candidate-manual-field hidden/);
+  assert.match(markup, /name="manualMajor"[^>]* disabled/);
+  assert.doesNotMatch(markup, /View workflow evidence/);
+  assert.match(markup, /Canonical workflow evidence · valid/);
+  // Candidate form is listed before Begin revision inside Revision cycle.
+  assert.match(
+    markup,
+    /data-library-lifecycle-form="submit_candidate"[\s\S]*data-library-lifecycle-action="begin_revision"/,
+  );
   assert.match(markup, /Current released PDF · V1\.2/);
   assert.match(markup, /id="library-document-control-form"/);
   assert.match(markup, /name="ownerObjectId" required/);
@@ -898,7 +912,7 @@ test("successful empty identity state renders literal placeholders and blocks li
   assert.match(emptyMarkup, /Requesting editor/);
   assert.match(emptyMarkup, /value="&lt;editor&gt;" readonly/);
   assert.match(emptyMarkup, /Candidate submission and release are blocked/);
-  assert.match(emptyMarkup, /type="submit" disabled>Submit candidate/);
+  assert.match(emptyMarkup, /type="submit" disabled>Create release candidate/);
 
   const populatedMarkup = libraryMarkup(
     { edit_root: "/srv/Edit", workspace_id: "ws-1" },
@@ -918,7 +932,30 @@ test("successful empty identity state renders literal placeholders and blocks li
   assert.match(populatedMarkup, /Apply real identities with successful release/);
   assert.match(populatedMarkup, /name="stagedOwnerObjectId" required/);
   assert.match(populatedMarkup, /name="stagedEditorObjectId" required/);
-  assert.match(populatedMarkup, /name="targetMode"><option value="next_minor">/);
+  assert.match(populatedMarkup, /name="targetMode"><option value="next_minor"/);
+});
+
+test("previewTargetVersions follows CAP-0002 first release and next-minor steps", () => {
+  assert.deepEqual(previewTargetVersions({}), {
+    current: null,
+    next_minor: { major: 1, minor: 0 },
+    next_major: { major: 1, minor: 0 },
+    first_release: true,
+  });
+  assert.deepEqual(previewTargetVersions({ current_release: { version: "1.0" } }), {
+    current: { major: 1, minor: 0 },
+    next_minor: { major: 1, minor: 1 },
+    next_major: { major: 2, minor: 0 },
+    first_release: false,
+  });
+  assert.match(
+    candidateTargetHelpText({ current_release: { version: "0.1" } }, "next_minor"),
+    /Effective target: V0\.2 · stays in draft for direct PDF export/,
+  );
+  assert.match(
+    candidateTargetHelpText({}, "next_minor"),
+    /Effective target: V1\.0 \(first release · approval required\)/,
+  );
 });
 
 test("updated document selection refreshes the detail and visible row in place", () => {

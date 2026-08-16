@@ -78,7 +78,7 @@ macOS.
   the width at drag start when cancelled with `Escape`.
 - The Library selection pane owns add/unregister/reassociate/permalink controls,
   document-control editing, the document confidentiality override, candidate
-  submission, review decision, release, local lifecycle actions, and canonical
+  creation, review decision, release, local lifecycle actions, and canonical
   workflow evidence; file rows remain selection-only and preserve exact source
   names. For one selected library document it groups **Document control data**,
   **Document review schedule**, **Actions**, **Revision cycle**, and
@@ -87,7 +87,11 @@ macOS.
   number, lifecycle badge, and Source file
   identity stay visible while sections fold. Section open/closed state is
   session-only Library UI state and survives document switches until the
-  Library activity ends. The adapter supplies lifecycle availability and precondition explanations
+  Library activity ends. In **Revision cycle**, **Create release candidate**
+  (when available) is listed first, shows the resolved effective target version,
+  keeps Manual major/minor disabled until Manual target is selected, and uses
+  one foldable **Canonical workflow evidence** disclosure (no separate View
+  workflow evidence button). The adapter supplies lifecycle availability and precondition explanations
   rather than duplicating core transitions in the frontend. `mailto:` delivery
   opens the host handler first and advances only through its explicit confirmation
   retry; review decisions require a fresh interactive Entra sign-in. Cancel review
@@ -98,7 +102,7 @@ macOS.
   selected, preserves an unchanged Library view without reloading, and retains
   Notes drafts and confirmation state when restoration succeeds or fails.
 - Document-profile editing submits an eligible owner object ID and never edits an
-  effective date. Candidate submission owns the required effective date and may
+  effective date. Candidate creation owns the required effective date and may
   stage eligible owner/editor replacements that apply only with a successful
   release. Current-release and history views use immutable release snapshots;
   review schedule remains a separate mutable surface. The schedule form shows

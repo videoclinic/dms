@@ -16,6 +16,7 @@ import {
   selectedEntries,
   setSelectionSectionOpen,
   bindReviewScheduleForm,
+  bindCandidateTargetForm,
   toggleLibrarySelection,
   toggleLibraryVisibility,
   toggleTreeFolder,
@@ -524,6 +525,7 @@ function render(state) {
     ? `<strong>${escapeHtml(state.workspace.workspace_id)}</strong><br>edit: ${escapeHtml(state.workspace.edit_root)}<br>publish: ${escapeHtml(state.workspace.publish_root)}`
     : "No workspace open";
   bindReviewScheduleForm(document.querySelector("#library-review-schedule-form"));
+  bindCandidateTargetForm(document.querySelector('[data-library-lifecycle-form="submit_candidate"]'));
 }
 
 function openDestination(destination) {
@@ -1273,14 +1275,6 @@ async function handleLibraryClick(event) {
     } catch (error) {
       appState = { ...appState, error: String(error) };
     }
-    render(appState);
-    return true;
-  }
-  if (event.target.closest("[data-library-open-evidence]")) {
-    appState = {
-      ...appState,
-      library: { ...appState.library, evidence_open: true },
-    };
     render(appState);
     return true;
   }
