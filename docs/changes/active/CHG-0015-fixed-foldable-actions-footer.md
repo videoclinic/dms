@@ -7,7 +7,7 @@
 **Entry checkpoint:** CHG-0014 is archived as done; `92efa51` includes its runtime and wireframe baseline.
 **Context sources:** `docs/product/capabilities/CAP-0006-library-explorer.md#outcomes` (outcomes 2, 6, and 8), `docs/product/capabilities/CAP-0015-document-control-data.md#outcomes` (outcome 11), `docs/changes/archive/CHG-0014-reassociate-source-topic-visibility.md#pane-layout-locked`, `crates/dms-desktop/AGENTS.md#local-contracts`, `crates/dms-desktop/ui/library.mjs` (`DEFAULT_SELECTION_OPEN`, `selectionMarkup`, `libraryMarkup`), `crates/dms-desktop/ui/styles.css` (`.selection-pane`, `.selection-actions-block`), `crates/dms-desktop/ui/library.test.mjs` (single-document markup and fold-state tests), `crates/dms-desktop/ui/app.test.mjs` (`shell and Library panes contain scrolling without moving navigation`), `docs/product/wireframes/generate.mjs` (`lostSourceSelectionPane`, `documentControlDataSelectionPane`)
 **Produces:** A single-document Library selection pane whose main details scroll above a bottom-docked, independently foldable Actions footer, with matching CAPs, tests, DOX, and CAP-0006/CAP-0015 wireframes.
-**Status:** in-progress — Phase 1 contract, runtime layout, and focused tests
+**Status:** in-progress — Phase 2 gate passed; Phase 3 not started
 
 Restructure the single-document Library selection pane so document details scroll independently above a bottom-docked Actions disclosure whose header never leaves the pane viewport.
 
@@ -25,14 +25,14 @@ Restructure the single-document Library selection pane so document details scrol
 - `crates/dms-desktop/ui/styles.css` makes `.selection-pane` a non-scrolling flex column; `.selection-scroll` is the growing overflow region; the Actions footer is a non-overlay bottom sibling capped at half pane height with an independently scrollable body.
 - CAP-0006 outcomes 2 and 6, CAP-0015 outcome 11, and `crates/dms-desktop/AGENTS.md` require that layout and session-only Actions fold state.
 - Focused tests: `node --test crates/dms-desktop/ui/library.test.mjs crates/dms-desktop/ui/app.test.mjs` 53/53.
-- Wireframes still render Actions in normal flow; that is Phase 2.
+- Wireframes: CAP-0006 Lost-source and CAP-0015 healthy-document panes use one `.selection-scroll` plus an open `.selection-actions-footer`. Native 1600×1600 Chrome exports are non-empty.
 
 ## Phases
 
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
 | 1 | Contract, runtime layout, and focused tests | done (`node --test crates/dms-desktop/ui/library.test.mjs crates/dms-desktop/ui/app.test.mjs` 53/53) | `node --test crates/dms-desktop/ui/library.test.mjs crates/dms-desktop/ui/app.test.mjs` exits 0; tests prove Actions is the foldable sibling after the sole details scroller and its state survives document switches |
-| 2 | CAP-linked wireframes and visual audit | pending | Wireframe generation and 1600×1600 CAP-0006/CAP-0015 Chrome exports exit 0; both non-empty PNGs show the Actions summary docked at the pane bottom without overlap or clipping |
+| 2 | CAP-linked wireframes and visual audit | done (`node generate.mjs` + 1600×1600 CAP-0006/CAP-0015 Chrome exports) | Wireframe generation and 1600×1600 CAP-0006/CAP-0015 Chrome exports exit 0; both non-empty PNGs show the Actions summary docked at the pane bottom without overlap or clipping |
 | 3 | Workspace gate and change-record closeout | pending | Full Rust/frontend, link, and diff checks exit 0; CHG-0015 is archived as done and the change index has no active row for it |
 
 Mark a phase `in-progress` while running it, `done (<evidence>)` once its gate passes, `pending` otherwise.

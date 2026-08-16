@@ -83,6 +83,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .detail-pane { position: relative; z-index: 1; min-width: 0; }
 .detail-pane .kv > div { grid-template-columns: 7.5rem 1fr; gap: 0.45rem; font-size: 0.8rem; }
 .detail-pane .doc-title { font-size: 1rem; margin-bottom: 0.15rem; }
+.selection-pane-layout { display: flex; flex-direction: column; overflow: hidden; }
+.selection-scroll { flex: 1 1 auto; min-height: 8rem; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .selection-section { margin-top: 0.8rem; border-top: 1px solid var(--border); padding-top: 0.65rem; }
 .selection-section summary {
   display: flex;
@@ -116,8 +118,26 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .selection-section-title { min-width: 0; }
 .selection-section-meta { color: var(--muted-foreground); font-size: 0.7rem; font-weight: 500; }
 .selection-section-body { margin-top: 0.65rem; padding-left: 1.35rem; }
-.selection-actions-block { margin-top: 0.8rem; border-top: 1px solid var(--border); padding-top: 0.65rem; }
-.selection-actions-block > .selection-section-title { margin: 0; font-size: 0.88rem; font-weight: 600; }
+.selection-actions-footer {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 50%;
+  overflow: hidden;
+  margin-top: 0;
+}
+.selection-actions-footer[open] { min-height: 10rem; max-height: 18rem; }
+.selection-actions-footer > summary { flex: 0 0 auto; }
+.selection-actions-footer > .selection-section-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.selection-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.selection-actions .btn { flex: 1 1 calc(50% - 0.25rem); min-width: 0; }
 .directory-field { display: flex; align-items: center; gap: 0.5rem; }
 .directory-field input { min-width: 0; flex: 1; height: 2rem; border: 1px solid var(--input); border-radius: calc(var(--radius) - 2px); padding: 0 0.6rem; font: inherit; }
 .batch-selection-demo { display: grid; grid-template-columns: minmax(0, 1fr) 18.5rem; gap: 0.85rem; align-items: start; margin-top: 0.25rem; }
@@ -256,7 +276,7 @@ tr:last-child td { border-bottom: 0; }
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Persistent folder tree + Explorer-like path controls + exact source file names. The toolbar stays fixed while tree, list, and selection details scroll independently.</p>
+      <p class="subtitle">Persistent folder tree + Explorer-like path controls + exact source file names. The toolbar stays fixed while tree, list, and the selection-detail scroller move independently of the bottom-docked Actions footer.</p>
       
       <style>
     html, body { height: 100%; }
@@ -269,8 +289,9 @@ tr:last-child td { border-bottom: 0; }
     .app[data-cap="CAP-0006"] .list-card th,
     .app[data-cap="CAP-0006"] .list-card td { padding: 0.55rem 0.45rem; font-size: 0.75rem; }
     .app[data-cap="CAP-0006"] .explorer-toolbar { position: sticky; z-index: 4; top: 0; }
-    .app[data-cap="CAP-0006"] .explorer-panes { height: min(36rem, calc(100vh - 14rem)); min-height: 24rem; align-items: stretch; }
-    .app[data-cap="CAP-0006"] .explorer-panes > .card { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+    .app[data-cap="CAP-0006"] .explorer-panes { height: min(40rem, calc(100vh - 11rem)); min-height: 26rem; align-items: stretch; }
+    .app[data-cap="CAP-0006"] .explorer-panes > .card:not(.detail-pane) { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+    .app[data-cap="CAP-0006"] .explorer-panes > .detail-pane { min-height: 0; overflow: hidden; }
     .app[data-cap="CAP-0006"] .explorer-panes .list-card { display: flex; flex-direction: column; }
     .app[data-cap="CAP-0006"] .explorer-panes .table-wrap { min-height: 0; flex: 1; }
     .app[data-cap="CAP-0006"] .list-card table { table-layout: fixed; }
@@ -426,27 +447,31 @@ tr:last-child td { border-bottom: 0; }
           <p class="hint"><strong>Name is the source file:</strong> it always shows the exact filesystem name, including the extension. Registered files show the independent DMS title and number under Document. The configured Markdown Word template is managed only under Configuration, so it never appears in these rows, counters, selections, or actions.</p>
         </section>
         <div role="separator" aria-label="Resize document details" aria-orientation="vertical" style="cursor:col-resize;background:var(--border);border-radius:999px" title="Drag or use Left/Right; Escape cancels"></div>
-        <aside class="card detail-pane">
-          <div class="row between mb">
+        <aside class="card detail-pane selection-pane-layout">
+          <div class="selection-scroll">
+      <div class="row between mb">
       <div class="row gap-2"><span class="badge danger">Lost source</span></div>
       <button class="btn outline">Clear</button>
     </div>
-    <h3 class="card-title" style="margin:0">Backup Config</h3>
-    <p class="muted">Document number: <span class="mono">DOC-031</span></p>
-    <p class="hint">The draft file is not at the stored path. Most actions stay disabled until you reassociate the source.</p>
+    <h3 class="card-title" style="margin:0">Backup Config <span class="muted" style="font-size:0.78rem;font-weight:500">· DOC-031</span></h3>
+    <p class="hint">Draft missing at the stored path. Reassociate the source before other actions.</p>
     <div class="source-identity-plain">
       <div class="label">Source file <span style="font-weight:400">· from filesystem</span></div>
-      <div class="mono" style="margin-top:0.3rem">Backup_config.docx</div>
-      <div class="muted" style="font-size:0.75rem;margin-top:0.2rem">Folder: policies/HR</div>
+      <div class="mono" style="margin-top:0.2rem">Backup_config.docx · policies/HR</div>
     </div>
     <details class="selection-section">
       <summary><span class="selection-section-title">Document control data</span></summary>
       <div class="selection-section-body"><p class="hint">Document control and confidentiality changes are unavailable while the source is Lost source.</p></div>
     </details>
-    <section class="selection-actions-block">
-      <h4 class="selection-section-title">Actions</h4>
+    <details class="selection-section">
+      <summary><span class="selection-section-title">Document review schedule</span></summary>
+      <div class="selection-section-body"><p class="hint">Review schedule editing is unavailable while the source is Lost source.</p></div>
+    </details>
+    </div>
+    <details class="selection-section selection-actions-footer" open>
+      <summary><span class="selection-section-title">Actions</span></summary>
       <div class="selection-section-body stack">
-        <div class="stack-btns">
+        <div class="selection-actions">
           <button class="btn outline" disabled>Open source draft</button>
           <button class="btn outline">Open current released PDF</button>
           <button class="btn outline">Open notes</button>
@@ -461,10 +486,6 @@ tr:last-child td { border-bottom: 0; }
         </div>
         <button class="btn">Reassociate source</button>
       </div>
-    </section>
-    <details class="selection-section">
-      <summary><span class="selection-section-title">Document review schedule</span></summary>
-      <div class="selection-section-body"><p class="hint">Review schedule editing is unavailable while the source is Lost source.</p></div>
     </details>
         </aside>
       </div>
