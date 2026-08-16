@@ -67,9 +67,11 @@ macOS.
   resetting unrelated session branch state. A folder row's primary click or
   `Enter` opens that folder; its disclosure control only expands or collapses it.
 - Library folder counters and the table use the same core snapshot. Session-wide
-  Draft documents, Available to add, and Unsupported files controls filter files
-  before sorting and pagination, apply equally to folder and search results, and
-  never hide folders or alter counters.
+  Draft documents, Available to add, Unsupported files, and (Re-)Moved documents
+  controls filter files before sorting and pagination, apply equally to folder and
+  search results, and never hide folders or alter counters. Lost source rows render
+  in italics with lifecycle **Lost source** and keep most actions disabled until
+  reassociation.
 - Never expose the configured Markdown Word-template asset in Library rows,
   counters, selections, notes, lifecycle actions, or permalinks. Configuration →
   Document defaults is its only management surface.

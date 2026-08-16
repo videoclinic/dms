@@ -72,6 +72,10 @@ When implemented, the following must hold:
      display label, marker verdicts/locations, current draft digest, and a
      non-empty operator reason, but no other draft content
    - `report_generated` — audit or other report exported from the workspace
+   - `source_reassociated` — draft locator changed (old relative path => new
+     relative path); when a registered target at the new path left the library,
+     the event records that absorbed document ID and the surviving chain already
+     contains the incorporated prior target audit events (CAP-0013)
    Each event uses the canonical body and required comment/reason fields
    defined by the owning CAP. The release event embeds the version label
    (`VMAJOR.MINOR`), selected target-version mode, the produced PDF digest, and

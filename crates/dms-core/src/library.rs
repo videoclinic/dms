@@ -10,9 +10,11 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{
-    is_metadata_path, is_supported_source, DmsError, Document, DocumentControl, Lifecycle, Result,
-    Workspace, METADATA_DIRECTORY,
+    default_author, is_metadata_path, is_supported_source, DmsError, Document, DocumentControl,
+    Lifecycle, Result, SourceReassociation, WorkflowEventBody, WorkflowEventType, Workspace,
+    METADATA_DIRECTORY,
 };
+use crate::lifecycle::hash_event_body;
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -33,6 +35,7 @@ pub enum LibraryEntryKind {
 #[serde(rename_all = "snake_case")]
 pub enum LibraryMembership {
     InLibrary { document_id: Uuid },
+    LostSource { document_id: Uuid },
     NotInLibrary,
     Unsupported,
 }
@@ -61,6 +64,8 @@ pub struct FolderCounters {
     pub draft_documents: usize,
     pub available_to_add: usize,
     pub unsupported_files: usize,
+    #[serde(default)]
+    pub moved_documents: usize,
 }
 
 impl AddAssign for FolderCounters {
@@ -68,6 +73,7 @@ impl AddAssign for FolderCounters {
         self.draft_documents += other.draft_documents;
         self.available_to_add += other.available_to_add;
         self.unsupported_files += other.unsupported_files;
+        self.moved_documents += other.moved_documents;
     }
 }
 
@@ -160,6 +166,8 @@ impl Workspace {
             }
         }
         entries.sort_by(entry_order);
+        self.append_lost_source_entries(&relative_folder, registered, &mut entries);
+        entries.sort_by(entry_order);
         let parent = if relative_folder == Path::new(".") {
             None
         } else {
@@ -233,22 +241,147 @@ impl Workspace {
         if !is_supported_source(&absolute_path) {
             return Err(DmsError::UnsupportedSource(absolute_path));
         }
-        if self
+        let previous_path = self.document(document_id)?.relative_path.clone();
+        let target_id = self
             .documents
             .values()
-            .any(|document| document.id != document_id && document.relative_path == relative_path)
+            .find(|document| {
+                document.id != document_id
+                    && document.source_state == SourceState::Registered
+                    && document.relative_path == relative_path
+            })
+            .map(|document| document.id);
+        let absorbed_document_id = if let Some(target_id) = target_id {
+            self.merge_target_audit_into_surviving(document_id, target_id, &relative_path)?;
+            self.unregister_document(target_id)?;
+            Some(target_id)
+        } else {
+            None
+        };
         {
-            return Err(DmsError::DocumentAlreadyRegistered(relative_path));
+            let document = self
+                .documents
+                .get_mut(&document_id)
+                .ok_or(DmsError::DocumentNotFound(document_id))?;
+            document.relative_path = relative_path.clone();
+            document.source_state = SourceState::Registered;
         }
-        let document = self
-            .documents
-            .get_mut(&document_id)
-            .ok_or(DmsError::DocumentNotFound(document_id))?;
-        document.relative_path = relative_path;
-        document.source_state = SourceState::Registered;
-        let document = document.clone();
-        self.sync_markdown_control_frontmatter(document.id)?;
-        Ok(document)
+        self.append_source_reassociated_event(
+            document_id,
+            &previous_path,
+            &relative_path,
+            absorbed_document_id,
+        )?;
+        self.sync_markdown_control_frontmatter(document_id)?;
+        Ok(self.document(document_id)?.clone())
+    }
+
+    fn merge_target_audit_into_surviving(
+        &mut self,
+        surviving_id: Uuid,
+        target_id: Uuid,
+        relative_path: &Path,
+    ) -> Result<()> {
+        let surviving_events = self.document(surviving_id)?.workflow_events.clone();
+        let target_events = self.document(target_id)?.workflow_events.clone();
+        if target_events.is_empty() {
+            return Ok(());
+        }
+        let surviving_min = surviving_events
+            .iter()
+            .map(|event| event.body.timestamp)
+            .min();
+        let surviving_max = surviving_events
+            .iter()
+            .map(|event| event.body.timestamp)
+            .max();
+        let target_min = target_events
+            .iter()
+            .map(|event| event.body.timestamp)
+            .min()
+            .expect("non-empty target events");
+        if let Some(surviving_min) = surviving_min {
+            if target_min < surviving_min {
+                return Err(DmsError::ReassociateTargetAuditOlder {
+                    path: relative_path.to_path_buf(),
+                    target_id,
+                });
+            }
+        }
+        if let Some(surviving_max) = surviving_max {
+            // Target must be entirely after the previous audit log (no overlap).
+            if target_min <= surviving_max {
+                return Err(DmsError::ReassociateTargetAuditOverlap {
+                    path: relative_path.to_path_buf(),
+                    target_id,
+                });
+            }
+        }
+        let mut predecessor = surviving_events
+            .last()
+            .map(|event| event.event_hash.clone());
+        let mut rewritten = Vec::with_capacity(target_events.len());
+        for mut event in target_events {
+            event.body.document_id = surviving_id;
+            event.body.predecessor_hash = predecessor.clone();
+            event.event_hash = hash_event_body(&event.body)?;
+            predecessor = Some(event.event_hash.clone());
+            rewritten.push(event);
+        }
+        self.documents
+            .get_mut(&surviving_id)
+            .ok_or(DmsError::DocumentNotFound(surviving_id))?
+            .workflow_events
+            .extend(rewritten);
+        Ok(())
+    }
+
+    fn append_source_reassociated_event(
+        &mut self,
+        document_id: Uuid,
+        previous_path: &Path,
+        new_path: &Path,
+        absorbed_document_id: Option<Uuid>,
+    ) -> Result<()> {
+        let previous = path_text(previous_path);
+        let next = path_text(new_path);
+        let body = WorkflowEventBody {
+            event_id: Uuid::new_v4(),
+            document_id,
+            event_type: WorkflowEventType::SourceReassociated,
+            predecessor_hash: self
+                .document(document_id)?
+                .workflow_events
+                .last()
+                .map(|event| event.event_hash.clone()),
+            timestamp: chrono::Utc::now(),
+            requester: None,
+            editor: None,
+            approver: None,
+            authenticated_actor: None,
+            local_os_user: default_author(),
+            revision_digest: None,
+            confidentiality: None,
+            target_version: None,
+            target_mode: None,
+            changelog: None,
+            assistance: None,
+            decision_comment: None,
+            operator_comment: Some(format!("{previous} => {next}")),
+            delivery: None,
+            content_override: None,
+            pdf_digest: None,
+            periodic_review: None,
+            control_change: None,
+            report: None,
+            source_reassociation: Some(SourceReassociation {
+                previous_relative_path: previous,
+                new_relative_path: next,
+                absorbed_document_id,
+            }),
+        };
+        self.append_event(document_id, body)?;
+        Ok(())
     }
 
     pub fn document_permalink(&self, document_id: Uuid) -> Result<String> {
@@ -280,6 +413,12 @@ impl Workspace {
             &mut counters,
         )?;
         counters.insert(PathBuf::from("."), root_counters);
+        self.apply_moved_document_counters(&mut counters);
+        for folder in &mut folders {
+            if let Some(updated) = counters.get(&folder.relative_path) {
+                folder.counters = *updated;
+            }
+        }
         folders.push(LibraryFolderNode {
             name: self
                 .edit_root
@@ -288,7 +427,10 @@ impl Workspace {
                 .unwrap_or("Library")
                 .to_owned(),
             relative_path: PathBuf::from("."),
-            counters: root_counters,
+            counters: counters
+                .get(&PathBuf::from("."))
+                .copied()
+                .unwrap_or_default(),
         });
         folders.sort_by(|left, right| path_order(&left.relative_path, &right.relative_path));
         Ok((folders, counters))
@@ -476,8 +618,14 @@ impl Workspace {
     ) -> LibraryEntry {
         let document = registered.get(&relative_path).copied();
         let membership = if let Some(document) = document {
-            LibraryMembership::InLibrary {
-                document_id: document.id,
+            if self.edit_root.join(&relative_path).is_file() {
+                LibraryMembership::InLibrary {
+                    document_id: document.id,
+                }
+            } else {
+                LibraryMembership::LostSource {
+                    document_id: document.id,
+                }
             }
         } else if is_supported_source(&relative_path) {
             LibraryMembership::NotInLibrary
@@ -497,6 +645,91 @@ impl Workspace {
             folder_counters: None,
         }
     }
+
+    fn append_lost_source_entries(
+        &self,
+        relative_folder: &Path,
+        registered: &HashMap<PathBuf, &Document>,
+        entries: &mut Vec<LibraryEntry>,
+    ) {
+        let present_paths = entries
+            .iter()
+            .filter(|entry| entry.kind == LibraryEntryKind::File)
+            .map(|entry| entry.relative_path.clone())
+            .collect::<std::collections::HashSet<_>>();
+        for (path, document) in registered {
+            if present_paths.contains(path) {
+                continue;
+            }
+            if self.edit_root.join(path).is_file() {
+                continue;
+            }
+            let parent = path
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| PathBuf::from("."));
+            if parent != relative_folder {
+                continue;
+            }
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("lost-source")
+                .to_owned();
+            entries.push(LibraryEntry {
+                name,
+                relative_path: path.clone(),
+                kind: LibraryEntryKind::File,
+                membership: Some(LibraryMembership::LostSource {
+                    document_id: document.id,
+                }),
+                document: Some(LibraryDocumentSummary {
+                    id: document.id,
+                    lifecycle: document.lifecycle,
+                    control: document.control.clone(),
+                }),
+                folder_counters: None,
+            });
+        }
+    }
+
+    fn apply_moved_document_counters(&self, counters: &mut HashMap<PathBuf, FolderCounters>) {
+        for document in self.documents.values() {
+            if document.source_state != SourceState::Registered {
+                continue;
+            }
+            if self.edit_root.join(&document.relative_path).is_file() {
+                continue;
+            }
+            for ancestor in path_ancestors(&document.relative_path) {
+                counters.entry(ancestor).or_default().moved_documents += 1;
+            }
+        }
+    }
+}
+
+fn path_ancestors(relative_path: &Path) -> Vec<PathBuf> {
+    let mut ancestors = vec![PathBuf::from(".")];
+    if relative_path == Path::new(".") || relative_path.as_os_str().is_empty() {
+        return ancestors;
+    }
+    let parent = relative_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
+    if parent == Path::new(".") {
+        return ancestors;
+    }
+    let mut current = PathBuf::new();
+    for component in parent.components() {
+        if let Component::Normal(part) = component {
+            current.push(part);
+            ancestors.push(current.clone());
+        }
+    }
+    ancestors
 }
 
 fn relative_join(folder: &Path, name: &str) -> PathBuf {

@@ -115,6 +115,7 @@ fn folder_counters_roll_up_descendants_and_classify_only_visible_files() {
             draft_documents: 1,
             available_to_add: 1,
             unsupported_files: 1,
+            moved_documents: 0,
         }
     );
     assert_eq!(counters("Policies"), counters("."));
@@ -295,4 +296,100 @@ fn schema_v2_migration_defaults_existing_documents_to_registered() {
         .edit_root
         .join(".dms/workspace.v2.json.bak")
         .is_file());
+}
+
+#[test]
+fn lost_source_rows_counters_reassociate_event_and_absorb_rules() {
+    let (_temp, mut workspace) = initialized_workspace();
+    fs::create_dir_all(workspace.edit_root.join("Policies")).expect("folder");
+    let original = workspace.edit_root.join("Policies/Handbook.md");
+    let free = workspace.edit_root.join("Policies/Relocated.md");
+    let occupied = workspace.edit_root.join("Policies/Occupied.md");
+    fs::write(&original, "# Handbook").expect("draft");
+    fs::write(&free, "# Free").expect("free");
+    fs::write(&occupied, "# Occupied").expect("occupied");
+
+    let lost = workspace.add_document(&original).expect("register lost");
+    workspace
+        .update_control(
+            lost.id,
+            ControlUpdate {
+                title: Some("Lost handbook".into()),
+                ..ControlUpdate::default()
+            },
+        )
+        .expect("lost audit");
+
+    fs::remove_file(&original).expect("external move");
+    let folder = workspace
+        .library_folder(Path::new("Policies"))
+        .expect("folder");
+    let lost_entry = folder
+        .entries
+        .iter()
+        .find(|entry| entry.relative_path == Path::new("Policies/Handbook.md"))
+        .expect("lost row");
+    assert_eq!(
+        lost_entry.membership,
+        Some(LibraryMembership::LostSource {
+            document_id: lost.id
+        })
+    );
+    let (tree, _) = workspace
+        .library_snapshot(Path::new("Policies"))
+        .expect("snapshot");
+    assert_eq!(
+        tree.iter()
+            .find(|node| node.relative_path == Path::new("."))
+            .expect("root")
+            .counters
+            .moved_documents,
+        1
+    );
+
+    let restored = workspace
+        .reassociate_document(lost.id, &free)
+        .expect("reassociate free path");
+    assert_eq!(restored.relative_path, Path::new("Policies/Relocated.md"));
+    assert!(workspace
+        .workflow_history(lost.id)
+        .expect("history")
+        .iter()
+        .any(|event| {
+            event.body.event_type == dms_core::WorkflowEventType::SourceReassociated
+                && event.body.operator_comment.as_deref()
+                    == Some("Policies/Handbook.md => Policies/Relocated.md")
+        }));
+
+    fs::remove_file(&free).expect("lose again");
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    let target = workspace.add_document(&occupied).expect("register target");
+    workspace
+        .update_control(
+            target.id,
+            ControlUpdate {
+                title: Some("Occupied handbook".into()),
+                ..ControlUpdate::default()
+            },
+        )
+        .expect("later target audit");
+    let absorbed = workspace
+        .reassociate_document(lost.id, &occupied)
+        .expect("absorb registered target");
+    assert_eq!(absorbed.relative_path, Path::new("Policies/Occupied.md"));
+    assert_eq!(
+        workspace.document(target.id).expect("target").source_state,
+        SourceState::Unregistered
+    );
+    assert!(workspace
+        .workflow_history(lost.id)
+        .expect("merged history")
+        .iter()
+        .any(|event| {
+            event
+                .body
+                .source_reassociation
+                .as_ref()
+                .is_some_and(|change| change.absorbed_document_id == Some(target.id))
+        }));
 }

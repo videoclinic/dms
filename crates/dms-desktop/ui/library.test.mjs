@@ -159,8 +159,8 @@ test("visibility controls filter files before paging and prune hidden selection 
   ];
   let library = { ...createLibraryState(), folder: snapshot("Policies", entries).folder };
   assert.deepEqual(
-    [library.show_draft_documents, library.show_available_to_add, library.show_unsupported_files],
-    [true, true, true],
+    [library.show_draft_documents, library.show_available_to_add, library.show_unsupported_files, library.show_moved_documents],
+    [true, true, true, true],
   );
   assert.equal(filterLibraryEntries(entries, library).length, 6);
   library = { ...library, selection: ["Policies/Draft.md"], detail: { document_id: "draft" }, page: 3 };
@@ -978,4 +978,67 @@ test("updated document selection refreshes the detail and visible row in place",
   assert.equal(updated.evidence_open, true);
   assert.equal(updated.folder.entries[0].document.control.title, "Employee handbook");
   assert.equal(updated.results[0].document.control.document_number, "HR-001");
+});
+
+test("lost source rows use italic state, dedicated filter, and reassociate-focused actions", () => {
+  const lost = file("Missing.md", { lost_source: { document_id: "lost-1" } }, {
+    id: "lost-1",
+    lifecycle: "draft",
+    control: { title: "Missing handbook", document_number: "HR-9" },
+  });
+  let library = {
+    ...createLibraryState(),
+    folder: snapshot("Policies", [
+      lost,
+      file("Draft.md", { in_library: { document_id: "draft" } }, { id: "draft", lifecycle: "draft" }),
+    ]).folder,
+    tree: [{ name: "Edit", relative_path: ".", counters: { moved_documents: 1, draft_documents: 1 } }],
+    detail: {
+      document_id: "lost-1",
+      source_name: "Missing.md",
+      relative_path: "Policies/Missing.md",
+      source_exists: false,
+      source_state: "registered",
+      lifecycle: "draft",
+      control: { title: "Missing handbook", document_number: "HR-9" },
+      lifecycle_actions: {
+        cancel_review: { available: false, reason: "Source file is Lost source; reassociate the source first." },
+        mark_obsolete: { available: false, reason: "Source file is Lost source; reassociate the source first." },
+      },
+      workflow_events: [],
+    },
+  };
+  library = toggleLibrarySelection(library, "Policies/Missing.md");
+  library = {
+    ...library,
+    detail: {
+      document_id: "lost-1",
+      source_name: "Missing.md",
+      relative_path: "Policies/Missing.md",
+      source_exists: false,
+      source_state: "registered",
+      lifecycle: "draft",
+      control: { title: "Missing handbook", document_number: "HR-9" },
+      lifecycle_actions: {
+        cancel_review: { available: false, reason: "Source file is Lost source; reassociate the source first." },
+        mark_obsolete: { available: false, reason: "Source file is Lost source; reassociate the source first." },
+      },
+      workflow_events: [],
+    },
+  };
+  const markup = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies" } },
+    library,
+  );
+  assert.match(markup, /class="library-row[^"]*lost-source"/);
+  assert.match(markup, />Lost source</);
+  assert.match(markup, /aria-pressed="true">\(Re-\)Moved documents/);
+  assert.match(markup, /\?1/);
+  assert.match(markup, /Reassociate source/);
+  assert.match(markup, /Most actions stay disabled until you reassociate the source/);
+  library = toggleLibraryVisibility(library, "show_moved_documents");
+  assert.deepEqual(filterLibraryEntries(library.folder.entries, library).map((entry) => entry.name), [
+    "Draft.md",
+  ]);
 });

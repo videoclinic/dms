@@ -851,7 +851,8 @@ fn search_library(
     folder: String,
     query: String,
 ) -> Result<Vec<LibraryEntry>, String> {
-    let mut workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let mut workspace =
+        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
     if workspace
         .sync_all_registered_lifecycles()
         .map_err(|error| error.to_string())?

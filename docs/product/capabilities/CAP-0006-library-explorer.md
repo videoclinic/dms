@@ -31,11 +31,14 @@
    - Every tree folder and current-folder folder row shows the same recursive
      summary immediately after its name: `~N` counts visible controlled files
      whose lifecycle is exactly `draft`, `+N` counts visible supported source
-     files available to add, and `!N` counts visible unsupported regular files.
-     Counts include descendants, omit zero buckets, and exclude `.dms`, Office
-     `~$` sidecars, directories, the configured Markdown export-template asset,
-     and controlled non-draft files. Each badge has
-     an accessible text equivalent; visibility controls never change these
+     files available to add, `!N` counts visible unsupported regular files, and
+     `?N` counts registered library documents whose stored source file is not
+     present at the recorded edit-root-relative path (**Lost source** /
+     (re-)moved). Counts include descendants, omit zero buckets, and exclude
+     `.dms`, Office `~$` sidecars, directories, the configured Markdown
+     export-template asset, and controlled non-draft files that still resolve on
+     disk. Lost-source documents never contribute to `~`. Each badge has an
+     accessible text equivalent; visibility controls never change these
      unfiltered values.
    - A current-folder toolbar exposes **Back**, **Forward**, and **Up** controls
      plus a clickable breadcrumb rooted at the workspace/edit-root display
@@ -56,16 +59,21 @@
      internal `.dms` content, Office lock/temp sidecars defined by CAP-0013, and
      the configured Markdown export-template asset.
      A file row's **Name** is always the exact filesystem file name, including
-     its extension. Each file row states whether it is **In library**, **Not in
-     library** (a supported source draft), or not a supported draft. The
-     configured CAP-0007 template never appears in Library rows, counters,
-     searches, selection, batch-add, lifecycle, notes, or permalink actions. A
-     registered document additionally shows its DMS-managed document title and
-     control data in a separate **Title** field; that title never replaces
-     the source file name. Primary-click or Enter on a folder row opens that
-     folder directly without first selecting it or loading document detail.
-     File rows retain single- and modifier-assisted multi-selection. Selecting
-     a tree node or breadcrumb segment opens that folder directly.
+     its extension (for a Lost source row, the last stored source file name).
+     Each file row states whether it is **In library**, **Lost source**
+     (registered, file missing at the stored locator), **Not in library** (a
+     supported source draft), or not a supported draft. Lost source rows appear
+     in the folder that still holds their stored relative path, even though no
+     filesystem file exists there; they use a distinct italic treatment and show
+     **Lost source** in the lifecycle/state column. The configured CAP-0007
+     template never appears in Library rows, counters, searches, selection,
+     batch-add, lifecycle, notes, or permalink actions. A registered document
+     additionally shows its DMS-managed document title and control data in a
+     separate **Title** field; that title never replaces the source file name.
+     Primary-click or Enter on a folder row opens that folder directly without
+     first selecting it or loading document detail. File rows retain single- and
+     modifier-assisted multi-selection. Selecting a tree node or breadcrumb
+     segment opens that folder directly.
    - Back/Forward history is session-only. Navigating alone does not create a
      saved view; the operator must use CAP-0005's explicit bookmark control.
 3. Selecting one or more **Not in library** supported source files
@@ -141,19 +149,26 @@
    - **Workflow chain / evidence** (CAP-0011)
    - **Verify release integrity** (CAP-0004)
    - **Start periodic review** when due rules allow (CAP-0017)
-   - **Rename / reassociate source file** when applicable (CAP-0013)
+   - **Reassociate source** when the selected document is **Lost source** or
+     when an in-root rename/repath is allowed (CAP-0013)
    - **Unregister** (this CAP)
    - **Copy permalink** (CAP-0020) — clipboard receives the stable
      workspace+document URI; never a path- or version-based link
    - **Claude change assistance** when enabled (CAP-0018)
-   Multi-select exposes only multi-applicable actions (including batch add for
-   a homogeneous selection of unregistered supported source files, plus bulk
-   verify where defined and multi-unregister with per-item precondition checks).
-   Copy permalink is single-selection only. Per-document actions such as Submit
-   for review, Mark obsolete, Start periodic review, and Copy permalink are not
-   exposed as batch actions — "Send reminder" is a per-document periodic
-   reminder action (CAP-0017) and is also not a batch action. Actions refuse
-   closed with a clear reason when preconditions fail.
+   When the selection is **Lost source**, source-dependent actions stay
+   disabled until reassociation succeeds: Open draft, Edit document control
+   data, Override confidentiality, Create release candidate / review / Release,
+   Mark obsolete, Start periodic review, Claude change assistance, and any other
+   action that requires the draft bytes. Open latest released PDF (when the PDF
+   exists), Notes, Copy permalink, Reassociate source, Unregister, and read-only
+   workflow evidence remain available. Multi-select exposes only multi-applicable
+   actions (including batch add for a homogeneous selection of unregistered
+   supported source files, plus bulk verify where defined and multi-unregister
+   with per-item precondition checks). Copy permalink is single-selection only.
+   Per-document actions such as Submit for review, Mark obsolete, Start periodic
+   review, and Copy permalink are not exposed as batch actions — "Send reminder"
+   is a per-document periodic reminder action (CAP-0017) and is also not a batch
+   action. Actions refuse closed with a clear reason when preconditions fail.
 9. Entering the Library creates or focuses one CAP-0005 **Library activity tab**
    labeled `Library · <edit-root-relative folder path>`. Folder navigation
    updates that tab's current path and label in place; it does not create one
@@ -170,8 +185,9 @@
    in-memory Library view retains its folder, search, sort, history, scroll, and
    selection state without reloading. If the activity was closed or its
    selection changed, the stable document ID resolves its current folder and
-   selection detail. A missing registered source retains document detail and
-   missing-source state without fabricating a filesystem row.
+   selection detail. A Lost source selection retains document detail and lost-source state;
+   the centre list keeps the stored-name row under the last known folder so the
+   operator can reassociate without a fabricated on-disk file.
 10. CAP-0005's `Bookmark this view` control saves the current library folder and
     sort order; when exactly one document is selected it also uses that
     document's stable ID as the target. It does not retain a multi-select batch
@@ -182,19 +198,21 @@
 11. Documents start versioning only after they are in the library; add is the
     gate into CAP-0002.
 12. An obsolete document's draft remains in its filesystem location and is shown
-    in the directory list with an `obsolete` lifecycle state. A missing
-    registered document has no fabricated directory row; it is reported as a
-    maintenance issue until resolved (CAP-0013).
-13. A labelled **Show in folder** group above the directory table has three
+    in the directory list with an `obsolete` lifecycle state. A registered
+    document whose source file is absent at the stored locator appears as a
+    **Lost source** row in that folder (and in search when it matches) until the
+    operator reassociates or unregisters it (CAP-0013).
+13. A labelled **Show in folder** group above the directory table has four
     independent, all-on session controls: **Draft documents** shows controlled
-    rows whose lifecycle is exactly `draft`; **Available to add** shows
-    supported `Not in library` files; and **Unsupported files** shows
-    unsupported regular files. Folder rows, controlled non-draft rows, and
-    unclassified rows remain visible. The state follows the Library activity
-    across folders and search, filters before sorting and pagination, returns to
-    page zero when changed, and prunes hidden selections and detail. It is a
-    file-visibility aid, not CAP-0012 metadata reporting, and never changes
-    recursive folder counters.
+    rows whose lifecycle is exactly `draft` and whose source still resolves;
+    **Available to add** shows supported `Not in library` files; **Unsupported
+    files** shows unsupported regular files; and **(Re-)Moved documents** shows
+    **Lost source** rows. Folder rows, controlled non-draft rows with a present
+    source, and unclassified rows remain visible. The state follows the Library
+    activity across folders and search, filters before sorting and pagination,
+    returns to page zero when changed, and prunes hidden selections and detail.
+    It is a file-visibility aid, not CAP-0012 metadata reporting, and never
+    changes recursive folder counters.
 14. Explorer search starts at the current folder and includes its descendants,
     with an explicit **Entire library** scope. It matches registered-document
     title and document number plus every file's exact source file name and

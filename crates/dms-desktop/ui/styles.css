@@ -261,6 +261,9 @@ button { cursor: pointer; }
 .folder-counter { display: inline-flex; min-width: 20px; height: 19px; flex: 0 0 auto; align-items: center; justify-content: center; padding: 0 5px; color: #435765; background: #e4ebef; border-radius: 999px; font-size: 10px; font-weight: 750; }
 .folder-counter.available_to_add { color: #245f45; background: #e3f2e9; }
 .folder-counter.unsupported_files { color: #8a4a20; background: #faeadf; }
+.folder-counter.moved_documents { color: #6b3a7a; background: #f3e7f7; }
+.library-row.lost-source td { font-style: italic; color: #5a3d63; }
+.badge.warn { color: #7a3410; background: #fde8d8; }
 .folder-contents { display: flex; min-width: 360px; flex: 1 1 480px; flex-direction: column; overflow: hidden; }
 .folder-contents > header { display: flex; min-height: 68px; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid #e4e9ed; }
 .folder-contents h2 { margin: 3px 0 0; font-size: 19px; }

@@ -185,6 +185,7 @@ impl Workspace {
             periodic_review: None,
             control_change: None,
             report: Some(evidence.clone()),
+            source_reassociation: None,
         };
         let event = WorkflowEvent {
             event_hash: crate::lifecycle::hash_event_body(&body)?,
@@ -847,6 +848,7 @@ fn event_type_text(value: WorkflowEventType) -> &'static str {
         WorkflowEventType::PeriodicReviewCancelled => "periodic_review_cancelled",
         WorkflowEventType::PeriodicReviewReminder => "periodic_review_reminder",
         WorkflowEventType::ReportGenerated => "report_generated",
+        WorkflowEventType::SourceReassociated => "source_reassociated",
     }
 }
 

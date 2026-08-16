@@ -676,6 +676,7 @@ impl Workspace {
             }),
             control_change: None,
             report: None,
+            source_reassociation: None,
         };
         self.append_event(document_id, body)?;
         Ok(())

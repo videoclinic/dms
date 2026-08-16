@@ -320,6 +320,15 @@ pub enum WorkflowEventType {
     PeriodicReviewCancelled,
     PeriodicReviewReminder,
     ReportGenerated,
+    SourceReassociated,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SourceReassociation {
+    pub previous_relative_path: String,
+    pub new_relative_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub absorbed_document_id: Option<Uuid>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -371,6 +380,8 @@ pub struct WorkflowEventBody {
     pub control_change: Option<DocumentControlChange>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub report: Option<crate::AuditReportEvidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_reassociation: Option<SourceReassociation>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -1233,10 +1244,24 @@ impl Workspace {
 
     pub fn local_lifecycle_actions(&self, document_id: Uuid) -> Result<LocalLifecycleActions> {
         let document = self.document(document_id)?;
+        let source_lost = document.source_state == SourceState::Registered
+            && !self.edit_root.join(&document.relative_path).is_file();
         let availability = |available, reason| LifecycleActionAvailability {
             available,
             reason: (!available).then_some(reason),
         };
+        if source_lost {
+            return Ok(LocalLifecycleActions {
+                cancel_review: availability(
+                    false,
+                    "Source file is Lost source; reassociate the source first.",
+                ),
+                mark_obsolete: availability(
+                    false,
+                    "Source file is Lost source; reassociate the source first.",
+                ),
+            });
+        }
         Ok(LocalLifecycleActions {
             cancel_review: availability(
                 document.lifecycle == Lifecycle::InReview,
@@ -1367,6 +1392,7 @@ impl Workspace {
             periodic_review: None,
             control_change: None,
             report: None,
+            source_reassociation: None,
         };
         self.append_event(document_id, body)?;
         let stored = self
@@ -1692,6 +1718,11 @@ impl Workspace {
                 "document is not registered".to_owned(),
             ));
         }
+        if !self.edit_root.join(&document.relative_path).is_file() {
+            return Err(DmsError::InvalidLifecycleTransition(
+                "source file is Lost source; reassociate the source first".to_owned(),
+            ));
+        }
         if document.lifecycle != Lifecycle::Draft || document.active_candidate_id.is_some() {
             return Err(DmsError::InvalidLifecycleTransition(
                 "document must be an idle draft".to_owned(),
@@ -1946,6 +1977,7 @@ impl Workspace {
             periodic_review: None,
             control_change: None,
             report: None,
+            source_reassociation: None,
         };
         self.append_event(document_id, body)
     }
@@ -1985,6 +2017,7 @@ impl Workspace {
             periodic_review: None,
             control_change: None,
             report: None,
+            source_reassociation: None,
         };
         self.append_event(document_id, body)
     }
@@ -2024,6 +2057,7 @@ impl Workspace {
             periodic_review: None,
             control_change: Some(DocumentControlChange { before, after }),
             report: None,
+            source_reassociation: None,
         };
         self.append_event(document_id, body)
     }

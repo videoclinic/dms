@@ -74,6 +74,14 @@ pub enum DmsError {
     OfficeTemporaryFile(PathBuf),
     #[error("document already registered for {0}")]
     DocumentAlreadyRegistered(PathBuf),
+    #[error(
+        "cannot reassociate onto {path}: that path is already library document {target_id}; the target must leave the library, but its audit history is older than this document's audit log"
+    )]
+    ReassociateTargetAuditOlder { path: PathBuf, target_id: Uuid },
+    #[error(
+        "cannot reassociate onto {path}: that path is already library document {target_id}; the target must leave the library, but its audit timestamps overlap this document's audit log"
+    )]
+    ReassociateTargetAuditOverlap { path: PathBuf, target_id: Uuid },
     #[error("document {0} was not found")]
     DocumentNotFound(Uuid),
     #[error("note {note_id} was not found on document {document_id}")]

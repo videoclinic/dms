@@ -60,6 +60,7 @@ export function createLibraryState() {
     show_draft_documents: true,
     show_available_to_add: true,
     show_unsupported_files: true,
+    show_moved_documents: true,
     detail_width: 420,
     loading: false,
   };
@@ -160,17 +161,22 @@ export function historyTarget(library, direction) {
 export function membershipKind(entry) {
   if (typeof entry?.membership === "string") return entry.membership;
   if (entry?.membership?.in_library) return "in_library";
+  if (entry?.membership?.lost_source) return "lost_source";
   return null;
 }
 
 export function entryDocumentId(entry) {
-  return entry?.membership?.in_library?.document_id ?? entry?.document?.id ?? null;
+  return entry?.membership?.in_library?.document_id
+    ?? entry?.membership?.lost_source?.document_id
+    ?? entry?.document?.id
+    ?? null;
 }
 
 export function filterLibraryEntries(entries, library) {
   return (entries ?? []).filter((entry) => {
     if (entry.kind === "folder") return true;
     const membership = membershipKind(entry);
+    if (membership === "lost_source") return library.show_moved_documents !== false;
     if (membership === "in_library" && entry.document?.lifecycle === "draft") {
       return library.show_draft_documents;
     }
@@ -181,7 +187,12 @@ export function filterLibraryEntries(entries, library) {
 }
 
 export function toggleLibraryVisibility(library, key) {
-  if (!["show_draft_documents", "show_available_to_add", "show_unsupported_files"].includes(key)) {
+  if (![
+    "show_draft_documents",
+    "show_available_to_add",
+    "show_unsupported_files",
+    "show_moved_documents",
+  ].includes(key)) {
     return library;
   }
   const next = { ...library, [key]: !library[key], page: 0 };
@@ -742,9 +753,15 @@ export function libraryIcon(name) {
 function membershipLabel(entry) {
   const membership = membershipKind(entry);
   if (membership === "in_library") return "In library";
+  if (membership === "lost_source") return "Lost source";
   if (membership === "not_in_library") return "Not in library";
   if (membership === "unsupported") return "Unsupported draft";
   return "Folder";
+}
+
+function lifecycleLabel(entry) {
+  if (membershipKind(entry) === "lost_source") return "Lost source";
+  return entry.document?.lifecycle ?? "—";
 }
 
 function counterChipsMarkup(counters) {
@@ -752,6 +769,7 @@ function counterChipsMarkup(counters) {
     ["draft_documents", "~", "draft document", "draft documents"],
     ["available_to_add", "+", "file available to add", "files available to add"],
     ["unsupported_files", "!", "unsupported file", "unsupported files"],
+    ["moved_documents", "?", "(re-)moved document", "(re-)moved documents"],
   ];
   return chips
     .filter(([key]) => Number(counters?.[key]) > 0)
@@ -790,7 +808,7 @@ function rowsMarkup(library, entries, emptyMessage) {
     : page.entries.map((entry) => {
         const path = normalizeLibraryPath(entry.relative_path);
         const selected = library.selection.includes(path) ? " selected" : "";
-        return `<tr class="library-row${selected}" tabindex="0" data-library-entry="${escapeHtml(path)}" data-library-kind="${escapeHtml(entry.kind)}"><td><span class="entry-name">${libraryIcon(entry.kind === "folder" ? "folder" : "file")}<span>${escapeHtml(entry.name)}</span>${entry.kind === "folder" ? counterChipsMarkup(entry.folder_counters) : ""}</span></td><td>${escapeHtml(entry.document?.control?.title ?? "—")}</td><td>${escapeHtml(membershipLabel(entry))}</td><td>${escapeHtml(entry.document?.lifecycle ?? "—")}</td><td>${escapeHtml(path)}</td></tr>`;
+        return `<tr class="library-row${selected}${membershipKind(entry) === "lost_source" ? " lost-source" : ""}" tabindex="0" data-library-entry="${escapeHtml(path)}" data-library-kind="${escapeHtml(entry.kind)}"><td><span class="entry-name">${libraryIcon(entry.kind === "folder" ? "folder" : "file")}<span>${escapeHtml(entry.name)}</span>${entry.kind === "folder" ? counterChipsMarkup(entry.folder_counters) : ""}</span></td><td>${escapeHtml(entry.document?.control?.title ?? "—")}</td><td>${escapeHtml(membershipLabel(entry))}</td><td>${escapeHtml(lifecycleLabel(entry))}</td><td>${escapeHtml(path)}</td></tr>`;
       }).join("");
   const paging = page.total > library.page_size
     ? `<button class="text-button" type="button" data-library-page="previous" ${page.page === 0 ? "disabled" : ""}>Previous</button><span>Page ${page.page + 1} of ${page.page_count}</span><button class="text-button" type="button" data-library-page="next" ${page.page + 1 === page.page_count ? "disabled" : ""}>Next</button>`
@@ -891,7 +909,10 @@ function selectionMarkup(library) {
   }
   if (selected.length > 1) {
     const allAddable = selected.every((entry) => membershipKind(entry) === "not_in_library");
-    const allRegistered = selected.every((entry) => membershipKind(entry) === "in_library");
+    const allRegistered = selected.every((entry) => {
+      const membership = membershipKind(entry);
+      return membership === "in_library" || membership === "lost_source";
+    });
     const identities = selected.slice(0, 5).map((entry) => `<li>${escapeHtml(entry.name)}</li>`).join("");
     return `<div class="selection-header"><span class="badge">${selected.length} selected</span><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><ul class="identity-list">${identities}</ul><div class="selection-actions">${allAddable ? `<button class="button" type="button" data-library-add>Add ${selected.length} documents to library</button>` : ""}${allRegistered ? `<button class="button danger" type="button" data-library-unregister>Unregister ${selected.length} documents</button>` : ""}${!allAddable && !allRegistered ? "<p>Mixed selections have no common action.</p>" : ""}</div>`;
   }
@@ -914,6 +935,7 @@ function selectionMarkup(library) {
   const roles = detail.effective_workflow_roles;
   const role = (value, placeholder) => identityLabel(value, placeholder);
   const sourceAvailable = detail.source_exists && detail.source_state === "registered";
+  const sourceLost = detail.source_state === "registered" && !detail.source_exists;
   const release = detail.current_release;
   const releaseProfile = release?.profile ?? release?.document_control_snapshot ?? null;
   const currentReleaseIdentity = release
@@ -939,17 +961,33 @@ function selectionMarkup(library) {
   const schedule = detail.review_schedule ?? {};
   const scheduleBaseline = reviewScheduleBaseline(detail);
   const scheduleMode = scheduleBaseline.mode;
-  const scheduleMarkup = `<form id="library-review-schedule-form" class="confidentiality-editor" data-baseline-mode="${escapeHtml(scheduleBaseline.mode)}" data-baseline-interval="${escapeHtml(scheduleBaseline.intervalMonths)}" data-baseline-exemption="${escapeHtml(scheduleBaseline.exemptionReason)}"><p class="source-path">Next review is derived from the current release effective date. An exemption records a reason and creates no due date.</p><label>Schedule<select name="scheduleMode"><option value="inherit" ${scheduleMode === "inherit" ? "selected" : ""}>Use workspace interval (${escapeHtml(schedule.workspace_interval_months ?? "—")} months)</option><option value="override" ${scheduleMode === "override" ? "selected" : ""}>Document interval override</option><option value="exempt" ${scheduleMode === "exempt" ? "selected" : ""}>Exempt document</option></select></label><label data-review-schedule-field="interval"${scheduleMode === "override" ? "" : " hidden"}>Review interval months<input name="reviewIntervalMonths" type="number" min="1" max="120" value="${escapeHtml(schedule.interval_months ?? "")}"${scheduleMode === "override" ? " required" : " disabled"}></label><label data-review-schedule-field="exemption"${scheduleMode === "exempt" ? "" : " hidden"}>Exemption reason<textarea name="reviewExemptionReason"${scheduleMode === "exempt" ? " required" : " disabled"}>${escapeHtml(schedule.exemption_reason ?? "")}</textarea></label><p class="source-path">Next review due: ${escapeHtml(schedule.next_due_date ?? (schedule.exemption_reason ? "Exempt" : "Unknown until release date is known"))}</p><button class="button secondary" type="submit" disabled>Update review schedule</button></form>`;
-  const editor = `<div class="document-control-editor" aria-labelledby="document-control-editor-heading"><h4 id="document-control-editor-heading">Edit document control data</h4><p class="source-path">Applies to ${escapeHtml(detail.source_name)} · ${escapeHtml(detail.relative_path)}</p>${library.detail_error ? `<p class="library-detail-error" role="alert">${escapeHtml(library.detail_error)}</p>` : ""}${ownerSelectable ? "" : '<p class="library-detail-error" role="status">No eligible Microsoft Entra owner is available. Identity placeholders and legacy owner text are display-only.</p>'}<form id="library-document-control-form"><div class="document-control-fields"><label>Title<input name="title" required value="${escapeHtml(detail.control.title)}"></label><label>Document number<input name="documentNumber" value="${escapeHtml(detail.control.document_number ?? "")}"></label><label>Document type<select name="documentType"><option value="">Not set</option>${documentTypeOptions}</select></label><label>Owner<select name="ownerObjectId" required ${ownerSelectable ? "" : "disabled"}>${unresolvedOwnerOption}${ownerOptions}</select></label></div><button class="button" type="submit" ${ownerSelectable ? "" : "disabled"}>Save document control</button></form><form id="library-confidentiality-form" class="confidentiality-editor"><label>Confidentiality override<select name="confidentialityTypeId"><option value="">Use inherited folder policy</option>${confidentialityOptions}</select></label><button class="button secondary" type="submit">Apply confidentiality</button></form></div>`;
+  const scheduleMarkup = sourceLost
+    ? '<p class="source-path">Review schedule editing is unavailable while the source is Lost source. Reassociate the source first.</p>'
+    : `<form id="library-review-schedule-form" class="confidentiality-editor" data-baseline-mode="${escapeHtml(scheduleBaseline.mode)}" data-baseline-interval="${escapeHtml(scheduleBaseline.intervalMonths)}" data-baseline-exemption="${escapeHtml(scheduleBaseline.exemptionReason)}"><p class="source-path">Next review is derived from the current release effective date. An exemption records a reason and creates no due date.</p><label>Schedule<select name="scheduleMode"><option value="inherit" ${scheduleMode === "inherit" ? "selected" : ""}>Use workspace interval (${escapeHtml(schedule.workspace_interval_months ?? "—")} months)</option><option value="override" ${scheduleMode === "override" ? "selected" : ""}>Document interval override</option><option value="exempt" ${scheduleMode === "exempt" ? "selected" : ""}>Exempt document</option></select></label><label data-review-schedule-field="interval"${scheduleMode === "override" ? "" : " hidden"}>Review interval months<input name="reviewIntervalMonths" type="number" min="1" max="120" value="${escapeHtml(schedule.interval_months ?? "")}"${scheduleMode === "override" ? " required" : " disabled"}></label><label data-review-schedule-field="exemption"${scheduleMode === "exempt" ? "" : " hidden"}>Exemption reason<textarea name="reviewExemptionReason"${scheduleMode === "exempt" ? " required" : " disabled"}>${escapeHtml(schedule.exemption_reason ?? "")}</textarea></label><p class="source-path">Next review due: ${escapeHtml(schedule.next_due_date ?? (schedule.exemption_reason ? "Exempt" : "Unknown until release date is known"))}</p><button class="button secondary" type="submit" disabled>Update review schedule</button></form>`;
+  const editor = sourceLost
+    ? '<p class="source-path">Document control and confidentiality changes are unavailable while the source is Lost source. Reassociate the source first.</p>'
+    : `<div class="document-control-editor" aria-labelledby="document-control-editor-heading"><h4 id="document-control-editor-heading">Edit document control data</h4><p class="source-path">Applies to ${escapeHtml(detail.source_name)} · ${escapeHtml(detail.relative_path)}</p>${library.detail_error ? `<p class="library-detail-error" role="alert">${escapeHtml(library.detail_error)}</p>` : ""}${ownerSelectable ? "" : '<p class="library-detail-error" role="status">No eligible Microsoft Entra owner is available. Identity placeholders and legacy owner text are display-only.</p>'}<form id="library-document-control-form"><div class="document-control-fields"><label>Title<input name="title" required value="${escapeHtml(detail.control.title)}"></label><label>Document number<input name="documentNumber" value="${escapeHtml(detail.control.document_number ?? "")}"></label><label>Document type<select name="documentType"><option value="">Not set</option>${documentTypeOptions}</select></label><label>Owner<select name="ownerObjectId" required ${ownerSelectable ? "" : "disabled"}>${unresolvedOwnerOption}${ownerOptions}</select></label></div><button class="button" type="submit" ${ownerSelectable ? "" : "disabled"}>Save document control</button></form><form id="library-confidentiality-form" class="confidentiality-editor"><label>Confidentiality override<select name="confidentialityTypeId"><option value="">Use inherited folder policy</option>${confidentialityOptions}</select></label><button class="button secondary" type="submit">Apply confidentiality</button></form></div>`;
   const openAttr = (key) => (selectionSectionOpen(library, key) ? " open" : "");
   const section = (key, title, body) =>
     `<details class="selection-section" data-library-section="${key}"${openAttr(key)}><summary><span class="selection-section-chevron" aria-hidden="true"></span><span class="selection-section-title">${title}</span><span class="selection-section-hint" aria-hidden="true"></span></summary><div class="selection-section-body">${body}</div></details>`;
   const controlSummary = `<dl class="selection-details"><dt>Document type</dt><dd>${escapeHtml(detail.control.document_type ?? "Not set")}</dd><dt>Owner</dt><dd>${escapeHtml(identityLabel(currentOwner, "Not set"))}</dd><dt>Confidentiality</dt><dd>${escapeHtml(confidentiality?.label ?? "Not configured")}${confidentiality ? ` · ${escapeHtml(confidentiality.document_override ? "override" : `from ${confidentiality.source_folder}`)}` : ""}</dd><dt>Editor</dt><dd>${escapeHtml(role(roles?.editor, "<editor>"))}</dd><dt>Approver</dt><dd>${escapeHtml(role(roles?.approver, "Not configured"))}</dd></dl>`;
   const controlBody = `${controlSummary}${editor}`;
-  const actionsBody = `<div class="selection-actions"><button class="button" type="button" data-library-open-source ${sourceAvailable ? "" : "disabled"}>Open source draft</button><button class="button" type="button" data-library-open-release ${release?.pdf_exists ? "" : "disabled"}>Open current released PDF</button><button class="button" type="button" data-library-open-notes>Open notes</button><button class="button secondary" type="button" data-library-open-assistance>Evaluate changes with Claude</button><button class="button secondary" type="button" data-library-copy-permalink>Copy permalink</button><button class="button danger" type="button" data-library-unregister>Unregister</button></div><form id="library-reassociate-form" class="reassociate-form"><label>Reassociate source<input name="path" required value="${escapeHtml(detail.relative_path)}" aria-label="New edit-root-relative source path"></label><button class="button secondary" type="submit">Reassociate</button></form>`;
+  const reassociateHelp = sourceLost
+    ? '<p class="source-path">Choose another supported file under the edit root. If that path is already a library document, it must leave the library and its audit history is merged only when it is entirely later than this document\'s audit log with no overlapping timestamps.</p>'
+    : '<p class="source-path">Updates the stored source locator. A path that is already another library document must leave the library after a non-overlapping audit merge.</p>';
+  const actionsBody = `<div class="selection-actions"><button class="button" type="button" data-library-open-source ${sourceAvailable ? "" : "disabled"}>Open source draft</button><button class="button" type="button" data-library-open-release ${release?.pdf_exists ? "" : "disabled"}>Open current released PDF</button><button class="button" type="button" data-library-open-notes>Open notes</button><button class="button secondary" type="button" data-library-open-assistance ${sourceLost ? "disabled" : ""}>Evaluate changes with Claude</button><button class="button secondary" type="button" data-library-copy-permalink>Copy permalink</button><button class="button danger" type="button" data-library-unregister>Unregister</button></div>${reassociateHelp}<form id="library-reassociate-form" class="reassociate-form"><label>Reassociate source<input name="path" required value="${escapeHtml(detail.relative_path)}" aria-label="New edit-root-relative source path"></label><button class="button secondary" type="submit">Reassociate source</button></form>`;
   const releasesBody = currentReleaseIdentity
     || '<p class="source-path">No release evidence is recorded for this document.</p>';
-  return `<div class="selection-header"><div class="selection-header-badges"><span class="badge">In library</span><span class="badge muted">${escapeHtml(detail.lifecycle)}</span></div><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><h3>${escapeHtml(detail.control.title)}</h3>${detail.control.document_number ? `<p class="document-number">${escapeHtml(detail.control.document_number)}</p>` : ""}<div class="source-identity"><strong>Source file</strong><span>${escapeHtml(detail.source_name)}</span><small>${escapeHtml(detail.relative_path)}</small></div>${section("control", "Document control data", controlBody)}${section("schedule", "Document review schedule", scheduleMarkup)}${section("actions", "Actions", actionsBody)}${section("revision", "Revision cycle", lifecyclePanelMarkup(library, detail))}${section("releases", "Releases", releasesBody)}`;
+  const membershipBadge = sourceLost
+    ? '<span class="badge warn">Lost source</span>'
+    : '<span class="badge">In library</span>';
+  const lifecycleBadge = sourceLost
+    ? '<span class="badge muted">Lost source</span>'
+    : `<span class="badge muted">${escapeHtml(detail.lifecycle)}</span>`;
+  const lostBanner = sourceLost
+    ? '<p class="library-detail-error" role="status">The draft file is not at the stored path. Most actions stay disabled until you reassociate the source.</p>'
+    : "";
+  return `<div class="selection-header"><div class="selection-header-badges">${membershipBadge}${lifecycleBadge}</div><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><h3>${escapeHtml(detail.control.title)}</h3>${detail.control.document_number ? `<p class="document-number">${escapeHtml(detail.control.document_number)}</p>` : ""}${lostBanner}<div class="source-identity"><strong>Source file</strong><span>${escapeHtml(detail.source_name)}</span><small>${escapeHtml(detail.relative_path)}</small></div>${section("control", "Document control data", controlBody)}${section("schedule", "Document review schedule", scheduleMarkup)}${section("actions", "Actions", actionsBody)}${section("revision", "Revision cycle", sourceLost ? '<p class="source-path">Revision cycle actions are unavailable while the source is Lost source.</p>' : lifecyclePanelMarkup(library, detail))}${section("releases", "Releases", releasesBody)}`;
 }
 
 export function libraryMarkup(workspace, activity, library, error = "") {
@@ -991,6 +1029,7 @@ export function libraryMarkup(workspace, activity, library, error = "") {
           ${visibilityToggle("show_draft_documents", "Draft documents")}
           ${visibilityToggle("show_available_to_add", "Available to add")}
           ${visibilityToggle("show_unsupported_files", "Unsupported files")}
+          ${visibilityToggle("show_moved_documents", "(Re-)Moved documents")}
         </div>
         <div class="table-scroll"><table><thead><tr><th>Name</th><th>Title</th><th>Library state</th><th>Lifecycle</th><th>Relative path</th></tr></thead><tbody>${rowsMarkup(library, entries, library.results === null ? "This folder has no visible entries." : "No files match this search.")}</tbody></table></div>
       </section>
