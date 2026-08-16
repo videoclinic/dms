@@ -7,14 +7,14 @@
 **Entry checkpoint:** CHG-0014 is archived as done; `92efa51` includes its runtime and wireframe baseline.
 **Context sources:** `docs/product/capabilities/CAP-0006-library-explorer.md#outcomes` (outcomes 2, 6, and 8), `docs/product/capabilities/CAP-0015-document-control-data.md#outcomes` (outcome 11), `docs/changes/archive/CHG-0014-reassociate-source-topic-visibility.md#pane-layout-locked`, `crates/dms-desktop/AGENTS.md#local-contracts`, `crates/dms-desktop/ui/library.mjs` (`DEFAULT_SELECTION_OPEN`, `selectionMarkup`, `libraryMarkup`), `crates/dms-desktop/ui/styles.css` (`.selection-pane`, `.selection-actions-block`), `crates/dms-desktop/ui/library.test.mjs` (single-document markup and fold-state tests), `crates/dms-desktop/ui/app.test.mjs` (`shell and Library panes contain scrolling without moving navigation`), `docs/product/wireframes/generate.mjs` (`lostSourceSelectionPane`, `documentControlDataSelectionPane`)
 **Produces:** A single-document Library selection pane whose main details scroll above a bottom-docked, independently foldable Actions footer, with matching CAPs, tests, DOX, and CAP-0006/CAP-0015 wireframes.
-**Status:** in-progress — Phase 2 gate passed; Phase 3 not started
+**Status:** done — foldable bottom-docked Actions footer shipped; archived after workspace gate
 
 Restructure the single-document Library selection pane so document details scroll independently above a bottom-docked Actions disclosure whose header never leaves the pane viewport.
 
 | Field | Value |
 | --- | --- |
 | ID | CHG-0015 |
-| Status | in-progress |
+| Status | done |
 | External request | Direct operator request: Redesign the position of the "Acionts" section in the "document control data" pane: fix the "Actions" on the bottom on the "document control data" pane so that scrolling within the "document control data" pane does not move the "Actions"; Actions should be foldable to save space if neede |
 | Affected CAPs | CAP-0006, CAP-0015 |
 | Decision records | none |
@@ -26,6 +26,7 @@ Restructure the single-document Library selection pane so document details scrol
 - CAP-0006 outcomes 2 and 6, CAP-0015 outcome 11, and `crates/dms-desktop/AGENTS.md` require that layout and session-only Actions fold state.
 - Focused tests: `node --test crates/dms-desktop/ui/library.test.mjs crates/dms-desktop/ui/app.test.mjs` 53/53.
 - Wireframes: CAP-0006 Lost-source and CAP-0015 healthy-document panes use one `.selection-scroll` plus an open `.selection-actions-footer`. Native 1600×1600 Chrome exports are non-empty.
+- Workspace gate: `cargo fmt --all -- --check`; `cargo test --workspace`; `cargo clippy --workspace --all-targets -- -D warnings`; `node --test crates/dms-desktop/ui/*.test.mjs` 94/94; `check-md-links.py --format summary .` 0 issues.
 
 ## Phases
 
@@ -33,7 +34,7 @@ Restructure the single-document Library selection pane so document details scrol
 | --- | --- | --- | --- |
 | 1 | Contract, runtime layout, and focused tests | done (`node --test crates/dms-desktop/ui/library.test.mjs crates/dms-desktop/ui/app.test.mjs` 53/53) | `node --test crates/dms-desktop/ui/library.test.mjs crates/dms-desktop/ui/app.test.mjs` exits 0; tests prove Actions is the foldable sibling after the sole details scroller and its state survives document switches |
 | 2 | CAP-linked wireframes and visual audit | done (`node generate.mjs` + 1600×1600 CAP-0006/CAP-0015 Chrome exports) | Wireframe generation and 1600×1600 CAP-0006/CAP-0015 Chrome exports exit 0; both non-empty PNGs show the Actions summary docked at the pane bottom without overlap or clipping |
-| 3 | Workspace gate and change-record closeout | pending | Full Rust/frontend, link, and diff checks exit 0; CHG-0015 is archived as done and the change index has no active row for it |
+| 3 | Workspace gate and change-record closeout | done (`cargo test --workspace`; `clippy -D warnings`; frontend 94/94; link check 0) | Full Rust/frontend, link, and diff checks exit 0; CHG-0015 is archived as done and the change index has no active row for it |
 
 Mark a phase `in-progress` while running it, `done (<evidence>)` once its gate passes, `pending` otherwise.
 

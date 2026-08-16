@@ -20,12 +20,12 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
-| [CHG-0015](active/CHG-0015-fixed-foldable-actions-footer.md) | Fixed foldable Actions footer | in-progress | CAP-0006, CAP-0015 |
 
 ## Archive
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
+| [CHG-0015](archive/CHG-0015-fixed-foldable-actions-footer.md) | Fixed foldable Actions footer | done | CAP-0006, CAP-0015 |
 | [CHG-0014](archive/CHG-0014-reassociate-source-topic-visibility.md) | Pinned Actions, Lost-source reassociate, native file pick | done | CAP-0006, CAP-0013, CAP-0015 |
 | [CHG-0013](archive/CHG-0013-lost-source-library-filter.md) | Lost-source library filter, counter, and reassociate audit | done | CAP-0006, CAP-0013, CAP-0011 |
 | [CHG-0001](archive/CHG-0001-tauri-local-dms-bootstrap.md) | Bootstrap Tauri local DMS for ISO 27001 document control | done | CAP-0001 … CAP-0022 |
