@@ -40,8 +40,11 @@ const snapshot = {
   ],
   policy_folders: [
     { relative_path: "." },
+    { relative_path: "Archive" },
+    { relative_path: "Archive/Old" },
     { relative_path: "Policies" },
     { relative_path: "Policies/HR" },
+    { relative_path: "Policies/IT" },
   ],
   identity_source: {
     binding_id: "binding-1",
@@ -390,11 +393,42 @@ test("workflow tree exposes semantic levels, direct role badges, and independent
   assert.match(markup, /role="treeitem" aria-level="3"/);
   assert.match(markup, /Approver: Anna Berg/);
   assert.match(markup, /data-configuration-folder-toggle="Policies"/);
+  assert.match(markup, /data-configuration-folder="Policies\/HR"/);
+  assert.match(markup, /data-configuration-folder="Archive"/);
+  assert.doesNotMatch(markup, /data-configuration-folder="Archive\/Old"/);
 
   state = toggleConfigurationFolder(state, "Policies");
   markup = configurationMarkup(state, assistancePolicy);
   assert.doesNotMatch(markup, /data-configuration-folder="Policies\/HR"/);
   assert.equal(state.selected_folder, ".");
+});
+
+test("document defaults tree matches workflow expand rules and badges direct confidentiality policies", () => {
+  let state = applyConfigurationSnapshot(createConfigurationState(), snapshot);
+  state = setConfigurationRoute(state, "document-defaults");
+  let markup = configurationMarkup(state, assistancePolicy);
+
+  assert.match(markup, /role="tree"/);
+  assert.match(markup, /role="treeitem" aria-level="3"/);
+  assert.match(markup, /data-configuration-folder-toggle="Policies"/);
+  assert.match(markup, /data-configuration-folder="Policies\/HR"/);
+  assert.match(markup, /data-configuration-folder="Policies\/HR"[^>]*>[\s\S]*?Restricted/);
+  assert.match(markup, /data-configuration-folder="\."[^{]*[\s\S]*?Internal/);
+  assert.match(markup, /data-configuration-folder="Archive"/);
+  assert.doesNotMatch(markup, /data-configuration-folder="Archive\/Old"/);
+  assert.deepEqual(
+    new Set(state.expanded_folders),
+    new Set([".", "Policies", "Policies/HR"]),
+  );
+
+  state = toggleConfigurationFolder(state, "Policies");
+  markup = configurationMarkup(state, assistancePolicy);
+  assert.doesNotMatch(markup, /data-configuration-folder="Policies\/HR"/);
+  assert.equal(state.selected_folder, ".");
+
+  state = toggleConfigurationFolder(state, "Archive");
+  markup = configurationMarkup(state, assistancePolicy);
+  assert.match(markup, /data-configuration-folder="Archive\/Old"/);
 });
 
 test("confidentiality catalogue is a secondary surface that returns to document defaults", () => {

@@ -136,9 +136,12 @@ macOS.
   exact relative path, and current validation state. Replacement preserves the
   ID; removal requires explicit confirmation and states that Markdown release is
   blocked until another valid template is selected.
-- Workflow folders render as a semantic tree with session-only independent
-  branch state. Folder selection expands only its ancestor chain; direct Editor
-  and Approver assignments are badged without labelling inherited roles as direct.
+- Workflow and Document defaults folders render as the same semantic tree with
+  session-only independent branch state. On first open, only ancestor paths that
+  reveal a direct workflow-role or confidentiality policy are expanded. Folder
+  selection expands only its ancestor chain; direct Editor/Approver assignments
+  and direct confidentiality types are badged without labelling inherited values
+  as direct.
 - SMTP configuration keeps relay authentication login separate from the RFC 5322
   `From` mailbox. Credential presence is exposed only as `***`; the test action
   targets the parsed saved `From` address, sends fixed non-document content, and

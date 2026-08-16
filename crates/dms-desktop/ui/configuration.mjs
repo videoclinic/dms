@@ -31,6 +31,16 @@ export function createConfigurationState() {
   };
 }
 
+function expandDirectPolicyPaths(expanded, policies) {
+  for (const policy of policies ?? []) {
+    let folder = policy.folder;
+    while (folder && folder !== ".") {
+      expanded.add(folder);
+      folder = parentFolder(folder);
+    }
+  }
+}
+
 export function applyConfigurationSnapshot(state, snapshot, notice = "") {
   if (!snapshot?.workspace) {
     return { ...state, notice: "", error: "" };
@@ -40,13 +50,9 @@ export function applyConfigurationSnapshot(state, snapshot, notice = "") {
   const expanded = new Set((state.expanded_folders ?? ["."]).filter((folder) => folders.includes(folder)));
   expanded.add(".");
   if (!state.snapshot) {
-    for (const policy of snapshot.workflow_policies ?? []) {
-      let folder = policy.folder;
-      while (folder && folder !== ".") {
-        expanded.add(folder);
-        folder = parentFolder(folder);
-      }
-    }
+    // Reveal only paths that hold a direct (non-inherited) policy exception.
+    expandDirectPolicyPaths(expanded, snapshot.workflow_policies);
+    expandDirectPolicyPaths(expanded, snapshot.confidentiality_policies);
   }
   return {
     ...state,
@@ -154,15 +160,14 @@ function directRoleBadge(snapshot, assignment, label) {
   return `<span class="badge configuration-role-badge">${escapeHtml(label)}: ${escapeHtml(person?.display_name ?? "Unresolved")}</span>`;
 }
 
-function folderListMarkup(state) {
-  const rows = state.snapshot.policy_folders.map((folder) => {
-    const current = folder.relative_path === state.selected_folder;
-    return `<button type="button" data-configuration-folder="${escapeHtml(folder.relative_path)}" class="configuration-folder${current ? " current" : ""}" style="--folder-depth:${folder.depth}" ${current ? 'aria-current="true"' : ""}><span aria-hidden="true">▦</span><span><strong>${escapeHtml(policyFolderLabel(folder.relative_path))}</strong><small>${escapeHtml(folder.relative_path)}</small></span></button>`;
-  }).join("");
-  return `<section class="card configuration-card"><h3>Choose default or exception</h3><div class="configuration-folder-tree">${rows}</div></section>`;
+function directConfidentialityBadge(snapshot, folder) {
+  const policy = snapshot.confidentiality_policies.find((candidate) => candidate.folder === folder);
+  if (!policy) return "";
+  const type = snapshot.confidentiality_types.find((candidate) => candidate.id === policy.type_id);
+  return `<span class="badge configuration-role-badge">${escapeHtml(type?.label ?? policy.type_id)}</span>`;
 }
 
-function folderTreeMarkup(state, showWorkflowRoles = false) {
+function folderTreeMarkup(state, badgeKind = null) {
   const folders = state.snapshot.policy_folders.map(({ relative_path }) => relative_path);
   const expanded = new Set(state.expanded_folders ?? ["."]);
   const children = new Map(folders.map((folder) => [folder, []]));
@@ -174,19 +179,23 @@ function folderTreeMarkup(state, showWorkflowRoles = false) {
     const hasChildren = descendants.length > 0;
     const isExpanded = expanded.has(folder);
     const current = folder === state.selected_folder;
-    const policy = showWorkflowRoles
-      ? state.snapshot.workflow_policies.find((candidate) => candidate.folder === folder)
-      : null;
-    const badges = policy
-      ? `<span class="configuration-role-badges">${directRoleBadge(state.snapshot, policy.editor, "Editor")}${directRoleBadge(state.snapshot, policy.approver, "Approver")}</span>`
-      : "";
+    let badges = "";
+    if (badgeKind === "workflow") {
+      const policy = state.snapshot.workflow_policies.find((candidate) => candidate.folder === folder);
+      badges = policy
+        ? `<span class="configuration-role-badges">${directRoleBadge(state.snapshot, policy.editor, "Editor")}${directRoleBadge(state.snapshot, policy.approver, "Approver")}</span>`
+        : "";
+    } else if (badgeKind === "confidentiality") {
+      const badge = directConfidentialityBadge(state.snapshot, folder);
+      badges = badge ? `<span class="configuration-role-badges">${badge}</span>` : "";
+    }
     const toggle = hasChildren
       ? `<button type="button" class="configuration-folder-toggle" data-configuration-folder-toggle="${escapeHtml(folder)}" aria-label="${isExpanded ? "Collapse" : "Expand"} ${escapeHtml(policyFolderLabel(folder))}"><span aria-hidden="true">${isExpanded ? "▾" : "▸"}</span></button>`
       : '<span class="configuration-folder-toggle-spacer" aria-hidden="true"></span>';
     const group = hasChildren && isExpanded
       ? `<div role="group">${descendants.map((child) => renderFolder(child, level + 1)).join("")}</div>`
       : "";
-    return `<div role="treeitem" aria-level="${level}" aria-selected="${current}" ${hasChildren ? `aria-expanded="${isExpanded}"` : ""} class="configuration-folder-item">${toggle}<button type="button" data-configuration-folder="${escapeHtml(folder)}" class="configuration-folder${current ? " current" : ""}" style="--folder-depth:${level - 1}"><span aria-hidden="true">▦</span><span><strong>${escapeHtml(policyFolderLabel(folder))}</strong><small>${escapeHtml(folder)}</small></span>${badges}</button>${group}</div>`;
+    return `<div role="treeitem" aria-level="${level}" aria-selected="${current}" ${hasChildren ? `aria-expanded="${isExpanded}"` : ""} class="configuration-folder-item">${toggle}<button type="button" data-configuration-folder="${escapeHtml(folder)}" class="configuration-folder${current ? " current" : ""}" style="--folder-depth:${level - 1}" ${current ? 'aria-current="true"' : ""}><span aria-hidden="true">▦</span><span><strong>${escapeHtml(policyFolderLabel(folder))}</strong><small>${escapeHtml(folder)}</small></span>${badges}</button>${group}</div>`;
   };
   return `<section class="card configuration-card"><h3>Choose default or exception</h3><div class="configuration-folder-tree" role="tree" aria-label="Configuration folders">${renderFolder(".", 1)}</div></section>`;
 }
@@ -239,7 +248,7 @@ function documentDefaultsMarkup(state) {
   const root = snapshot.confidentiality_policies.find((policy) => policy.folder === ".");
   const rootType = snapshot.confidentiality_types.find((type) => type.id === root?.type_id);
   const enabledCount = snapshot.confidentiality_types.filter((type) => type.enabled).length;
-  return `${markdownTemplateMarkup(snapshot)}<section class="configuration-summary"><div><strong>Workspace default</strong><span>${escapeHtml(rootType?.label ?? "Not configured")}</span></div><span class="badge">${enabledCount} enabled confidentiality ${enabledCount === 1 ? "type" : "types"}</span></section><div class="configuration-defaults-grid">${folderListMarkup(state)}${selectedPolicyMarkup(state)}</div>${documentTypesMarkup(snapshot)}`;
+  return `${markdownTemplateMarkup(snapshot)}<section class="configuration-summary"><div><strong>Workspace default</strong><span>${escapeHtml(rootType?.label ?? "Not configured")}</span></div><span class="badge">${enabledCount} enabled confidentiality ${enabledCount === 1 ? "type" : "types"}</span></section><div class="configuration-defaults-grid">${folderTreeMarkup(state, "confidentiality")}${selectedPolicyMarkup(state)}</div>${documentTypesMarkup(snapshot)}`;
 }
 
 function confidentialityTypesMarkup(state) {
@@ -310,7 +319,7 @@ function workflowMarkup(state) {
   const editor = roleSelectMarkup(snapshot, direct, "editor", rootFolder);
   const approver = roleSelectMarkup(snapshot, direct, "approver", rootFolder);
   const canSave = Boolean(source && snapshot.eligible_people.length > 0);
-  return `<section class="configuration-summary"><div><strong>People source</strong><span>One direct-user Microsoft Entra group</span></div>${sourceSummary}<button class="button secondary" type="button" data-configuration-secondary="identity-source">Manage identity source…</button></section><div class="configuration-defaults-grid">${folderTreeMarkup(state, true)}<section class="card configuration-card"><span class="badge">Selected folder</span><h3>${escapeHtml(rootFolder ? "Edit root" : selected)}</h3><p>${direct ? "Direct workflow role assignment." : rootFolder ? "Root roles are required after an identity source is connected." : "Editor and approver inherit independently from the nearest parent assignment."}</p><form class="configuration-form" data-configuration-form="workflow-policy">${editor}${approver}<button class="button" type="submit" ${canSave ? "" : "disabled"}>Save workflow roles</button></form>${!rootFolder && direct ? '<form data-configuration-form="remove-workflow-policy"><button class="button secondary" type="submit">Remove folder exception</button></form>' : ""}</section></div>`;
+  return `<section class="configuration-summary"><div><strong>People source</strong><span>One direct-user Microsoft Entra group</span></div>${sourceSummary}<button class="button secondary" type="button" data-configuration-secondary="identity-source">Manage identity source…</button></section><div class="configuration-defaults-grid">${folderTreeMarkup(state, "workflow")}<section class="card configuration-card"><span class="badge">Selected folder</span><h3>${escapeHtml(rootFolder ? "Edit root" : selected)}</h3><p>${direct ? "Direct workflow role assignment." : rootFolder ? "Root roles are required after an identity source is connected." : "Editor and approver inherit independently from the nearest parent assignment."}</p><form class="configuration-form" data-configuration-form="workflow-policy">${editor}${approver}<button class="button" type="submit" ${canSave ? "" : "disabled"}>Save workflow roles</button></form>${!rootFolder && direct ? '<form data-configuration-form="remove-workflow-policy"><button class="button secondary" type="submit">Remove folder exception</button></form>' : ""}</section></div>`;
 }
 
 function identitySourceMarkup(state) {

@@ -5,7 +5,7 @@
 | ID | CAP-0008 |
 | Status | not implemented |
 | Storage | `<edit-root>/.dms/` |
-| Tests | Partial phases 2, 9f.1, 9f.3, and 9f.4 evidence: [core policy tests](../../../crates/dms-core/tests/policies.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [Library override-form tests](../../../crates/dms-desktop/ui/library.test.mjs), [configuration route and catalogue tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
+| Tests | Partial phases 2, 9f.1, 9f.3, 9f.4, and CHG-0005 evidence: [core policy tests](../../../crates/dms-core/tests/policies.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [Library override-form tests](../../../crates/dms-desktop/ui/library.test.mjs), [configuration route, catalogue, and semantic confidentiality-tree tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 
@@ -25,13 +25,18 @@ When implemented, the following must hold:
    administration as a secondary surface and returns to Document defaults when
    dismissed; the full type list and its controls do not occupy a permanent
    Configuration column.
-3. The folder-policy editor shows an
+3. The folder-policy editor shows a semantic, independently expandable
    edit-root-relative folder tree containing the edit root and every accessible
    descendant folder, including empty folders and folders without library
-   documents; `<edit-root>/.dms` is excluded. Selecting a tree node is the only
-   way to choose the editor target. The editor shows that selected relative path;
-   it does not accept an arbitrary typed path and does not reuse Library
-   navigation selection.
+   documents; `<edit-root>/.dms` is excluded. Tree items expose levels,
+   selection, and expandable state to assistive technology. On first open, only
+   ancestor paths needed to reveal folders that hold a direct confidentiality
+   policy are expanded; fully inherited branches stay collapsed until the
+   operator expands them. Each direct folder policy is visibly badged with its
+   type label; inherited types are not misrepresented as direct badges.
+   Selecting a tree node is the only way to choose the editor target. The editor
+   shows that selected relative path; it does not accept an arbitrary typed path
+   and does not reuse Library navigation selection.
 4. The editor targets only the selected edit root or existing folder under it.
    The operator chooses one enabled confidentiality type from the workspace
    catalogue. **Save folder policy** creates a direct policy for the selected
@@ -68,9 +73,6 @@ When implemented, the following must hold:
    approval-required content review is open or after approval but before release,
    the request/approval is invalidated and a new review is required. Historical
    snapshots remain unchanged.
-12. The folder-exceptions table follows CAP-0005's growing-table interaction;
-    its text filter case-insensitively matches the edit-root-relative path and
-    confidentiality type before pagination.
 
 ## Non-goals
 
