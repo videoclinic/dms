@@ -329,13 +329,13 @@ const CAPS = [
           <p class="hint" style="margin-top:0">Edit-root folders · <code>.dms</code> and the configured Markdown Word template hidden</p>
           <ul class="tree-root">
             <li>
-              <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">${wireframeIcon("folder")} DMS Workspace ${folderCounter("~2", "2 draft documents")} ${folderCounter("+2", "2 files available to add")} ${folderCounter("!1", "1 unsupported file")}</span></div>
+              <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">${wireframeIcon("folder")} DMS Workspace ${folderCounter("~2", "2 draft documents")} ${folderCounter("+2", "2 files available to add")} ${folderCounter("!1", "1 unsupported file")} ${folderCounter("?1", "1 (re-)moved document")}</span></div>
               <ul>
                 <li>
-                  <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">${wireframeIcon("folder")} policies ${folderCounter("~2", "2 draft documents")} ${folderCounter("+2", "2 files available to add")} ${folderCounter("!1", "1 unsupported file")}</span></div>
+                  <div class="tree-node"><span class="tree-twisty">▾</span><span class="tree-label">${wireframeIcon("folder")} policies ${folderCounter("~2", "2 draft documents")} ${folderCounter("+2", "2 files available to add")} ${folderCounter("!1", "1 unsupported file")} ${folderCounter("?1", "1 (re-)moved document")}</span></div>
                   <ul>
                     <li>
-                      <div class="tree-node active"><span class="tree-twisty">▾</span><span class="tree-label">${wireframeIcon("folder")} HR ${folderCounter("~2", "2 draft documents")} ${folderCounter("+2", "2 files available to add")} ${folderCounter("!1", "1 unsupported file")}</span></div>
+                      <div class="tree-node active"><span class="tree-twisty">▾</span><span class="tree-label">${wireframeIcon("folder")} HR ${folderCounter("~2", "2 draft documents")} ${folderCounter("+2", "2 files available to add")} ${folderCounter("!1", "1 unsupported file")} ${folderCounter("?1", "1 (re-)moved document")}</span></div>
                       <ul>
                         <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">${wireframeIcon("folder")} Recruiting ${folderCounter("~1", "1 draft document")}</span></div></li>
                         <li><div class="tree-node"><span class="tree-twisty empty">▸</span><span class="tree-label">${wireframeIcon("folder")} Templates ${folderCounter("+1", "1 file available to add")}</span></div></li>
@@ -373,6 +373,7 @@ const CAPS = [
             <button class="btn outline" aria-pressed="true">Draft documents</button>
             <button class="btn outline" aria-pressed="true">Available to add</button>
             <button class="btn outline" aria-pressed="true">Unsupported files</button>
+            <button class="btn outline" aria-pressed="true">(Re-)Moved documents</button>
             <span class="muted grow" style="text-align:right">All on · also applies to search results</span>
           </div>
           <div class="table-wrap"><table>
@@ -425,6 +426,14 @@ const CAPS = [
                 <td>Office draft</td>
                 <td>—</td>
                 <td>—</td>
+              </tr>
+              <tr>
+                <td><span class="check">☐</span></td>
+                <td style="font-style:italic">Backup_config.docx</td>
+                <td>${badge("Lost source", "danger")}</td>
+                <td style="font-style:italic">Backup Config · DOC-031</td>
+                <td style="font-style:italic">${badge("Lost source", "danger")}</td>
+                <td style="font-style:italic">V1.0</td>
               </tr>
               <tr>
                 <td><span class="check">☐</span></td>
@@ -695,14 +704,14 @@ const CAPS = [
     file: "CAP-0013-library-maintenance",
     title: "Library maintenance",
     nav: "maintenance",
-    subtitle: "Rename/move with preserved ID, missing handling, rescan for recovery or batch work, catalogues, withdraw. Microsoft Entra owns workflow people.",
+    subtitle: "Lost source rows and reassociate recovery, rename/move with preserved ID, rescan, catalogues, withdraw. Microsoft Entra owns workflow people.",
     body: `
       <div class="grid-explorer">
         <aside class="card">
           <h3 class="card-title">Actions</h3>
           <div class="stack-btns">
-            <button class="btn">Rename / move draft (in-root)</button>
-            <button class="btn outline">Mark missing</button>
+            <button class="btn">Reassociate source…</button>
+            <button class="btn outline">Rename / move draft (in-root)</button>
             <button class="btn outline">Rescan library</button>
             <button class="btn outline">Workflow identity source</button>
             <button class="btn outline">Confidentiality catalogue</button>
@@ -717,15 +726,16 @@ const CAPS = [
             headers: ["Title", "Old path", "Status", "Suggestion"],
             rows: [
               ["Acceptable Use", "policies/IT/AUP.docx", badge("renamed", "warn"), "Match: policies/IT/AUP-v2.docx"],
-              ["Backup Config", "policies/IT/Backup.docx", badge("missing", "danger"), "No candidate — restore from backup"],
+              ["Backup Config", "policies/IT/Backup.docx", badge("Lost source", "danger"), "Reassociate source… · target must leave library if already registered"],
               ["Vendor Onboarding", "procedures/Onboarding.docx", badge("candidate", "info"), "Match by last digest"],
               ["Office lock ignored", "~$AUP.docx", badge("ignored", "muted"), "Lock/temp sidecar — never a candidate"],
             ],
             filterLabel: "Finding",
             filterAriaLabel: "Filter rescan findings",
-            filterPlaceholder: "e.g. Backup or missing",
+            filterPlaceholder: "e.g. Backup or Lost source",
             matchingLabel: "findings",
           })}
+          <p class="hint">Reassociating onto a path that is already a library document merges audit history only when the target's events are entirely later with no timestamp overlap; the target then leaves the library.</p>
         </section>
       </div>`,
   },

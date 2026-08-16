@@ -252,14 +252,14 @@ tr:last-child td { border-bottom: 0; }
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Rename/move with preserved ID, missing handling, rescan for recovery or batch work, catalogues, withdraw. Microsoft Entra owns workflow people.</p>
+      <p class="subtitle">Lost source rows and reassociate recovery, rename/move with preserved ID, rescan, catalogues, withdraw. Microsoft Entra owns workflow people.</p>
       
       <div class="grid-explorer">
         <aside class="card">
           <h3 class="card-title">Actions</h3>
           <div class="stack-btns">
-            <button class="btn">Rename / move draft (in-root)</button>
-            <button class="btn outline">Mark missing</button>
+            <button class="btn">Reassociate source…</button>
+            <button class="btn outline">Rename / move draft (in-root)</button>
             <button class="btn outline">Rescan library</button>
             <button class="btn outline">Workflow identity source</button>
             <button class="btn outline">Confidentiality catalogue</button>
@@ -271,15 +271,16 @@ tr:last-child td { border-bottom: 0; }
         <section class="card">
           <h3 class="card-title">Drafts requiring attention</h3>
           <div class="row between mb" style="flex-wrap:wrap;gap:0.75rem">
-    <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Finding <input aria-label="Filter rescan findings" placeholder="e.g. Backup or missing" style="height:2rem;width:15rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.65rem;font:inherit;color:var(--foreground);background:var(--background)"/></label>
+    <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Finding <input aria-label="Filter rescan findings" placeholder="e.g. Backup or Lost source" style="height:2rem;width:15rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.65rem;font:inherit;color:var(--foreground);background:var(--background)"/></label>
     <span class="muted">4 matching findings</span>
   </div><div class="table-wrap"><table>
     <thead><tr><th>Title</th><th>Old path</th><th>Status</th><th>Suggestion</th></tr></thead>
-    <tbody><tr><td>Acceptable Use</td><td>policies/IT/AUP.docx</td><td><span class="badge warn">renamed</span></td><td>Match: policies/IT/AUP-v2.docx</td></tr><tr><td>Backup Config</td><td>policies/IT/Backup.docx</td><td><span class="badge danger">missing</span></td><td>No candidate — restore from backup</td></tr><tr><td>Vendor Onboarding</td><td>procedures/Onboarding.docx</td><td><span class="badge info">candidate</span></td><td>Match by last digest</td></tr><tr><td>Office lock ignored</td><td>~$AUP.docx</td><td><span class="badge muted">ignored</span></td><td>Lock/temp sidecar — never a candidate</td></tr></tbody>
+    <tbody><tr><td>Acceptable Use</td><td>policies/IT/AUP.docx</td><td><span class="badge warn">renamed</span></td><td>Match: policies/IT/AUP-v2.docx</td></tr><tr><td>Backup Config</td><td>policies/IT/Backup.docx</td><td><span class="badge danger">Lost source</span></td><td>Reassociate source… · target must leave library if already registered</td></tr><tr><td>Vendor Onboarding</td><td>procedures/Onboarding.docx</td><td><span class="badge info">candidate</span></td><td>Match by last digest</td></tr><tr><td>Office lock ignored</td><td>~$AUP.docx</td><td><span class="badge muted">ignored</span></td><td>Lock/temp sidecar — never a candidate</td></tr></tbody>
   </table></div><div class="row between" style="margin-top:0.75rem;flex-wrap:wrap;gap:0.75rem">
     <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Rows per page <select aria-label="Table rows per page" style="height:2rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.45rem;font:inherit;color:var(--foreground);background:var(--background)"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
     <div class="row gap-2"><span class="muted">1–4 of 4</span><button class="btn outline" disabled>Previous</button><button class="btn outline" disabled>Next</button></div>
   </div>
+          <p class="hint">Reassociating onto a path that is already a library document merges audit history only when the target's events are entirely later with no timestamp overlap; the target then leaves the library.</p>
         </section>
       </div>
     </main>
