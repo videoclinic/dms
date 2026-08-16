@@ -411,24 +411,24 @@ const CAPS = [
                 <td>${badge("released", "ok")}</td>
                 <td>V1.1</td>
               </tr>
-              <tr class="selected">
-                <td><span class="check on">☑</span></td>
+              <tr>
+                <td><span class="check">☐</span></td>
                 <td>Risk assessment.md</td>
                 <td>${badge("Not in library", "warn")}</td>
                 <td>Markdown draft</td>
                 <td>—</td>
                 <td>—</td>
               </tr>
-              <tr class="selected">
-                <td><span class="check on">☑</span></td>
+              <tr>
+                <td><span class="check">☐</span></td>
                 <td>Employee onboarding.docx</td>
                 <td>${badge("Not in library", "warn")}</td>
                 <td>Office draft</td>
                 <td>—</td>
                 <td>—</td>
               </tr>
-              <tr>
-                <td><span class="check">☐</span></td>
+              <tr class="selected">
+                <td><span class="check on">☑</span></td>
                 <td style="font-style:italic">Backup_config.docx</td>
                 <td>${badge("Lost source", "danger")}</td>
                 <td style="font-style:italic">Backup Config · DOC-031</td>
@@ -450,19 +450,7 @@ const CAPS = [
         </section>
         <div role="separator" aria-label="Resize document details" aria-orientation="vertical" style="cursor:col-resize;background:var(--border);border-radius:999px" title="Drag or use Left/Right; Escape cancels"></div>
         <aside class="card detail-pane">
-          <div class="row between mb">
-            <h3 class="card-title" style="margin:0">2 selected</h3>
-            <button class="btn outline">Clear</button>
-          </div>
-          <details class="selection-section" open>
-            <summary>Files</summary>
-            <div class="selection-section-body"><ul class="list"><li>Risk assessment.md <span class="muted">· policies/HR</span></li><li>Employee onboarding.docx <span class="muted">· policies/HR</span></li></ul></div>
-          </details>
-          <details class="selection-section" open>
-            <summary>Actions <span>1 available</span></summary>
-            <div class="selection-section-body stack-btns"><button class="btn">Add 2 documents to library</button></div>
-          </details>
-          <p class="hint">Batch add is available because every selected row is an in-root supported source draft, including Markdown. A mixed or unsupported selection has no incompatible action. The divider resizes this pane from 280–640 px for this session while preserving at least 360 px for the list; Escape cancels a drag.</p>
+          ${lostSourceSelectionPane()}
         </aside>
       </div>
       ${batchSelectionPane()}`,
@@ -726,7 +714,7 @@ const CAPS = [
             headers: ["Title", "Old path", "Status", "Suggestion"],
             rows: [
               ["Acceptable Use", "policies/IT/AUP.docx", badge("renamed", "warn"), "Match: policies/IT/AUP-v2.docx"],
-              ["Backup Config", "policies/IT/Backup.docx", badge("Lost source", "danger"), "Reassociate source… · target must leave library if already registered"],
+              ["Backup Config", "policies/IT/Backup.docx", badge("Lost source", "danger"), "Reassociate from Library Actions · desktop refuses a registered target"],
               ["Vendor Onboarding", "procedures/Onboarding.docx", badge("candidate", "info"), "Match by last digest"],
               ["Office lock ignored", "~$AUP.docx", badge("ignored", "muted"), "Lock/temp sidecar — never a candidate"],
             ],
@@ -735,7 +723,7 @@ const CAPS = [
             filterPlaceholder: "e.g. Backup or Lost source",
             matchingLabel: "findings",
           })}
-          <p class="hint">Reassociating onto a path that is already a library document merges audit history only when the target's events are entirely later with no timestamp overlap; the target then leaves the library.</p>
+          <p class="hint">Desktop Actions refuse an already-registered target. Core and CLI still absorb when the target's events are entirely later with no timestamp overlap; the target then leaves the library.</p>
         </section>
       </div>`,
   },
@@ -1214,6 +1202,47 @@ function configurationNavigation(cap) {
     <nav class="config-tabs" aria-label="Configuration sections">${routes}</nav>
   </section>`;
 }
+function lostSourceSelectionPane() {
+  return `<div class="row between mb">
+      <div class="row gap-2">${badge("Lost source", "danger")}</div>
+      <button class="btn outline">Clear</button>
+    </div>
+    <h3 class="card-title" style="margin:0">Backup Config</h3>
+    <p class="muted">Document number: <span class="mono">DOC-031</span></p>
+    <p class="hint">The draft file is not at the stored path. Most actions stay disabled until you reassociate the source.</p>
+    <div class="source-identity-plain">
+      <div class="label">Source file <span style="font-weight:400">· from filesystem</span></div>
+      <div class="mono" style="margin-top:0.3rem">Backup_config.docx</div>
+      <div class="muted" style="font-size:0.75rem;margin-top:0.2rem">Folder: policies/HR</div>
+    </div>
+    <details class="selection-section">
+      <summary><span class="selection-section-title">Document control data</span></summary>
+      <div class="selection-section-body"><p class="hint">Document control and confidentiality changes are unavailable while the source is Lost source.</p></div>
+    </details>
+    <section class="selection-actions-block">
+      <h4 class="selection-section-title">Actions</h4>
+      <div class="selection-section-body stack">
+        <div class="stack-btns">
+          <button class="btn outline" disabled>Open source draft</button>
+          <button class="btn outline">Open current released PDF</button>
+          <button class="btn outline">Open notes</button>
+          <button class="btn outline">Copy permalink</button>
+          <button class="btn danger">Unregister</button>
+        </div>
+        <p class="hint">Choose another supported file under the edit root.</p>
+        <label class="label" for="reassociate-path">Reassociate source</label>
+        <div class="directory-field">
+          <input id="reassociate-path" value="policies/HR/Backup_config.docx" aria-label="New edit-root-relative source path">
+          <button class="btn outline">Browse…</button>
+        </div>
+        <button class="btn">Reassociate source</button>
+      </div>
+    </section>
+    <details class="selection-section">
+      <summary><span class="selection-section-title">Document review schedule</span></summary>
+      <div class="selection-section-body"><p class="hint">Review schedule editing is unavailable while the source is Lost source.</p></div>
+    </details>`;
+}
 function documentControlDataSelectionPane() {
   // CAP-0015 owns this shared selection-pane content; CAP-0006 owns its placement.
   // Frameless foldable topics with visible disclosure cues; open/closed is session-only.
@@ -1249,6 +1278,17 @@ function documentControlDataSelectionPane() {
         <button class="btn">Save document control</button>
       </div></div>
     </details>
+    <section class="selection-actions-block">
+      <h4 class="selection-section-title">Actions</h4>
+      <div class="selection-section-body stack-btns">
+        <button class="btn outline">Open source draft</button>
+        <button class="btn outline">Open current released PDF</button>
+        <button class="btn outline">Open notes</button>
+        <button class="btn outline">Evaluate changes with Claude</button>
+        <button class="btn outline">Copy permalink</button>
+        <button class="btn danger">Unregister</button>
+      </div>
+    </section>
     <details class="selection-section" open>
       <summary><span class="selection-section-title">Document review schedule</span><span class="selection-section-meta">Mutable</span></summary>
       <div class="selection-section-body">${kv([
@@ -1260,18 +1300,6 @@ function documentControlDataSelectionPane() {
         <label class="label">Schedule <select><option selected>Use workspace interval (12 months)</option><option>Document interval override</option><option>Exempt document</option></select></label>
         <button class="btn outline" disabled>Update review schedule</button>
       </div></div>
-    </details>
-    <details class="selection-section" open>
-      <summary><span class="selection-section-title">Actions</span></summary>
-      <div class="selection-section-body stack-btns">
-        <button class="btn outline">Open source draft</button>
-        <button class="btn outline">Open current released PDF</button>
-        <button class="btn outline">Open notes</button>
-        <button class="btn outline">Evaluate changes with Claude</button>
-        <button class="btn outline">Copy permalink</button>
-        <button class="btn outline">Reassociate source</button>
-        <button class="btn danger">Unregister</button>
-      </div>
     </details>
     <details class="selection-section" open>
       <summary><span class="selection-section-title">Revision cycle</span></summary>
@@ -1570,6 +1598,10 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .selection-section-title { min-width: 0; }
 .selection-section-meta { color: var(--muted-foreground); font-size: 0.7rem; font-weight: 500; }
 .selection-section-body { margin-top: 0.65rem; padding-left: 1.35rem; }
+.selection-actions-block { margin-top: 0.8rem; border-top: 1px solid var(--border); padding-top: 0.65rem; }
+.selection-actions-block > .selection-section-title { margin: 0; font-size: 0.88rem; font-weight: 600; }
+.directory-field { display: flex; align-items: center; gap: 0.5rem; }
+.directory-field input { min-width: 0; flex: 1; height: 2rem; border: 1px solid var(--input); border-radius: calc(var(--radius) - 2px); padding: 0 0.6rem; font: inherit; }
 .batch-selection-demo { display: grid; grid-template-columns: minmax(0, 1fr) 18.5rem; gap: 0.85rem; align-items: start; margin-top: 0.25rem; }
 .batch-detail-pane { min-height: 0; }
 .selection-bar { display: flex; flex-wrap: nowrap; align-items: center; gap: 0.4rem; margin-bottom: 0.75rem; padding: 0.5rem 0.65rem; border: 1px solid color-mix(in oklch, var(--info) 28%, var(--border)); background: color-mix(in oklch, var(--info) 8%, white); border-radius: calc(var(--radius) - 2px); font-size: 0.8rem; overflow-x: auto; }

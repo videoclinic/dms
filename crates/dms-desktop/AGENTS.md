@@ -87,7 +87,11 @@ macOS.
   frameless independently foldable sections with a visible disclosure chevron
   and Expand/Collapse cue on each summary. **Actions** is a non-foldable block
   immediately after Document control data. **Reassociate source** appears in
-  Actions only for a single Lost source document. Title, document
+  Actions only for a single Lost source document, with a path field plus native
+  **Browse…** limited to `.md` / `.docx` / `.xlsx` / `.pptx` (no All-files
+  filter). Location and registration are checked only on **Reassociate source**;
+  failures stay in the selected-document pane and do not mutate the workspace.
+  Desktop Actions refuse an already-registered target. Title, document
   number, lifecycle badge, and Source file
   identity stay visible while sections fold. Section open/closed state is
   session-only Library UI state and survives document switches until the

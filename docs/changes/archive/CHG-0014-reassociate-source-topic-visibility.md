@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | CHG-0014 |
-| Status | in-progress |
+| Status | done |
 | External request | Direct operator request: The "Reassociate source" feature in the document control pane should only be visible, as a own topic, only if it's applicable. Follow-up: "Actions" should always be visible below the document control but within the pane so the user can always have access to actions. The "Reassociate source" action should also be kept within this section in that cases where we recover a lost document. Follow-up: The edit field should be extended by a standard operating system file/directory search dialog so the user does not have to enter the path and name manually. If the user selects a file outside of the edit directory, the selection is skipped and an appropriate error message shows the rules that the selected file have to be in the edit directory; the selected file can also not be registered in the library and further rules, if they apply. Follow-up: this check and warning message appear only after the user presses the "Reassociate source" button, not earlier. Follow-up: Also only supported file formats can be selected. |
 | Affected CAPs | CAP-0006, CAP-0013, CAP-0015 |
 | Decision records | none |
@@ -15,7 +15,7 @@
 **Entry checkpoint:** none
 **Context sources:** `docs/product/capabilities/CAP-0006-library-explorer.md` (selection-pane actions and Lost source), `docs/product/capabilities/CAP-0013-library-maintenance.md` (reassociate outcomes), `docs/product/capabilities/CAP-0015-document-control-data.md` (foldable topics), `crates/dms-desktop/ui/library.mjs` (`selectionMarkup`, `DEFAULT_SELECTION_OPEN`), `crates/dms-desktop/ui/library.test.mjs`, `crates/dms-desktop/ui/app.mjs` (`library-reassociate-form`), `crates/dms-desktop/src/lib.rs` (`select_directory`, `choose_markdown_template`, `reassociate_library_document`), `docs/product/wireframes/generate.mjs` (`documentControlDataSelectionPane`)
 **Produces:** Pinned non-foldable **Actions** under **Document control data**; Lost-source-only reassociate form with a native **Browse…** limited to supported drafts; submit-time fail-closed rule error; no picker-time warning.
-**Status:** in-progress — Phase 2 done; Phase 3 wireframes and workspace gate not started
+**Status:** done — pinned Actions, Lost-source Browse, submit-time rules, and wireframes shipped
 
 The Library selection pane pins **Actions** under **Document control data**. **Reassociate source** lives in that block only for a single Lost source document. The path field has a native OS file picker. Validation and the rule error run only when the operator presses **Reassociate source**.
 
@@ -65,7 +65,7 @@ Show the form iff all of:
 |---|---|---|---|
 | 1 | CAP wording + selection-pane layout | done (`node --test crates/dms-desktop/ui/library.test.mjs` 25/25) | `node --test crates/dms-desktop/ui/library.test.mjs` exits 0; healthy markup has no `#library-reassociate-form` and no `data-library-section="actions"`; Lost source markup has the form after `data-library-section="control"` and before `data-library-section="schedule"` |
 | 2 | Native Browse + submit-time rule error | done (`node --test crates/dms-desktop/ui/library.test.mjs` 27/27; `cargo test -p dms-desktop --lib reassociate` 4/4) | Desktop/frontend tests: picker filters are only `md`/`docx`/`xlsx`/`pptx` with no All-files filter; Browse cancel leaves the field; Browse does not emit the rule error; submit of an outside-edit-root path, an already-registered path, and an unsupported typed path each refuse with a rule-list error and leave workspace documents unchanged; a valid unregistered in-root file still reassociates |
-| 3 | Wireframes + desktop contract + workspace gate | pending | Regenerated CAP-0006/0013/0015 HTML+PNG; `cargo fmt --all -- --check`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings` all exit 0 |
+| 3 | Wireframes + desktop contract + workspace gate | done (`cargo fmt --all -- --check`; `cargo test --workspace`; `cargo clippy --workspace --all-targets -- -D warnings`) | Regenerated CAP-0006/0013/0015 HTML+PNG; `cargo fmt --all -- --check`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings` all exit 0 |
 
 Mark a phase `in-progress` while running it, `done (<evidence>)` once its gate passes, `pending` otherwise.
 

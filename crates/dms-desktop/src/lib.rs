@@ -497,9 +497,9 @@ fn desktop_reassociate_format_ok(workspace: &Workspace, path: &Path) -> bool {
     let Some(relative) = relative_to_edit_root(&workspace.edit_root, path) else {
         return true;
     };
-    !workspace
+    workspace
         .markdown_template()
-        .is_some_and(|template| path_key(&template.relative_path) == path_key(&relative))
+        .is_none_or(|template| path_key(&template.relative_path) != path_key(&relative))
 }
 
 fn desktop_reassociate_unregistered_ok(
