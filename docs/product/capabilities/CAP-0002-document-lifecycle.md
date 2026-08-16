@@ -29,15 +29,19 @@
    released PDF.
 4. Before every release, the editor records a non-empty changelog, a required
    effective date, the requesting workflow person, and a SHA-256 digest of the
-   current draft. The candidate form defaults its target-version control to
-   **Next minor**; the first release still resolves to `V1.0`. The
-   requester identity and email are snapshotted with the release candidate. The
-   first release proposes `V1.0`. For every later release, the editor selects
-   exactly one target-version mode:
+   current draft. The Library **Revision cycle** candidate form is titled
+   **Create release candidate** and explains that it records the candidate in
+   this workspace (not an external “submit” destination). The form defaults its
+   target-version control to **Next minor** and always shows the **effective
+   target version** that the selected mode resolves to. **Manual major** and
+   **Manual minor** stay disabled until **Manual target** is selected. The first
+   release still resolves to `V1.0`. The requester identity and email are
+   snapshotted with the release candidate. The first release proposes `V1.0`.
+   For every later release, the editor selects exactly one target-version mode:
    - **Minor version change** proposes the next minor version of the current
-     release (`V1.3` → `V1.4`).
+     release (`V1.3` → `V1.4`; never-released → `V1.0`).
    - **Major version change** proposes the next major version and resets the
-     minor component (`V1.3` → `V2.0`).
+     minor component (`V1.3` → `V2.0`; never-released → `V1.0`).
    - **Manual version set** supplies `V<major>.<minor>` with non-negative integer
      components, numerically greater than the current released version, and not
      equal to any committed release version for that document. It may skip

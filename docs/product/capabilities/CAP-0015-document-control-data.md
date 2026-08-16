@@ -117,10 +117,17 @@
     frontmatter into `.dms`. The application restores draft content only from an
     operator workspace backup; released PDFs and their evidence remain the
     durable application-managed version history.
-14. **Begin revision**, **Mark obsolete**, and **Cancel review** are available
-    from the CAP-0006 selection pane (single selection) when preconditions hold;
-    disabled states explain why. They are not offered as multi-select batch
-    actions unless a future CAP explicitly allows bulk obsolescence.
+14. **Create release candidate** (when the document is an idle draft with no
+    active candidate), **Begin revision**, **Mark obsolete**, and **Cancel
+    review** are available from the CAP-0006 selection pane (single selection)
+    when preconditions hold; disabled states explain why. In **Revision cycle**,
+    the candidate form is listed first when available, shows the resolved
+    effective target version for Next minor / Next major / Manual, and keeps
+    Manual major/minor disabled unless Manual target is selected. Canonical
+    workflow evidence is a single foldable disclosure in that section (no
+    separate **View workflow evidence** control). These actions are not offered
+    as multi-select batch actions unless a future CAP explicitly allows bulk
+    obsolescence.
 15. A candidate may stage a replacement Owner and responsible Editor selected
     from currently eligible people. Their object-ID references apply atomically
     only after PDF export and release metadata save succeed. Export or save

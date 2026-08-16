@@ -35,6 +35,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 | [CHG-0008](archive/CHG-0008-markdown-variables-confidentiality-id.md) | Markdown variables reference and confidentiality type ID | done | CAP-0002, CAP-0007, CAP-0008, CAP-0015 |
 | [CHG-0009](archive/CHG-0009-selection-pane-foldable-topics.md) | Selection pane foldable topics | done | CAP-0006, CAP-0015 |
 | [CHG-0010](archive/CHG-0010-selection-fold-affordance-schedule.md) | Selection fold affordance and review schedule section | done | CAP-0006, CAP-0015 |
+| [CHG-0011](archive/CHG-0011-revision-cycle-candidate-clarity.md) | Revision cycle candidate clarity | done | CAP-0002, CAP-0006, CAP-0015 |
 
 ## Related
 
