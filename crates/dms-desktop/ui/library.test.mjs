@@ -4,9 +4,11 @@ import assert from "node:assert/strict";
 import {
   applyDocumentSelection,
   applyLibrarySnapshot,
+  applyReassociateBrowseSelection,
   breadcrumbSegments,
   buildFolderTree,
   candidateTargetHelpText,
+  chooseReassociateSourceRequest,
   clampLibraryDetailWidth,
   createLibraryState,
   confidentialityUpdateRequest,
@@ -1044,8 +1046,65 @@ test("lost source rows use italic state, dedicated filter, and reassociate-focus
   );
   assert.doesNotMatch(markup, /data-library-section="actions"/);
   assert.doesNotMatch(markup, /must leave the library/);
+  assert.match(markup, /data-reassociate-browse>Browse…/);
+  assert.match(markup, /class="directory-field"/);
+  assert.doesNotMatch(markup, /All files|\*\.\*/);
   library = toggleLibraryVisibility(library, "show_moved_documents");
   assert.deepEqual(filterLibraryEntries(library.folder.entries, library).map((entry) => entry.name), [
     "Draft.md",
   ]);
+});
+
+test("browse cancel leaves the reassociate field and does not emit a rule error", () => {
+  const library = {
+    ...createLibraryState(),
+    reassociate_path: "Policies/Missing.md",
+    detail_error: "",
+  };
+  const cancelled = applyReassociateBrowseSelection(library, null);
+  assert.equal(cancelled, library);
+  assert.equal(cancelled.reassociate_path, "Policies/Missing.md");
+  assert.equal(cancelled.detail_error, "");
+
+  const picked = applyReassociateBrowseSelection(library, "Policies/Relocated.md");
+  assert.equal(picked.reassociate_path, "Policies/Relocated.md");
+  assert.equal(picked.detail_error, "");
+  assert.deepEqual(chooseReassociateSourceRequest("/srv/Edit", "Policies/Missing.md"), {
+    command: "choose_reassociate_source",
+    arguments: { editRoot: "/srv/Edit", storedPath: "Policies/Missing.md" },
+  });
+});
+
+test("lost source submit-time error stays in the pane and keeps the typed path", () => {
+  const registered = file("Missing.md", { lost_source: { document_id: "lost-1" } }, {
+    id: "lost-1",
+    lifecycle: "draft",
+    control: { title: "Missing handbook", document_number: "HR-9" },
+  });
+  const library = {
+    ...createLibraryState(),
+    folder: snapshot("Policies", [registered]).folder,
+    selection: ["Policies/Missing.md"],
+    reassociate_path: "/tmp/outside.md",
+    detail_error: "Cannot reassociate this path:\n- must be a regular file under the workspace edit root (not outside, not a directory, not under .dms)\nThe selected file must be a supported unregistered source file inside the edit root.",
+    detail: {
+      document_id: "lost-1",
+      source_name: "Missing.md",
+      relative_path: "Policies/Missing.md",
+      source_exists: false,
+      source_state: "registered",
+      lifecycle: "draft",
+      control: { title: "Missing handbook", document_number: "HR-9" },
+      lifecycle_actions: {},
+      workflow_events: [],
+    },
+  };
+  const markup = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies" } },
+    library,
+  );
+  assert.match(markup, /role="alert">Cannot reassociate this path/);
+  assert.match(markup, /value="\/tmp\/outside\.md"/);
+  assert.doesNotMatch(markup, /appState\.error/);
 });

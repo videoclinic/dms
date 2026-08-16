@@ -18,7 +18,7 @@ use dms_core::{
     PeriodicReviewResult, PermalinkTarget, PersonSnapshot, PolicyFolder, ReleaseCandidate,
     ReleaseVerificationStatus, RestoreOutcome, RestoreRequest, ReviewDecision, RoleUpdate,
     SmtpSettings, SourceState, TargetSelection, Version, WorkflowEvent, WorkflowPolicyAssignment,
-    WorkflowVerification, Workspace, WorkspaceLock, WorkspaceLockStatus,
+    WorkflowVerification, Workspace, WorkspaceLock, WorkspaceLockStatus, METADATA_DIRECTORY,
 };
 use lettre::message::Mailbox;
 use serde::{Deserialize, Serialize};
@@ -37,6 +37,12 @@ use assistance::ClaudeDesktopApp;
 const PREFERENCES_FILENAME: &str = "preferences.json";
 const GLOBAL_SETTINGS_FILENAME: &str = "global-settings.json";
 const RECENT_LIBRARIES_LIMIT: usize = 10;
+const REASSOCIATE_SOURCE_FILTER_NAME: &str = "Supported drafts";
+const REASSOCIATE_SOURCE_FILTER_EXTENSIONS: &[&str] = &["md", "docx", "xlsx", "pptx"];
+const DESKTOP_REASSOCIATE_RULE_LOCATION: &str = "must be a regular file under the workspace edit root (not outside, not a directory, not under .dms)";
+const DESKTOP_REASSOCIATE_RULE_FORMAT: &str = "must be a supported draft (.md, .docx, .xlsx, .pptx), not an Office lock/temp sidecar, and not the workspace Word-template asset";
+const DESKTOP_REASSOCIATE_RULE_UNREGISTERED: &str =
+    "must not already be another registered library document";
 
 struct DesktopIntegrations {
     graph: Mutex<graph::MicrosoftGraphClient>,
@@ -401,6 +407,177 @@ async fn choose_markdown_template(
         .as_path()
         .ok_or_else(|| "the selected Word template is not a local filesystem path".to_owned())?;
     import_markdown_template_from_path(Path::new(&edit_root), source_path).map(Some)
+}
+
+fn path_key(path: &Path) -> String {
+    path.iter()
+        .map(|component| component.to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+fn absolute_from_edit_root(edit_root: &Path, path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        edit_root.join(path)
+    }
+}
+
+fn relative_to_edit_root(edit_root: &Path, path: &Path) -> Option<PathBuf> {
+    let absolute = absolute_from_edit_root(edit_root, path);
+    if let (Ok(canonical), Ok(root)) = (absolute.canonicalize(), edit_root.canonicalize()) {
+        return canonical.strip_prefix(root).ok().map(Path::to_path_buf);
+    }
+    if path.is_absolute() {
+        path.strip_prefix(edit_root).ok().map(Path::to_path_buf)
+    } else {
+        Some(path.to_path_buf())
+    }
+}
+
+fn display_reassociate_path(edit_root: &Path, selected: &Path) -> String {
+    relative_to_edit_root(edit_root, selected)
+        .map(|relative| path_key(&relative))
+        .unwrap_or_else(|| selected.to_string_lossy().into_owned())
+}
+
+fn reassociate_source_picker_start_dir(edit_root: &Path, stored_locator: &str) -> PathBuf {
+    let stored = Path::new(stored_locator);
+    let stored_absolute = absolute_from_edit_root(edit_root, stored);
+    let parent = stored_absolute.parent().unwrap_or(edit_root);
+    let Ok(root) = edit_root.canonicalize() else {
+        return edit_root.to_path_buf();
+    };
+    match parent.canonicalize() {
+        Ok(directory) if directory.starts_with(&root) && directory.is_dir() => directory,
+        _ => edit_root.to_path_buf(),
+    }
+}
+
+fn desktop_reassociate_location_ok(edit_root: &Path, path: &Path) -> bool {
+    let absolute = absolute_from_edit_root(edit_root, path);
+    let Ok(canonical) = absolute.canonicalize() else {
+        return false;
+    };
+    if !canonical.is_file() {
+        return false;
+    }
+    let Ok(root) = edit_root.canonicalize() else {
+        return false;
+    };
+    let Ok(relative) = canonical.strip_prefix(&root) else {
+        return false;
+    };
+    !relative.components().next().is_some_and(
+        |component| matches!(component, Component::Normal(name) if name == METADATA_DIRECTORY),
+    )
+}
+
+fn desktop_reassociate_format_ok(workspace: &Workspace, path: &Path) -> bool {
+    let filename = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    if filename.starts_with("~$") {
+        return false;
+    }
+    let supported = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            matches!(
+                extension.to_ascii_lowercase().as_str(),
+                "md" | "docx" | "xlsx" | "pptx"
+            )
+        });
+    if !supported {
+        return false;
+    }
+    let Some(relative) = relative_to_edit_root(&workspace.edit_root, path) else {
+        return true;
+    };
+    !workspace
+        .markdown_template()
+        .is_some_and(|template| path_key(&template.relative_path) == path_key(&relative))
+}
+
+fn desktop_reassociate_unregistered_ok(
+    workspace: &Workspace,
+    document_id: Uuid,
+    path: &Path,
+) -> bool {
+    let Some(relative) = relative_to_edit_root(&workspace.edit_root, path) else {
+        return true;
+    };
+    !workspace.documents().iter().any(|document| {
+        document.id != document_id
+            && document.source_state == SourceState::Registered
+            && path_key(&document.relative_path) == path_key(&relative)
+    })
+}
+
+fn desktop_reassociate_rule_errors(
+    workspace: &Workspace,
+    document_id: Uuid,
+    path: &Path,
+) -> Vec<&'static str> {
+    let mut failed = Vec::new();
+    if !desktop_reassociate_location_ok(&workspace.edit_root, path) {
+        failed.push(DESKTOP_REASSOCIATE_RULE_LOCATION);
+    }
+    if !desktop_reassociate_format_ok(workspace, path) {
+        failed.push(DESKTOP_REASSOCIATE_RULE_FORMAT);
+    }
+    if !desktop_reassociate_unregistered_ok(workspace, document_id, path) {
+        failed.push(DESKTOP_REASSOCIATE_RULE_UNREGISTERED);
+    }
+    failed
+}
+
+fn format_desktop_reassociate_error(failed: &[&str]) -> String {
+    let mut message = String::from("Cannot reassociate this path:\n");
+    for rule in failed {
+        message.push_str("- ");
+        message.push_str(rule);
+        message.push('\n');
+    }
+    message.push_str(
+        "The selected file must be a supported unregistered source file inside the edit root.",
+    );
+    message
+}
+
+#[tauri::command]
+async fn choose_reassociate_source(
+    app: AppHandle,
+    edit_root: String,
+    stored_path: String,
+) -> Result<Option<String>, String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let selection = app
+        .dialog()
+        .file()
+        .set_title("Choose source file")
+        .set_directory(reassociate_source_picker_start_dir(
+            &workspace.edit_root,
+            &stored_path,
+        ))
+        .add_filter(
+            REASSOCIATE_SOURCE_FILTER_NAME,
+            REASSOCIATE_SOURCE_FILTER_EXTENSIONS,
+        )
+        .blocking_pick_file();
+    let Some(selection) = selection else {
+        return Ok(None);
+    };
+    let source_path = selection
+        .as_path()
+        .ok_or_else(|| "the selected source file is not a local filesystem path".to_owned())?;
+    Ok(Some(display_reassociate_path(
+        &workspace.edit_root,
+        source_path,
+    )))
 }
 
 fn import_markdown_template_from_path(
@@ -899,6 +1076,10 @@ fn reassociate_library_document(
 ) -> Result<Document, String> {
     let mut workspace =
         Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let failed = desktop_reassociate_rule_errors(&workspace, document_id, Path::new(&path));
+    if !failed.is_empty() {
+        return Err(format_desktop_reassociate_error(&failed));
+    }
     let document = workspace
         .reassociate_document(document_id, Path::new(&path))
         .map_err(|error| error.to_string())?;
@@ -2561,6 +2742,7 @@ pub fn run() {
             search_library,
             add_library_documents,
             unregister_library_documents,
+            choose_reassociate_source,
             reassociate_library_document,
             load_document_selection,
             update_document_control,
@@ -4125,5 +4307,129 @@ mod tests {
         println!("DMS_SMOKE_PDF={}", pdf.display());
         println!("DMS_SMOKE_SHA256={}", release.pdf_digest);
         println!("DMS_SMOKE_VERSION={}", release.version);
+    }
+
+    fn lost_source_workspace() -> (tempfile::TempDir, tempfile::TempDir, Uuid, String) {
+        let edit_root = tempfile::tempdir().unwrap();
+        let publish_root = tempfile::tempdir().unwrap();
+        let mut workspace = Workspace::init(edit_root.path(), publish_root.path()).unwrap();
+        fs::create_dir_all(edit_root.path().join("Policies")).unwrap();
+        let original = edit_root.path().join("Policies/Handbook.md");
+        fs::write(&original, "# Handbook").unwrap();
+        let document = workspace.add_document(&original).unwrap();
+        fs::remove_file(&original).unwrap();
+        workspace.save().unwrap();
+        let root = edit_root.path().to_string_lossy().into_owned();
+        (edit_root, publish_root, document.id, root)
+    }
+
+    #[test]
+    fn reassociate_source_picker_offers_only_supported_drafts() {
+        assert_eq!(
+            REASSOCIATE_SOURCE_FILTER_EXTENSIONS,
+            &["md", "docx", "xlsx", "pptx"]
+        );
+        assert!(!REASSOCIATE_SOURCE_FILTER_EXTENSIONS
+            .iter()
+            .any(|extension| *extension == "*" || extension.contains('*')));
+        assert_eq!(REASSOCIATE_SOURCE_FILTER_NAME, "Supported drafts");
+    }
+
+    #[test]
+    fn reassociate_picker_starts_at_last_known_folder_or_edit_root() {
+        let edit_root = tempfile::tempdir().unwrap();
+        fs::create_dir_all(edit_root.path().join("Policies")).unwrap();
+        let policies =
+            reassociate_source_picker_start_dir(edit_root.path(), "Policies/Handbook.md");
+        assert_eq!(
+            policies,
+            edit_root.path().join("Policies").canonicalize().unwrap()
+        );
+        fs::remove_dir_all(edit_root.path().join("Policies")).unwrap();
+        let fallback =
+            reassociate_source_picker_start_dir(edit_root.path(), "Policies/Handbook.md");
+        assert_eq!(fallback, edit_root.path());
+    }
+
+    #[test]
+    fn desktop_reassociate_refuses_outside_registered_and_unsupported_paths() {
+        let (edit_root, _publish_root, document_id, root) = lost_source_workspace();
+        fs::write(edit_root.path().join("Policies/notes.txt"), "plain").unwrap();
+        fs::write(edit_root.path().join("Policies/Occupied.md"), "# Occupied").unwrap();
+        let occupied = add_library_documents(
+            root.clone(),
+            vec![edit_root
+                .path()
+                .join("Policies/Occupied.md")
+                .to_string_lossy()
+                .into_owned()],
+        )
+        .unwrap();
+        assert_eq!(occupied.len(), 1);
+
+        let outside = tempfile::NamedTempFile::with_suffix(".md").unwrap();
+        fs::write(outside.path(), "# Outside").unwrap();
+        let outside_error = reassociate_library_document(
+            root.clone(),
+            document_id,
+            outside.path().to_string_lossy().into_owned(),
+        )
+        .expect_err("outside path");
+        assert!(outside_error.contains(DESKTOP_REASSOCIATE_RULE_LOCATION));
+        assert!(outside_error.contains(
+            "The selected file must be a supported unregistered source file inside the edit root."
+        ));
+
+        let unsupported = reassociate_library_document(
+            root.clone(),
+            document_id,
+            "Policies/notes.txt".to_owned(),
+        )
+        .expect_err("unsupported path");
+        assert!(unsupported.contains(DESKTOP_REASSOCIATE_RULE_FORMAT));
+
+        let registered = reassociate_library_document(
+            root.clone(),
+            document_id,
+            "Policies/Occupied.md".to_owned(),
+        )
+        .expect_err("registered path");
+        assert!(registered.contains(DESKTOP_REASSOCIATE_RULE_UNREGISTERED));
+
+        let workspace = Workspace::open(edit_root.path()).unwrap();
+        assert_eq!(workspace.documents().len(), 2);
+        assert_eq!(
+            workspace.document(document_id).unwrap().relative_path,
+            Path::new("Policies/Handbook.md")
+        );
+        assert_eq!(
+            workspace.document(occupied[0].id).unwrap().relative_path,
+            Path::new("Policies/Occupied.md")
+        );
+        assert_eq!(
+            workspace.document(occupied[0].id).unwrap().source_state,
+            SourceState::Registered
+        );
+    }
+
+    #[test]
+    fn desktop_reassociate_accepts_an_unregistered_in_root_file() {
+        let (edit_root, _publish_root, document_id, root) = lost_source_workspace();
+        fs::write(
+            edit_root.path().join("Policies/Relocated.md"),
+            "# Relocated",
+        )
+        .unwrap();
+        let restored =
+            reassociate_library_document(root, document_id, "Policies/Relocated.md".to_owned())
+                .unwrap();
+        assert_eq!(restored.relative_path, Path::new("Policies/Relocated.md"));
+        assert_eq!(restored.source_state, SourceState::Registered);
+        let workspace = Workspace::open(edit_root.path()).unwrap();
+        assert_eq!(workspace.documents().len(), 1);
+        assert_eq!(
+            workspace.document(document_id).unwrap().relative_path,
+            Path::new("Policies/Relocated.md")
+        );
     }
 }

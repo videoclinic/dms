@@ -15,16 +15,16 @@
 **Entry checkpoint:** none
 **Context sources:** `docs/product/capabilities/CAP-0006-library-explorer.md` (selection-pane actions and Lost source), `docs/product/capabilities/CAP-0013-library-maintenance.md` (reassociate outcomes), `docs/product/capabilities/CAP-0015-document-control-data.md` (foldable topics), `crates/dms-desktop/ui/library.mjs` (`selectionMarkup`, `DEFAULT_SELECTION_OPEN`), `crates/dms-desktop/ui/library.test.mjs`, `crates/dms-desktop/ui/app.mjs` (`library-reassociate-form`), `crates/dms-desktop/src/lib.rs` (`select_directory`, `choose_markdown_template`, `reassociate_library_document`), `docs/product/wireframes/generate.mjs` (`documentControlDataSelectionPane`)
 **Produces:** Pinned non-foldable **Actions** under **Document control data**; Lost-source-only reassociate form with a native **Browse…** limited to supported drafts; submit-time fail-closed rule error; no picker-time warning.
-**Status:** in-progress — Phase 1 done; Phase 2 Browse and submit-time rules not started
+**Status:** in-progress — Phase 2 done; Phase 3 wireframes and workspace gate not started
 
 The Library selection pane pins **Actions** under **Document control data**. **Reassociate source** lives in that block only for a single Lost source document. The path field has a native OS file picker. Validation and the rule error run only when the operator presses **Reassociate source**.
 
 ## Current state
 
 - `selectionMarkup` order is foldable `control` → pinned Actions → foldable `schedule` → `revision` → `releases`. Actions is not a `<details>` topic and is dropped from `DEFAULT_SELECTION_OPEN`.
-- `#library-reassociate-form` is a typed path only for a single Lost source document. Submit still calls `reassociate_library_document` (`app.mjs:2240`). Browse is Phase 2.
-- Native pickers already exist: `select_directory` starts at home (`lib.rs:322`); `choose_markdown_template` starts at the edit root and picks a `.docx` (`lib.rs:385`). Reassociate has no Browse control.
-- Core already refuses outside-edit-root (`DmsError::OutsideEditRoot`), unsupported formats, Office lock sidecars, `.dms` paths, and the Word-template asset. Reassociate onto another registered path currently absorbs that document (CAP-0013 outcome 4). Desktop Actions will refuse that target in Phase 2.
+- `#library-reassociate-form` is a typed path plus **Browse…** only for a single Lost source document. Browse calls `choose_reassociate_source` (supported-draft filter, no All files). Submit runs desktop standing rules before `reassociate_library_document` and keeps failures in `library.detail_error`.
+- Native pickers: `select_directory` starts at home; `choose_markdown_template` starts at the edit root and picks a `.docx`; `choose_reassociate_source` starts at the lost document's last known folder under the edit root, else the edit root.
+- Core still absorbs a registered target. Desktop Actions refuse that target and do not mutate the workspace.
 - Operator lock: Lost source only; Reassociate stays in Actions; Actions always visible; Browse extends the field and can select only supported drafts (`md` / `docx` / `xlsx` / `pptx` from `is_supported_source`); checks run on **Reassociate source** only.
 
 ## Pane layout (locked)
@@ -64,7 +64,7 @@ Show the form iff all of:
 | # | Phase | Status | Verification gate |
 |---|---|---|---|
 | 1 | CAP wording + selection-pane layout | done (`node --test crates/dms-desktop/ui/library.test.mjs` 25/25) | `node --test crates/dms-desktop/ui/library.test.mjs` exits 0; healthy markup has no `#library-reassociate-form` and no `data-library-section="actions"`; Lost source markup has the form after `data-library-section="control"` and before `data-library-section="schedule"` |
-| 2 | Native Browse + submit-time rule error | pending | Desktop/frontend tests: picker filters are only `md`/`docx`/`xlsx`/`pptx` with no All-files filter; Browse cancel leaves the field; Browse does not emit the rule error; submit of an outside-edit-root path, an already-registered path, and an unsupported typed path each refuse with a rule-list error and leave workspace documents unchanged; a valid unregistered in-root file still reassociates |
+| 2 | Native Browse + submit-time rule error | done (`node --test crates/dms-desktop/ui/library.test.mjs` 27/27; `cargo test -p dms-desktop --lib reassociate` 4/4) | Desktop/frontend tests: picker filters are only `md`/`docx`/`xlsx`/`pptx` with no All-files filter; Browse cancel leaves the field; Browse does not emit the rule error; submit of an outside-edit-root path, an already-registered path, and an unsupported typed path each refuse with a rule-list error and leave workspace documents unchanged; a valid unregistered in-root file still reassociates |
 | 3 | Wireframes + desktop contract + workspace gate | pending | Regenerated CAP-0006/0013/0015 HTML+PNG; `cargo fmt --all -- --check`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings` all exit 0 |
 
 Mark a phase `in-progress` while running it, `done (<evidence>)` once its gate passes, `pending` otherwise.

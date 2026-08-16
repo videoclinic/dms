@@ -1,6 +1,7 @@
 import {
   applyDocumentSelection,
   applyLibrarySnapshot,
+  applyReassociateBrowseSelection,
   confidentialityUpdateRequest,
   createLibraryState,
   documentControlUpdateRequest,
@@ -1231,6 +1232,26 @@ async function handleLibraryClick(event) {
     if (selected?.kind === "folder") void loadLibraryFolder(selected.relative_path);
     return true;
   }
+  if (event.target.closest("[data-reassociate-browse]")) {
+    const input = document.getElementById("library-reassociate-path");
+    const storedPath = appState.library.detail?.relative_path ?? "";
+    try {
+      const selected = await invokeCommand("choose_reassociate_source", {
+        editRoot: appState.workspace.edit_root,
+        storedPath,
+      });
+      if (selected) {
+        if (input) input.value = selected;
+        appState = {
+          ...appState,
+          library: applyReassociateBrowseSelection(appState.library, selected),
+        };
+      }
+    } catch {
+      // Browse must not emit the submit-time rule error or a setup-level warning.
+    }
+    return true;
+  }
   if (event.target.closest("[data-library-add]")) {
     const paths = selectedEntries(appState.library).map((entry) => normalizeLibraryPath(entry.relative_path));
     try {
@@ -2248,7 +2269,14 @@ async function handleSubmit(event) {
       });
       await refreshWorkspaceAndLibrary();
     } catch (error) {
-      appState = { ...appState, error: String(error) };
+      appState = {
+        ...appState,
+        library: {
+          ...appState.library,
+          reassociate_path: path,
+          detail_error: String(error),
+        },
+      };
       render(appState);
     }
     return;

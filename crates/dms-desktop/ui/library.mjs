@@ -44,6 +44,7 @@ export function createLibraryState() {
     selection: [],
     detail: null,
     detail_error: "",
+    reassociate_path: "",
     evidence_open: false,
     selection_open: { ...DEFAULT_SELECTION_OPEN },
     lifecycle_drafts: {},
@@ -140,6 +141,7 @@ export function applyLibrarySnapshot(library, snapshot, target, historyMode = "p
     selection: [],
     detail: null,
     detail_error: "",
+    reassociate_path: "",
     evidence_open: false,
     lifecycle_drafts: {},
     results: null,
@@ -217,6 +219,7 @@ export function toggleLibrarySelection(library, relativePath, additive = false) 
     selection,
     detail: null,
     detail_error: "",
+    reassociate_path: "",
     evidence_open: false,
     lifecycle_drafts: {},
   };
@@ -236,6 +239,21 @@ export function libraryOpenRequest(detail, target) {
   }[target];
   if (!command || !detail?.document_id) throw new Error("A document file target is required.");
   return { command, arguments: { documentId: detail.document_id } };
+}
+
+export function applyReassociateBrowseSelection(library, selected) {
+  if (selected == null || selected === "") return library;
+  return {
+    ...library,
+    reassociate_path: String(selected),
+  };
+}
+
+export function chooseReassociateSourceRequest(editRoot, storedPath) {
+  return {
+    command: "choose_reassociate_source",
+    arguments: { editRoot, storedPath },
+  };
 }
 
 function validIsoDate(value) {
@@ -971,8 +989,12 @@ function selectionMarkup(library) {
     `<details class="selection-section" data-library-section="${key}"${openAttr(key)}><summary><span class="selection-section-chevron" aria-hidden="true"></span><span class="selection-section-title">${title}</span><span class="selection-section-hint" aria-hidden="true"></span></summary><div class="selection-section-body">${body}</div></details>`;
   const controlSummary = `<dl class="selection-details"><dt>Document type</dt><dd>${escapeHtml(detail.control.document_type ?? "Not set")}</dd><dt>Owner</dt><dd>${escapeHtml(identityLabel(currentOwner, "Not set"))}</dd><dt>Confidentiality</dt><dd>${escapeHtml(confidentiality?.label ?? "Not configured")}${confidentiality ? ` · ${escapeHtml(confidentiality.document_override ? "override" : `from ${confidentiality.source_folder}`)}` : ""}</dd><dt>Editor</dt><dd>${escapeHtml(role(roles?.editor, "<editor>"))}</dd><dt>Approver</dt><dd>${escapeHtml(role(roles?.approver, "Not configured"))}</dd></dl>`;
   const controlBody = `${controlSummary}${editor}`;
+  const reassociatePath = library.reassociate_path || detail.relative_path;
+  const reassociateError = library.detail_error
+    ? `<p class="library-detail-error" role="alert">${escapeHtml(library.detail_error)}</p>`
+    : "";
   const reassociateMarkup = sourceLost
-    ? `<p class="source-path">Choose another supported file under the edit root.</p><form id="library-reassociate-form" class="reassociate-form"><label>Reassociate source<input name="path" required value="${escapeHtml(detail.relative_path)}" aria-label="New edit-root-relative source path"></label><button class="button secondary" type="submit">Reassociate source</button></form>`
+    ? `${reassociateError}<p class="source-path">Choose another supported file under the edit root.</p><form id="library-reassociate-form" class="reassociate-form"><label for="library-reassociate-path">Reassociate source</label><div class="directory-field"><input id="library-reassociate-path" name="path" required value="${escapeHtml(reassociatePath)}" aria-label="New edit-root-relative source path"><button class="button secondary" type="button" data-reassociate-browse>Browse…</button></div><button class="button secondary" type="submit">Reassociate source</button></form>`
     : "";
   const actionsBody = `<div class="selection-actions"><button class="button" type="button" data-library-open-source ${sourceAvailable ? "" : "disabled"}>Open source draft</button><button class="button" type="button" data-library-open-release ${release?.pdf_exists ? "" : "disabled"}>Open current released PDF</button><button class="button" type="button" data-library-open-notes>Open notes</button><button class="button secondary" type="button" data-library-open-assistance ${sourceLost ? "disabled" : ""}>Evaluate changes with Claude</button><button class="button secondary" type="button" data-library-copy-permalink>Copy permalink</button><button class="button danger" type="button" data-library-unregister>Unregister</button></div>${reassociateMarkup}`;
   const actionsBlock = `<section class="selection-actions-block"><h4 class="selection-section-title">Actions</h4><div class="selection-section-body">${actionsBody}</div></section>`;
