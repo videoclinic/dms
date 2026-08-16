@@ -1,4 +1,11 @@
+use std::collections::BTreeMap;
+
 use super::{DmsError, MarkerStatus, MarkerVerdict, Result};
+
+/// Controlled export-chrome tokens. Frontmatter may validate these fields but
+/// must not fill the matching Word placeholders; release chrome owns them.
+pub const RESERVED_MARKDOWN_TEMPLATE_VARIABLES: &[&str] =
+    &["TITLE", "DOCUMENT_NUMBER", "VERSION", "CONFIDENTIALITY"];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MarkdownFrontmatter {
@@ -6,6 +13,30 @@ pub struct MarkdownFrontmatter {
     pub document_number: Option<String>,
     pub version: String,
     pub confidentiality: String,
+    /// Every flat scalar frontmatter key → value, original key spelling.
+    pub variables: BTreeMap<String, String>,
+}
+
+impl MarkdownFrontmatter {
+    /// Non-reserved template variables as `{TOKEN}` → value.
+    /// Keys must be ASCII identifiers; tokens are uppercased.
+    pub fn template_variables(&self) -> BTreeMap<String, String> {
+        let mut variables = BTreeMap::new();
+        for (key, value) in &self.variables {
+            if !is_template_variable_key(key) {
+                continue;
+            }
+            let token = key.to_ascii_uppercase();
+            if RESERVED_MARKDOWN_TEMPLATE_VARIABLES
+                .iter()
+                .any(|reserved| *reserved == token)
+            {
+                continue;
+            }
+            variables.insert(format!("{{{token}}}"), value.clone());
+        }
+        variables
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -46,6 +77,7 @@ pub fn parse_markdown_frontmatter(markdown: &str) -> Result<(MarkdownFrontmatter
     let mut document_number = None;
     let mut version = None;
     let mut confidentiality = None;
+    let mut variables = BTreeMap::new();
     let mut body_offset = 0;
     let mut closed = false;
 
@@ -76,6 +108,11 @@ pub fn parse_markdown_frontmatter(markdown: &str) -> Result<(MarkdownFrontmatter
             )));
         }
         let value = parse_scalar(key, raw_value)?;
+        if variables.insert(key.to_owned(), value.clone()).is_some() {
+            return Err(DmsError::InvalidMarkdownFrontmatter(format!(
+                "frontmatter key {key} is duplicated"
+            )));
+        }
         match key {
             "title" => set_once(&mut title, key, value)?,
             "document_number" => set_once(&mut document_number, key, value)?,
@@ -107,9 +144,19 @@ pub fn parse_markdown_frontmatter(markdown: &str) -> Result<(MarkdownFrontmatter
             document_number,
             version,
             confidentiality,
+            variables,
         },
         &rest[body_offset..],
     ))
+}
+
+fn is_template_variable_key(key: &str) -> bool {
+    let mut chars = key.chars();
+    match chars.next() {
+        Some(character) if character.is_ascii_alphabetic() => {}
+        _ => return false,
+    }
+    chars.all(|character| character.is_ascii_alphanumeric() || character == '_')
 }
 
 pub fn check_markdown_frontmatter(
@@ -210,12 +257,29 @@ mod tests {
 
     #[test]
     fn parses_supported_flat_fields_and_returns_body() {
-        let source = "---\ntitle: Policy\ndocument_number: P-01\nversion: 1.0\nconfidentiality: Internal\nowner: ignored\n---\n# Body\n";
+        let source = "---\ntitle: Policy\ndocument_number: P-01\nversion: 1.0\nconfidentiality: Internal\nowner: ignored\nauthor: Ada\n---\n# Body\n";
         let (frontmatter, body) = parse_markdown_frontmatter(source).unwrap();
         assert_eq!(frontmatter.title.as_deref(), Some("Policy"));
         assert_eq!(frontmatter.document_number.as_deref(), Some("P-01"));
         assert_eq!(frontmatter.version, "1.0");
         assert_eq!(frontmatter.confidentiality, "Internal");
+        assert_eq!(
+            frontmatter.variables.get("owner").map(String::as_str),
+            Some("ignored")
+        );
+        assert_eq!(
+            frontmatter.variables.get("author").map(String::as_str),
+            Some("Ada")
+        );
+        assert_eq!(
+            frontmatter
+                .template_variables()
+                .get("{AUTHOR}")
+                .map(String::as_str),
+            Some("Ada")
+        );
+        assert!(!frontmatter.template_variables().contains_key("{TITLE}"));
+        assert!(!frontmatter.template_variables().contains_key("{VERSION}"));
         assert_eq!(body, "# Body\n");
     }
 

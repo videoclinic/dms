@@ -18,8 +18,8 @@ persistence.
 | `src/lifecycle.rs` | Version candidates, Entra/notification/export ports, content conformance, review decisions, release commits, and hash-chained evidence |
 | `src/maintenance.rs` | Release checksum verification, workspace review defaults, periodic-review scheduling and transitions, and full-workspace ZIP backup with SHA-256 manifest |
 | `src/policies.rs` | Folder-policy tree, confidentiality inheritance, Entra display binding, and workflow-role resolution |
-| `src/frontmatter.rs` | Strict flat Markdown control-field parsing and expected/detected comparison |
-| `src/template.rs` | Reusable workspace Word-template identity, validation, and deterministic CommonMark-to-OOXML assembly |
+| `src/frontmatter.rs` | Strict flat Markdown control-field parsing, optional template-variable map, and expected/detected comparison |
+| `src/template.rs` | Reusable workspace Word-template identity, validation, CommonMark-to-OOXML assembly, and frontmatter variable fill |
 | `tests/` | Domain, migration-fixture, and persistence behaviour tests |
 
 ## Local Contracts
@@ -73,7 +73,10 @@ persistence.
   Its strict contract includes the four `DMS_*` custom properties with one
   release-value placeholder each. Markdown release passes only a configured,
   present, unchanged, valid template path to the export adapter; rejection does
-  not call the adapter or commit release evidence.
+  not call the adapter or commit release evidence. Assembly strips YAML
+  frontmatter from the body and fills optional non-reserved `{KEY}` tokens from
+  additional flat frontmatter scalars; reserved controlled tokens remain for
+  export chrome.
 - Workflow evidence is append-only, SHA-256 predecessor-linked, newest-first at
   the public history boundary, and validated whenever workspace metadata opens
   or saves.

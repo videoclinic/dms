@@ -306,13 +306,16 @@ pub fn validate_markdown_template(path: &Path) -> Result<MarkdownTemplateContrac
 
 pub fn assemble_markdown_docx(template: &Path, markdown: &str, destination: &Path) -> Result<()> {
     let loaded = load_template(template)?;
-    let (_, body) = super::parse_markdown_frontmatter(markdown)?;
+    let (frontmatter, body) = super::parse_markdown_frontmatter(markdown)?;
     let blocks = parse_markdown_blocks(body)?;
     let rendered = render_blocks(&blocks, &loaded)?;
     let mut document_xml = String::with_capacity(loaded.document_xml.len() + rendered.len());
     document_xml.push_str(&loaded.document_xml[..loaded.prototype_start]);
     document_xml.push_str(&rendered);
     document_xml.push_str(&loaded.document_xml[loaded.prototype_end..]);
+
+    let variables = frontmatter.template_variables();
+    let document_xml = apply_template_variables(&document_xml, &variables);
 
     let output = fs::File::create(destination).map_err(|source| DmsError::Io {
         path: destination.to_path_buf(),
@@ -337,6 +340,20 @@ pub fn assemble_markdown_docx(template: &Path, markdown: &str, destination: &Pat
                     path: destination.to_path_buf(),
                     source,
                 })?;
+        } else if entry.name.ends_with(".xml") || entry.name.ends_with(".rels") {
+            let text = String::from_utf8(entry.bytes).map_err(|error| {
+                DmsError::InvalidMarkdownTemplate(format!(
+                    "package part {} is not UTF-8: {error}",
+                    entry.name
+                ))
+            })?;
+            let filled = apply_template_variables(&text, &variables);
+            writer
+                .write_all(filled.as_bytes())
+                .map_err(|source| DmsError::Io {
+                    path: destination.to_path_buf(),
+                    source,
+                })?;
         } else {
             writer
                 .write_all(&entry.bytes)
@@ -350,6 +367,18 @@ pub fn assemble_markdown_docx(template: &Path, markdown: &str, destination: &Pat
         .finish()
         .map_err(|error| DmsError::InvalidDocx(error.to_string()))?;
     validate_docx_package(destination)
+}
+
+fn apply_template_variables(xml: &str, variables: &BTreeMap<String, String>) -> String {
+    if variables.is_empty() {
+        return xml.to_owned();
+    }
+    let mut output = xml.to_owned();
+    for (token, value) in variables {
+        let escaped = xml_escape(value);
+        output = output.replace(token, &escaped);
+    }
+    output
 }
 
 fn load_template(path: &Path) -> Result<LoadedTemplate> {

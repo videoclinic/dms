@@ -293,6 +293,8 @@ title: Employee handbook
 document_number: HB-001
 version: 1.0
 confidentiality: Internal
+author: Ada Lovelace
+department: Quality
 ---
 # Handbook
 ## Scope
@@ -350,6 +352,22 @@ let value = 1;
     ] {
         assert!(!document.contains(prototype));
     }
+    for leaked in [
+        "---",
+        "title: Employee handbook",
+        "document_number: HB-001",
+        "version: 1.0",
+        "confidentiality: Internal",
+        "author: Ada Lovelace",
+        "Employee handbook",
+        "HB-001",
+        "Ada Lovelace",
+    ] {
+        assert!(
+            !document.contains(leaked),
+            "frontmatter leaked into body: {leaked:?}"
+        );
+    }
     for text in [
         "Handbook",
         "Scope",
@@ -374,6 +392,77 @@ let value = 1;
     ] {
         assert!(document.contains(markup), "missing OOXML {markup:?}");
     }
+}
+
+#[test]
+fn assembler_fills_frontmatter_template_variables_and_leaves_controlled_tokens() {
+    let temp = tempfile::tempdir().unwrap();
+    let template = temp.path().join("template.docx");
+    let output = temp.path().join("filled.docx");
+    write_template_with_header_token(&template, "{AUTHOR} · {DEPARTMENT} · {VERSION}");
+    let markdown = r#"---
+title: Policy
+document_number: P-9
+version: 1.0
+confidentiality: Internal
+author: Ada & Co
+department: Quality
+---
+# Body
+"#;
+
+    assemble_markdown_docx(&template, markdown, &output).unwrap();
+    let parts = zip_entries(&output);
+    let header = String::from_utf8(parts["word/header1.xml"].clone()).unwrap();
+    assert!(header.contains("Ada &amp; Co"));
+    assert!(header.contains("Quality"));
+    assert!(header.contains("{VERSION}"));
+    assert!(!header.contains("{AUTHOR}"));
+    assert!(!header.contains("{DEPARTMENT}"));
+    let custom = String::from_utf8(parts["docProps/custom.xml"].clone()).unwrap();
+    assert!(custom.contains("{TITLE}"));
+    assert!(custom.contains("{DOCUMENT_NUMBER}"));
+    assert!(custom.contains("{VERSION}"));
+    assert!(custom.contains("{CONFIDENTIALITY}"));
+    let document = String::from_utf8(parts["word/document.xml"].clone()).unwrap();
+    assert!(document.contains("Body"));
+    assert!(!document.contains("Ada"));
+    assert!(!document.contains("---"));
+}
+
+fn write_template_with_header_token(path: &Path, header_text: &str) {
+    let source = zip_entries_from_bytes(FIXTURE);
+    let file = fs::File::create(path).unwrap();
+    let mut archive = ZipWriter::new(file);
+    for (name, bytes) in source {
+        archive
+            .start_file(&name, SimpleFileOptions::default())
+            .unwrap();
+        if name == "word/header1.xml" {
+            let xml = format!(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><w:hdr xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:p><w:r><w:t>{header_text}</w:t></w:r></w:p></w:hdr>"
+            );
+            archive.write_all(xml.as_bytes()).unwrap();
+        } else {
+            archive.write_all(&bytes).unwrap();
+        }
+    }
+    archive.finish().unwrap();
+}
+
+fn zip_entries_from_bytes(bytes: &[u8]) -> BTreeMap<String, Vec<u8>> {
+    let mut archive = ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+    let mut entries = BTreeMap::new();
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).unwrap();
+        if entry.is_dir() {
+            continue;
+        }
+        let mut data = Vec::new();
+        entry.read_to_end(&mut data).unwrap();
+        entries.insert(entry.name().to_owned(), data);
+    }
+    entries
 }
 
 #[test]

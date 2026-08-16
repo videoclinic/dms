@@ -48,7 +48,8 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
   publish root → builds one export chrome map from `.dms` → exports Office
   drafts through installed Microsoft Office, or validates Markdown frontmatter,
   assembles a temporary DOCX from the configured workspace template and
-  CommonMark body, fills controlled fields from the release snapshot, and
+  CommonMark body (frontmatter stripped; optional non-controlled frontmatter
+  `{KEY}` variables filled), fills controlled fields from the release snapshot, and
   exports that DOCX through installed Word → writes
   `<stem>_VMAJOR.MINOR_<confidentiality-type-id>.pdf` → checksums the result.
 - Application-managed version history consists of immutable release PDFs and

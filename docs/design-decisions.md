@@ -128,7 +128,9 @@ Capability-local rules stay in their CAP files.
 - **Consequences:** Licensed desktop Word is required for Markdown as well as
   DOCX release. DMS title, document number, candidate version, and effective
   confidentiality remain authoritative; frontmatter is validated source
-  metadata and never overwrites `.dms` control data. The temporary DOCX retains
+  metadata and never overwrites `.dms` control data. Extra flat frontmatter
+  scalars may define optional non-controlled Word-template `{KEY}` variables
+  filled only into the temporary DOCX. The temporary DOCX retains
   template styles, page setup, headers, footers, media, and supported field
   locations, while the source Markdown and template remain unchanged. CI may
   use deterministic DOCX assembly plus Office test doubles, but supported-host

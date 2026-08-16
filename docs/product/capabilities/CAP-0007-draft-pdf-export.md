@@ -73,7 +73,12 @@ When implemented, the following must hold:
     snapshot; optional `title` and `document_number` must match when present.
     Frontmatter never overwrites `.dms` control data and is not emitted as body
     content. The generated DOCX and PDF always receive controlled values from the
-    release snapshot.
+    release snapshot for `TITLE`, `DOCUMENT_NUMBER`, `VERSION`, and
+    `CONFIDENTIALITY`. Additional flat ASCII-identifier frontmatter keys act as
+    optional Word-template **variable definitions**: each key `name` fills
+    matching `{NAME}` placeholders (uppercased) in temporary package XML during
+    Markdown→DOCX assembly. Those variables never become document-control data
+    and never override the four reserved controlled tokens.
 
 ## Non-goals
 

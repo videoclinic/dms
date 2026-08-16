@@ -165,7 +165,9 @@
     `document_number` fields must match the candidate snapshot when present;
     duplicate, structured, or malformed controlled fields fail closed.
     Frontmatter validates the source but never supplies authoritative release
-    values or mutates DMS document control data. Other draft formats may
+    values or mutates DMS document control data. Additional flat frontmatter
+    scalars may fill non-controlled Word-template `{KEY}` variables under
+    CAP-0007 during temporary DOCX assembly only. Other draft formats may
     not enter review or release until equivalent visible-content coverage is
     implemented and tested alongside CAP-0007.
     A failed check blocks the transition by default and reports the expected and

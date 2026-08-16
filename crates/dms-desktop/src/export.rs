@@ -477,7 +477,7 @@ mod tests {
         let output = directory.path().join("release.tmp");
         fs::write(
             &source,
-            "---\ntitle: source title\ndocument_number: SOURCE-1\nversion: 2.3\nconfidentiality: Vertraulich & intern\n---\n# Body\n\nVisible text.",
+            "---\ntitle: source title\ndocument_number: SOURCE-1\nversion: 2.3\nconfidentiality: Vertraulich & intern\nauthor: Source Author\n---\n# Body\n\nVisible text.",
         )
         .unwrap();
         fs::write(&template, MARKDOWN_TEMPLATE).unwrap();
@@ -507,6 +507,8 @@ mod tests {
         assert!(document.contains("Body"));
         assert!(document.contains("Visible text."));
         assert!(!document.contains("source title"));
+        assert!(!document.contains("Source Author"));
+        assert!(!document.contains("---"));
         assert!(!document.contains("{Heading 1}"));
         let custom = zip_text(&packages[0], "docProps/custom.xml");
         assert!(custom.contains("Policy &lt;West&gt;"));
