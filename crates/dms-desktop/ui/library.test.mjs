@@ -25,6 +25,8 @@ import {
   reviewScheduleBaseline,
   reviewScheduleIsDirty,
   selectedEntries,
+  setSelectionSectionOpen,
+  selectionSectionOpen,
   sortLibraryEntries,
   toggleLibrarySelection,
   toggleLibraryVisibility,
@@ -410,7 +412,86 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /data-library-copy-permalink/);
   assert.match(markup, /data-library-unregister/);
   assert.match(markup, /id="library-reassociate-form"/);
+  assert.match(markup, /data-library-section="control"/);
+  assert.match(markup, /data-library-section="schedule"/);
+  assert.match(markup, /data-library-section="actions"/);
+  assert.match(markup, /data-library-section="revision"/);
+  assert.match(markup, /data-library-section="releases"/);
+  assert.match(markup, /selection-section-chevron/);
+  assert.match(markup, /class="badge muted">draft</);
+  assert.doesNotMatch(markup, /document-control-editor"[^>]*border/);
   assert.doesNotMatch(markup, /overflow menu|hamburger/i);
+});
+
+test("selection section folds stay open or closed across document switches", () => {
+  let library = createLibraryState();
+  assert.equal(selectionSectionOpen(library, "control"), true);
+  library = setSelectionSectionOpen(library, "control", false);
+  library = setSelectionSectionOpen(library, "schedule", false);
+  library = setSelectionSectionOpen(library, "releases", false);
+  library = setSelectionSectionOpen(library, "revision", true);
+  library = toggleLibrarySelection(library, "Policies/A.md");
+  assert.equal(selectionSectionOpen(library, "control"), false);
+  assert.equal(selectionSectionOpen(library, "schedule"), false);
+  assert.equal(selectionSectionOpen(library, "releases"), false);
+  assert.equal(selectionSectionOpen(library, "revision"), true);
+  library = applyDocumentSelection(library, {
+    document_id: "doc-a",
+    lifecycle: "draft",
+    control: { title: "A" },
+  });
+  assert.equal(selectionSectionOpen(library, "control"), false);
+  const registered = file("Handbook.md", { in_library: { document_id: "doc-1" } }, {
+    id: "doc-1",
+    lifecycle: "draft",
+    control: { title: "Employee handbook", document_number: "HR-001" },
+  });
+  library = {
+    ...library,
+    folder: snapshot("Policies", [registered]).folder,
+    selection: ["Policies/Handbook.md"],
+    detail: {
+      document_id: "doc-1",
+      source_name: "Handbook.md",
+      relative_path: "Policies/Handbook.md",
+      source_exists: true,
+      source_state: "registered",
+      lifecycle: "draft",
+      control: {
+        title: "Employee handbook",
+        document_number: "HR-001",
+        document_type: "procedure",
+        owner: { kind: "entra", object_id: "owner-1", display_name: "Olivia Owner" },
+      },
+      current_owner: { kind: "entra", object_id: "owner-1", display_name: "Olivia Owner" },
+      eligible_people: [],
+      document_types: [{ id: "procedure", label: "Procedure", enabled: true }],
+      confidentiality_types: [],
+      lifecycle_actions: {
+        begin_revision: { available: false, reason: "Only a released document can begin a revision." },
+        cancel_review: { available: false, reason: "Available only while a review is open." },
+        mark_obsolete: { available: true, reason: null },
+      },
+      workflow_events: [],
+      workflow_verification: "valid",
+      current_release: null,
+      review_schedule: {
+        workspace_interval_months: 12,
+        interval_months: null,
+        exemption_reason: null,
+        next_due_date: null,
+      },
+    },
+  };
+  const markup = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies" } },
+    library,
+  );
+  assert.match(markup, /data-library-section="control"(?! open)/);
+  assert.match(markup, /data-library-section="schedule"(?! open)/);
+  assert.match(markup, /data-library-section="revision" open/);
+  assert.match(markup, /data-library-section="releases"(?! open)/);
 });
 
 test("library file actions map only to host-mediated document commands", () => {

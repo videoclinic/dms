@@ -14,6 +14,7 @@ import {
   normalizeLibraryPath,
   resizeLibraryDetailWidth,
   selectedEntries,
+  setSelectionSectionOpen,
   bindReviewScheduleForm,
   toggleLibrarySelection,
   toggleLibraryVisibility,
@@ -1144,6 +1145,26 @@ async function refreshWorkspaceAndLibrary() {
   const workspace = await invokeCommand("open_workspace", { editRoot: appState.workspace.edit_root });
   appState = { ...appState, workspace };
   await loadLibraryFolder(appState.library.folder.relative_path, "replace");
+}
+
+function handleLibraryToggle(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLDetailsElement)) return;
+  if (currentActivity(appState)?.destination !== "Library") return;
+  const section = target.dataset.librarySection;
+  if (section) {
+    appState = {
+      ...appState,
+      library: setSelectionSectionOpen(appState.library, section, target.open),
+    };
+    return;
+  }
+  if (target.hasAttribute("data-library-evidence")) {
+    appState = {
+      ...appState,
+      library: { ...appState.library, evidence_open: target.open },
+    };
+  }
 }
 
 async function handleLibraryClick(event) {
@@ -2492,6 +2513,7 @@ async function start() {
   document.addEventListener("click", handleClick);
   document.addEventListener("submit", handleSubmit);
   document.addEventListener("change", handleChange);
+  document.addEventListener("toggle", handleLibraryToggle, true);
   document.addEventListener("keydown", handleKeyDown);
   document.addEventListener("pointerdown", handlePointerDown);
   document.addEventListener("pointermove", handlePointerMove);

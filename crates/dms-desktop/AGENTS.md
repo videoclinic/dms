@@ -80,7 +80,14 @@ macOS.
   document-control editing, the document confidentiality override, candidate
   submission, review decision, release, local lifecycle actions, and canonical
   workflow evidence; file rows remain selection-only and preserve exact source
-  names. The adapter supplies lifecycle availability and precondition explanations
+  names. For one selected library document it groups **Document control data**,
+  **Document review schedule**, **Actions**, **Revision cycle**, and
+  **Releases** into frameless independently foldable sections with a visible
+  disclosure chevron and Expand/Collapse cue on each summary. Title, document
+  number, lifecycle badge, and Source file
+  identity stay visible while sections fold. Section open/closed state is
+  session-only Library UI state and survives document switches until the
+  Library activity ends. The adapter supplies lifecycle availability and precondition explanations
   rather than duplicating core transitions in the frontend. `mailto:` delivery
   opens the host handler first and advances only through its explicit confirmation
   retry; review decisions require a fresh interactive Entra sign-in. Cancel review

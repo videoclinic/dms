@@ -295,39 +295,78 @@ button { cursor: pointer; }
 .selection-pane p { color: #61717d; line-height: 1.45; }
 .selection-empty { margin-top: 26px; text-align: center; }
 .selection-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.selection-header-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .source-path, .document-number { margin: 3px 0 15px; color: #657581; font-size: 12px; overflow-wrap: anywhere; }
-.source-identity { display: grid; gap: 3px; margin: 16px 0; padding: 12px; background: #eef3f6; border-radius: 7px; }
+.source-identity { display: grid; gap: 3px; margin: 12px 0 4px; padding: 10px 0; }
 .source-identity small { color: #61717d; overflow-wrap: anywhere; }
-.selection-pane details { padding: 10px 0; border-top: 1px solid #dfe5ea; }
-.selection-pane summary { cursor: pointer; font-weight: 750; }
+.selection-pane details.selection-section { padding: 8px 0; border-top: 1px solid #dfe5ea; }
+.selection-pane details.selection-section > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 2px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 750;
+  list-style: none;
+  user-select: none;
+}
+.selection-pane details.selection-section > summary::-webkit-details-marker { display: none; }
+.selection-pane details.selection-section > summary:hover { background: #eef3f6; color: #1f4f6a; }
+.selection-pane details.selection-section > summary:focus-visible { outline: 2px solid #447c9d; outline-offset: 1px; }
+.selection-section-chevron {
+  flex: 0 0 1.1rem;
+  width: 1.1rem;
+  color: #4a6575;
+  font-size: 14px;
+  line-height: 1;
+  text-align: center;
+}
+.selection-pane details.selection-section > summary .selection-section-chevron::before { content: "▸"; }
+.selection-pane details.selection-section[open] > summary .selection-section-chevron::before { content: "▾"; }
+.selection-section-title { min-width: 0; flex: 1 1 auto; }
+.selection-section-hint {
+  flex: 0 0 auto;
+  color: #7a8b96;
+  font-size: 11px;
+  font-weight: 600;
+}
+.selection-pane details.selection-section > summary .selection-section-hint::before { content: "Expand"; }
+.selection-pane details.selection-section[open] > summary .selection-section-hint::before { content: "Collapse"; }
+.selection-pane details.selection-section > summary:hover .selection-section-hint { color: #5a7382; }
+.selection-section-body { display: grid; gap: 12px; margin-top: 10px; padding-left: 1.85rem; }
 .selection-details { display: grid; grid-template-columns: 92px 1fr; gap: 6px 9px; font-size: 12px; }
 .selection-details dt { color: #687984; }
 .selection-details dd { margin: 0; overflow-wrap: anywhere; }
-.selection-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 13px; }
-.reassociate-form { display: grid; gap: 7px; margin-top: 14px; }
+.selection-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.reassociate-form { display: grid; gap: 7px; }
 .reassociate-form label { display: grid; gap: 5px; color: #5f6f7b; font-size: 12px; font-weight: 700; }
 .reassociate-form input { width: 100%; height: 34px; padding: 0 8px; border: 1px solid #bdc9d2; border-radius: 6px; }
 .reassociate-form .button { justify-self: start; }
-.document-control-editor { display: grid; gap: 12px; margin: 16px 0; padding: 13px; border: 1px solid #d9e2e8; border-radius: 8px; background: #fff; }
+.document-control-editor { display: grid; gap: 12px; margin: 0; padding: 0; border: 0; background: transparent; }
 .document-control-editor h4 { margin: 0; font-size: 14px; }
-.document-control-editor .source-path { margin: -5px 0 0; }
+.document-control-editor .source-path { margin: 0; }
 .document-control-fields { display: grid; gap: 9px; }
 .document-control-fields label, .confidentiality-editor label { display: grid; gap: 4px; color: #52636f; font-size: 12px; font-weight: 700; }
 .document-control-fields input, .document-control-fields select, .confidentiality-editor select { width: 100%; height: 34px; padding: 0 8px; border: 1px solid #bdc9d2; border-radius: 6px; background: #fff; }
 .document-control-editor form { display: grid; gap: 10px; }
 .document-control-editor .button { justify-self: start; }
-.confidentiality-editor { padding-top: 12px; border-top: 1px solid #e3e8ec; }
+.confidentiality-editor { padding-top: 4px; border-top: 0; }
 .library-detail-error { margin: 0 !important; padding: 9px; color: #922b21 !important; background: #fff0ed; border-radius: 6px; font-size: 12px; }
-.lifecycle-panel { display: grid; gap: 12px; margin: 16px 0; padding: 13px; border: 1px solid #d9e2e8; border-radius: 8px; background: #fff; }
-.lifecycle-panel h4 { margin: 0; font-size: 14px; }
-.lifecycle-actions { display: grid; gap: 10px; }
-.lifecycle-action { display: grid; gap: 7px; padding: 10px; border: 1px solid #e3e8ec; border-radius: 7px; }
+.lifecycle-panel { display: grid; gap: 12px; margin: 0; padding: 0; border: 0; background: transparent; }
+.lifecycle-actions { display: grid; gap: 12px; }
+.lifecycle-action { display: grid; gap: 7px; padding: 0; border: 0; border-radius: 0; }
 .lifecycle-action small { color: #687985; }
 .lifecycle-action label { display: grid; gap: 4px; color: #52636f; font-size: 12px; font-weight: 700; }
 .lifecycle-action textarea { min-height: 62px; padding: 7px; resize: vertical; border: 1px solid #bdc9d2; border-radius: 6px; }
 .lifecycle-action .confirmation { display: flex; align-items: center; gap: 7px; }
 .lifecycle-action .button, .lifecycle-panel > .button { justify-self: start; }
+.current-release-profile { display: grid; gap: 4px; }
+.current-release-profile h4 { margin: 8px 0 0; font-size: 13px; }
+.current-release-profile small { color: #61717d; }
 .workflow-evidence { padding-top: 8px; border-top: 1px solid #e3e8ec; }
+.workflow-evidence > summary { cursor: pointer; font-weight: 650; }
 .workflow-event { display: grid; gap: 7px; margin-top: 10px; padding: 10px; border-radius: 7px; background: #f6f8fa; }
 .workflow-event header { display: flex; justify-content: space-between; gap: 8px; text-transform: capitalize; }
 .workflow-event time { color: #687985; font-size: 11px; }
