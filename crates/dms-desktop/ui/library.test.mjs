@@ -326,7 +326,6 @@ test("library markup separates source Name from DMS Title and keeps actions in t
       effective_confidentiality: null,
       effective_workflow_roles: null,
       lifecycle_actions: {
-        begin_revision: { available: false, reason: "Only a released document can begin a revision." },
         cancel_review: { available: false, reason: "Available only while a review is open." },
         mark_obsolete: { available: true, reason: null },
       },
@@ -382,11 +381,12 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /name="manualMajor"[^>]* disabled/);
   assert.doesNotMatch(markup, /View workflow evidence/);
   assert.match(markup, /Canonical workflow evidence · valid/);
-  // Candidate form is listed before Begin revision inside Revision cycle.
+  // Candidate form is listed before Cancel review inside Revision cycle.
   assert.match(
     markup,
-    /data-library-lifecycle-form="submit_candidate"[\s\S]*data-library-lifecycle-action="begin_revision"/,
+    /data-library-lifecycle-form="submit_candidate"[\s\S]*data-library-lifecycle-form="cancel_review"/,
   );
+  assert.doesNotMatch(markup, /Begin revision|begin_revision/);
   assert.match(markup, /Current released PDF · V1\.2/);
   assert.match(markup, /id="library-document-control-form"/);
   assert.match(markup, /name="ownerObjectId" required/);
@@ -407,8 +407,6 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /<option value="procedure" selected>Procedure<\/option>/);
   assert.match(markup, /id="library-confidentiality-form"/);
   assert.match(markup, /<option value="restricted" selected>Restricted<\/option>/);
-  assert.match(markup, /data-library-lifecycle-action="begin_revision" disabled/);
-  assert.match(markup, /Only a released document can begin a revision/);
   assert.match(markup, /data-library-lifecycle-form="mark_obsolete"/);
   assert.match(markup, /Canonical workflow evidence · valid/);
   assert.match(markup, /document control data changed/);
@@ -482,7 +480,6 @@ test("selection section folds stay open or closed across document switches", () 
       document_types: [{ id: "procedure", label: "Procedure", enabled: true }],
       confidentiality_types: [],
       lifecycle_actions: {
-        begin_revision: { available: false, reason: "Only a released document can begin a revision." },
         cancel_review: { available: false, reason: "Available only while a review is open." },
         mark_obsolete: { available: true, reason: null },
       },
@@ -798,10 +795,10 @@ test("review schedule fields are mode-gated and Update is dirty-only", () => {
 
 test("lifecycle actions require reasons and confirmations and map to narrow commands", () => {
   const detail = { document_id: "doc-1" };
-  assert.deepEqual(lifecycleActionRequest("begin_revision", null, detail), {
-    command: "begin_document_revision",
-    arguments: { documentId: "doc-1" },
-  });
+  assert.throws(
+    () => lifecycleActionRequest("begin_revision", null, detail),
+    /Begin revision is no longer available/,
+  );
 
   const values = new FormData();
   values.set("reason", " Superseded by the global policy ");

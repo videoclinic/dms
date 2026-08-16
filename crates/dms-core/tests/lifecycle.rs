@@ -130,6 +130,20 @@ impl Fixture {
         }
     }
 
+    /// Edit the source so its digest no longer matches the current release and
+    /// reconcile lifecycle to Draft (replaces the removed Begin revision action).
+    fn start_next_draft_cycle(&mut self, body: &str) {
+        fs::write(&self.source_path, markdown_with_control_frontmatter(body)).expect("edit draft");
+        assert!(self
+            .workspace
+            .sync_lifecycle_from_source(self.document_id)
+            .expect("sync lifecycle"));
+        assert_eq!(
+            self.workspace.document(self.document_id).unwrap().lifecycle,
+            Lifecycle::Draft
+        );
+    }
+
     fn candidate_request(&self, selection: TargetSelection) -> CandidateRequest {
         CandidateRequest {
             document_id: self.document_id,
@@ -387,44 +401,23 @@ fn local_lifecycle_actions_append_canonical_evidence_and_apply_transitions() {
         NotificationTransport::Smtp,
     );
     let (mut graph, _) = release_first(&mut fixture);
-    assert!(
-        fixture
-            .workspace
-            .local_lifecycle_actions(fixture.document_id)
-            .unwrap()
-            .begin_revision
-            .available
-    );
-
-    fixture
-        .workspace
-        .begin_revision(fixture.document_id)
-        .expect("begin revision");
     assert_eq!(
         fixture
             .workspace
             .document(fixture.document_id)
             .unwrap()
             .lifecycle,
-        Lifecycle::Draft
-    );
-    assert_eq!(
-        fixture
-            .workspace
-            .workflow_history(fixture.document_id)
-            .unwrap()[0]
-            .body
-            .event_type,
-        WorkflowEventType::RevisionBegun
+        Lifecycle::Released
     );
 
-    fs::write(
-        &fixture.source_path,
-        markdown_with_control_frontmatter(
-            "# Handbook\n\nVersion: 2.0\n\nVertraulichkeitsstufe: Internal\n",
-        ),
-    )
-    .unwrap();
+    fixture.start_next_draft_cycle(
+        "# Handbook
+
+Version: 2.0
+
+Vertraulichkeitsstufe: Internal
+",
+    );
     fixture
         .workspace
         .submit_candidate(
@@ -494,7 +487,6 @@ fn local_lifecycle_actions_append_canonical_evidence_and_apply_transitions() {
         .workspace
         .local_lifecycle_actions(fixture.document_id)
         .unwrap();
-    assert!(!actions.begin_revision.available);
     assert!(!actions.cancel_review.available);
     assert!(!actions.mark_obsolete.available);
     assert_eq!(
@@ -864,15 +856,15 @@ fn approved_release_is_atomic_mirrors_tree_persists_chain_and_refuses_overwrite(
         WorkflowVerification::Valid
     );
 
-    fixture
-        .workspace
-        .begin_revision(fixture.document_id)
-        .unwrap();
     fs::write(
         &renamed,
         "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
     )
     .unwrap();
+    assert!(fixture
+        .workspace
+        .sync_lifecycle_from_source(fixture.document_id)
+        .unwrap());
     let manual = fixture.candidate_request(TargetSelection::Manual(Version::V1_0));
     let mut notifier = FakeNotifier::accepted();
     assert!(matches!(
@@ -1000,16 +992,7 @@ fn schema_v11_migration_maps_effective_date_to_current_release_and_open_candidat
         )
         .expect("initial release");
     fixture
-        .workspace
-        .begin_revision(fixture.document_id)
-        .expect("minor revision");
-    fs::write(
-        &fixture.source_path,
-        markdown_with_control_frontmatter(
-            "# Handbook\n\nVersion: 1.1\n\nVertraulichkeitsstufe: Internal\n",
-        ),
-    )
-    .unwrap();
+        .start_next_draft_cycle("# Handbook\n\nVersion: 1.1\n\nVertraulichkeitsstufe: Internal\n");
     fixture
         .workspace
         .submit_candidate(
@@ -1029,16 +1012,7 @@ fn schema_v11_migration_maps_effective_date_to_current_release_and_open_candidat
         )
         .expect("minor release");
     fixture
-        .workspace
-        .begin_revision(fixture.document_id)
-        .expect("next revision");
-    fs::write(
-        &fixture.source_path,
-        markdown_with_control_frontmatter(
-            "# Handbook\n\nVersion: 2.0\n\nVertraulichkeitsstufe: Internal\n",
-        ),
-    )
-    .unwrap();
+        .start_next_draft_cycle("# Handbook\n\nVersion: 2.0\n\nVertraulichkeitsstufe: Internal\n");
     fixture
         .workspace
         .submit_candidate(
@@ -1153,16 +1127,7 @@ fn minor_release_skips_review_and_notification_failure_does_not_reverse_commit()
         )
         .expect("first release");
     fixture
-        .workspace
-        .begin_revision(fixture.document_id)
-        .unwrap();
-    fs::write(
-        &fixture.source_path,
-        markdown_with_control_frontmatter(
-            "# Handbook\n\nVersion: 1.1\n\nVertraulichkeitsstufe: Internal\n",
-        ),
-    )
-    .unwrap();
+        .start_next_draft_cycle("# Handbook\n\nVersion: 1.1\n\nVertraulichkeitsstufe: Internal\n");
 
     let mut notifier = FakeNotifier::default();
     let candidate = fixture
@@ -1247,16 +1212,7 @@ fn withdrawal_preserves_history_falls_back_to_prior_release_and_advances_version
     );
     let (mut graph, first) = release_first(&mut fixture);
     fixture
-        .workspace
-        .begin_revision(fixture.document_id)
-        .unwrap();
-    fs::write(
-        &fixture.source_path,
-        markdown_with_control_frontmatter(
-            "# Handbook\n\nVersion: 1.1\n\nVertraulichkeitsstufe: Internal\n",
-        ),
-    )
-    .unwrap();
+        .start_next_draft_cycle("# Handbook\n\nVersion: 1.1\n\nVertraulichkeitsstufe: Internal\n");
     fixture
         .workspace
         .submit_candidate(
@@ -1350,16 +1306,7 @@ fn withdrawal_preserves_history_falls_back_to_prior_release_and_advances_version
         .any(|release| release.id == second.release.id && release.withdrawn));
 
     fixture
-        .workspace
-        .begin_revision(fixture.document_id)
-        .unwrap();
-    fs::write(
-        &fixture.source_path,
-        markdown_with_control_frontmatter(
-            "# Handbook\n\nVersion: 1.2\n\nVertraulichkeitsstufe: Internal\n",
-        ),
-    )
-    .unwrap();
+        .start_next_draft_cycle("# Handbook\n\nVersion: 1.2\n\nVertraulichkeitsstufe: Internal\n");
     let next = fixture
         .workspace
         .submit_candidate(
@@ -1868,8 +1815,10 @@ fn periodic_review_binds_release_requires_integrity_and_records_result_transitio
             .document(changed.document_id)
             .unwrap()
             .lifecycle,
-        Lifecycle::Draft
+        Lifecycle::Released
     );
+    changed
+        .start_next_draft_cycle("# Handbook\n\nVersion: 1.1\n\nVertraulichkeitsstufe: Internal\n");
 
     let mut obsolete = Fixture::new(
         "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",

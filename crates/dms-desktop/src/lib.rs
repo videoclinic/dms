@@ -851,7 +851,14 @@ fn search_library(
     folder: String,
     query: String,
 ) -> Result<Vec<LibraryEntry>, String> {
-    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let mut workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    if workspace
+        .sync_all_registered_lifecycles()
+        .map_err(|error| error.to_string())?
+        > 0
+    {
+        workspace.save().map_err(|error| error.to_string())?;
+    }
     workspace
         .search_library(Path::new(&folder), &query)
         .map_err(|error| error.to_string())
@@ -1010,20 +1017,6 @@ fn update_document_review_schedule(
         .map_err(|error| error.to_string())?;
     workspace
         .set_document_review_exemption(document_id, review_exemption_reason.as_deref())
-        .map_err(|error| error.to_string())?;
-    workspace.save().map_err(|error| error.to_string())?;
-    document_selection(Path::new(&edit_root), document_id)
-}
-
-#[tauri::command]
-fn begin_document_revision(
-    edit_root: String,
-    document_id: Uuid,
-) -> Result<DocumentSelection, String> {
-    let mut workspace =
-        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
-    workspace
-        .begin_revision(document_id)
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
     document_selection(Path::new(&edit_root), document_id)
@@ -2087,7 +2080,14 @@ fn mutate_workspace_configuration(
 }
 
 fn library_snapshot(edit_root: &Path, folder: &Path) -> Result<LibrarySnapshot, String> {
-    let workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
+    let mut workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
+    if workspace
+        .sync_all_registered_lifecycles()
+        .map_err(|error| error.to_string())?
+        > 0
+    {
+        workspace.save().map_err(|error| error.to_string())?;
+    }
     let (tree, folder) = workspace
         .library_snapshot(folder)
         .map_err(|error| error.to_string())?;
@@ -2095,7 +2095,13 @@ fn library_snapshot(edit_root: &Path, folder: &Path) -> Result<LibrarySnapshot, 
 }
 
 fn document_selection(edit_root: &Path, document_id: Uuid) -> Result<DocumentSelection, String> {
-    let workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
+    let mut workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
+    if workspace
+        .sync_lifecycle_from_source(document_id)
+        .map_err(|error| error.to_string())?
+    {
+        workspace.save().map_err(|error| error.to_string())?;
+    }
     let document = workspace
         .document(document_id)
         .map_err(|error| error.to_string())?;
@@ -2559,7 +2565,6 @@ pub fn run() {
             update_document_control,
             update_document_review_schedule,
             set_document_confidentiality,
-            begin_document_revision,
             cancel_document_review,
             mark_document_obsolete,
             submit_document_candidate,
@@ -3341,7 +3346,6 @@ mod tests {
         assert_eq!(selection.document_id, document.id);
         assert_eq!(selection.document_types[0].id, "procedure");
         assert_eq!(selection.confidentiality_types.len(), 2);
-        assert!(!selection.lifecycle_actions.begin_revision.available);
         assert!(!selection.lifecycle_actions.cancel_review.available);
         assert!(selection.lifecycle_actions.mark_obsolete.available);
         assert_eq!(
@@ -3427,9 +3431,6 @@ mod tests {
             "internal"
         );
 
-        assert!(begin_document_revision(root.clone(), document.id)
-            .unwrap_err()
-            .contains("only a released document"));
         assert!(cancel_document_review(
             root.clone(),
             document.id,

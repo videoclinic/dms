@@ -395,7 +395,6 @@ pub struct LifecycleActionAvailability {
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct LocalLifecycleActions {
-    pub begin_revision: LifecycleActionAvailability,
     pub cancel_review: LifecycleActionAvailability,
     pub mark_obsolete: LifecycleActionAvailability,
 }
@@ -1239,10 +1238,6 @@ impl Workspace {
             reason: (!available).then_some(reason),
         };
         Ok(LocalLifecycleActions {
-            begin_revision: availability(
-                document.lifecycle == Lifecycle::Released,
-                "Only a released document can begin a revision.",
-            ),
             cancel_review: availability(
                 document.lifecycle == Lifecycle::InReview,
                 "Available only while a review is open.",
@@ -1254,19 +1249,74 @@ impl Workspace {
         })
     }
 
-    pub fn begin_revision(&mut self, document_id: Uuid) -> Result<()> {
-        if self.document(document_id)?.lifecycle != Lifecycle::Released {
-            return Err(DmsError::InvalidLifecycleTransition(
-                "only a released document can begin a revision".to_owned(),
-            ));
+    /// Set Draft/Released from the current draft digest versus the latest
+    /// non-withdrawn release. Never-released registered documents are Draft.
+    /// Matching digest keeps Released; mismatch becomes Draft. Open review,
+    /// approved candidates, and obsolete stay unchanged.
+    pub fn sync_lifecycle_from_source(&mut self, document_id: Uuid) -> Result<bool> {
+        let document = self.document(document_id)?;
+        if matches!(
+            document.lifecycle,
+            Lifecycle::Obsolete | Lifecycle::InReview | Lifecycle::Approved
+        ) {
+            return Ok(false);
         }
-        self.append_simple_event(document_id, WorkflowEventType::RevisionBegun, None)?;
+        if document.active_candidate_id.is_some() {
+            if document.lifecycle != Lifecycle::Draft {
+                self.documents
+                    .get_mut(&document_id)
+                    .expect("document checked above")
+                    .lifecycle = Lifecycle::Draft;
+                self.sync_markdown_control_frontmatter(document_id)?;
+                return Ok(true);
+            }
+            return Ok(false);
+        }
+        let desired = self.lifecycle_from_source_digest(document_id)?;
+        if document.lifecycle == desired {
+            return Ok(false);
+        }
         self.documents
             .get_mut(&document_id)
             .expect("document checked above")
-            .lifecycle = Lifecycle::Draft;
+            .lifecycle = desired;
         self.sync_markdown_control_frontmatter(document_id)?;
-        Ok(())
+        Ok(true)
+    }
+
+    /// Reconcile every registered document. Returns how many lifecycles changed.
+    pub fn sync_all_registered_lifecycles(&mut self) -> Result<usize> {
+        let ids: Vec<Uuid> = self
+            .documents
+            .values()
+            .filter(|document| document.source_state == SourceState::Registered)
+            .map(|document| document.id)
+            .collect();
+        let mut changed = 0;
+        for document_id in ids {
+            if self.sync_lifecycle_from_source(document_id)? {
+                changed += 1;
+            }
+        }
+        Ok(changed)
+    }
+
+    fn lifecycle_from_source_digest(&self, document_id: Uuid) -> Result<Lifecycle> {
+        let Some(release) = self.current_release(document_id)? else {
+            return Ok(Lifecycle::Draft);
+        };
+        let document = self.document(document_id)?;
+        let source_path = self.edit_root.join(&document.relative_path);
+        if !source_path.is_file() {
+            // Missing source keeps Released when a current release exists.
+            return Ok(Lifecycle::Released);
+        }
+        let digest = sha256_file(&source_path)?;
+        if digest == release.source_digest {
+            Ok(Lifecycle::Released)
+        } else {
+            Ok(Lifecycle::Draft)
+        }
     }
 
     pub fn withdraw_release(
@@ -1634,7 +1684,8 @@ impl Workspace {
         Ok(())
     }
 
-    fn ensure_document_can_start_candidate(&self, document_id: Uuid) -> Result<()> {
+    fn ensure_document_can_start_candidate(&mut self, document_id: Uuid) -> Result<()> {
+        self.sync_lifecycle_from_source(document_id)?;
         let document = self.document(document_id)?;
         if document.source_state != SourceState::Registered {
             return Err(DmsError::InvalidLifecycleTransition(

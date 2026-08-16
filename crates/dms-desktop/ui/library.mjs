@@ -549,10 +549,7 @@ export function confidentialityUpdateRequest(values, detail) {
 export function lifecycleActionRequest(action, values, detail) {
   if (!detail?.document_id) throw new Error("A selected document is required.");
   if (action === "begin_revision") {
-    return {
-      command: "begin_document_revision",
-      arguments: { documentId: detail.document_id },
-    };
+    throw new Error("Begin revision is no longer available. Edit the draft to leave released.");
   }
   if (action === "submit_candidate") {
     const targetMode = String(values?.get("targetMode") ?? "").trim();
@@ -811,7 +808,6 @@ function workflowEventMarkup(event) {
 function lifecyclePanelMarkup(library, detail) {
   const actions = detail.lifecycle_actions ?? {};
   const availability = (name, fallback) => actions[name] ?? { available: false, reason: fallback };
-  const begin = availability("begin_revision", "Lifecycle state is unavailable.");
   const cancel = availability("cancel_review", "Lifecycle state is unavailable.");
   const obsolete = availability("mark_obsolete", "Lifecycle state is unavailable.");
   const form = (action, title, available, reason) => {
@@ -827,7 +823,7 @@ function lifecyclePanelMarkup(library, detail) {
       ? `tampered at ${detail.workflow_verification.tampered_at}`
       : "invalid";
   const external = externalLifecycleMarkup(library, detail);
-  return `<div class="lifecycle-panel" aria-label="Revision cycle actions"><div class="lifecycle-actions">${external}<div class="lifecycle-action"><strong>Begin revision</strong>${begin.reason ? `<small>${escapeHtml(begin.reason)}</small>` : ""}<button class="button secondary" type="button" data-library-lifecycle-action="begin_revision" ${begin.available ? "" : "disabled"}>Begin revision</button></div>${form("cancel_review", "Cancel review", cancel.available, cancel.reason)}${form("mark_obsolete", "Mark obsolete", obsolete.available, obsolete.reason)}</div><details class="workflow-evidence" data-library-evidence ${library.evidence_open ? "open" : ""}><summary>Canonical workflow evidence · ${escapeHtml(verification)}</summary>${events}</details></div>`;
+  return `<div class="lifecycle-panel" aria-label="Revision cycle actions"><div class="lifecycle-actions">${external}${form("cancel_review", "Cancel review", cancel.available, cancel.reason)}${form("mark_obsolete", "Mark obsolete", obsolete.available, obsolete.reason)}</div><details class="workflow-evidence" data-library-evidence ${library.evidence_open ? "open" : ""}><summary>Canonical workflow evidence · ${escapeHtml(verification)}</summary>${events}</details></div>`;
 }
 
 function externalLifecycleMarkup(library, detail) {

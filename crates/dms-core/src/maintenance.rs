@@ -426,7 +426,9 @@ impl Workspace {
                 self.save()?;
             }
             PeriodicReviewResult::ChangesRequired => {
-                self.begin_revision(document_id)?;
+                // Digest-driven lifecycle: stays Released until the draft bytes
+                // diverge from the current release source digest.
+                self.save()?;
             }
             PeriodicReviewResult::Obsolete => {
                 self.mark_obsolete(document_id, &comment)?;

@@ -91,7 +91,9 @@ macOS.
   (when available) is listed first, shows the resolved effective target version,
   keeps Manual major/minor disabled until Manual target is selected, and uses
   one foldable **Canonical workflow evidence** disclosure (no separate View
-  workflow evidence button). The adapter supplies lifecycle availability and precondition explanations
+  workflow evidence button). There is no **Begin revision** control: library
+  load and document selection reconcile Draft/Released from the draft digest
+  versus the latest release. The adapter supplies lifecycle availability and precondition explanations
   rather than duplicating core transitions in the frontend. `mailto:` delivery
   opens the host handler first and advances only through its explicit confirmation
   retry; review decisions require a fresh interactive Entra sign-in. Cancel review
