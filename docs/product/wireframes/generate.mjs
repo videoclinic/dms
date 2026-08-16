@@ -118,8 +118,9 @@ const CAPS = [
             <label class="label">Effective date * <input type="date" value="2025-08-15" required></label>
             <label class="label">Owner * <select required><option value="8a1f">Lukas Roth · lukas@vc.de</option><option value="41c2">Anna Berg · anna@vc.de</option></select></label>
             <label class="label">Requesting editor * <select required><option value="8a1f">Lukas Roth · lukas@vc.de</option></select></label>
-            <label class="label">Target * <select required><option value="next_minor" selected>Next minor · V1.4</option><option value="next_major">Next major · V2.0</option><option value="manual">Manual</option></select></label>
-            <div class="row gap-2" style="flex-wrap:wrap"><button class="btn outline">Preview V2.0 review request</button><button class="btn">Release V1.4 minor version</button></div>
+            <label class="label">Target * <select required><option value="next_minor" selected>Next minor · V1.4</option><option value="next_major">Next major · V2.0 (approval required)</option><option value="manual">Manual target</option></select></label>
+            <p class="hint">Effective target: V1.4 · stays in draft for direct PDF export. Manual major/minor stay disabled until Manual target is selected.</p>
+            <div class="row gap-2" style="flex-wrap:wrap"><button class="btn outline">Preview V2.0 review request</button><button class="btn">Create release candidate · V1.4</button></div>
           </form>
           <p class="hint">A successful empty people import shows literal <code>&lt;owner&gt;</code> and <code>&lt;editor&gt;</code> placeholders here and blocks submission. Minor release snapshots the requested profile, effective date, changelog, mode, editor, and approver; it stays in <code>draft</code> until successful atomic export.</p>
         </section>
@@ -1265,15 +1266,20 @@ function documentControlDataSelectionPane() {
     <details class="selection-section" open>
       <summary><span class="selection-section-title">Revision cycle</span></summary>
       <div class="selection-section-body stack">
-        <p class="muted" style="font-size:0.85rem;margin:0">The current released PDF remains available while this newer draft is in review. After release, <strong>Begin revision</strong> returns the document to <code>draft</code>; PDFs and history remain preserved.</p>
+        <p class="muted" style="font-size:0.85rem;margin:0">Create a release candidate here in the workspace (not an external upload). The current released PDF remains available while a newer draft is in progress. After release, <strong>Begin revision</strong> returns the document to <code>draft</code>; PDFs and history remain preserved.</p>
+        <strong>Create release candidate</strong>
         <label class="label">Effective date * <input type="date" value="2025-08-15" required></label>
-        <label class="label">Target * <select><option value="next_minor" selected>Next minor · V1.4</option><option value="next_major">Next major · V2.0</option><option value="manual">Manual</option></select></label>
+        <label class="label">Target * <select><option value="next_minor" selected>Next minor · V1.4</option><option value="next_major">Next major · V2.0 (approval required)</option><option value="manual">Manual target</option></select></label>
+        <p class="hint">Effective target: V1.4 · stays in draft for direct PDF export. Manual major/minor stay disabled until Manual target is selected.</p>
         <label class="label">Requesting editor * <select><option value="8a1f">Lukas Roth · lukas@vc.de</option></select></label>
-        <button class="btn">Submit candidate</button>
+        <button class="btn">Create release candidate</button>
         <button class="btn outline">Begin revision</button>
         <button class="btn outline">Cancel review</button>
         <button class="btn danger">Mark obsolete</button>
-        <button class="btn outline">View workflow evidence</button>
+        <details open>
+          <summary>Canonical workflow evidence · valid</summary>
+          <p class="hint" style="margin:0.5rem 0 0">Hash-chained lifecycle events (newest first). Fold this disclosure to hide evidence.</p>
+        </details>
         <p class="hint">Document-control-data changes while a review is open invalidate that review. Copy permalink uses workspace + document IDs only.</p>
       </div>
     </details>
