@@ -101,8 +101,12 @@ macOS.
   identity stay visible while sections fold. Section open/closed state is
   session-only Library UI state and survives document switches until the
   Library activity ends. In **Revision cycle**, **Create release candidate**
-  (when available) is listed first, shows the resolved effective target version,
-  keeps Manual major/minor disabled until Manual target is selected, and uses
+  (when available) is listed first, keeps that same title and submit label
+  whether approval is skipped or required, always includes **Review
+  content-check override reason (only when needed)**, shows the resolved
+  effective target version, labels later Next minor options **approval
+  optional**, keeps Manual major/minor disabled until Manual target is
+  selected, and uses
   one foldable **Canonical workflow evidence** disclosure (no separate View
   workflow evidence button). There is no **Begin revision** control: library
   load and document selection reconcile Draft/Released from the draft digest

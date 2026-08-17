@@ -376,7 +376,8 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /data-library-open-source/);
   assert.match(markup, /data-library-open-release/);
   assert.match(markup, /Create release candidate/);
-  assert.match(markup, /Next minor · V1\.3/);
+  assert.match(markup, /Review content-check override reason \(only when needed\)/);
+  assert.match(markup, /Next minor · V1\.3 \(approval optional\)/);
   assert.match(markup, /Next major · V2\.0 \(approval required\)/);
   assert.match(markup, /Effective target: V1\.3 · stays in draft for direct PDF export/);
   assert.match(markup, /data-candidate-manual-field hidden/);
@@ -937,6 +938,9 @@ test("successful empty identity state renders literal placeholders and blocks li
   assert.match(emptyMarkup, /value="&lt;editor&gt;" readonly/);
   assert.match(emptyMarkup, /Candidate submission and release are blocked/);
   assert.match(emptyMarkup, /type="submit" disabled>Create release candidate/);
+  assert.match(emptyMarkup, /Next minor · V1\.0 \(first release\)/);
+  assert.match(emptyMarkup, /Review content-check override reason \(only when needed\)/);
+  assert.doesNotMatch(emptyMarkup, /approval optional/);
 
   const populatedMarkup = libraryMarkup(
     { edit_root: "/srv/Edit", workspace_id: "ws-1" },

@@ -894,7 +894,7 @@ function externalLifecycleMarkup(library, detail) {
     : "";
   const nextMinorOption = preview.first_release
     ? `Next minor · ${nextMinorLabel} (first release)`
-    : `Next minor · ${nextMinorLabel}`;
+    : `Next minor · ${nextMinorLabel} (approval optional)`;
   const nextMajorOption = preview.first_release
     ? `Next major · ${nextMajorLabel} (first release · approval required)`
     : `Next major · ${nextMajorLabel} (approval required)`;

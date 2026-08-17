@@ -31,9 +31,17 @@
    effective date, the requesting workflow person, and a SHA-256 digest of the
    current draft. The Library **Revision cycle** candidate form is titled
    **Create release candidate** and explains that it records the candidate in
-   this workspace (not an external “submit” destination). The form defaults its
+   this workspace (not an external “submit” destination). That title and submit
+   label stay **Create release candidate** whether the selected target skips
+   approval or opens review. The form always includes **Review content-check
+   override reason (only when needed)** for both approval-optional and
+   approval-required targets. The form defaults its
    target-version control to **Next minor** and always shows the **effective
-   target version** that the selected mode resolves to. **Manual major** and
+   target version** that the selected mode resolves to. After the first
+   release, the Next minor option is labeled **approval optional**; Next major
+   remains **approval required**. First-release Next minor stays
+   `Next minor · V1.0 (first release)` because `V1.0` still requires approval.
+   **Manual major** and
    **Manual minor** stay disabled until **Manual target** is selected. The first
    release still resolves to `V1.0`. The requester identity and email are
    snapshotted with the release candidate. The first release proposes `V1.0`.

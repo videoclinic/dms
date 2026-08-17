@@ -130,9 +130,12 @@
     active candidate), **Mark obsolete**, and **Cancel review** are available
     from the CAP-0006 selection pane (single selection) when preconditions hold;
     disabled states explain why. In **Revision cycle**, the candidate form is
-    listed first when available, shows the resolved effective target version for
-    Next minor / Next major / Manual, and keeps Manual major/minor disabled
-    unless Manual target is selected. Canonical workflow evidence is a single
+    listed first when available, uses **Create release candidate** whether the
+    selected target skips approval or opens review, always includes **Review
+    content-check override reason (only when needed)**, shows the resolved
+    effective target version for Next minor / Next major / Manual, labels later
+    Next minor options **approval optional**, and keeps Manual major/minor
+    disabled unless Manual target is selected. Canonical workflow evidence is a single
     foldable disclosure in that section. There is no **Begin revision** action:
     Draft/Released follows CAP-0002 digest rules. These actions are not offered
     as multi-select batch actions unless a future CAP explicitly allows bulk
