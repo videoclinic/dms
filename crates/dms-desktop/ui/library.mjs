@@ -828,21 +828,60 @@ function treeMarkup(tree, currentPath, expandedFolders) {
   return `<ul class="tree-root" role="tree">${buildFolderTree(tree).map((node) => nodeMarkup(node, 1)).join("")}</ul>`;
 }
 
+const LIBRARY_COLUMNS = [
+  { key: "col-name", label: "Name", defaultWidth: 220, minWidth: 80 },
+  { key: "col-title", label: "Title", defaultWidth: 180, minWidth: 80 },
+  { key: "col-lib-state", label: "Library state", defaultWidth: 130, minWidth: 80 },
+  { key: "col-lifecycle", label: "Lifecycle", defaultWidth: 110, minWidth: 70 },
+  { key: "col-next-review", label: "Next review", defaultWidth: 120, minWidth: 80 },
+  { key: "col-editor", label: "Editor", defaultWidth: 140, minWidth: 80 },
+  { key: "col-approver", label: "Approver", defaultWidth: 140, minWidth: 80 },
+  { key: "col-confidentiality", label: "Confidentiality", defaultWidth: 130, minWidth: 80 },
+];
+
+function libraryTableHeaders(library) {
+  const widths = library.column_widths ?? {};
+  return LIBRARY_COLUMNS.map((col) => {
+    const width = widths[col.key] ?? col.defaultWidth;
+    return `<th class="${escapeHtml(col.key)}" style="width:${width}px" data-col-resize="${escapeHtml(col.key)}" data-col-min-width="${col.minWidth}">${escapeHtml(col.label)}<span class="col-resize-grip" role="separator" aria-orientation="vertical" aria-label="Resize ${escapeHtml(col.label)} column"></span></th>`;
+  }).join("");
+}
+
+export function setColumnWidth(library, colKey, newWidth) {
+  const widths = { ...library.column_widths };
+  widths[colKey] = newWidth;
+  return { ...library, column_widths: widths };
+}
+
 function rowsMarkup(library, entries, emptyMessage) {
   const filteredEntries = filterLibraryEntries(entries, library);
   const allEntries = sortLibraryEntries(filteredEntries, library.sort);
   const page = paginateLibraryEntries(allEntries, library.page_size, library.page);
   const rows = page.entries.length === 0
-    ? `<tr><td colspan="5" class="empty-table">${escapeHtml(entries.length > 0 ? "No entries match Show in folder." : emptyMessage)}</td></tr>`
+    ? `<tr><td colspan="8" class="empty-table">${escapeHtml(entries.length > 0 ? "No entries match Show in folder." : emptyMessage)}</td></tr>`
     : page.entries.map((entry) => {
         const path = normalizeLibraryPath(entry.relative_path);
         const selected = library.selection.includes(path) ? " selected" : "";
-        return `<tr class="library-row${selected}${membershipKind(entry) === "lost_source" ? " lost-source" : ""}" tabindex="0" data-library-entry="${escapeHtml(path)}" data-library-kind="${escapeHtml(entry.kind)}"><td><span class="entry-name">${libraryIcon(entry.kind === "folder" ? "folder" : "file")}<span>${escapeHtml(entry.name)}</span>${entry.kind === "folder" ? counterChipsMarkup(entry.folder_counters) : ""}</span></td><td>${escapeHtml(entry.document?.control?.title ?? "—")}</td><td>${escapeHtml(membershipLabel(entry))}</td><td>${escapeHtml(lifecycleLabel(entry))}</td><td>${escapeHtml(path)}</td></tr>`;
+        const isFile = entry.kind === "file";
+        const doc = entry.document;
+        const nextReview = isFile && doc?.next_review_due
+            ? `<span>${escapeHtml(doc.next_review_due)}</span>`
+            : "";
+        const editor = isFile && doc?.editor
+            ? `<span>${escapeHtml(doc.editor)}</span>`
+            : "";
+        const approver = isFile && doc?.approver
+            ? `<span>${escapeHtml(doc.approver)}</span>`
+            : "";
+        const confidentiality = isFile && doc?.confidentiality
+            ? `<span>${escapeHtml(doc.confidentiality)}</span>`
+            : "";
+        return `<tr class="library-row${selected}${membershipKind(entry) === "lost_source" ? " lost-source" : ""}" tabindex="0" data-library-entry="${escapeHtml(path)}" data-library-kind="${escapeHtml(entry.kind)}"><td><span class="entry-name">${libraryIcon(entry.kind === "folder" ? "folder" : "file")}<span>${escapeHtml(entry.name)}</span>${entry.kind === "folder" ? counterChipsMarkup(entry.folder_counters) : ""}</span></td><td>${escapeHtml(entry.document?.control?.title ?? (isFile ? "—" : ""))}</td><td>${escapeHtml(membershipLabel(entry))}</td><td>${escapeHtml(lifecycleLabel(entry))}</td><td>${nextReview}</td><td>${editor}</td><td>${approver}</td><td>${confidentiality}</td></tr>`;
       }).join("");
   const paging = page.total > library.page_size
     ? `<button class="text-button" type="button" data-library-page="previous" ${page.page === 0 ? "disabled" : ""}>Previous</button><span>Page ${page.page + 1} of ${page.page_count}</span><button class="text-button" type="button" data-library-page="next" ${page.page + 1 === page.page_count ? "disabled" : ""}>Next</button>`
     : `<span>${page.total} entries</span>`;
-  return `${rows}<tr class="pagination-row"><td colspan="5"><div><label>Rows per page <select data-library-page-size><option value="10" ${library.page_size === 10 ? "selected" : ""}>10</option><option value="25" ${library.page_size === 25 ? "selected" : ""}>25</option><option value="50" ${library.page_size === 50 ? "selected" : ""}>50</option><option value="100" ${library.page_size === 100 ? "selected" : ""}>100</option></select></label><span>${paging}</span></div></td></tr>`;
+  return `${rows}<tr class="pagination-row"><td colspan="8"><div><label>Rows per page <select data-library-page-size><option value="10" ${library.page_size === 10 ? "selected" : ""}>10</option><option value="25" ${library.page_size === 25 ? "selected" : ""}>25</option><option value="50" ${library.page_size === 50 ? "selected" : ""}>50</option><option value="100" ${library.page_size === 100 ? "selected" : ""}>100</option></select></label><span>${paging}</span></div></td></tr>`;
 }
 
 function workflowEventMarkup(event) {
@@ -1073,7 +1112,7 @@ export function libraryMarkup(workspace, activity, library, error = "") {
           ${visibilityToggle("show_unsupported_files", "Unsupported files")}
           ${visibilityToggle("show_moved_documents", "(Re-)Moved documents")}
         </div>
-        <div class="table-scroll"><table><thead><tr><th>Name</th><th>Title</th><th>Library state</th><th>Lifecycle</th><th>Relative path</th></tr></thead><tbody>${rowsMarkup(library, entries, library.results === null ? "This folder has no visible entries." : "No files match this search.")}</tbody></table></div>
+        <div class="table-scroll"><table><thead><tr>${libraryTableHeaders(library)}</tr></thead><tbody>${rowsMarkup(library, entries, library.results === null ? "This folder has no visible entries." : "No files match this search.")}</tbody></table></div>
       </section>
       <div class="library-splitter" role="separator" aria-orientation="vertical" aria-label="Resize document details" aria-valuemin="280" aria-valuemax="640" aria-valuenow="${library.detail_width}" tabindex="0" data-library-splitter></div>
       <aside class="selection-pane" aria-live="polite" style="width:${library.detail_width}px">${selectionMarkup(library)}</aside>

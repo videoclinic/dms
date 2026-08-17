@@ -16,6 +16,7 @@ import {
   resizeLibraryDetailWidth,
   resizeLibraryTreeWidth,
   selectedEntries,
+  setColumnWidth,
   setSelectionSectionOpen,
   bindReviewScheduleForm,
   bindCandidateTargetForm,
@@ -2477,6 +2478,7 @@ function handleKeyDown(event) {
 
 let libraryResize = null;
 let treeResize = null;
+let colResize = null;
 
 function libraryDetailMaximum(splitter) {
   const grid = splitter.closest(".library-grid");
@@ -2518,6 +2520,26 @@ function handlePointerDown(event) {
     };
     return;
   }
+  const grip = event.target.closest(".col-resize-grip");
+  if (grip) {
+    event.preventDefault();
+    const th = grip.closest("th");
+    const colKey = th?.dataset.colResize;
+    const minWidth = Number(th?.dataset.colMinWidth) ?? 60;
+    if (colKey) {
+      grip.setPointerCapture?.(event.pointerId);
+      colResize = {
+        pointerId: event.pointerId,
+        grip,
+        colKey,
+        minWidth,
+        startX: event.clientX,
+        startWidth: th.offsetWidth,
+        th,
+      };
+    }
+    return;
+  }
 }
 
 function handlePointerMove(event) {
@@ -2547,6 +2569,12 @@ function handlePointerMove(event) {
     treeResize.splitter.setAttribute("aria-valuenow", String(width));
     return;
   }
+  if (colResize && event.pointerId === colResize.pointerId) {
+    const delta = event.clientX - colResize.startX;
+    const newWidth = Math.max(colResize.minWidth, colResize.startWidth + delta);
+    colResize.th.style.width = `${newWidth}px`;
+    return;
+  }
 }
 
 function finishLibraryResize(event) {
@@ -2558,6 +2586,16 @@ function finishLibraryResize(event) {
   if (treeResize && event.pointerId === treeResize.pointerId) {
     treeResize.splitter.releasePointerCapture?.(event.pointerId);
     treeResize = null;
+    return;
+  }
+  if (colResize && event.pointerId === colResize.pointerId) {
+    colResize.grip.releasePointerCapture?.(event.pointerId);
+    const finalWidth = Number(colResize.th.style.width) || colResize.startWidth;
+    appState = {
+      ...appState,
+      library: setColumnWidth(appState.library, colResize.colKey, finalWidth),
+    };
+    colResize = null;
     return;
   }
 }

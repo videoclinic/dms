@@ -45,6 +45,14 @@ pub struct LibraryDocumentSummary {
     pub id: Uuid,
     pub lifecycle: Lifecycle,
     pub control: DocumentControl,
+    #[serde(default)]
+    pub next_review_due: Option<chrono::NaiveDate>,
+    #[serde(default)]
+    pub editor: Option<String>,
+    #[serde(default)]
+    pub approver: Option<String>,
+    #[serde(default)]
+    pub confidentiality: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -637,12 +645,32 @@ impl Workspace {
             relative_path,
             kind: LibraryEntryKind::File,
             membership: Some(membership),
-            document: document.map(|document| LibraryDocumentSummary {
-                id: document.id,
-                lifecycle: document.lifecycle,
-                control: document.control.clone(),
-            }),
+            document: document.map(|document| self.document_summary(document)),
             folder_counters: None,
+        }
+    }
+
+    fn document_summary(&self, document: &Document) -> LibraryDocumentSummary {
+        let id = document.id;
+        let roles = self.effective_workflow_roles(id).ok();
+        let conf = self.effective_confidentiality(id).ok();
+        let editor = roles
+            .as_ref()
+            .and_then(|r| r.editor.as_ref())
+            .and_then(|r| r.display_name.clone());
+        let approver = roles
+            .as_ref()
+            .and_then(|r| r.approver.as_ref())
+            .and_then(|r| r.display_name.clone());
+        let confidentiality = conf.map(|c| c.label);
+        LibraryDocumentSummary {
+            id: document.id,
+            lifecycle: document.lifecycle,
+            control: document.control.clone(),
+            next_review_due: document.next_review_due,
+            editor,
+            approver,
+            confidentiality,
         }
     }
 
@@ -684,11 +712,7 @@ impl Workspace {
                 membership: Some(LibraryMembership::LostSource {
                     document_id: document.id,
                 }),
-                document: Some(LibraryDocumentSummary {
-                    id: document.id,
-                    lifecycle: document.lifecycle,
-                    control: document.control.clone(),
-                }),
+                document: Some(self.document_summary(document)),
                 folder_counters: None,
             });
         }

@@ -413,7 +413,12 @@ test("library markup separates source Name from DMS Title and keeps actions in t
     library,
   );
 
-  assert.match(markup, /<th>Name<\/th><th>Title<\/th>/);
+  assert.match(markup, /<th class="col-name"[^>]*>Name/);
+  assert.match(markup, /<th class="col-title"[^>]*>Title/);
+  assert.match(markup, /<th class="col-next-review"[^>]*>Next review/);
+  assert.match(markup, /<th class="col-editor"[^>]*>Editor/);
+  assert.match(markup, /<th class="col-approver"[^>]*>Approver/);
+  assert.match(markup, /<th class="col-confidentiality"[^>]*>Confidentiality/);
   assert.match(markup, /Handbook\.md/);
   assert.match(markup, /Employee handbook/);
   assert.match(markup, /data-library-open-source/);

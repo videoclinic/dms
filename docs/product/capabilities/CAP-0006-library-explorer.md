@@ -74,8 +74,13 @@
      **Lost source** in the lifecycle/state column. The configured CAP-0007
      template never appears in Library rows, counters, searches, selection,
      batch-add, lifecycle, notes, or permalink actions. A registered document
-     additionally shows its DMS-managed document title and control data in a
-     separate **Title** field; that title never replaces the source file name.
+ additionally shows its DMS-managed document title and control data in a
+ separate **Title** field; that title never replaces the source file name.
+ Each file row also states the document's effective workflow metadata in
+ its own columns — **Next review** (next review due date), **Editor**,
+ **Approver**, and **Confidentiality** (effective label); folder rows
+ carry no workflow metadata. All table columns are pointer-resizable for
+ the active Library session (session-only widths, enforced minimums).
      Primary-click or Enter on a folder row opens that folder directly without
      first selecting it or loading document detail. File rows retain single- and
      modifier-assisted multi-selection. Selecting a tree node or breadcrumb
@@ -270,3 +275,4 @@
 - Claude handoff: [`CAP-0018-claude-desktop-change-assistance.md`](CAP-0018-claude-desktop-change-assistance.md)
 - Permalinks: [`CAP-0020-document-permalinks.md`](CAP-0020-document-permalinks.md)
 - Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)
+- Workflow metadata columns and resizable table columns: [`../../changes/archive/CHG-0022-library-table-workflow-columns.md`](../../changes/archive/CHG-0022-library-table-workflow-columns.md)

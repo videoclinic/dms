@@ -274,8 +274,20 @@ button { cursor: pointer; }
 .library-visibility button { padding: 5px 9px; color: #536571; background: white; border: 1px solid #bdc9d2; border-radius: 999px; font: inherit; font-size: 12px; }
 .library-visibility button[aria-pressed="true"] { color: #173e56; background: #dcebf5; border-color: #7da2ba; }
 .table-scroll { min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
-.table-scroll table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.table-scroll th { position: sticky; z-index: 1; top: 0; padding: 8px 10px; color: #5f6f7b; background: #f8fafb; border-bottom: 1px solid #dfe5ea; text-align: left; white-space: nowrap; }
+.table-scroll table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+.table-scroll th { position: sticky; z-index: 1; top: 0; padding: 8px 10px; color: #5f6f7b; background: #f8fafb; border-bottom: 1px solid #dfe5ea; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid #eef2f4; }
+.table-scroll th:last-child { border-right: 0; }
+.table-scroll .col-name { width: 220px; min-width: 80px; }
+.table-scroll .col-title { width: 180px; min-width: 80px; }
+.table-scroll .col-lib-state { width: 130px; min-width: 80px; }
+.table-scroll .col-lifecycle { width: 110px; min-width: 70px; }
+.table-scroll .col-next-review { width: 120px; min-width: 80px; }
+.table-scroll .col-editor { width: 140px; min-width: 80px; }
+.table-scroll .col-approver { width: 140px; min-width: 80px; }
+.table-scroll .col-confidentiality { width: 130px; min-width: 80px; }
+.table-scroll th { position: relative; }
+.col-resize-grip { position: absolute; top: 0; right: 0; width: 7px; height: 100%; cursor: col-resize; z-index: 2; }
+.col-resize-grip:hover { background: rgba(169, 192, 207, 0.5); }
 .table-scroll td { max-width: 280px; padding: 9px 10px; border-bottom: 1px solid #edf0f2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .library-row { outline: none; }
 .library-row:hover { background: #f1f6f9; }
