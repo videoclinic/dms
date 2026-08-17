@@ -75,9 +75,12 @@ macOS.
 - Never expose the configured Markdown Word-template asset in Library rows,
   counters, selections, notes, lifecycle actions, or permalinks. Configuration →
   Document defaults is its only management surface.
-- The Library centre/details divider resizes the selection pane only for the
-  current session, preserves at least 360 px for folder contents, and restores
-  the width at drag start when cancelled with `Escape`.
+- The Library folder/contents divider resizes the folder tree only for the
+  current session, preserves at least 170 px for the tree, and restores
+  the width at drag start when cancelled with `Escape`. The centre/details
+  divider resizes the selection pane only for the current session, preserves
+  at least 360 px for folder contents, and restores the width at drag start
+  when cancelled with `Escape`.
 - The Library selection pane owns add/unregister/reassociate/permalink controls,
   document-control editing, the document confidentiality override, candidate
   creation, review decision, release, local lifecycle actions, and canonical

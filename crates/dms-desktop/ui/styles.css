@@ -240,7 +240,6 @@ button { cursor: pointer; }
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  resize: horizontal;
   background: #f7f9fa;
   border-right: 1px solid #dfe5ea;
 }
@@ -293,6 +292,7 @@ button { cursor: pointer; }
 .pagination-row .button:disabled { cursor: default; opacity: .4; }
 .library-splitter { width: 7px; flex: 0 0 7px; cursor: col-resize; touch-action: none; background: #eef2f4; border-left: 1px solid #dfe5ea; border-right: 1px solid #dfe5ea; }
 .library-splitter:hover, .library-splitter:focus-visible { background: #a9c0cf; outline: none; }
+.library-splitter.tree-splitter { border-left: 0; }
 .selection-pane { width: 420px; min-width: 280px; max-width: 640px; min-height: 0; flex: 0 0 auto; display: flex; flex-direction: column; padding: 18px; overflow: hidden; background: #fbfcfd; }
 .selection-pane h3 { margin: 8px 0 4px; font-size: 18px; overflow-wrap: anywhere; }
 .selection-pane p { color: #61717d; line-height: 1.45; }

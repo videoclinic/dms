@@ -14,6 +14,7 @@ import {
   membershipKind,
   normalizeLibraryPath,
   resizeLibraryDetailWidth,
+  resizeLibraryTreeWidth,
   selectedEntries,
   setSelectionSectionOpen,
   bindReviewScheduleForm,
@@ -2416,7 +2417,8 @@ function handleChange(event) {
 }
 
 function handleKeyDown(event) {
-  const splitter = event.target.closest("[data-library-splitter]");
+  const detailSplitter = event.target.closest("[data-library-splitter]");
+  const treeSplitter = event.target.closest("[data-tree-splitter]");
   if (libraryResize && event.key === "Escape") {
     event.preventDefault();
     const { startWidth, pointerId, splitter: activeSplitter } = libraryResize;
@@ -2427,18 +2429,42 @@ function handleKeyDown(event) {
     document.querySelector("[data-library-splitter]")?.focus();
     return;
   }
-  if (splitter && ["ArrowLeft", "ArrowRight"].includes(event.key)) {
+  if (treeResize && event.key === "Escape") {
+    event.preventDefault();
+    const { startWidth, pointerId, splitter: activeSplitter } = treeResize;
+    appState = { ...appState, library: { ...appState.library, tree_width: startWidth } };
+    activeSplitter.releasePointerCapture?.(pointerId);
+    treeResize = null;
+    render(appState);
+    document.querySelector("[data-tree-splitter]")?.focus();
+    return;
+  }
+  if (detailSplitter && ["ArrowLeft", "ArrowRight"].includes(event.key)) {
     event.preventDefault();
     const delta = event.key === "ArrowLeft" ? 20 : -20;
     const width = resizeLibraryDetailWidth(
       appState.library.detail_width,
       0,
       -delta,
-      libraryDetailMaximum(splitter),
+      libraryDetailMaximum(detailSplitter),
     );
     appState = { ...appState, library: { ...appState.library, detail_width: width } };
     render(appState);
     document.querySelector("[data-library-splitter]")?.focus();
+    return;
+  }
+  if (treeSplitter && ["ArrowLeft", "ArrowRight"].includes(event.key)) {
+    event.preventDefault();
+    const delta = event.key === "ArrowRight" ? 20 : -20;
+    const width = resizeLibraryTreeWidth(
+      appState.library.tree_width,
+      0,
+      delta,
+      libraryTreeMaximum(treeSplitter),
+    );
+    appState = { ...appState, library: { ...appState.library, tree_width: width } };
+    render(appState);
+    document.querySelector("[data-tree-splitter]")?.focus();
     return;
   }
   if (event.key !== "Enter") return;
@@ -2450,6 +2476,7 @@ function handleKeyDown(event) {
 }
 
 let libraryResize = null;
+let treeResize = null;
 
 function libraryDetailMaximum(splitter) {
   const grid = splitter.closest(".library-grid");
@@ -2458,38 +2485,81 @@ function libraryDetailMaximum(splitter) {
   return Math.min(640, Math.max(280, grid.clientWidth - tree.offsetWidth - splitter.offsetWidth - 360));
 }
 
+function libraryTreeMaximum(splitter) {
+  const grid = splitter.closest(".library-grid");
+  if (!grid) return 420;
+  return Math.min(420, Math.max(170, grid.clientWidth - splitter.offsetWidth - 640));
+}
+
 function handlePointerDown(event) {
-  const splitter = event.target.closest("[data-library-splitter]");
-  if (!splitter) return;
-  event.preventDefault();
-  splitter.setPointerCapture?.(event.pointerId);
-  libraryResize = {
-    pointerId: event.pointerId,
-    startX: event.clientX,
-    startWidth: appState.library.detail_width,
-    splitter,
-    maximum: libraryDetailMaximum(splitter),
-  };
+  const detailSplitter = event.target.closest("[data-library-splitter]");
+  if (detailSplitter) {
+    event.preventDefault();
+    detailSplitter.setPointerCapture?.(event.pointerId);
+    libraryResize = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startWidth: appState.library.detail_width,
+      splitter: detailSplitter,
+      maximum: libraryDetailMaximum(detailSplitter),
+    };
+    return;
+  }
+  const treeSplitter = event.target.closest("[data-tree-splitter]");
+  if (treeSplitter) {
+    event.preventDefault();
+    treeSplitter.setPointerCapture?.(event.pointerId);
+    treeResize = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startWidth: appState.library.tree_width,
+      splitter: treeSplitter,
+      maximum: libraryTreeMaximum(treeSplitter),
+    };
+    return;
+  }
 }
 
 function handlePointerMove(event) {
-  if (!libraryResize || event.pointerId !== libraryResize.pointerId) return;
-  const width = resizeLibraryDetailWidth(
-    libraryResize.startWidth,
-    libraryResize.startX,
-    event.clientX,
-    libraryResize.maximum,
-  );
-  appState = { ...appState, library: { ...appState.library, detail_width: width } };
-  const pane = document.querySelector(".selection-pane");
-  if (pane) pane.style.width = `${width}px`;
-  libraryResize.splitter.setAttribute("aria-valuenow", String(width));
+  if (libraryResize && event.pointerId === libraryResize.pointerId) {
+    const width = resizeLibraryDetailWidth(
+      libraryResize.startWidth,
+      libraryResize.startX,
+      event.clientX,
+      libraryResize.maximum,
+    );
+    appState = { ...appState, library: { ...appState.library, detail_width: width } };
+    const pane = document.querySelector(".selection-pane");
+    if (pane) pane.style.width = `${width}px`;
+    libraryResize.splitter.setAttribute("aria-valuenow", String(width));
+    return;
+  }
+  if (treeResize && event.pointerId === treeResize.pointerId) {
+    const width = resizeLibraryTreeWidth(
+      treeResize.startWidth,
+      treeResize.startX,
+      event.clientX,
+      treeResize.maximum,
+    );
+    appState = { ...appState, library: { ...appState.library, tree_width: width } };
+    const tree = document.querySelector(".folder-tree");
+    if (tree) tree.style.width = `${width}px`;
+    treeResize.splitter.setAttribute("aria-valuenow", String(width));
+    return;
+  }
 }
 
 function finishLibraryResize(event) {
-  if (!libraryResize || event.pointerId !== libraryResize.pointerId) return;
-  libraryResize.splitter.releasePointerCapture?.(event.pointerId);
-  libraryResize = null;
+  if (libraryResize && event.pointerId === libraryResize.pointerId) {
+    libraryResize.splitter.releasePointerCapture?.(event.pointerId);
+    libraryResize = null;
+    return;
+  }
+  if (treeResize && event.pointerId === treeResize.pointerId) {
+    treeResize.splitter.releasePointerCapture?.(event.pointerId);
+    treeResize = null;
+    return;
+  }
 }
 
 let appState = createInitialState();

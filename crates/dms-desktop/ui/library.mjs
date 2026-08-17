@@ -13,6 +13,16 @@ export function resizeLibraryDetailWidth(startWidth, startX, currentX, maximum =
   return clampLibraryDetailWidth(Number(startWidth) - (Number(currentX) - Number(startX)), maximum);
 }
 
+export function clampLibraryTreeWidth(width, maximum = 420) {
+  const numeric = Number(width);
+  const boundedMaximum = Math.max(170, Math.min(420, Number(maximum) || 420));
+  return Math.min(boundedMaximum, Math.max(170, Number.isFinite(numeric) ? numeric : 230));
+}
+
+export function resizeLibraryTreeWidth(startWidth, startX, currentX, maximum = 420) {
+  return clampLibraryTreeWidth(Number(startWidth) + (Number(currentX) - Number(startX)), maximum);
+}
+
 export const DEFAULT_SELECTION_OPEN = {
   control: true,
   schedule: true,
@@ -63,6 +73,7 @@ export function createLibraryState() {
     show_unsupported_files: true,
     show_moved_documents: true,
     detail_width: 420,
+    tree_width: 230,
     loading: false,
   };
 }
@@ -1050,7 +1061,8 @@ export function libraryMarkup(workspace, activity, library, error = "") {
     </div>
     ${error ? `<p class="library-error" role="alert">${escapeHtml(error)}</p>` : ""}
     <div class="library-grid">
-      <aside class="folder-tree" aria-label="Library folders">${treeMarkup(library.tree, folder, library.expanded_folders)}</aside>
+      <aside class="folder-tree" aria-label="Library folders" style="width:${library.tree_width}px">${treeMarkup(library.tree, folder, library.expanded_folders)}</aside>
+      <div class="library-splitter tree-splitter" role="separator" aria-orientation="vertical" aria-label="Resize folder tree" aria-valuemin="170" aria-valuemax="420" aria-valuenow="${library.tree_width}" tabindex="0" data-tree-splitter></div>
       <section class="folder-contents">
         <header><div><span class="eyebrow">${library.results === null ? "Current folder" : "Explorer search"}</span><h2>${escapeHtml(heading)}</h2></div><span>${visibleTotal} visible entries</span></header>
         ${searchSummary}

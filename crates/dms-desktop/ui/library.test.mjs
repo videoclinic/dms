@@ -10,6 +10,7 @@ import {
   candidateTargetHelpText,
   chooseReassociateSourceRequest,
   clampLibraryDetailWidth,
+  clampLibraryTreeWidth,
   createLibraryState,
   confidentialityUpdateRequest,
   documentControlUpdateRequest,
@@ -26,6 +27,7 @@ import {
   paginateLibraryEntries,
   previewTargetVersions,
   resizeLibraryDetailWidth,
+  resizeLibraryTreeWidth,
   reviewScheduleBaseline,
   reviewScheduleIsDirty,
   selectedEntries,
@@ -188,6 +190,11 @@ test("detail width is bounded per session and inline SVG icons stay self-contain
   assert.equal(clampLibraryDetailWidth(600, 440), 440);
   assert.equal(resizeLibraryDetailWidth(420, 100, 60), 460);
   assert.equal(createLibraryState().detail_width, 420);
+  assert.equal(clampLibraryTreeWidth(100), 170);
+  assert.equal(clampLibraryTreeWidth(500), 420);
+  assert.equal(clampLibraryTreeWidth(300, 250), 250);
+  assert.equal(resizeLibraryTreeWidth(230, 100, 140), 270);
+  assert.equal(createLibraryState().tree_width, 230);
   for (const icon of ["folder", "file", "chevron_right", "chevron_down", "back", "forward", "up", "refresh"]) {
     assert.match(libraryIcon(icon), /^<svg class="library-icon"[^>]*aria-hidden="true"/);
   }
@@ -220,7 +227,9 @@ test("search results use the same visibility state instead of changing folder co
   assert.doesNotMatch(markup, /Policies\/Current\.md/);
   assert.match(markup, /aria-pressed="false">Draft documents/);
   assert.match(markup, /data-library-splitter/);
+  assert.match(markup, /data-tree-splitter/);
   assert.match(markup, /class="selection-pane"[^>]*width:420px/);
+  assert.match(markup, /class="folder-tree"[^>]*width:230px/);
 });
 
 test("multi-selection exposes homogeneous membership without losing exact identities", () => {
