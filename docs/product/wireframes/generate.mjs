@@ -69,8 +69,8 @@ const CAPS = [
     file: "CAP-0002-document-lifecycle",
     title: "Document lifecycle",
     nav: "library",
-    subtitle: "Next minor is the default target. Major changes require approval; minor changes release directly and notify the assigned approver after publication.",
-    actions: ["Create release candidate", "Release V1.4 minor version", "Preview V2.0 review request"],
+    subtitle: "Next minor is the default target and is labeled approval optional. Major changes require approval; minor changes release directly and notify the assigned approver after publication.",
+    actions: ["Create release candidate", "Release V1.4 minor version"],
     body: `
       <section class="card">
         <div class="row between">
@@ -106,7 +106,7 @@ const CAPS = [
             ["Effective date *", "2025-08-15 <span class=\"muted\">(captured only by successful release)</span>"],
             ["Owner *", "Lukas Roth · lukas@vc.de · object ID 8a1f…"],
             ["Requesting editor *", "Lukas Roth · object ID 8a1f…"],
-            ["Target version *", "Next minor V1.4 <span class=\"muted\">(default)</span> · Next major V2.0 · Manual V&lt;major&gt;.&lt;minor&gt;"],
+            ["Target version *", "Next minor V1.4 <span class=\"muted\">(default · approval optional)</span> · Next major V2.0 <span class=\"muted\">(approval required)</span> · Manual V&lt;major&gt;.&lt;minor&gt;"],
             ["Manual validation", "<span class=\"muted\">Greater unused target required when manual is selected</span>"],
             ["Candidate", "V1.4 <span class=\"muted\">(minor release; no approval required)</span>"],
             ["Draft SHA-256", "<span class=\"muted\">(computed from current draft bytes before release)</span>"],
@@ -118,9 +118,11 @@ const CAPS = [
             <label class="label">Effective date * <input type="date" value="2025-08-15" required></label>
             <label class="label">Owner * <select required><option value="8a1f">Lukas Roth · lukas@vc.de</option><option value="41c2">Anna Berg · anna@vc.de</option></select></label>
             <label class="label">Requesting editor * <select required><option value="8a1f">Lukas Roth · lukas@vc.de</option></select></label>
-            <label class="label">Target * <select required><option value="next_minor" selected>Next minor · V1.4</option><option value="next_major">Next major · V2.0 (approval required)</option><option value="manual">Manual target</option></select></label>
+            <label class="label">Target * <select required><option value="next_minor" selected>Next minor · V1.4 (approval optional)</option><option value="next_major">Next major · V2.0 (approval required)</option><option value="manual">Manual target</option></select></label>
             <p class="hint">Effective target: V1.4 · stays in draft for direct PDF export. Manual major/minor stay disabled until Manual target is selected.</p>
-            <div class="row gap-2" style="flex-wrap:wrap"><button class="btn outline">Preview V2.0 review request</button><button class="btn">Create release candidate · V1.4</button></div>
+            <label class="label">Changelog * <textarea required>Updated retention table to 24 months.</textarea></label>
+            <label class="label">Review content-check override reason (only when needed) <textarea></textarea></label>
+            <div class="row gap-2" style="flex-wrap:wrap"><button class="btn">Create release candidate</button></div>
           </form>
           <p class="hint">A successful empty people import shows literal <code>&lt;owner&gt;</code> and <code>&lt;editor&gt;</code> placeholders here and blocks submission. Minor release snapshots the requested profile, effective date, changelog, mode, editor, and approver; it stays in <code>draft</code> until successful atomic export.</p>
         </section>
@@ -1299,9 +1301,11 @@ function documentControlDataSelectionPane() {
         <p class="muted" style="font-size:0.85rem;margin:0">Create a release candidate here in the workspace (not an external upload). Lifecycle is <code>released</code> while the draft matches the current release digest, and becomes <code>draft</code> when the draft changes or was never released. PDFs and history remain preserved.</p>
         <strong>Create release candidate</strong>
         <label class="label">Effective date * <input type="date" value="2025-08-15" required></label>
-        <label class="label">Target * <select><option value="next_minor" selected>Next minor · V1.4</option><option value="next_major">Next major · V2.0 (approval required)</option><option value="manual">Manual target</option></select></label>
+        <label class="label">Target * <select><option value="next_minor" selected>Next minor · V1.4 (approval optional)</option><option value="next_major">Next major · V2.0 (approval required)</option><option value="manual">Manual target</option></select></label>
         <p class="hint">Effective target: V1.4 · stays in draft for direct PDF export. Manual major/minor stay disabled until Manual target is selected.</p>
         <label class="label">Requesting editor * <select><option value="8a1f">Lukas Roth · lukas@vc.de</option></select></label>
+        <label class="label">Changelog * <textarea required>Updated retention table to 24 months.</textarea></label>
+        <label class="label">Review content-check override reason (only when needed) <textarea></textarea></label>
         <button class="btn">Create release candidate</button>
         <button class="btn outline">Cancel review</button>
         <button class="btn danger">Mark obsolete</button>

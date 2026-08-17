@@ -270,7 +270,7 @@ tr:last-child td { border-bottom: 0; }
       <div class="grow"></div>
       <span class="ham-note">☰ when menu folded</span>
       <span class="badge ok">Workspace healthy</span>
-      <div class="header-actions"><button class="btn outline bookmark-btn" title="Bookmark this view" aria-pressed="false">☆ Bookmark this view</button><button class="btn">Create release candidate</button><button class="btn outline">Release V1.4 minor version</button><button class="btn outline">Preview V2.0 review request</button></div>
+      <div class="header-actions"><button class="btn outline bookmark-btn" title="Bookmark this view" aria-pressed="false">☆ Bookmark this view</button><button class="btn">Create release candidate</button><button class="btn outline">Release V1.4 minor version</button></div>
     </header>
     <main class="content">
       <div class="cap-head">
@@ -279,7 +279,7 @@ tr:last-child td { border-bottom: 0; }
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Next minor is the default target. Major changes require approval; minor changes release directly and notify the assigned approver after publication.</p>
+      <p class="subtitle">Next minor is the default target and is labeled approval optional. Major changes require approval; minor changes release directly and notify the assigned approver after publication.</p>
       
       <section class="card">
         <div class="row between">
@@ -300,14 +300,16 @@ tr:last-child td { border-bottom: 0; }
       <div class="grid-2">
         <section class="card">
           <h3 class="card-title">Release candidate (required fields)</h3>
-          <dl class="kv"><div><dt>Changelog *</dt><dd>Updated retention table to 24 months.</dd></div><div><dt>Effective date *</dt><dd>2025-08-15 <span class="muted">(captured only by successful release)</span></dd></div><div><dt>Owner *</dt><dd>Lukas Roth · lukas@vc.de · object ID 8a1f…</dd></div><div><dt>Requesting editor *</dt><dd>Lukas Roth · object ID 8a1f…</dd></div><div><dt>Target version *</dt><dd>Next minor V1.4 <span class="muted">(default)</span> · Next major V2.0 · Manual V&lt;major&gt;.&lt;minor&gt;</dd></div><div><dt>Manual validation</dt><dd><span class="muted">Greater unused target required when manual is selected</span></dd></div><div><dt>Candidate</dt><dd>V1.4 <span class="muted">(minor release; no approval required)</span></dd></div><div><dt>Draft SHA-256</dt><dd><span class="muted">(computed from current draft bytes before release)</span></dd></div><div><dt>Released by</dt><dd>Lukas Roth <lukas@vc.de> <span class="muted">(snapshotted on release)</span></dd></div><div><dt>Approver notification</dt><dd>Anna Berg <anna@vc.de> · effective approver snapshot</dd></div><div><dt>Approval rule</dt><dd>V1.0 and targets that increase the major component require Entra-verified approval</dd></div></dl>
+          <dl class="kv"><div><dt>Changelog *</dt><dd>Updated retention table to 24 months.</dd></div><div><dt>Effective date *</dt><dd>2025-08-15 <span class="muted">(captured only by successful release)</span></dd></div><div><dt>Owner *</dt><dd>Lukas Roth · lukas@vc.de · object ID 8a1f…</dd></div><div><dt>Requesting editor *</dt><dd>Lukas Roth · object ID 8a1f…</dd></div><div><dt>Target version *</dt><dd>Next minor V1.4 <span class="muted">(default · approval optional)</span> · Next major V2.0 <span class="muted">(approval required)</span> · Manual V&lt;major&gt;.&lt;minor&gt;</dd></div><div><dt>Manual validation</dt><dd><span class="muted">Greater unused target required when manual is selected</span></dd></div><div><dt>Candidate</dt><dd>V1.4 <span class="muted">(minor release; no approval required)</span></dd></div><div><dt>Draft SHA-256</dt><dd><span class="muted">(computed from current draft bytes before release)</span></dd></div><div><dt>Released by</dt><dd>Lukas Roth <lukas@vc.de> <span class="muted">(snapshotted on release)</span></dd></div><div><dt>Approver notification</dt><dd>Anna Berg <anna@vc.de> · effective approver snapshot</dd></div><div><dt>Approval rule</dt><dd>V1.0 and targets that increase the major component require Entra-verified approval</dd></div></dl>
           <form class="stack" style="margin-top:0.75rem">
             <label class="label">Effective date * <input type="date" value="2025-08-15" required></label>
             <label class="label">Owner * <select required><option value="8a1f">Lukas Roth · lukas@vc.de</option><option value="41c2">Anna Berg · anna@vc.de</option></select></label>
             <label class="label">Requesting editor * <select required><option value="8a1f">Lukas Roth · lukas@vc.de</option></select></label>
-            <label class="label">Target * <select required><option value="next_minor" selected>Next minor · V1.4</option><option value="next_major">Next major · V2.0 (approval required)</option><option value="manual">Manual target</option></select></label>
+            <label class="label">Target * <select required><option value="next_minor" selected>Next minor · V1.4 (approval optional)</option><option value="next_major">Next major · V2.0 (approval required)</option><option value="manual">Manual target</option></select></label>
             <p class="hint">Effective target: V1.4 · stays in draft for direct PDF export. Manual major/minor stay disabled until Manual target is selected.</p>
-            <div class="row gap-2" style="flex-wrap:wrap"><button class="btn outline">Preview V2.0 review request</button><button class="btn">Create release candidate · V1.4</button></div>
+            <label class="label">Changelog * <textarea required>Updated retention table to 24 months.</textarea></label>
+            <label class="label">Review content-check override reason (only when needed) <textarea></textarea></label>
+            <div class="row gap-2" style="flex-wrap:wrap"><button class="btn">Create release candidate</button></div>
           </form>
           <p class="hint">A successful empty people import shows literal <code>&lt;owner&gt;</code> and <code>&lt;editor&gt;</code> placeholders here and blocks submission. Minor release snapshots the requested profile, effective date, changelog, mode, editor, and approver; it stays in <code>draft</code> until successful atomic export.</p>
         </section>
