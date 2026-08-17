@@ -49,7 +49,10 @@
      regions. The right selection/details pane is a bounded column: its main
      document-detail region scrolls independently, and for exactly one
      registered document a bottom-docked Actions disclosure stays outside that
-     scroller. Exhaustive document control data, lifecycle forms, release
+     scroller. The Actions summary stays fully visible. Unfolding Actions shows
+     every action; the main details scroller shrinks first, and the Actions
+     body scrolls only if the pane is shorter than the heading plus those
+     actions. Exhaustive document control data, lifecycle forms, release
      history, or workflow evidence in the right pane never moves the toolbar,
      folder tree, centre contents, main activity header, application sidebar,
      or the Actions summary.
@@ -119,7 +122,9 @@
    foldable and frameless as defined by CAP-0015; each summary exposes a
    disclosure chevron plus Expand/Collapse cue. **Actions** is an independently
    foldable disclosure docked at the bottom of the pane, outside that scroller,
-   expanded by default, using the same chevron and Expand/Collapse cue. The
+   expanded by default, using the same chevron and Expand/Collapse cue. Its
+   summary stays fully visible at heading height. Unfolding it shows every
+   action; the main details scroller shrinks first. The
    selection header (including lifecycle badge) and Source file identity remain
    visible. Section fold
    open/closed state, including Actions, is session-only and survives document

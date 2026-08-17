@@ -90,8 +90,11 @@
     topics). Each section summary shows a disclosure chevron and Expand/Collapse
     cue so foldability is visible. **Actions** is a separately foldable
     disclosure docked at the bottom of the pane, outside that scroller, expanded
-    by default, using the same chevron and cue. Document actions, including
-    Lost-source reassociate when applicable, sit in that footer. The document
+    by default, using the same chevron and cue. Its summary stays fully visible
+    at heading height. Unfolding it shows every document action, including
+    Lost-source reassociate when applicable. The main details scroller shrinks
+    first; the Actions body scrolls only if the pane is shorter than the
+    heading plus those actions. The document
     identity, lifecycle badge, and Source file identity remain visible while any
     section is folded. Fold open/closed state, including Actions, is
     session-only Library UI state shared across document switches in the open
@@ -102,8 +105,7 @@
     never-released document or when the current release file is missing. When
     the main detail sections exceed the available window height, only that
     scroller moves under CAP-0006; it never moves Library or application
-    navigation or the Actions summary. An expanded Actions body may scroll
-    independently and is capped so it cannot cover the main details. CAP-0006's
+    navigation or the Actions summary. CAP-0006's
     bounded session splitter may widen this
     pane without changing its field rules, independent-scroll contract, or
     persisted document data.

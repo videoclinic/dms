@@ -88,7 +88,9 @@ macOS.
   and Expand/Collapse cue on each summary. Those topics live in the pane's main
   document-detail scroller. **Actions** is a separately foldable disclosure
   docked at the bottom of the pane, expanded by default, using the same chevron
-  and cue; its open/closed state is session-only alongside the other sections.
+  and cue; its summary stays fully visible at heading height, and unfolding it
+  shows every action while the main details scroller shrinks first. Its
+  open/closed state is session-only alongside the other sections.
   **Reassociate source** appears in
   Actions only for a single Lost source document, with a path field plus native
   **Browse…** limited to `.md` / `.docx` / `.xlsx` / `.pptx` (no All-files

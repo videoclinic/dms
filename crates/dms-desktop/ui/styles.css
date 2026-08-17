@@ -305,15 +305,23 @@ button { cursor: pointer; }
 .selection-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .selection-pane details.selection-section { padding: 8px 0; border-top: 1px solid #dfe5ea; }
 .selection-pane details.selection-actions-footer {
-  display: flex;
-  flex-direction: column;
-  flex: 0 1 auto;
-  min-height: 0;
-  max-height: 50%;
+  flex: 0 0 auto;
+  min-height: 2.75rem;
   overflow: hidden;
   padding: 8px 0 0;
 }
+.selection-pane details.selection-actions-footer[open] {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-height: 2.75rem;
+  max-height: 100%;
+}
+.selection-pane details.selection-actions-footer > summary {
+  flex: 0 0 auto;
+}
 .selection-pane details.selection-actions-footer > .selection-section-body {
+  flex: 0 1 auto;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;

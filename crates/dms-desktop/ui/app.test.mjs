@@ -198,11 +198,18 @@ test("shell and Library panes contain scrolling without moving navigation", () =
   );
   assert.doesNotMatch(styles, /\.selection-pane\s*\{[^}]*overflow:\s*auto/);
   assert.match(styles, /\.selection-scroll\s*\{[^}]*flex:\s*1 1 auto[^}]*overflow:\s*auto/);
-  assert.match(styles, /\.selection-actions-footer\s*\{[^}]*max-height:\s*50%/);
+  assert.match(styles, /\.selection-actions-footer\s*\{[^}]*min-height:\s*2\.75rem/);
+  assert.match(styles, /\.selection-actions-footer\[open\]\s*\{[^}]*flex:\s*0 0 auto/);
+  assert.doesNotMatch(styles, /\.selection-actions-footer[^{]*\{[^}]*max-height:\s*50%/);
+  assert.doesNotMatch(styles, /\.selection-actions-footer\[open\][^{]*\{[^}]*max-height:\s*(?:50%|18rem)/);
   assert.doesNotMatch(styles, /\.selection-actions-footer\s*\{[^}]*position:\s*(?:sticky|fixed)/);
   assert.match(
     styles,
     /\.selection-actions-footer[^{]*\{[^}]*overflow:\s*hidden/,
+  );
+  assert.match(
+    styles,
+    /\.selection-actions-footer[^{]*>\s*summary\s*\{[^}]*flex:\s*0 0 auto/,
   );
   assert.match(
     styles,
