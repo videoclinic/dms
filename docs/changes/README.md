@@ -25,6 +25,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
+| [CHG-0017](archive/CHG-0017-candidate-approval-copy.md) | Candidate form approval-neutral copy | done | CAP-0002, CAP-0015 |
 | [CHG-0016](archive/CHG-0016-actions-footer-full-height.md) | Actions footer full height | done | CAP-0006, CAP-0015 |
 | [CHG-0015](archive/CHG-0015-fixed-foldable-actions-footer.md) | Fixed foldable Actions footer | done | CAP-0006, CAP-0015 |
 | [CHG-0014](archive/CHG-0014-reassociate-source-topic-visibility.md) | Pinned Actions, Lost-source reassociate, native file pick | done | CAP-0006, CAP-0013, CAP-0015 |
