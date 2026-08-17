@@ -359,6 +359,15 @@ function invokeCommand(command, arguments_) {
   return invoke(command, arguments_);
 }
 
+export async function refreshLibrarySnapshot(invoke, editRoot, folder) {
+  const workspace = await invoke("open_workspace", { editRoot });
+  const snapshot = await invoke("load_library", {
+    editRoot,
+    folder: normalizeLibraryPath(folder),
+  });
+  return { workspace, snapshot };
+}
+
 function persistPreferences(state) {
   return invokeCommand("save_preferences", { preferences: state.preferences }).catch((error) => {
     console.error("Could not save preferences", error);
@@ -1145,9 +1154,30 @@ async function handleAssistanceClick(event) {
 }
 
 async function refreshWorkspaceAndLibrary() {
-  const workspace = await invokeCommand("open_workspace", { editRoot: appState.workspace.edit_root });
-  appState = { ...appState, workspace };
-  await loadLibraryFolder(appState.library.folder.relative_path, "replace");
+  const folder = normalizeLibraryPath(appState.library.folder.relative_path);
+  appState = { ...appState, library: { ...appState.library, loading: true }, error: "" };
+  render(appState);
+  try {
+    const { workspace, snapshot } = await refreshLibrarySnapshot(
+      invokeCommand,
+      appState.workspace.edit_root,
+      folder,
+    );
+    appState = {
+      ...appState,
+      workspace,
+      library: applyLibrarySnapshot(appState.library, snapshot, folder, "replace"),
+      error: "",
+    };
+    updateLibraryActivity(folder);
+  } catch (error) {
+    appState = {
+      ...appState,
+      library: { ...appState.library, loading: false },
+      error: String(error),
+    };
+  }
+  render(appState);
 }
 
 function handleLibraryToggle(event) {
@@ -1195,7 +1225,7 @@ async function handleLibraryClick(event) {
     return true;
   }
   if (event.target.closest("[data-library-refresh]")) {
-    void loadLibraryFolder(appState.library.folder.relative_path, "replace");
+    await refreshWorkspaceAndLibrary();
     return true;
   }
   const visibility = event.target.closest("[data-library-visibility]")?.dataset.libraryVisibility;

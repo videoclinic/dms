@@ -17,6 +17,7 @@ import {
   notesLibraryReturnTarget,
   openActivity,
   permalinkActivity,
+  refreshLibrarySnapshot,
   rememberRecentLibrary,
   removeRecentLibrary,
   savedViewId,
@@ -27,6 +28,30 @@ import {
 } from "./app.mjs";
 
 const workspaceId = "5ef3db10-8f6d-4ae4-9d68-ecb1eaac8235";
+
+test("Library Refresh opens the workspace and replaces one current-folder snapshot", async () => {
+  const calls = [];
+  const workspace = { workspace_id: workspaceId, edit_root: "/DMS/Edit" };
+  const snapshot = {
+    tree: [{ name: "Edit", relative_path: "." }, { name: "New", relative_path: "New" }],
+    folder: { relative_path: "Policies", parent: ".", entries: [{ name: "Added.md" }] },
+  };
+
+  const refreshed = await refreshLibrarySnapshot(
+    async (command, arguments_) => {
+      calls.push({ command, arguments_ });
+      return command === "open_workspace" ? workspace : snapshot;
+    },
+    "/DMS/Edit",
+    "Policies",
+  );
+
+  assert.deepEqual(calls, [
+    { command: "open_workspace", arguments_: { editRoot: "/DMS/Edit" } },
+    { command: "load_library", arguments_: { editRoot: "/DMS/Edit", folder: "Policies" } },
+  ]);
+  assert.deepEqual(refreshed, { workspace, snapshot });
+});
 
 test("an active form submission suppresses duplicate IPC dispatch", () => {
   const form = {};
