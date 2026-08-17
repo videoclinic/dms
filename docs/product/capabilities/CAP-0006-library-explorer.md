@@ -20,6 +20,14 @@
      centre, and the selection/details pane on the right. The folder tree is a
      primary navigation surface, not a compact filter card beside a
      document-dominant table.
+   - The path toolbar exposes **Fold folder tree** and **Fold selection
+     pane** icon controls that collapse the matching side pane plus its
+     splitter for the current session, letting the centre contents fill the
+     freed space. Folding keeps the folder tree and selection state in
+     session memory; re-opening restores the pane at the last user-set
+     width and never loses the current selection, expanded folders, search,
+     sort, or history. The controls share the same disclosure affordance
+     (`aria-pressed` + accessible Fold/Expand label) used elsewhere.
    - The tree shows every accessible folder below the edit root, including
      empty folders and folders without registered documents. `<edit-root>/.dms`
      is never shown.
@@ -275,4 +283,5 @@
 - Claude handoff: [`CAP-0018-claude-desktop-change-assistance.md`](CAP-0018-claude-desktop-change-assistance.md)
 - Permalinks: [`CAP-0020-document-permalinks.md`](CAP-0020-document-permalinks.md)
 - Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)
+- Foldable side panes: [`../../changes/archive/CHG-0020-foldable-library-panes.md`](../../changes/archive/CHG-0020-foldable-library-panes.md)
 - Workflow metadata columns and resizable table columns: [`../../changes/archive/CHG-0022-library-table-workflow-columns.md`](../../changes/archive/CHG-0022-library-table-workflow-columns.md)

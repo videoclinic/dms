@@ -25,6 +25,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
+| [CHG-0020](archive/CHG-0020-foldable-library-panes.md) | Foldable Library side panes | done | CAP-0006 |
 | [CHG-0022](archive/CHG-0022-library-table-workflow-columns.md) | Workflow metadata and resizable columns in the Library table | done | CAP-0006 |
 | [CHG-0021](archive/CHG-0021-html-notification-permalinks.md) | Clickable permalinks in HTML notification emails | done | CAP-0010 |
 | [CHG-0019](archive/CHG-0019-library-refresh-snapshot.md) | Library Refresh re-enumerates the current snapshot | done | CAP-0006 |

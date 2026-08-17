@@ -23,6 +23,26 @@ export function resizeLibraryTreeWidth(startWidth, startX, currentX, maximum = 4
   return clampLibraryTreeWidth(Number(startWidth) + (Number(currentX) - Number(startX)), maximum);
 }
 
+export const LIBRARY_PANE_SIDES = ["tree", "detail"];
+
+function isLibraryPaneSide(side) {
+  return LIBRARY_PANE_SIDES.includes(String(side));
+}
+
+export function isLibraryPaneFolded(library, side) {
+  if (!isLibraryPaneSide(side)) return false;
+  return Boolean(library?.[`${side}_folded`]);
+}
+
+export function setLibraryPaneFolded(library, side, isFolded) {
+  if (!isLibraryPaneSide(side)) return library;
+  return { ...library, [`${side}_folded`]: Boolean(isFolded) };
+}
+
+export function toggleLibraryPaneFold(library, side) {
+  return setLibraryPaneFolded(library, side, !isLibraryPaneFolded(library, side));
+}
+
 export const DEFAULT_SELECTION_OPEN = {
   control: true,
   schedule: true,
@@ -74,6 +94,8 @@ export function createLibraryState() {
     show_moved_documents: true,
     detail_width: 420,
     tree_width: 230,
+    tree_folded: false,
+    detail_folded: false,
     loading: false,
   };
 }
@@ -773,6 +795,10 @@ export function libraryIcon(name) {
     forward: '<path d="m9 5 7 7-7 7"/>',
     up: '<path d="m5 14 7-7 7 7"/>',
     refresh: '<path d="M20 6v5h-5"/><path d="M18.5 16a8 8 0 1 1 .5-8l1 3"/>',
+    panel_left: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M9 4v16"/>',
+    panel_right: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M15 4v16"/>',
+    panel_left_collapsed: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M9 4v16"/><path d="m13 9 3 3-3 3"/>',
+    panel_right_collapsed: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M15 4v16"/><path d="m11 9-3 3 3 3"/>',
   };
   const path = paths[name];
   if (!path) throw new Error(`Unknown Library icon: ${name}`);
@@ -1084,12 +1110,36 @@ export function libraryMarkup(workspace, activity, library, error = "") {
   const searchSummary = library.results === null
     ? ""
     : `<span class="search-result-summary">${escapeHtml(searchScope)} · ${visibleTotal} visible of ${library.results.length} results <button class="text-button" type="button" data-library-clear-search>Clear</button></span>`;
+  const treeFolded = isLibraryPaneFolded(library, "tree");
+  const detailFolded = isLibraryPaneFolded(library, "detail");
+  const foldButton = (side, target) => {
+    const folded = isLibraryPaneFolded(library, side);
+    const label = folded ? `Expand ${target}` : `Fold ${target}`;
+    const icon = side === "tree"
+      ? (folded ? "panel_left_collapsed" : "panel_left")
+      : (folded ? "panel_right_collapsed" : "panel_right");
+    return `<button class="icon-button" type="button" data-library-fold="${side}" aria-pressed="${folded}" aria-label="${label}" title="${label}">${libraryIcon(icon)}</button>`;
+  };
+  const treeAside = treeFolded
+    ? ""
+    : `<aside class="folder-tree" aria-label="Library folders" style="width:${library.tree_width}px">${treeMarkup(library.tree, folder, library.expanded_folders)}</aside>`;
+  const treeSplitter = treeFolded
+    ? ""
+    : `<div class="library-splitter tree-splitter" role="separator" aria-orientation="vertical" aria-label="Resize folder tree" aria-valuemin="170" aria-valuemax="420" aria-valuenow="${library.tree_width}" tabindex="0" data-tree-splitter></div>`;
+  const detailSplitter = detailFolded
+    ? ""
+    : `<div class="library-splitter" role="separator" aria-orientation="vertical" aria-label="Resize document details" aria-valuemin="280" aria-valuemax="640" aria-valuenow="${library.detail_width}" tabindex="0" data-library-splitter></div>`;
+  const detailAside = detailFolded
+    ? ""
+    : `<aside class="selection-pane" aria-live="polite" style="width:${library.detail_width}px">${selectionMarkup(library)}</aside>`;
   return `<section class="library-workspace">
     <div class="library-toolbar">
       <button class="icon-button" type="button" data-library-history="back" ${library.back.length ? "" : "disabled"} aria-label="Back" title="Back">${libraryIcon("back")}</button>
       <button class="icon-button" type="button" data-library-history="forward" ${library.forward.length ? "" : "disabled"} aria-label="Forward" title="Forward">${libraryIcon("forward")}</button>
       <button class="icon-button" type="button" data-library-up ${folder === "." ? "disabled" : ""} aria-label="Up" title="Up">${libraryIcon("up")}</button>
       <button class="icon-button" type="button" data-library-refresh aria-label="Refresh" title="Refresh">${libraryIcon("refresh")}</button>
+      ${foldButton("tree", "folder tree")}
+      ${foldButton("detail", "selection pane")}
       <nav class="breadcrumbs" aria-label="Current folder">${breadcrumbs}</nav>
       <form id="library-search-form" class="library-search">
         <input name="query" value="${escapeHtml(library.query)}" aria-label="Search library" placeholder="Search files, paths, titles, numbers">
@@ -1099,9 +1149,9 @@ export function libraryMarkup(workspace, activity, library, error = "") {
       <label class="sort-control">Sort <select data-library-sort>${sortOptions}</select></label>
     </div>
     ${error ? `<p class="library-error" role="alert">${escapeHtml(error)}</p>` : ""}
-    <div class="library-grid">
-      <aside class="folder-tree" aria-label="Library folders" style="width:${library.tree_width}px">${treeMarkup(library.tree, folder, library.expanded_folders)}</aside>
-      <div class="library-splitter tree-splitter" role="separator" aria-orientation="vertical" aria-label="Resize folder tree" aria-valuemin="170" aria-valuemax="420" aria-valuenow="${library.tree_width}" tabindex="0" data-tree-splitter></div>
+    <div class="library-grid${treeFolded ? " tree-folded" : ""}${detailFolded ? " detail-folded" : ""}">
+      ${treeAside}
+      ${treeSplitter}
       <section class="folder-contents">
         <header><div><span class="eyebrow">${library.results === null ? "Current folder" : "Explorer search"}</span><h2>${escapeHtml(heading)}</h2></div><span>${visibleTotal} visible entries</span></header>
         ${searchSummary}
@@ -1114,8 +1164,8 @@ export function libraryMarkup(workspace, activity, library, error = "") {
         </div>
         <div class="table-scroll"><table><thead><tr>${libraryTableHeaders(library)}</tr></thead><tbody>${rowsMarkup(library, entries, library.results === null ? "This folder has no visible entries." : "No files match this search.")}</tbody></table></div>
       </section>
-      <div class="library-splitter" role="separator" aria-orientation="vertical" aria-label="Resize document details" aria-valuemin="280" aria-valuemax="640" aria-valuenow="${library.detail_width}" tabindex="0" data-library-splitter></div>
-      <aside class="selection-pane" aria-live="polite" style="width:${library.detail_width}px">${selectionMarkup(library)}</aside>
+      ${detailSplitter}
+      ${detailAside}
     </div>
   </section>`;
 }

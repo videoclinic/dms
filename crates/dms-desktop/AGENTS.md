@@ -81,6 +81,19 @@ macOS.
   divider resizes the selection pane only for the current session, preserves
   at least 360 px for folder contents, and restores the width at drag start
   when cancelled with `Escape`.
+- The Library path toolbar exposes **Fold folder tree** and **Fold
+  selection pane** icon controls between Refresh and the breadcrumb.
+  Each control toggles a session-only `tree_folded` / `detail_folded` flag,
+  omits the matching `<aside>` and its drag splitter from the grid so the
+  centre folder-contents column fills the freed space, and exposes the
+  same `aria-pressed` + Expand/Fold label pattern used by the in-pane
+  section disclosures. Folding a pane keeps the current selection, expanded
+  tree branches, search, sort, history, and the last user-set
+  `tree_width` / `detail_width`; re-opening restores that width and the
+  matching drag splitter. Folding is session-only and never persisted
+  across sessions or saved views. The folded state never affects the
+  backend, the selection rules, or the lifecycle flows that the
+  selection pane hosts.
 - The Library selection pane owns add/unregister/reassociate/permalink controls,
   document-control editing, the document confidentiality override, candidate
   creation, review decision, release, local lifecycle actions, and canonical

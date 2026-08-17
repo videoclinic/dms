@@ -210,6 +210,7 @@ button { cursor: pointer; }
   border-bottom: 1px solid #dfe5ea;
 }
 .library-toolbar .icon-button:disabled { cursor: default; opacity: .4; }
+.library-toolbar .icon-button[aria-pressed="true"] { color: #173e56; background: #dce7f0; }
 .library-icon { width: 16px; height: 16px; flex: 0 0 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .breadcrumbs { display: flex; min-width: 120px; flex: 1; align-items: center; gap: 3px; }
 .breadcrumb-chevron { display: inline-flex; color: #7a8a95; }

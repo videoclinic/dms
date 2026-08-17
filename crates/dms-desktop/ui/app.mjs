@@ -20,6 +20,7 @@ import {
   setSelectionSectionOpen,
   bindReviewScheduleForm,
   bindCandidateTargetForm,
+  toggleLibraryPaneFold,
   toggleLibrarySelection,
   toggleLibraryVisibility,
   toggleTreeFolder,
@@ -1228,6 +1229,12 @@ async function handleLibraryClick(event) {
   }
   if (event.target.closest("[data-library-refresh]")) {
     await refreshWorkspaceAndLibrary();
+    return true;
+  }
+  const fold = event.target.closest("[data-library-fold]")?.dataset.libraryFold;
+  if (fold) {
+    appState = { ...appState, library: toggleLibraryPaneFold(appState.library, fold) };
+    render(appState);
     return true;
   }
   const visibility = event.target.closest("[data-library-visibility]")?.dataset.libraryVisibility;

@@ -34,6 +34,7 @@ import {
   setSelectionSectionOpen,
   selectionSectionOpen,
   sortLibraryEntries,
+  toggleLibraryPaneFold,
   toggleLibrarySelection,
   toggleLibraryVisibility,
   toggleTreeFolder,
@@ -195,10 +196,104 @@ test("detail width is bounded per session and inline SVG icons stay self-contain
   assert.equal(clampLibraryTreeWidth(300, 250), 250);
   assert.equal(resizeLibraryTreeWidth(230, 100, 140), 270);
   assert.equal(createLibraryState().tree_width, 230);
-  for (const icon of ["folder", "file", "chevron_right", "chevron_down", "back", "forward", "up", "refresh"]) {
+  for (const icon of ["folder", "file", "chevron_right", "chevron_down", "back", "forward", "up", "refresh", "panel_left", "panel_right", "panel_left_collapsed", "panel_right_collapsed"]) {
     assert.match(libraryIcon(icon), /^<svg class="library-icon"[^>]*aria-hidden="true"/);
   }
   assert.throws(() => libraryIcon("missing"), /Unknown Library icon/);
+});
+
+test("library toolbar folds each side pane and re-opens at the prior session width", () => {
+  let library = createLibraryState();
+  assert.equal(library.tree_folded, false);
+  assert.equal(library.detail_folded, false);
+
+  // Unknown side names are ignored so a stray click never mutates state.
+  const unchanged = toggleLibraryPaneFold(library, "middle");
+  assert.equal(unchanged, library);
+
+  library = toggleLibraryPaneFold(library, "tree");
+  assert.equal(library.tree_folded, true);
+  assert.equal(library.detail_folded, false);
+  assert.equal(library.tree_width, 230);
+
+  library = toggleLibraryPaneFold(library, "detail");
+  assert.equal(library.tree_folded, true);
+  assert.equal(library.detail_folded, true);
+  assert.equal(library.detail_width, 420);
+
+  // Re-opening keeps the last user-set width from any prior drag.
+  library = { ...library, tree_width: 312, detail_width: 510 };
+  library = toggleLibraryPaneFold(library, "tree");
+  library = toggleLibraryPaneFold(library, "detail");
+  assert.equal(library.tree_folded, false);
+  assert.equal(library.detail_folded, false);
+  assert.equal(library.tree_width, 312);
+  assert.equal(library.detail_width, 510);
+
+  // setLibraryPaneFolded accepts explicit booleans and is idempotent.
+  const explicit = toggleLibraryPaneFold({ ...createLibraryState(), tree_folded: true }, "tree");
+  assert.equal(explicit.tree_folded, false);
+});
+
+test("library markup omits the folded pane and its splitter and exposes Fold/Expand controls", () => {
+  const baseLibrary = {
+    ...createLibraryState(),
+    tree: [
+      { name: "Edit", relative_path: "." },
+      { name: "Policies", relative_path: "Policies" },
+    ],
+    expanded_folders: [".", "Policies"],
+    folder: { relative_path: "Policies", parent: ".", entries: [] },
+  };
+  const expanded = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies" } },
+    baseLibrary,
+  );
+  assert.match(expanded, /data-library-fold="tree"[^>]*aria-label="Fold folder tree"/);
+  assert.match(expanded, /data-library-fold="detail"[^>]*aria-label="Fold selection pane"/);
+  assert.match(expanded, /class="folder-tree"/);
+  assert.match(expanded, /data-tree-splitter/);
+  assert.match(expanded, /class="selection-pane"/);
+  assert.match(expanded, /data-library-splitter/);
+
+  const treeFolded = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies" } },
+    { ...baseLibrary, tree_folded: true },
+  );
+  assert.doesNotMatch(treeFolded, /class="folder-tree"/);
+  assert.doesNotMatch(treeFolded, /data-tree-splitter/);
+  assert.match(treeFolded, /library-grid tree-folded/);
+  assert.match(treeFolded, /data-library-fold="tree"[^>]*aria-pressed="true"[^>]*aria-label="Expand folder tree"/);
+  // Centre + right still render.
+  assert.match(treeFolded, /class="folder-contents"/);
+  assert.match(treeFolded, /class="selection-pane"/);
+  assert.match(treeFolded, /data-library-splitter/);
+
+  const detailFolded = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies" } },
+    { ...baseLibrary, detail_folded: true },
+  );
+  assert.doesNotMatch(detailFolded, /class="selection-pane"/);
+  assert.doesNotMatch(detailFolded, /data-library-splitter/);
+  assert.match(detailFolded, /library-grid detail-folded/);
+  assert.match(detailFolded, /class="folder-tree"/);
+  assert.match(detailFolded, /data-tree-splitter/);
+  assert.match(detailFolded, /data-library-fold="detail"[^>]*aria-pressed="true"[^>]*aria-label="Expand selection pane"/);
+
+  const bothFolded = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies" } },
+    { ...baseLibrary, tree_folded: true, detail_folded: true },
+  );
+  assert.match(bothFolded, /library-grid tree-folded detail-folded/);
+  assert.match(bothFolded, /class="folder-contents"/);
+  assert.doesNotMatch(bothFolded, /class="folder-tree"/);
+  assert.doesNotMatch(bothFolded, /class="selection-pane"/);
+  assert.doesNotMatch(bothFolded, /data-tree-splitter/);
+  assert.doesNotMatch(bothFolded, /data-library-splitter/);
 });
 
 test("search results use the same visibility state instead of changing folder counters", () => {
