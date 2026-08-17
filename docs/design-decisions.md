@@ -204,8 +204,11 @@ Capability-local rules stay in their CAP files.
   application when a relay is not appropriate, without forcing every workspace
   to host a relay.
 - **Consequences:** The contract for "review requested" is identical for both
-  transports; only the message-creation step differs. SMTP delivery acceptance
-  is recorded (ADR-0009); `mailto:` fallback records the operator's send
+  transports; only the message-creation step differs. SMTP messages are
+  `multipart/alternative` (plain text plus an HTML alternative whose only
+  difference is the clickable CAP-0020 permalink); the `mailto:` draft remains
+  plain text because `mailto:` cannot carry HTML. SMTP delivery acceptance is
+  recorded (ADR-0009); `mailto:` fallback records the operator's send
   confirmation and a placeholder receiver address. The UI must distinguish the
   two states (sent vs queued-in-mail-handler) in the workflow history.
 

@@ -621,6 +621,20 @@ fn major_review_requires_graph_refresh_transport_success_and_verified_actor() {
     ] {
         assert!(message.body.contains(expected), "missing {expected:?}");
     }
+    for expected in [
+        "<!DOCTYPE html>",
+        "<pre>A review decision is requested.</pre>",
+        "<pre>Title: Employee handbook</pre>",
+        "<pre>Open review task:</pre>",
+        "<a href=\"dms://open?workspace=",
+        "&amp;target=review&amp;review=",
+        "\">dms://open?workspace=",
+    ] {
+        assert!(
+            message.html_body.contains(expected),
+            "missing HTML alternative part {expected:?}"
+        );
+    }
 
     graph.actor.object_id = fixture.editor_id;
     let mut outcome_notifier = FakeNotifier {
@@ -1164,6 +1178,9 @@ fn minor_release_skips_review_and_notification_failure_does_not_reverse_commit()
     assert!(notifier.messages[0]
         .body
         .contains("Document: Policies/Handbook.md"));
+    assert!(notifier.messages[0]
+        .html_body
+        .contains("<a href=\"dms://open?workspace="));
     assert_eq!(
         fixture
             .workspace
@@ -1975,6 +1992,9 @@ fn periodic_review_reminders_record_every_attempt_without_duplicate_or_lifecycle
         .subject
         .contains("Periodic review reminder"));
     assert!(notifier.messages[0].body.contains(&permalink));
+    assert!(notifier.messages[0]
+        .html_body
+        .contains("<a href=\"dms://open?workspace="));
     let document = fixture.workspace.document(fixture.document_id).unwrap();
     assert_eq!(document.lifecycle, Lifecycle::Released);
     let marker = fixture

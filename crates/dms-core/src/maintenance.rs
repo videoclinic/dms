@@ -507,18 +507,26 @@ impl Workspace {
             "[{}] Periodic review reminder: {} ({})",
             review.confidentiality.label, document.control.title, review.version
         );
-        let body = format!(
-            "A periodic review is awaiting your result.\n\nTitle: {}\nCurrent release: {}\nConfidentiality: {}\nAction: record the periodic review result\n\nOpen review detail:\n{}",
-            document.control.title,
-            review.version,
-            review.confidentiality.label,
-            self.review_permalink(document_id, review.id)?
+        let permalink = self.review_permalink(document_id, review.id)?;
+        let (body, html_body) = super::lifecycle::notification_bodies(
+            &[
+                "A periodic review is awaiting your result.",
+                "",
+                &format!("Title: {}", document.control.title),
+                &format!("Current release: {}", review.version),
+                &format!("Confidentiality: {}", review.confidentiality.label),
+                "Action: record the periodic review result",
+                "",
+                "Open review detail:",
+            ],
+            &permalink,
         );
         let message = notification_message(
             NotificationKind::PeriodicReviewReminder,
             review.approver.email.clone(),
             subject,
             body,
+            html_body,
         );
         let attempt = delivery_attempt(&settings, &message, notifier);
         self.append_periodic_event(

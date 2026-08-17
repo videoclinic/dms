@@ -4,8 +4,9 @@ use dms_core::{
 };
 use keyring::Entry;
 use lettre::{
-    message::Mailbox, transport::smtp::authentication::Credentials, Message, SmtpTransport,
-    Transport,
+    message::{Mailbox, MultiPart},
+    transport::smtp::authentication::Credentials,
+    Message, SmtpTransport, Transport,
 };
 use uuid::Uuid;
 
@@ -205,7 +206,10 @@ impl<C: CredentialStore, S: SmtpSender> NotificationClient for DesktopNotifier<C
                         )
                     })?)
                     .subject(&message.subject)
-                    .body(message.body.clone())
+                    .multipart(MultiPart::alternative_plain_html(
+                        message.body.clone(),
+                        message.html_body.clone(),
+                    ))
                     .map_err(|error| format!("cannot build notification message: {error}"))?;
                 let password = self.credentials.smtp_password(self.workspace_id)?;
                 self.smtp_sender.send(smtp, password, &email)
@@ -282,6 +286,7 @@ mod tests {
             recipient: "approver@example.test".to_owned(),
             subject: "Review".to_owned(),
             body: "Review body".to_owned(),
+            html_body: "<html><body>Review body</body></html>".to_owned(),
             mailto_uri: "mailto:approver@example.test?subject=Review".to_owned(),
         }
     }
@@ -354,9 +359,25 @@ mod tests {
         assert_eq!(observed.0, "smtp-login@example.test");
         assert_eq!(observed.1, "\"Doc Mgmt\" <sender@example.test>");
         assert_eq!(observed.2, "not-used-for-mailto");
-        assert!(observed
-            .3
-            .contains("From: \"Doc Mgmt\" <sender@example.test>"));
-        assert!(observed.3.contains("To: approver@example.test"));
+        let formatted = &observed.3;
+        assert!(formatted.contains("From: \"Doc Mgmt\" <sender@example.test>"));
+        assert!(formatted.contains("To: approver@example.test"));
+        assert!(formatted.contains("multipart/alternative"));
+        assert!(formatted.contains("Content-Type: text/plain; charset=utf-8"));
+        assert!(formatted.contains("Content-Type: text/html; charset=utf-8"));
+        let plain_index = formatted
+            .find("text/plain; charset=utf-8")
+            .expect("plain part before html part");
+        let html_index = formatted
+            .find("text/html; charset=utf-8")
+            .expect("html alternative part");
+        assert!(
+            plain_index < html_index,
+            "plain text must lead the alternative"
+        );
+        let body_index = formatted
+            .find("Review body")
+            .expect("plain body in the formatted message");
+        assert!(body_index > plain_index && body_index < html_index);
     }
 }

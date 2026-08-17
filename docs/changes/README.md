@@ -25,6 +25,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
+| [CHG-0021](archive/CHG-0021-html-notification-permalinks.md) | Clickable permalinks in HTML notification emails | done | CAP-0010 |
 | [CHG-0019](archive/CHG-0019-library-refresh-snapshot.md) | Library Refresh re-enumerates the current snapshot | done | CAP-0006 |
 | [CHG-0018](archive/CHG-0018-membership-obsolescence-independence.md) | Membership and obsolescence stay independent | done | CAP-0006, CAP-0015 |
 | [CHG-0017](archive/CHG-0017-candidate-approval-copy.md) | Candidate form approval-neutral copy | done | CAP-0002, CAP-0015 |

@@ -5,7 +5,7 @@
 | ID | CAP-0010 |
 | Status | implemented |
 | Transports | Configured SMTP relay (ADR-0009) and host default mail handler via `mailto:` (ADR-0012) |
-| Tests | Phases 9i, 9k, and 9k.5 fake-backed evidence plus Phase 9l configured SMTP acceptance: [core lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [notification adapter tests](../../../crates/dms-desktop/src/notify.rs), [Library request tests](../../../crates/dms-desktop/ui/library.test.mjs), and [Configuration transport/test tests](../../../crates/dms-desktop/ui/configuration.test.mjs); configured Windows SMTP review, decision, and minor-publication delivery is recorded in [CHG-0001](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md) |
+| Tests | Phases 9i, 9k, and 9k.5 fake-backed evidence plus Phase 9l configured SMTP acceptance: [core lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [notification adapter tests](../../../crates/dms-desktop/src/notify.rs), [Library request tests](../../../crates/dms-desktop/ui/library.test.mjs), and [Configuration transport/test tests](../../../crates/dms-desktop/ui/configuration.test.mjs); configured Windows SMTP review, decision, and minor-publication delivery is recorded in [CHG-0001](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md); the HTML alternative part is proven by [core notification tests](../../../crates/dms-core/tests/lifecycle.rs) and [notify multipart tests](../../../crates/dms-desktop/src/notify.rs) under [CHG-0021](../../changes/archive/CHG-0021-html-notification-permalinks.md) |
 
 ## Outcomes
 
@@ -24,9 +24,12 @@
    store, never stored in `.dms`. Once saved, the UI represents credential
    presence only as `***`; it never reconstructs or returns the password.
 2. When the transport is `smtp`, a review request uses the configured relay to
-   send the canonical review-request notification below. Successful relay
-   acceptance is recorded in the workflow event chain; failure leaves the
-   document in `draft` and offers a retry.
+   send the canonical review-request notification below. The SMTP message is
+   `multipart/alternative`: the plain-text part carries the template below and
+   the HTML alternative part carries the same visible copy with the
+   `<review-permalink>` as a clickable link (see the HTML alternative part
+   contract below). Successful relay acceptance is recorded in the workflow
+   event chain; failure leaves the document in `draft` and offers a retry.
 3. The local-app deep link is a CAP-0020 permalink URI. It identifies the
    workspace and stable document ID, plus the review-request target ID, without
    embedding document content, draft file name, version label, or an absolute
@@ -37,8 +40,10 @@
    does not open an arbitrary path or record a workflow decision.
 4. When the transport is `mailto`, the desktop app opens the host's default
    mail handler with the canonical review-request subject and body below in a
-   pre-filled `mailto:` URI. The lifecycle state does not advance to `in_review`
-   until the operator explicitly confirms in the app that the message was sent.
+   pre-filled `mailto:` URI (the compose window carries the plain-text subject
+   and body only; `mailto:` cannot carry HTML). The lifecycle state does not
+   advance to `in_review` until the operator explicitly confirms in the app
+   that the message was sent.
 5. After an `approved`, `rejected`, or `changed_requested` decision is recorded,
    the app notifies the requester's snapshotted email address. The notification
    contains the relative path, decision outcome, confidentiality label, and a
@@ -130,6 +135,18 @@ Open document:
 - `<document-permalink>` is the CAP-0020 document URI without a review target.
 - The notification contains no document content, source/PDF URL, attachment, or
   approval control.
+
+## HTML alternative part (contract)
+
+Every SMTP notification — review request, decision outcome, minor publication,
+and periodic-review reminder — is sent as `multipart/alternative`. The first
+part is the `text/plain; charset=utf-8` body of the kind's plain-text template
+above and the second part is a `text/html; charset=utf-8` alternative that
+mirrors the visible copy line for line and renders only the notification's
+CAP-0020 permalink as a hyperlink (`<a href>` carrying the exact same URI).
+The HTML part adds no other link, image, or document content; the plain-text
+part stays the canonical contract and remains what the `mailto:` transport
+prefills.
 
 ## Non-goals
 

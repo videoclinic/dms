@@ -1004,6 +1004,7 @@ fn test_smtp_notification_with<C: notify::CredentialStore, N: NotificationClient
         recipient: recipient.clone(),
         subject: "DMS SMTP configuration test".to_owned(),
         body: "This message confirms that the saved DMS SMTP configuration can deliver email. It contains no document or workflow content.".to_owned(),
+        html_body: "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n</head>\n<body>\n<pre>This message confirms that the saved DMS SMTP configuration can deliver email. It contains no document or workflow content.</pre>\n</body>\n</html>\n".to_owned(),
         mailto_uri: String::new(),
     };
     let receipt = notifier.send(settings, &message).map_err(|_| {

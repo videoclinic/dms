@@ -169,6 +169,9 @@ pub struct NotificationMessage {
     pub recipient: String,
     pub subject: String,
     pub body: String,
+    /// HTML alternative part for rich mail clients; the plain `body` remains
+    /// the canonical plain-text contract and the `mailto:` draft content.
+    pub html_body: String,
     pub mailto_uri: String,
 }
 
@@ -2356,20 +2359,30 @@ fn review_request_message(candidate: &ReleaseCandidate, permalink: String) -> No
         candidate.metadata.control.title,
         candidate.version
     );
-    let body = format!(
-        "A review decision is requested.\n\nAction: Review and decide\nTitle: {}\nDocument: {}\nRequested by: {}\nTarget version: {}\nConfidentiality: {}\n\nOpen review task:\n{}",
-        candidate.metadata.control.title,
-        path_text(&candidate.source_path),
-        candidate.requester.display_name,
-        candidate.version,
-        candidate.metadata.confidentiality.label,
-        permalink
+    let (body, html_body) = notification_bodies(
+        &[
+            "A review decision is requested.",
+            "",
+            "Action: Review and decide",
+            &format!("Title: {}", candidate.metadata.control.title),
+            &format!("Document: {}", path_text(&candidate.source_path)),
+            &format!("Requested by: {}", candidate.requester.display_name),
+            &format!("Target version: {}", candidate.version),
+            &format!(
+                "Confidentiality: {}",
+                candidate.metadata.confidentiality.label
+            ),
+            "",
+            "Open review task:",
+        ],
+        &permalink,
     );
     notification_message(
         NotificationKind::ReviewRequest,
         candidate.metadata.approver.email.clone(),
         subject,
         body,
+        html_body,
     )
 }
 
@@ -2390,20 +2403,29 @@ fn decision_message(
         candidate.metadata.control.title,
         candidate.version
     );
-    let body = format!(
-        "A review decision was recorded.\n\nTitle: {}\nDocument: {}\nDecision: {}\nTarget version: {}\nConfidentiality: {}\n\nOpen review detail:\n{}",
-        candidate.metadata.control.title,
-        path_text(&candidate.source_path),
-        outcome,
-        candidate.version,
-        candidate.metadata.confidentiality.label,
-        permalink
+    let (body, html_body) = notification_bodies(
+        &[
+            "A review decision was recorded.",
+            "",
+            &format!("Title: {}", candidate.metadata.control.title),
+            &format!("Document: {}", path_text(&candidate.source_path)),
+            &format!("Decision: {outcome}"),
+            &format!("Target version: {}", candidate.version),
+            &format!(
+                "Confidentiality: {}",
+                candidate.metadata.confidentiality.label
+            ),
+            "",
+            "Open review detail:",
+        ],
+        &permalink,
     );
     notification_message(
         NotificationKind::DecisionOutcome,
         candidate.requester.email.clone(),
         subject,
         body,
+        html_body,
     )
 }
 
@@ -2417,20 +2439,29 @@ fn minor_publication_message(
         candidate.metadata.control.title,
         candidate.version
     );
-    let body = format!(
-        "A new minor version of your assigned document has been released.\n\nTitle: {}\nDocument: {}\nReleased by: {}\nReleased version: {}\nConfidentiality: {}\n\nOpen document:\n{}",
-        candidate.metadata.control.title,
-        path_text(&candidate.source_path),
-        candidate.requester.display_name,
-        candidate.version,
-        candidate.metadata.confidentiality.label,
-        permalink
+    let (body, html_body) = notification_bodies(
+        &[
+            "A new minor version of your assigned document has been released.",
+            "",
+            &format!("Title: {}", candidate.metadata.control.title),
+            &format!("Document: {}", path_text(&candidate.source_path)),
+            &format!("Released by: {}", candidate.requester.display_name),
+            &format!("Released version: {}", candidate.version),
+            &format!(
+                "Confidentiality: {}",
+                candidate.metadata.confidentiality.label
+            ),
+            "",
+            "Open document:",
+        ],
+        &permalink,
     );
     notification_message(
         NotificationKind::MinorPublication,
         candidate.metadata.approver.email.clone(),
         subject,
         body,
+        html_body,
     )
 }
 
@@ -2439,6 +2470,7 @@ pub(crate) fn notification_message(
     recipient: String,
     subject: String,
     body: String,
+    html_body: String,
 ) -> NotificationMessage {
     let mailto_uri = format!(
         "mailto:{}?subject={}&body={}",
@@ -2451,8 +2483,42 @@ pub(crate) fn notification_message(
         recipient,
         subject,
         body,
+        html_body,
         mailto_uri,
     }
+}
+
+/// Renders one notification body in both representations from the same
+/// values: the canonical plain-text lines (joined with `"\n"`, followed by
+/// the bare permalink line) and an HTML alternative that wraps the lines in
+/// `<pre>` so the visible copy is identical, with the permalink rendered as
+/// a clickable `<a>` element.
+pub(crate) fn notification_bodies(lines: &[&str], permalink: &str) -> (String, String) {
+    let body = format!("{}\n{}", lines.join("\n"), permalink);
+    let mut html_body = String::from("<!DOCTYPE html>\n<html>\n<head>\n");
+    html_body.push_str("<meta charset=\"utf-8\">\n</head>\n<body>\n");
+    for line in lines {
+        if line.is_empty() {
+            html_body.push_str("<br>\n");
+        } else {
+            html_body.push_str(&format!("<pre>{}</pre>\n", escape_html(line)));
+        }
+    }
+    html_body.push_str(&format!(
+        "<a href=\"{}\">{}</a>\n",
+        escape_html(permalink),
+        escape_html(permalink)
+    ));
+    html_body.push_str("</body>\n</html>\n");
+    (body, html_body)
+}
+
+fn escape_html(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 pub(crate) fn delivery_attempt<N: NotificationClient + ?Sized>(
