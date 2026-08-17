@@ -4,7 +4,7 @@
 | --- | --- |
 | ID | CAP-0006 |
 | Status | implemented |
-| Tests | Phases 3, 9b.1, 9e, 9f.1, 9f.2, 9f.5, 9g, 9k.3, 9k.4, and 9l plus CHG-0004 Phases 2–3 evidence: [`dms-core` Library and lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [`dms-core` recursive Library counter tests](../../../crates/dms-core/tests/library.rs), [template-asset exclusion tests](../../../crates/dms-core/tests/markdown_template.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [shell, direct folder activation, bounded splitter, and permalink-target tests](../../../crates/dms-desktop/ui/app.test.mjs), [hierarchical Library, file-visibility, counter, icon, document-control, placeholder, and workflow frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31359360786) |
+| Tests | Phases 3, 9b.1, 9e, 9f.1, 9f.2, 9f.5, 9g, 9k.3, 9k.4, and 9l plus CHG-0004 Phases 2–3 evidence: [`dms-core` Library and lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs), [`dms-core` recursive Library counter and unregister-independence tests](../../../crates/dms-core/tests/library.rs), [template-asset exclusion tests](../../../crates/dms-core/tests/markdown_template.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [shell, direct folder activation, bounded splitter, and permalink-target tests](../../../crates/dms-desktop/ui/app.test.mjs), [hierarchical Library, file-visibility, counter, icon, document-control, placeholder, and workflow frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [Windows/macOS smoke](https://github.com/videoclinic/dms/actions/runs/31359360786) |
 
 ## Outcomes
 
@@ -90,11 +90,13 @@
    registered. Add fails for a path outside the edit root or an already
    registered file. There is no header-level `Add documents` picker: the
    selection makes every action target explicit.
-4. Operator can **unregister** a document from the active library only when no
-   content or periodic review is open. Unregister preserves its stable ID,
-   document control data, notes, workflow/release history, and checksums in read-only
-   history; it never deletes the source file or a released PDF. Re-registering
-   that record associates a confirmed in-root draft path with the same ID.
+4. Operator can **unregister** a document from the active library. Unregister
+   sets membership to `unregistered` and preserves the stable ID, document
+   control data, notes, workflow/release history, and checksums on the retained
+   record. It does not require an idle lifecycle, does not cancel an open
+   content or periodic review, and never deletes the source file or a released
+   PDF. Adding that same in-root path again restores `registered` on the same
+   ID and leaves the retained lifecycle unchanged.
 5. **In library** document rows keep the exact source file name in **Name** and
    surface enough DMS-managed data to scan the current folder without leaving
    the explorer: lifecycle state, latest released version label, document title,
@@ -175,7 +177,7 @@
    workflow evidence remain available. Multi-select exposes only multi-applicable
    actions (including batch add for a homogeneous selection of unregistered
    supported source files, plus bulk verify where defined and multi-unregister
-   with per-item precondition checks). Copy permalink is single-selection only.
+   of registered selections). Copy permalink is single-selection only.
    Per-document actions such as Submit for review, Mark obsolete, Start periodic
    review, and Copy permalink are not exposed as batch actions — "Send reminder"
    is a per-document periodic reminder action (CAP-0017) and is also not a batch
@@ -263,6 +265,7 @@
 - Evidence: [`CAP-0011-approval-evidence.md`](CAP-0011-approval-evidence.md)
 - Maintenance: [`CAP-0013-library-maintenance.md`](CAP-0013-library-maintenance.md)
 - Document control data: [`CAP-0015-document-control-data.md`](CAP-0015-document-control-data.md)
+- Membership vs obsolescence: [`../../library-membership-and-obsolescence.md`](../../library-membership-and-obsolescence.md)
 - Periodic review: [`CAP-0017-periodic-document-review.md`](CAP-0017-periodic-document-review.md)
 - Claude handoff: [`CAP-0018-claude-desktop-change-assistance.md`](CAP-0018-claude-desktop-change-assistance.md)
 - Permalinks: [`CAP-0020-document-permalinks.md`](CAP-0020-document-permalinks.md)

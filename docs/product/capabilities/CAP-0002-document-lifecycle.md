@@ -237,6 +237,7 @@
 - Library maintenance: [`CAP-0013-library-maintenance.md`](CAP-0013-library-maintenance.md)
 - Workspace integrity: [`CAP-0014-workspace-integrity.md`](CAP-0014-workspace-integrity.md)
 - Document control data / revision cycle: [`CAP-0015-document-control-data.md`](CAP-0015-document-control-data.md)
+- Membership vs obsolescence: [`../../library-membership-and-obsolescence.md`](../../library-membership-and-obsolescence.md)
 - Publish tree: [`CAP-0016-publish-tree-maintenance.md`](CAP-0016-publish-tree-maintenance.md)
 - Periodic review: [`CAP-0017-periodic-document-review.md`](CAP-0017-periodic-document-review.md)
 - Claude Desktop assistance: [`CAP-0018-claude-desktop-change-assistance.md`](CAP-0018-claude-desktop-change-assistance.md)

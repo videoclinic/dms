@@ -172,3 +172,4 @@ below are part of the contract every adapter honours.
 - Privacy: [`privacy.md`](privacy.md)
 - Decisions: [`design-decisions.md`](design-decisions.md)
 - Capabilities: [`product/README.md`](product/README.md)
+- Membership vs obsolescence: [`library-membership-and-obsolescence.md`](library-membership-and-obsolescence.md)

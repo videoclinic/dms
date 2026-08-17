@@ -14,6 +14,7 @@ privacy, and design decisions for this repository.
 | `design-decisions.md` | Cross-cutting ADRs |
 | `entra-client-setup.md` | Operator setup for the DMS Entra public-client registration and delegated Graph consent |
 | `markdown-frontmatter-and-template-variables.md` | Markdown controlled frontmatter keys, optional template variables, and Word chrome tokens |
+| `library-membership-and-obsolescence.md` | Operator comparison of library membership vs obsolescence |
 | `product/` | CAP index, capability contracts, wireframe references |
 | `changes/` | CHG lifecycle (active/archive) |
 

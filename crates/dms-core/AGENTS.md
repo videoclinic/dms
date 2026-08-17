@@ -41,6 +41,10 @@ persistence.
   stored locator.
 - Unregister and reassociate preserve stable document identity and retained
   document metadata; batch mutations validate atomically before changing state.
+  Unregister sets `source_state` only: it does not require an idle lifecycle,
+  cancel an open content or periodic review, delete files, or append a
+  workflow event. Adding the same in-root path again restores `registered` on
+  the same ID and leaves lifecycle unchanged.
 - `Workspace::save` is the persistence boundary for ordinary mutations; release
   export owns its save/rollback transaction so a committed PDF and metadata
   release record cannot be reported independently.

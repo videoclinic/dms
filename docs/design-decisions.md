@@ -482,3 +482,17 @@ Capability-local rules stay in their CAP files.
   dates into the current non-withdrawn release, preserve a `legacy_owner_label`
   for the prior free-text value, and never invent a release snapshot for an
   unrecorded date.
+
+## ADR-0026 — Membership and obsolescence stay distinct
+
+- **Decision:** Library membership (`source_state`) and document lifecycle
+  (`lifecycle`, including terminal `obsolete`) are independent axes. Unregister
+  never means withdrawn-from-use. Mark obsolete never means leave-the-library.
+- **Why:** Operators need a controlled dead document to remain visible and
+  auditable, and they need a way to drop a file from the active library without
+  destroying identity or history. Collapsing the actions would mix a control
+  decision with a registry mutation.
+- **Consequences:** CAP-0015 owns obsolescence. CAP-0006 owns unregister.
+  Re-adding an unregistered path restores the same document ID and whatever
+  lifecycle that record still has. Operator comparison:
+  [`library-membership-and-obsolescence.md`](library-membership-and-obsolescence.md).

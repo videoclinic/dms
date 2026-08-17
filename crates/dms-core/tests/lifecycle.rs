@@ -2130,3 +2130,120 @@ fn schema_v5_migrates_disabled_claude_assistance_policy_and_creates_backup() {
         .join(".dms/workspace.v5.json.bak")
         .is_file());
 }
+
+#[test]
+fn unregister_leaves_open_content_and_periodic_reviews() {
+    let mut fixture = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    let mut graph = fixture.graph();
+    fixture
+        .workspace
+        .submit_candidate(
+            fixture.candidate_request(TargetSelection::NextMajor),
+            &mut graph,
+            &mut FakeNotifier::accepted(),
+        )
+        .expect("open review");
+    assert_eq!(
+        fixture
+            .workspace
+            .document(fixture.document_id)
+            .unwrap()
+            .lifecycle,
+        Lifecycle::InReview
+    );
+    let candidate_id = fixture
+        .workspace
+        .active_candidate(fixture.document_id)
+        .unwrap()
+        .expect("active candidate")
+        .id;
+    let events_before = fixture
+        .workspace
+        .workflow_history(fixture.document_id)
+        .unwrap()
+        .len();
+
+    fixture
+        .workspace
+        .unregister_document(fixture.document_id)
+        .expect("unregister in-review");
+    let unregistered = fixture.workspace.document(fixture.document_id).unwrap();
+    assert_eq!(
+        unregistered.source_state,
+        dms_core::SourceState::Unregistered
+    );
+    assert_eq!(unregistered.lifecycle, Lifecycle::InReview);
+    assert_eq!(
+        fixture
+            .workspace
+            .active_candidate(fixture.document_id)
+            .unwrap()
+            .expect("retained candidate")
+            .id,
+        candidate_id
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .workflow_history(fixture.document_id)
+            .unwrap()
+            .len(),
+        events_before
+    );
+    assert!(fixture.source_path.is_file());
+
+    let restored = fixture
+        .workspace
+        .add_document(&fixture.source_path)
+        .expect("add back in-review");
+    assert_eq!(restored.id, fixture.document_id);
+    assert_eq!(restored.source_state, dms_core::SourceState::Registered);
+    assert_eq!(restored.lifecycle, Lifecycle::InReview);
+
+    let mut released = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    released
+        .workspace
+        .configure_default_review_interval(6)
+        .unwrap();
+    release_first(&mut released);
+    let review = released
+        .workspace
+        .start_periodic_review(released.document_id)
+        .expect("open periodic review");
+    released
+        .workspace
+        .unregister_document(released.document_id)
+        .expect("unregister released with periodic review");
+    assert_eq!(
+        released
+            .workspace
+            .document(released.document_id)
+            .unwrap()
+            .lifecycle,
+        Lifecycle::Released
+    );
+    assert!(matches!(
+        released
+            .workspace
+            .start_periodic_review(released.document_id),
+        Err(DmsError::PeriodicReviewAlreadyOpen)
+    ));
+    let restored_release = released
+        .workspace
+        .add_document(&released.source_path)
+        .expect("add back released");
+    assert_eq!(restored_release.lifecycle, Lifecycle::Released);
+    assert!(matches!(
+        released
+            .workspace
+            .start_periodic_review(released.document_id),
+        Err(DmsError::PeriodicReviewAlreadyOpen)
+    ));
+    assert_eq!(review.status, PeriodicReviewStatus::Open);
+}

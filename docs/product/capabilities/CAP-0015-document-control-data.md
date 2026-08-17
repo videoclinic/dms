@@ -5,7 +5,7 @@
 | ID | CAP-0015 |
 | Status | implemented |
 | Storage | `<edit-root>/.dms/` |
-| Tests | Phases 9e–9f.5, 9k.3, 9k.4, and 9l plus CHG-0004 Phase 2 evidence: [release-snapshot, frontmatter comparison, migration, identity-stability, and atomic-handover core tests](../../../crates/dms-core/tests/lifecycle.rs), [document-profile and legacy-owner migration tests](../../../crates/dms-core/tests/workspace.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [Library document-control, bounded details-pane, release-profile, placeholder, and lifecycle tests](../../../crates/dms-desktop/ui/library.test.mjs), [document-type catalogue tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
+| Tests | Phases 9e–9f.5, 9k.3, 9k.4, and 9l plus CHG-0004 Phase 2 evidence: [release-snapshot, frontmatter comparison, migration, identity-stability, atomic-handover, and unregister-independence core tests](../../../crates/dms-core/tests/lifecycle.rs), [document-profile and legacy-owner migration tests](../../../crates/dms-core/tests/workspace.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [Library document-control, bounded details-pane, release-profile, placeholder, and lifecycle tests](../../../crates/dms-desktop/ui/library.test.mjs), [document-type catalogue tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
 
 ## Outcomes
 
@@ -169,9 +169,10 @@
 
 - Lifecycle: [`CAP-0002-document-lifecycle.md`](CAP-0002-document-lifecycle.md)
 - Library: [`CAP-0006-library-explorer.md`](CAP-0006-library-explorer.md)
+- Membership vs obsolescence: [`../../library-membership-and-obsolescence.md`](../../library-membership-and-obsolescence.md)
 - Maintenance: [`CAP-0013-library-maintenance.md`](CAP-0013-library-maintenance.md)
 - Evidence: [`CAP-0011-approval-evidence.md`](CAP-0011-approval-evidence.md)
 - Periodic review: [`CAP-0017-periodic-document-review.md`](CAP-0017-periodic-document-review.md)
 - Workflow-role routing: [`CAP-0019-inherited-workflow-role-routing.md`](CAP-0019-inherited-workflow-role-routing.md)
-- ADR-0004, ADR-0013, ADR-0015, ADR-0016: [`../../design-decisions.md`](../../design-decisions.md)
+- ADR-0004, ADR-0013, ADR-0015, ADR-0016, ADR-0026: [`../../design-decisions.md`](../../design-decisions.md)
 - Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)

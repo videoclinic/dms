@@ -1,8 +1,8 @@
 use std::{fs, path::Path};
 
 use dms_core::{
-    ControlUpdate, DmsError, LibraryEntryKind, LibraryMembership, PermalinkTarget, SourceState,
-    Workspace,
+    ControlUpdate, DmsError, LibraryEntryKind, LibraryMembership, Lifecycle, PermalinkTarget,
+    SourceState, Workspace,
 };
 
 fn initialized_workspace() -> (tempfile::TempDir, Workspace) {
@@ -392,4 +392,40 @@ fn lost_source_rows_counters_reassociate_event_and_absorb_rules() {
                 .as_ref()
                 .is_some_and(|change| change.absorbed_document_id == Some(target.id))
         }));
+}
+
+#[test]
+fn unregister_leaves_obsolete_lifecycle_and_add_back_restores_same_id() {
+    let (_temp, mut workspace) = initialized_workspace();
+    fs::create_dir_all(workspace.edit_root.join("Policies")).expect("folder");
+    let source = workspace.edit_root.join("Policies/Handbook.md");
+    fs::write(&source, "# Handbook").expect("draft");
+    let document = workspace.add_document(&source).expect("register");
+    workspace
+        .mark_obsolete(document.id, "Superseded")
+        .expect("mark obsolete");
+    let events_before = workspace
+        .workflow_history(document.id)
+        .expect("history before")
+        .len();
+
+    workspace
+        .unregister_document(document.id)
+        .expect("unregister obsolete");
+    assert!(source.is_file());
+    let unregistered = workspace.document(document.id).expect("retained");
+    assert_eq!(unregistered.source_state, SourceState::Unregistered);
+    assert_eq!(unregistered.lifecycle, Lifecycle::Obsolete);
+    assert_eq!(
+        workspace
+            .workflow_history(document.id)
+            .expect("history after unregister")
+            .len(),
+        events_before
+    );
+
+    let restored = workspace.add_document(&source).expect("add back");
+    assert_eq!(restored.id, document.id);
+    assert_eq!(restored.source_state, SourceState::Registered);
+    assert_eq!(restored.lifecycle, Lifecycle::Obsolete);
 }

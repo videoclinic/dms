@@ -77,6 +77,8 @@ source-file access-control boundary.
   DMS with its client, tenant, and group IDs.
 - [Product capabilities](docs/product/README.md) — current capability contracts
   and wireframe index.
+- [Library membership and obsolescence](docs/library-membership-and-obsolescence.md)
+  — why **Mark obsolete** and **Unregister** are different actions.
 - [Bootstrap implementation receipt](docs/changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)
   — completed implementation scope, phases, and verification evidence.
 

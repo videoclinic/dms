@@ -59,3 +59,4 @@ Each CAP links its HTML + PNG under **Links**.
 - Architecture: [`../architecture.md`](../architecture.md)
 - Privacy: [`../privacy.md`](../privacy.md)
 - Design decisions: [`../design-decisions.md`](../design-decisions.md)
+- Membership vs obsolescence: [`../library-membership-and-obsolescence.md`](../library-membership-and-obsolescence.md)

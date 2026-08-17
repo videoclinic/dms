@@ -290,6 +290,40 @@ test("mixed and unsupported selections expose no incompatible batch action", () 
   assert.doesNotMatch(markup, /data-library-unregister/);
 });
 
+test("in-review documents still expose Unregister in Actions", () => {
+  const registered = file("Handbook.md", { in_library: { document_id: "doc-1" } }, {
+    id: "doc-1",
+    lifecycle: "in_review",
+    control: { title: "Employee handbook" },
+  });
+  const library = {
+    ...createLibraryState(),
+    folder: snapshot("Policies", [registered]).folder,
+    selection: ["Policies/Handbook.md"],
+    detail: {
+      document_id: "doc-1",
+      source_name: "Handbook.md",
+      relative_path: "Policies/Handbook.md",
+      source_exists: true,
+      source_state: "registered",
+      lifecycle: "in_review",
+      control: { title: "Employee handbook" },
+      lifecycle_actions: {
+        cancel_review: { available: true, reason: null },
+        mark_obsolete: { available: true, reason: null },
+      },
+      workflow_events: [],
+    },
+  };
+  const markup = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies" } },
+    library,
+  );
+  assert.match(markup, /class="badge muted">in_review</);
+  assert.match(markup, /data-library-unregister/);
+});
+
 test("library markup separates source Name from DMS Title and keeps actions in the selection pane", () => {
   const registered = file("Handbook.md", { in_library: { document_id: "doc-1" } }, {
     id: "doc-1",
