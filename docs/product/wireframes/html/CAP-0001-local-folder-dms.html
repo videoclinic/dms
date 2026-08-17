@@ -98,7 +98,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .detail-pane .kv > div { grid-template-columns: 7.5rem 1fr; gap: 0.45rem; font-size: 0.8rem; }
 .detail-pane .doc-title { font-size: 1rem; margin-bottom: 0.15rem; }
 .selection-pane-layout { display: flex; flex-direction: column; overflow: hidden; }
-.selection-scroll { flex: 1 1 auto; min-height: 8rem; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.selection-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .selection-section { margin-top: 0.8rem; border-top: 1px solid var(--border); padding-top: 0.65rem; }
 .selection-section summary {
   display: flex;
@@ -133,18 +133,21 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .selection-section-meta { color: var(--muted-foreground); font-size: 0.7rem; font-weight: 500; }
 .selection-section-body { margin-top: 0.65rem; padding-left: 1.35rem; }
 .selection-actions-footer {
-  display: flex;
-  flex-direction: column;
-  flex: 0 1 auto;
-  min-height: 0;
-  max-height: 50%;
+  flex: 0 0 auto;
+  min-height: 2.75rem;
   overflow: hidden;
   margin-top: 0;
 }
-.selection-actions-footer[open] { min-height: 10rem; max-height: 18rem; }
+.selection-actions-footer[open] {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-height: 2.75rem;
+  max-height: 100%;
+}
 .selection-actions-footer > summary { flex: 0 0 auto; }
 .selection-actions-footer > .selection-section-body {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
