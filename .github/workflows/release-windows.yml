@@ -91,19 +91,19 @@ jobs:
             # CA-issued leaf is not self-signed and verifies against the
             # system trust store, keeping chain verification real.
             #
-            # Trust only a KEYLESS export: adding a cert that carries a
-            # private key to the Root store triggers CAPI keyset creation in
-            # that store location and blocks indefinitely on headless
-            # Windows runners. The private key stays in My (above).
-            Write-Host "[4/4] self-signed cert: trusting keyless copy in Cert:\CurrentUser\Root"
-            # ::new() not New-Object: a byte[] argument to New-Object is
-            # deconstructed into N scalar args (observed: "argument count: 952").
-            $keyless = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
-              $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert))
-            $root = New-Object System.Security.Cryptography.X509Certificates.X509Store -ArgumentList 'Root', 'CurrentUser'
-            $root.Open('ReadWrite')
-            $root.Add($keyless)
-            $root.Close()
+            # Use native `certutil -addstore`, NOT the .NET X509Store API:
+            # `X509Store('Root','CurrentUser').Add(<valid cert>)` blocks
+            # indefinitely on headless windows-latest runners (observed
+            # 2026-08-18, runs 32159384160 + 32163986746 with a private-key
+            # cert, and 32169684243 with a keyless export — so it is the
+            # Root add itself, not the key, that stalls). certutil is the
+            # standard synchronous CI path and does not stall.
+            Write-Host "[4/4] self-signed cert: trusting in Cert:\CurrentUser\Root via certutil"
+            $cerPath = Join-Path $env:RUNNER_TEMP 'dms-root.cer'
+            [IO.File]::WriteAllBytes($cerPath, $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+            & certutil -addstore -user 'Root' $cerPath
+            if ($LASTEXITCODE -ne 0) { throw "certutil -addstore Root exited with $LASTEXITCODE." }
+            Remove-Item -Path $cerPath -Force
           } else {
             Write-Host "[4/4] CA-issued cert: relying on system trust store"
           }
