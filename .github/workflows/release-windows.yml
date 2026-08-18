@@ -121,16 +121,20 @@ jobs:
           # signtool verify builds a chain against the system trust store,
           # which forces the Root-store self-trust that hangs headless
           # runners (see CHG-0024). Get-AuthenticodeSignature reads the
-          # embedded signature: it must come from the pinned cert, carry a
-          # valid (non-erroring) status, and be Authenticode-signed. A
-          # CA-issued cert yields Status=Valid; the self-signed test cert
-          # yields NotTrusted, which is the expected, correct result.
+          # embedded signature: it must come from the pinned cert, and its
+          # chain status must be explainable. Accepted outcomes:
+          #   Valid        — CA-issued cert chains to a system root
+          #   NotTrusted   — untrusted root (Windows PowerShell 5.1 bucket)
+          #   UnknownError — pwsh 7 / .NET 8's bucket for the SAME
+          #                  "chain terminated in an untrusted root"
+          #                  condition (run 32180394018 proved the split),
+          #                  accepted only when the status message says so.
           $sig = Get-AuthenticodeSignature -FilePath $exe.FullName
           if (-not ($sig.SignerCertificate.Thumbprint -replace '\s','') -ieq $env:WINDOWS_CERT_THUMBPRINT) {
             throw "Installer signed with $($sig.SignerCertificate.Thumbprint), not the pinned $($env:WINDOWS_CERT_THUMBPRINT)."
           }
-          $expected = @('Valid', 'NotTrusted')
-          if ($expected -notcontains $sig.Status) {
+          $untrustedRoot = ($sig.StatusMessage -match 'terminated in a root certificate which is not trusted')
+          if ($sig.Status -notin @('Valid', 'NotTrusted') -and -not ($sig.Status -eq 'UnknownError' -and $untrustedRoot)) {
             throw "Authenticode status $($sig.Status) for $($sig.StatusMessage)."
           }
           Write-Host "Signed + verified: $($exe.Name) (status: $($sig.Status))"
