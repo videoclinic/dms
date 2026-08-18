@@ -140,6 +140,7 @@ ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
 | Native Windows desktop development | Requires the MSVC Rust toolchain selected by `rust-toolchain.toml`, Visual Studio Build Tools with Desktop development with C++, and the WebView2 Evergreen Runtime; WSL is not a Windows desktop-integration substitute |
 | Ubuntu on WSL2 development | Uses Rustup-selected Linux Rust 1.88.0, Node.js, and Tauri's Ubuntu development libraries; keep the checkout under the Linux filesystem and treat any WSLg launch only as Linux-adapter validation |
 | `.github/workflows/desktop-platform-smoke.yml` | Rust 1.88 workspace gate on Windows, macOS, and Linux; desktop launch smoke; Linux job additionally verifies the `dms://` XDG scheme registration; Markdown-to-template-DOCX fake-backed export coverage; NSIS/DMG packaging smoke; installed-Word evidence remains an external host gate |
+| `.github/workflows/release-windows.yml` | Tag-driven (`v*`) Windows release: NSIS installer built, Authenticode-signed (`signtool` + DigiCert TSA, cert from `WINDOWS_CERT_*` secrets), and published as a draft GitHub Release with a `.sha256` sidecar; operator publishes the draft; contract in ADR-0027 and CHG-0024 |
 
 ### Index scope
 

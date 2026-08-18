@@ -28,7 +28,10 @@ When implemented, the following must hold:
    change-comment handoff, and document permalink copy/resolve (CAP-0020).
 4. The app runs without a database service process.
 5. Platform packaging produces installable artifacts for Windows and macOS
-   (exact installer formats chosen at implementation).
+   (exact installer formats chosen at implementation). The Windows
+   distribution is a signed NSIS installer published as a GitHub Release
+   by `.github/workflows/release-windows.yml` on every `v*` tag push;
+   see ADR-0027 and `CHG-0024` for the contract.
 6. The primary chrome includes a **foldable left menu** (sidebar) with the
    primary destinations (Library, Releases, Audit & Reports, Maintenance,
    Configuration). Expanded and collapsed states are operator-toggled.

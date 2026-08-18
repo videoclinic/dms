@@ -491,6 +491,35 @@ Capability-local rules stay in their CAP files.
   for the prior free-text value, and never invent a release snapshot for an
   unrecorded date.
 
+## ADR-0027 — Windows installer distribution = signed NSIS, published to GitHub Releases
+
+- **Decision:** The Windows distribution is a single signed NSIS installer
+  (`DMS_Desktop_<version>_x64-setup.exe`) produced by `cargo tauri build
+  --bundles nsis` on a `windows-latest` GitHub Actions runner, signed with
+  the operator's Authenticode certificate via `signtool` with a DigiCert
+  RFC 3162 timestamp, and published as a GitHub Release on every `v*` tag
+  push by `.github/workflows/release-windows.yml`. The release carries a
+  `<installer>.sha256` sidecar so operators can verify the download.
+- **Why:** GitHub Releases is the public channel the operator requested,
+  and the Actions runner is the only environment that holds the
+  Authenticode private key. NSIS is Tauri's first-party Windows installer
+  and the bundler already drives `dms://` URL Protocol registration from
+  `plugins.deep-link.desktop.schemes` (verified against
+  `tauri-bundler/src/bundle/windows/nsis/installer.nsi:671-672, 806-807` in
+  tauri v2.11.5), so per-user scheme registration ships with the installer
+  at no extra cost. The release workflow is the only path that signs the
+  binary before publication.
+- **Consequences:** The operator must provision three CI secrets
+  (`WINDOWS_CERT_PFX`, `WINDOWS_CERT_PFX_PASSWORD`, `WINDOWS_CERT_THUMBPRINT`)
+  before the first tagged release can ship signed. Until then the workflow
+  still publishes an unsigned installer with a warning, which is suitable
+  for an internal dry-run. Authenticode renewal is a secret-rotation
+  exercise, not a code change. `bundle.active` stays `false` in
+  `tauri.conf.json`; the release workflow passes `--bundles nsis`
+  explicitly so dev `cargo run -p dms-desktop` does not invoke the
+  bundler. macOS DMG and Linux package distribution are out of scope
+  until a future ADR.
+
 ## ADR-0026 — Membership and obsolescence stay distinct
 
 - **Decision:** Library membership (`source_state`) and document lifecycle

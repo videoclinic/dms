@@ -66,6 +66,37 @@ and digital signatures. Microsoft Graph is limited to Microsoft Entra workflow
 identity resolution and verification; filesystem permissions remain the
 source-file access-control boundary.
 
+### Installing the Windows app
+
+The signed NSIS installer is published as a GitHub Release on every
+`v*` tag push.
+
+1. Open the [releases page](https://github.com/videoclinic/dms/releases)
+   and pick the latest tag (e.g. `v0.1.0`).
+2. Download `DMS_Desktop_<version>_x64-setup.exe` **and** the matching
+   `*.sha256` sidecar.
+3. Verify the SHA-256 of the installer matches the sidecar:
+   ```powershell
+   Get-FileHash .\DMS_Desktop_<version>_x64-setup.exe -Algorithm SHA256
+   Get-Content .\DMS_Desktop_<version>_x64-setup.exe.sha256
+   ```
+4. Double-click the installer and follow the standard NSIS prompts.
+   The installer writes the `dms://` URL Protocol keys under
+   `HKCU\Software\Classes\dms` (per-user) so document permalinks from
+   notification emails open back into the installed app.
+5. Launch **DMS Desktop** from the Start Menu, then open an existing
+   workspace through the setup screen.
+
+The Windows SmartScreen prompt is expected on first launch until the
+Authenticode certificate accrues enough installs; an EV code-signing
+certificate removes it entirely. See
+[`docs/changes/archive/CHG-0024-windows-nsis-installer-release.md`](docs/changes/archive/CHG-0024-windows-nsis-installer-release.md)
+for the full distribution contract.
+
+The "Windows setup" section above is the **developer** path (build from
+source with the MSVC toolchain); this section is the **end-user** path
+(download and run the signed installer).
+
 ## Repository guide
 
 - [Architecture](docs/architecture.md) — runtime shape, roots, trust boundary,
