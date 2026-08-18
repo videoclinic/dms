@@ -31,7 +31,7 @@
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
 | 1 | Linux runtime scheme registration in `setup()` | done (smoke 2026-08-18: `~/.local/share/applications/dms-desktop-handler.desktop` with `MimeType=x-scheme-handler/dms` written; `xdg-mime query default x-scheme-handler/dms` → `dms-desktop-handler.desktop`; `cargo test -p dms-desktop` 54 passed; `node --test` exit 0) | After `DMS_DESKTOP_SMOKE=1 cargo run -p dms-desktop`: `~/.local/share/applications/dms-desktop-handler.desktop` exists with `MimeType=x-scheme-handler/dms` and `xdg-mime query default x-scheme-handler/dms` prints `dms-desktop-handler.desktop`; `cargo test -p dms-desktop` and `node --test crates/dms-desktop/ui/*.test.mjs` exit 0 |
-| 2 | Linux job in the platform smoke workflow | pending | Pushed `desktop-platform-smoke` run is green including a new `ubuntu-latest` job that runs the workspace gates plus the phase-1 registration assertions; run id recorded here |
+| 2 | Linux job in the platform smoke workflow | in-progress | Pushed `desktop-platform-smoke` run is green including a new `ubuntu-latest` job that runs the workspace gates plus the phase-1 registration assertions; run id recorded here |
 | 3 | Windows/macOS installer registration evidence | pending | Latest CI run green with `nsis` and `dmg` artifacts uploaded (run id recorded here); host-side probes documented in this CHG as external gates (`reg query "HKCU\Software\Classes\dms"` after NSIS install; `plutil -p Info.plist` / `mdls` CFBundleURLTypes check on the DMG app) |
 | 4 | Records: ADR-0002 amendment, root + desktop AGENTS, CAP-0020 status | pending | `cargo test --workspace` and `node --test crates/dms-desktop/ui/*.test.mjs` exit 0; CAP-0020 outcomes all match runtime and its Status reflects it; CHG archived as `done` and `docs/changes/README.md` index refreshed |
 
@@ -52,6 +52,11 @@ Recovery: registration only writes `~/.local/share/applications/dms-desktop-hand
 ## Phase 2 — Linux CI job
 
 **Goal:** Every push proves the Linux registration on a clean runner, so the scheme handler cannot silently regress.
+
+Findings (2026-08-18, while authoring the job):
+- The smoke step launches a real webview window before the `DMS_DESKTOP_SMOKE` exit inside `setup()`, so it needs a display. GitHub's `ubuntu-latest` is headless — the smoke runs under `xvfb-run`.
+- The plugin's `register_all` needs `xdg-mime` (`xdg-utils`) and `update-desktop-database` (`desktop-file-utils`); the apt step installs both plus the standard Tauri Linux webview libraries and `xvfb` explicitly rather than trusting the runner image.
+- Linux packaging is not part of this job (`bundle: ""` skips the packaging step; Linux deb/rpm/AppImage packaging stays out of scope).
 
 Steps:
 

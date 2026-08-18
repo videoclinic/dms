@@ -139,7 +139,7 @@ ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
 | `rust-toolchain.toml` | Exact Rust 1.88.0 toolchain with `clippy` and `rustfmt`; `Cargo.toml` retains the 1.88 MSRV |
 | Native Windows desktop development | Requires the MSVC Rust toolchain selected by `rust-toolchain.toml`, Visual Studio Build Tools with Desktop development with C++, and the WebView2 Evergreen Runtime; WSL is not a Windows desktop-integration substitute |
 | Ubuntu on WSL2 development | Uses Rustup-selected Linux Rust 1.88.0, Node.js, and Tauri's Ubuntu development libraries; keep the checkout under the Linux filesystem and treat any WSLg launch only as Linux-adapter validation |
-| `.github/workflows/desktop-platform-smoke.yml` | Rust 1.88 Windows/macOS workspace gate, desktop launch smoke, Markdown-to-template-DOCX fake-backed export coverage, and NSIS/DMG packaging smoke; installed-Word evidence remains an external host gate |
+| `.github/workflows/desktop-platform-smoke.yml` | Rust 1.88 workspace gate on Windows, macOS, and Linux; desktop launch smoke; Linux job additionally verifies the `dms://` XDG scheme registration; Markdown-to-template-DOCX fake-backed export coverage; NSIS/DMG packaging smoke; installed-Word evidence remains an external host gate |
 
 ### Index scope
 

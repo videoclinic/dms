@@ -21,6 +21,8 @@ jobs:
             bundle: nsis
           - os: macos-latest
             bundle: dmg
+          - os: ubuntu-latest
+            bundle: ""
 
     steps:
       - uses: actions/checkout@v4
@@ -31,6 +33,13 @@ jobs:
         with:
           node-version: 24
       - uses: Swatinem/rust-cache@v2
+      - name: Install Linux desktop dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xdg-utils desktop-file-utils xvfb \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev libssl-dev
       - name: Rust format
         run: cargo fmt --check
       - name: Rust tests
@@ -40,12 +49,25 @@ jobs:
       - name: Shell model tests
         run: node --test crates/dms-desktop/ui/app.test.mjs
       - name: Launch desktop app
-        run: cargo run -p dms-desktop
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            xvfb-run -a cargo run -p dms-desktop
+          else
+            cargo run -p dms-desktop
+          fi
         env:
           DMS_DESKTOP_SMOKE: "1"
+      - name: Verify dms scheme registration
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          set -e
+          test -f "$HOME/.local/share/applications/dms-desktop-handler.desktop"
+          grep -q '^MimeType=x-scheme-handler/dms' "$HOME/.local/share/applications/dms-desktop-handler.desktop"
+          [ "$(xdg-mime query default x-scheme-handler/dms)" = "dms-desktop-handler.desktop" ]
       - name: Exercise Markdown template assembly and fake-backed Office export
         run: cargo test -p dms-desktop export::tests::markdown_assembles_fills_and_dispatches_a_template_backed_docx_to_office -- --exact
       - name: Build installable desktop package
+        if: matrix.bundle != ''
         uses: tauri-apps/tauri-action@v1
         with:
           projectPath: crates/dms-desktop
