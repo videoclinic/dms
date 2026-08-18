@@ -2305,7 +2305,7 @@ fn document_selection(edit_root: &Path, document_id: Uuid) -> Result<DocumentSel
         .map_err(|error| error.to_string())?
         .map(|release| CurrentReleaseSelection {
             release_id: release.id,
-            version: release.version.to_string(),
+            version: format!("{}.{}", release.version.major, release.version.minor),
             relative_pdf_path: path_text(&release.relative_pdf_path),
             pdf_exists: workspace.release_pdf_path(document_id, release.id).is_ok(),
             effective_date: release.effective_date,
@@ -2535,7 +2535,7 @@ fn release_maintenance(workspace: &Workspace) -> Result<ReleaseMaintenance, Stri
                     |control| control.title.clone(),
                 ),
                 release_id: release.id,
-                version: release.version.to_string(),
+                version: format!("{}.{}", release.version.major, release.version.minor),
                 relative_pdf_path: path_text(&release.relative_pdf_path),
                 pdf_digest: release.pdf_digest.clone(),
                 confidentiality_id: release.confidentiality.type_id.clone(),
