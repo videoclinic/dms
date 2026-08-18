@@ -49,6 +49,8 @@ jobs:
       - name: Shell model tests
         run: node --test crates/dms-desktop/ui/app.test.mjs
       - name: Launch desktop app
+        # The conditional branch is bash; Windows steps default to PowerShell.
+        shell: bash
         run: |
           if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
             xvfb-run -a cargo run -p dms-desktop

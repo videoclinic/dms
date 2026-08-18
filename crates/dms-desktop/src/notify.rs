@@ -25,7 +25,8 @@ pub struct OsCredentialStore;
 
 impl CredentialStore for OsCredentialStore {
     fn smtp_password(&self, workspace_id: Uuid) -> Result<String, String> {
-        let entry = smtp_password_entry(workspace_id)?;
+        let entry = smtp_password_entry(workspace_id)
+            .map_err(|error| format!("cannot access the OS credential store: {error}"))?;
         entry.get_password().map_err(|error| {
             format!(
                 "SMTP password is not available in the OS credential store for workspace {workspace_id}: {error}"
@@ -37,7 +38,8 @@ impl CredentialStore for OsCredentialStore {
         if password.trim().is_empty() {
             return Err("SMTP app password cannot be empty".to_owned());
         }
-        smtp_password_entry(workspace_id)?
+        smtp_password_entry(workspace_id)
+            .map_err(|error| format!("cannot access the OS credential store: {error}"))?
             .set_password(password)
             .map_err(|error| {
                 format!("cannot save SMTP app password in the OS credential store: {error}")
@@ -45,7 +47,9 @@ impl CredentialStore for OsCredentialStore {
     }
 
     fn delete_smtp_password(&self, workspace_id: Uuid) -> Result<(), String> {
-        match smtp_password_entry(workspace_id)?.delete_credential() {
+        let entry = smtp_password_entry(workspace_id)
+            .map_err(|error| format!("cannot access the OS credential store: {error}"))?;
+        match entry.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(error) => Err(format!(
                 "cannot delete SMTP app password from the OS credential store: {error}"
@@ -54,9 +58,18 @@ impl CredentialStore for OsCredentialStore {
     }
 
     fn smtp_password_exists(&self, workspace_id: Uuid) -> Result<bool, String> {
-        match smtp_password_entry(workspace_id)?.get_password() {
+        let entry = match smtp_password_entry(workspace_id) {
+            Ok(entry) => entry,
+            // A system without any default credential store (for example a
+            // headless CI runner) cannot hold an SMTP password, so the
+            // credential is unconfigured rather than unreadable.
+            Err(keyring::Error::NoDefaultStore) => return Ok(false),
+            Err(error) => return Err(format!("cannot access the OS credential store: {error}")),
+        };
+        match entry.get_password() {
             Ok(_) => Ok(true),
             Err(keyring::Error::NoEntry) => Ok(false),
+            Err(keyring::Error::NoDefaultStore) => Ok(false),
             Err(error) => Err(format!(
                 "cannot access the OS credential store for the SMTP app password: {error}"
             )),
@@ -70,12 +83,11 @@ impl OsCredentialStore {
     }
 }
 
-fn smtp_password_entry(workspace_id: Uuid) -> Result<Entry, String> {
+fn smtp_password_entry(workspace_id: Uuid) -> Result<Entry, keyring::Error> {
     Entry::new(
         KEYRING_SERVICE,
         &format!("{workspace_id}/{SMTP_PASSWORD_PURPOSE}"),
     )
-    .map_err(|error| format!("cannot access the OS credential store: {error}"))
 }
 
 pub(crate) trait SmtpSender {

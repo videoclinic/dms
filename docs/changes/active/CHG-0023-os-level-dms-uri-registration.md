@@ -58,6 +58,10 @@ Findings (2026-08-18, while authoring the job):
 - The plugin's `register_all` needs `xdg-mime` (`xdg-utils`) and `update-desktop-database` (`desktop-file-utils`); the apt step installs both plus the standard Tauri Linux webview libraries and `xvfb` explicitly rather than trusting the runner image.
 - Linux packaging is not part of this job (`bundle: ""` skips the packaging step; Linux deb/rpm/AppImage packaging stays out of scope).
 
+Fixes applied after the first CI run (32129034916, failed on Windows + Linux):
+- **Windows `ParserError` on the launch step**: the step used a bash `if` conditional, but Windows workflow steps default to PowerShell. The step now sets `shell: bash` (bash is preinstalled on all GitHub runners).
+- **Two Linux test failures** (`desktop_configuration_commands_persist_workspace_and_document_defaults`, `desktop_configuration_commands_persist_workflow_and_notifications`): both call configuration command wrappers that probe the real OS credential store; a headless runner has no default keyring store, so `keyring::Entry::new` fails with `NoDefaultStore` and the unwrap panicked. Fix in `crates/dms-desktop/src/notify.rs`: `smtp_password_exists` now maps `NoDefaultStore` to `Ok(false)` — a system without any credential store cannot hold an SMTP password, so the credential is unconfigured, not unreadable. Entry construction errors are mapped to the same user-facing string as before at the call sites. Verified locally with `env -u DBUS_SESSION_BUS_ADDRESS cargo test -p dms-desktop desktop_configuration_commands_persist` (2 passed) plus the full crate suite.
+
 Steps:
 
 1. Add `os: ubuntu-latest, bundle: none` to the matrix in `.github/workflows/desktop-platform-smoke.yml`.
