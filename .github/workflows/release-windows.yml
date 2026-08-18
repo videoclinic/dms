@@ -103,6 +103,31 @@ jobs:
           args: --bundles nsis
           uploadWorkflowArtifacts: true
 
+      - name: Normalize installer filename (space to underscore)
+        shell: pwsh
+        run: |
+          $nsisDir = 'target/release/bundle/nsis'
+          # tauri 2 names the NSIS installer from productName verbatim
+          # ("DMS Desktop" -> "DMS Desktop_0.1.0_x64-setup.exe"), and GitHub
+          # replaces spaces with dots in uploaded asset names, which would
+          # break the documented DMS_Desktop_<version>_x64-setup.exe contract
+          # (README, ADR-0027). Normalize before signing so the sign, hash,
+          # and publish steps all see one name.
+          Get-ChildItem -Path $nsisDir -File | Where-Object { $_.Name -match ' ' } | ForEach-Object {
+            $newName = $_.Name -replace ' ', '_'
+            Rename-Item -Path $_.FullName -NewName $newName
+            Write-Host "Renamed: $($_.Name) -> $newName"
+          }
+          # Positive gate: the published name must match the documented
+          # contract for this build's version, whatever tauri produced.
+          $version = (Get-Content crates/dms-desktop/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $expected = "DMS_Desktop_${version}_x64-setup.exe"
+          if (-not (Test-Path (Join-Path $nsisDir $expected))) {
+            $found = (Get-ChildItem -Path $nsisDir -Filter '*.exe' | ForEach-Object { $_.Name }) -join ', '
+            throw "Normalized installer not found: expected $expected in $nsisDir; found: $found."
+          }
+          Write-Host "Installer ready: $expected"
+
       - name: Sign installer with Authenticode
         if: ${{ env.WINDOWS_CERT_THUMBPRINT != '' }}
         shell: pwsh
