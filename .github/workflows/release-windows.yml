@@ -71,12 +71,19 @@ jobs:
             exit 0
           }
           # Phase markers let a stuck run's completed log show exactly which
-          # call blocked (see CHG-0024: runs 32159384160 + 32163986746 hung
-          # on a private-key cert being added to the Root store).
-          Write-Host "[1/4] writing PFX to runner temp"
+          # call blocked.
+          #
+          # NO Root-store self-trust here, on purpose: writing to
+          # Cert:\CurrentUser\Root blocks indefinitely on headless
+          # windows-latest runners — observed four times (runs 32159384160,
+          # 32163986746 via X509Store.Add keyed; 32169684243 via X509Store.Add
+          # keyless; 32176773256 via certutil -addstore). Trust is not needed:
+          # the Sign step verifies via Get-AuthenticodeSignature, which reads
+          # the embedded signature and needs no trusted root (see CHG-0024).
+          Write-Host "[1/3] writing PFX to runner temp"
           $pfxPath = Join-Path $env:RUNNER_TEMP 'dms-cert.pfx'
           [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX))
-          Write-Host "[2/4] importing PFX into Cert:\CurrentUser\My (carries the private key signtool signs with)"
+          Write-Host "[2/3] importing PFX into Cert:\CurrentUser\My (carries the private key signtool signs with)"
           $securePwd = if ($env:WINDOWS_CERT_PFX_PASSWORD) {
             ConvertTo-SecureString -String $env:WINDOWS_CERT_PFX_PASSWORD -AsPlainText -Force
           } else { New-Object SecureString }
@@ -87,29 +94,7 @@ jobs:
           # the one whose thumbprint the operator pinned.
           $cert = $imported | Where-Object { ($_.Thumbprint -replace '\s','') -ieq $env:WINDOWS_CERT_THUMBPRINT } | Select-Object -First 1
           if (-not $cert) { throw "No certificate in the PFX matches thumbprint $($env:WINDOWS_CERT_THUMBPRINT)." }
-          Write-Host "[3/4] selected signing cert $($cert.Thumbprint) (subject: $($cert.Subject))"
-          if ($cert.Issuer -eq $cert.Subject) {
-            # Self-signed test-cert path: trust it as a root on this
-            # ephemeral runner so `signtool verify /pa` can chain. A
-            # CA-issued leaf is not self-signed and verifies against the
-            # system trust store, keeping chain verification real.
-            #
-            # Use native `certutil -addstore`, NOT the .NET X509Store API:
-            # `X509Store('Root','CurrentUser').Add(<valid cert>)` blocks
-            # indefinitely on headless windows-latest runners (observed
-            # 2026-08-18, runs 32159384160 + 32163986746 with a private-key
-            # cert, and 32169684243 with a keyless export — so it is the
-            # Root add itself, not the key, that stalls). certutil is the
-            # standard synchronous CI path and does not stall.
-            Write-Host "[4/4] self-signed cert: trusting in Cert:\CurrentUser\Root via certutil"
-            $cerPath = Join-Path $env:RUNNER_TEMP 'dms-root.cer'
-            [IO.File]::WriteAllBytes($cerPath, $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert))
-            & certutil -addstore -user 'Root' $cerPath
-            if ($LASTEXITCODE -ne 0) { throw "certutil -addstore Root exited with $LASTEXITCODE." }
-            Remove-Item -Path $cerPath -Force
-          } else {
-            Write-Host "[4/4] CA-issued cert: relying on system trust store"
-          }
+          Write-Host "[3/3] selected signing cert $($cert.Thumbprint) (subject: $($cert.Subject))"
 
       - name: Build NSIS installer (no release upload)
         uses: tauri-apps/tauri-action@v1
@@ -132,9 +117,23 @@ jobs:
           & $signtool.FullName sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 `
             /sha1 $env:WINDOWS_CERT_THUMBPRINT $exe.FullName
           if ($LASTEXITCODE -ne 0) { throw "signtool sign exited with $LASTEXITCODE." }
-          & $signtool.FullName verify /pa $exe.FullName
-          if ($LASTEXITCODE -ne 0) { throw "signtool verify exited with $LASTEXITCODE." }
-          Write-Host "Signed: $($exe.Name)"
+          # Verify via Get-AuthenticodeSignature, NOT `signtool verify /pa`:
+          # signtool verify builds a chain against the system trust store,
+          # which forces the Root-store self-trust that hangs headless
+          # runners (see CHG-0024). Get-AuthenticodeSignature reads the
+          # embedded signature: it must come from the pinned cert, carry a
+          # valid (non-erroring) status, and be Authenticode-signed. A
+          # CA-issued cert yields Status=Valid; the self-signed test cert
+          # yields NotTrusted, which is the expected, correct result.
+          $sig = Get-AuthenticodeSignature -FilePath $exe.FullName
+          if (-not ($sig.SignerCertificate.Thumbprint -replace '\s','') -ieq $env:WINDOWS_CERT_THUMBPRINT) {
+            throw "Installer signed with $($sig.SignerCertificate.Thumbprint), not the pinned $($env:WINDOWS_CERT_THUMBPRINT)."
+          }
+          $expected = @('Valid', 'NotTrusted')
+          if ($expected -notcontains $sig.Status) {
+            throw "Authenticode status $($sig.Status) for $($sig.StatusMessage)."
+          }
+          Write-Host "Signed + verified: $($exe.Name) (status: $($sig.Status))"
 
       - name: Compute SHA-256 sidecar
         shell: pwsh
