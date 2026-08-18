@@ -20,12 +20,12 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
-| [CHG-0023](active/CHG-0023-os-level-dms-uri-registration.md) | OS-level `dms://` URI handler registration | in-progress | CAP-0020 |
 
 ## Archive
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
+| [CHG-0023](archive/CHG-0023-os-level-dms-uri-registration.md) | OS-level `dms://` URI handler registration | done | CAP-0020 |
 | [CHG-0020](archive/CHG-0020-foldable-library-panes.md) | Foldable Library side panes | done | CAP-0006 |
 | [CHG-0022](archive/CHG-0022-library-table-workflow-columns.md) | Workflow metadata and resizable columns in the Library table | done | CAP-0006 |
 | [CHG-0021](archive/CHG-0021-html-notification-permalinks.md) | Clickable permalinks in HTML notification emails | done | CAP-0010 |

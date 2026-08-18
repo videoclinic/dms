@@ -15,14 +15,19 @@ Capability-local rules stay in their CAP files.
 
 ## ADR-0002 — Tauri 2 on Windows and macOS
 
-- **Decision:** Build a Tauri 2 application with **Windows and macOS both
-  required** supported targets. Linux is not a v1 requirement.
+- **Decision:** Build a Tauri 2 application with **Windows, macOS, and Linux
+  supported** desktop targets. Windows and macOS remain the operator rollout
+  targets; Linux is a supported target whose OS-level `dms://` scheme
+  registration happens at app start through the deep-link plugin's
+  `register_all` (tauri-bundler performs no Linux scheme registration).
 - **Why:** Native filesystem access with a small binary footprint; WebView UI
-  without shipping a full browser; operators use both Windows and Mac for ISO
-  documentation work.
-- **Consequences:** Rust toolchain plus WebView2 (Windows) and WKWebView/macOS
-  prerequisites; CI and release packaging must cover both OS; format-specific
-  PDF export adapters (ADR-0008) sit behind one export interface.
+  without shipping a full browser; operators use Windows and Mac for ISO
+  documentation work; Linux support was added on operator request for the
+  permalink URI handler.
+- **Consequences:** Rust toolchain plus WebView2 (Windows), WKWebView/macOS,
+  and WebKitGTK (Linux) prerequisites; CI and release packaging must cover all
+  three OS; format-specific PDF export adapters (ADR-0008) sit behind one
+  export interface.
 
 ## ADR-0003 — Source drafts; releases are PDFs
 

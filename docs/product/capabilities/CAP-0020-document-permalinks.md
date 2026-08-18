@@ -3,13 +3,13 @@
 | Field | Value |
 | --- | --- |
 | ID | CAP-0020 |
-| Status | not implemented |
+| Status | implemented |
 | Identity keys | Stable workspace ID + stable document ID (ADR-0015) |
-| Tests | Partial phase 9g evidence: [`dms-core` permalink tests](../../../crates/dms-core/tests/library.rs), [review resolution tests](../../../crates/dms-core/tests/lifecycle.rs), [`dms-desktop` registry/config adapter tests](../../../crates/dms-desktop/src/lib.rs), [activity and retained-detail frontend tests](../../../crates/dms-desktop/ui/app.test.mjs), [Windows/macOS startup and packaging smoke](../../../.github/workflows/desktop-platform-smoke.yml) |
+| Tests | [`dms-core` permalink tests](../../../crates/dms-core/tests/library.rs), [review resolution tests](../../../crates/dms-core/tests/lifecycle.rs), [`dms-desktop` registry/config adapter tests](../../../crates/dms-desktop/src/lib.rs), [activity and retained-detail frontend tests](../../../crates/dms-desktop/ui/app.test.mjs), [Windows/macOS/Linux startup and packaging smoke](../../../.github/workflows/desktop-platform-smoke.yml) |
 
-## Outcomes (contract — not yet true in runtime)
+## Outcomes (contract)
 
-When implemented, the following must hold:
+The following hold:
 
 1. The desktop app registers a **local-app URI scheme** used for document
    permalinks and notification deep links. The scheme is stable across

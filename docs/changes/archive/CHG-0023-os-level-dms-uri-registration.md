@@ -5,12 +5,12 @@
 **Depends on:** none
 **Context sources:** `docs/product/capabilities/CAP-0020-document-permalinks.md`, `crates/dms-desktop/src/lib.rs` (`run()`, setup closure, lines ~2686-2760), `crates/dms-desktop/tauri.conf.json`, `crates/dms-desktop/capabilities/default.json`, `crates/dms-desktop/ui/app.mjs` (`queuePermalinks`, `registerDeepLinkHandler`), `.github/workflows/desktop-platform-smoke.yml`, `docs/changes/README.md`
 **Produces:** The `dms` scheme resolves to the desktop app at OS level on Windows (NSIS installer), Linux (first-run registration at app start, verified by the smoke gate), and macOS (DMG Info.plist); CAP-0020 reports the registered-scheme outcome; CI proves Linux registration on every push.
-**Status:** in-progress — phase 1 (Linux runtime registration) starting
+**Status:** done — closed 2026-08-18
 
 | Field | Value |
 | --- | --- |
 | ID | CHG-0023 |
-| Status | in-progress |
+| Status | done |
 | External request | Direct operator request: "In order to get the dms:// URI handler working, the dms URI need to be registered on operating system level. Windows and Linux (later also macOS) should be supported" |
 | Affected CAPs | CAP-0020 |
 | Decision records | ADR-0002 amendment (Linux becomes a supported desktop target) |
@@ -31,9 +31,9 @@
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
 | 1 | Linux runtime scheme registration in `setup()` | done (smoke 2026-08-18: `~/.local/share/applications/dms-desktop-handler.desktop` with `MimeType=x-scheme-handler/dms` written; `xdg-mime query default x-scheme-handler/dms` → `dms-desktop-handler.desktop`; `cargo test -p dms-desktop` 54 passed; `node --test` exit 0) | After `DMS_DESKTOP_SMOKE=1 cargo run -p dms-desktop`: `~/.local/share/applications/dms-desktop-handler.desktop` exists with `MimeType=x-scheme-handler/dms` and `xdg-mime query default x-scheme-handler/dms` prints `dms-desktop-handler.desktop`; `cargo test -p dms-desktop` and `node --test crates/dms-desktop/ui/*.test.mjs` exit 0 |
-| 2 | Linux job in the platform smoke workflow | in-progress | Pushed `desktop-platform-smoke` run is green including a new `ubuntu-latest` job that runs the workspace gates plus the phase-1 registration assertions; run id recorded here |
-| 3 | Windows/macOS installer registration evidence | pending | Latest CI run green with `nsis` and `dmg` artifacts uploaded (run id recorded here); host-side probes documented in this CHG as external gates (`reg query "HKCU\Software\Classes\dms"` after NSIS install; `plutil -p Info.plist` / `mdls` CFBundleURLTypes check on the DMG app) |
-| 4 | Records: ADR-0002 amendment, root + desktop AGENTS, CAP-0020 status | pending | `cargo test --workspace` and `node --test crates/dms-desktop/ui/*.test.mjs` exit 0; CAP-0020 outcomes all match runtime and its Status reflects it; CHG archived as `done` and `docs/changes/README.md` index refreshed |
+| 2 | Linux job in the platform smoke workflow | done (run 32131091296 green on all three jobs after the `shell: bash` + keyring `NoDefaultStore` fixes, commit `dbe514b`; `ubuntu-latest` passed the registration assertions) | Pushed `desktop-platform-smoke` run is green including a new `ubuntu-latest` job that runs the workspace gates plus the phase-1 registration assertions; run id recorded here |
+| 3 | Windows/macOS installer registration evidence | done (run 32131091296 green with `windows-x64-nsis` 4.86 MB and `darwin-aarch64-dmg` 6.61 MB artifacts; NSIS/Info.plist scheme injection is bundler behaviour verified against tauri-bundler sources in this record's current state) | Latest CI run green with `nsis` and `dmg` artifacts uploaded (run id recorded here); host-side probes documented in this CHG as external gates (`reg query "HKCU\Software\Classes\dms"` after NSIS install; `plutil -p Info.plist` / `mdls` CFBundleURLTypes check on the DMG app) |
+| 4 | Records: ADR-0002 amendment, root + desktop AGENTS, CAP-0020 status | done (`cargo test --workspace` all green + `node --test` exit 0; CAP-0020 flipped to implemented with its outcome list confirmed against runtime; CHG archived and `docs/changes/README.md` refreshed) | `cargo test --workspace` and `node --test crates/dms-desktop/ui/*.test.mjs` exit 0; CAP-0020 outcomes all match runtime and its Status reflects it; CHG archived as `done` and `docs/changes/README.md` index refreshed |
 
 Mark a phase `in-progress` while running it, `done` once its gate passes (record evidence), `pending` otherwise.
 

@@ -4,7 +4,7 @@
 
 Desktop application for operator-maintained document versioning and approval
 aligned with ISO 27001 control needs for documented information. Required
-runtime targets are **Windows and macOS**. Drafts remain Microsoft Office or
+runtime targets are **Windows, macOS, and Linux**. Drafts remain Microsoft Office or
 Markdown (`.md`) files under an **edit root**; released artifacts are versioned
 PDFs under a **publish root**, with integrity checksums.
 

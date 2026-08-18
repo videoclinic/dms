@@ -41,7 +41,11 @@ macOS.
   most ten unique edit roots in most-recent-first order; removing one never
   touches workspace metadata or files. A failed recent-library open reports the
   error beside that list and retains the edit root in the explicit open form.
-- Register the configured `dms://` scheme in Windows and macOS bundles. The
+- Register the configured `dms://` scheme in Windows and macOS bundles and, on
+  Linux, at app start through the deep-link plugin's `register_all` (which
+  writes `~/.local/share/applications/dms-desktop-handler.desktop` and makes it
+  the default `x-scheme-handler/dms` handler; a registration failure logs and
+  does not block startup). The
   single-instance plugin remains the first Tauri plugin so an activation focuses
   the existing main window and reaches the deep-link listener.
 - Resolve inbound permalinks only through `dms-core` against accessible edit
@@ -226,7 +230,8 @@ macOS.
 - `DMS_DESKTOP_SMOKE=1 cargo run -p dms-desktop`
 - On Windows with explicit source, template, and new retained-workspace paths:
   `cargo test -p dms-desktop tests::windows_installed_word_releases_operator_markdown_template -- --ignored --exact`
-- `.github/workflows/desktop-platform-smoke.yml` on Windows and macOS
+- `.github/workflows/desktop-platform-smoke.yml` on Windows, macOS, and Linux
+  (the Linux job also asserts the `dms` XDG scheme registration)
 
 ## Child DOX Index
 
