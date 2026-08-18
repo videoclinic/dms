@@ -77,7 +77,7 @@ jobs:
           Remove-Item -Path $pfxPath -Force
           # Production PFX bundles carry the full chain; the signing cert is
           # the one whose thumbprint the operator pinned.
-          $cert = $imported | Where-Object { $_.Thumbprint -replace '\s','' -ie $env:WINDOWS_CERT_THUMBPRINT } | Select-Object -First 1
+          $cert = $imported | Where-Object { ($_.Thumbprint -replace '\s','') -ieq $env:WINDOWS_CERT_THUMBPRINT } | Select-Object -First 1
           if (-not $cert) { throw "No imported certificate matches thumbprint $($env:WINDOWS_CERT_THUMBPRINT)." }
           # Trust the signing cert as a root on this ephemeral runner only
           # when it is self-signed (the test-cert path), so `signtool verify
