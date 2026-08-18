@@ -27,7 +27,7 @@ jobs:
     env:
       WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
       WINDOWS_CERT_PFX_PASSWORD: ${{ secrets.WINDOWS_CERT_PFX_PASSWORD }}
-      WINDOWS_CERT_THUMBPRINT: ${{ secrets.WINDOWS_CERT_THUMBPRINT }}
+      WINDOWS_CERT_THUMBPRINT: ${{ vars.WINDOWS_CERT_THUMBPRINT }}
 
     steps:
       - name: Resolve release tag
@@ -96,7 +96,7 @@ jobs:
         if: ${{ env.WINDOWS_CERT_THUMBPRINT != '' }}
         shell: pwsh
         run: |
-          $exe = Get-ChildItem -Path crates/dms-desktop/target/release/bundle/nsis -Filter '*.exe' -Recurse -File |
+          $exe = Get-ChildItem -Path target/release/bundle/nsis -Filter '*.exe' -Recurse -File |
             Select-Object -First 1
           if (-not $exe) { throw "NSIS installer not found under target/release/bundle/nsis." }
           $candidates = @('C:\Program Files (x86)\Windows Kits\10\bin', 'C:\Program Files\Windows Kits\10\bin')
@@ -113,7 +113,7 @@ jobs:
       - name: Compute SHA-256 sidecar
         shell: pwsh
         run: |
-          $exe = Get-ChildItem -Path crates/dms-desktop/target/release/bundle/nsis -Filter '*.exe' -Recurse -File |
+          $exe = Get-ChildItem -Path target/release/bundle/nsis -Filter '*.exe' -Recurse -File |
             Select-Object -First 1
           if (-not $exe) { throw "NSIS installer missing for hashing." }
           $hash = (Get-FileHash -Algorithm SHA256 -Path $exe.FullName).Hash.ToLower()
@@ -130,8 +130,8 @@ jobs:
             Signed NSIS installer for Windows. Verify the SHA-256 sidecar next to the binary before installing.
             See `docs/changes/active/CHG-0024-windows-nsis-installer-release.md` for the distribution contract.
           files: |
-            crates/dms-desktop/target/release/bundle/nsis/*.exe
-            crates/dms-desktop/target/release/bundle/nsis/*.sha256
+            target/release/bundle/nsis/*.exe
+            target/release/bundle/nsis/*.sha256
           fail_on_unmatched_files: true
           draft: true
           prerelease: ${{ contains(steps.tag.outputs.name, '-') }}

@@ -32,7 +32,7 @@
 
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
-| 1 | `release-windows.yml` tag-driven workflow + first tagged release | in-progress | Workflow file committed (this commit); first tag push + green `windows-latest` run + signed release with `.sha256` sidecar — operator step, gated on the `WINDOWS_CERT_*` secrets |
+| 1 | `release-windows.yml` tag-driven workflow + first tagged release | in-progress | Workflow file committed; tag `v0.1.0-installer-preview.1` pushed (2026-08-18) → release run 32156557691 executing with the self-signed test cert (`WINDOWS_CERT_*` synced via gh-vault); gate: green run + draft release with signed installer + `.sha256` sidecar, then operator cert swap for the production release |
 | 2 | README install story + ADR-0027 + CAP-0005 update | done (2026-08-18) | README Windows install section present; ADR-0027 in `docs/design-decisions.md`; CAP-0005 outcome 5 references the workflow; `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `node --test crates/dms-desktop/ui/app.test.mjs` all green |
 | 3 | Smoke integration: release workflow runs do not regress the existing matrix | done (2026-08-18) | Non-tag push `f5ecc8e` triggered `Desktop platform smoke` runs 32138172649 + 32138171263, both `success`; zero `Release Windows installer` runs from the same push; `gh workflow list` shows both workflows active; `desktop-platform-smoke.yml` unmodified by this commit |
 | 4 | Records closeout: archive this CHG, refresh `docs/changes/README.md` | pending | CHG moved to `archive/`, status `done`, README active index updated, archive entry present |
@@ -42,8 +42,11 @@ Mark a phase `in-progress` while running it, `done` once its gate passes (record
 Evidence (phase 1, partial):
 
 - `release-windows.yml` committed; `gh act workflow_dispatch --dryrun` resolves the workflow and lists all 11 steps. Local Linux `gh act` cannot host `windows-latest`, so the CI run is the source of truth.
-- `gh-vault workflow check --env-file <empty>` reports exactly the three `WINDOWS_CERT_*` secret references and no other issues; the repo has no `.env` declarations, so `secret sync`/`secret check` are vacuous until the operator declares the secrets.
-- Pre-commit gates green on this commit: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `node --test crates/dms-desktop/ui/app.test.mjs`.
+- `gh-vault workflow check --env-file <empty>` reports exactly the three `WINDOWS_CERT_*` references and no other issues; the repo declares them in `.env` (2 secrets, 1 variable) and `gh-vault secret check` passes after sync.
+- Pre-commit gates green on the landing commit: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `node --test crates/dms-desktop/ui/app.test.mjs`.
+- First tag run 32156557691 (`v0.1.0-installer-preview.1`, 2026-08-18) **failed at Compute SHA-256** with two root causes, both fixed in the follow-up commit:
+  - The thumbprint is a GitHub **variable** (`.env` declares it `# gh-vault: variable`), but the workflow read `secrets.WINDOWS_CERT_THUMBPRINT` → empty → cert-import warned and exited 0, sign step skipped by its `if:`. Fix: `vars.WINDOWS_CERT_THUMBPRINT`.
+  - The NSIS bundle lands in the **workspace-root** `target/release/bundle/nsis` (confirmed in the build log: `D:\a\dms\dms\target\release\bundle\nsis\DMS_Desktop_0.1.0_x64-setup.exe`), not a per-crate `target/`. Fix: all three path references (sign, hash, release upload).
 
 ## Phase 1 — `release-windows.yml` + first tagged release
 
