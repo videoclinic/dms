@@ -1,3 +1,7 @@
 .temp
 /target/
 /crates/dms-desktop/gen/
+
+# editor swap files
+*.swp
+*.swo
