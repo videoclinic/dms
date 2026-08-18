@@ -32,7 +32,7 @@
 | --- | --- | --- | --- |
 | 1 | `release-windows.yml` tag-driven workflow + first tagged release | in-progress | Workflow file committed (this commit); first tag push + green `windows-latest` run + signed release with `.sha256` sidecar — operator step, gated on the `WINDOWS_CERT_*` secrets |
 | 2 | README install story + ADR-0027 + CAP-0005 update | done (2026-08-18) | README Windows install section present; ADR-0027 in `docs/design-decisions.md`; CAP-0005 outcome 5 references the workflow; `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `node --test crates/dms-desktop/ui/app.test.mjs` all green |
-| 3 | Smoke integration: release workflow runs do not regress the existing matrix | pending | New `release-windows.yml` does not modify `desktop-platform-smoke.yml`; the matrix still produces `windows-x64-nsis` artifact on push/PR; `gh workflow list` shows both workflows active |
+| 3 | Smoke integration: release workflow runs do not regress the existing matrix | done (2026-08-18) | Non-tag push `f5ecc8e` triggered `Desktop platform smoke` runs 32138172649 + 32138171263, both `success`; zero `Release Windows installer` runs from the same push; `gh workflow list` shows both workflows active; `desktop-platform-smoke.yml` unmodified by this commit |
 | 4 | Records closeout: archive this CHG, refresh `docs/changes/README.md` | pending | CHG moved to `archive/`, status `done`, README active index updated, archive entry present |
 
 Mark a phase `in-progress` while running it, `done` once its gate passes (record evidence), `pending` otherwise.
