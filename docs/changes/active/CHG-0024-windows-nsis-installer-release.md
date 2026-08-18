@@ -47,6 +47,7 @@ Evidence (phase 1, partial):
 - First tag run 32156557691 (`v0.1.0-installer-preview.1`, 2026-08-18) **failed at Compute SHA-256** with two root causes, both fixed in the follow-up commit:
   - The thumbprint is a GitHub **variable** (`.env` declares it `# gh-vault: variable`), but the workflow read `secrets.WINDOWS_CERT_THUMBPRINT` → empty → cert-import warned and exited 0, sign step skipped by its `if:`. Fix: `vars.WINDOWS_CERT_THUMBPRINT`.
   - The NSIS bundle lands in the **workspace-root** `target/release/bundle/nsis` (confirmed in the build log: `D:\a\dms\dms\target\release\bundle\nsis\DMS_Desktop_0.1.0_x64-setup.exe`), not a per-crate `target/`. Fix: all three path references (sign, hash, release upload).
+- Re-run 32157572691 (workflow_dispatch, same tag) **failed at cert import**: `Import-Certificate` has no `-Certificate` parameter in any PowerShell version (PS 5.1 *and* 7). Fix: trust the cert via the .NET `X509Store` API, which works in both.
 
 ## Phase 1 — `release-windows.yml` + first tagged release
 

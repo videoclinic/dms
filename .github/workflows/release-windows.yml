@@ -78,8 +78,13 @@ jobs:
           # Trust the imported cert as a root on this ephemeral runner so
           # `signtool verify /pa` can validate the chain end-to-end. Required
           # for self-signed test certs; a no-op for public CAs already in the
-          # system trust store.
-          Import-Certificate -Certificate $cert -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
+          # system trust store. (Import-Certificate has no -Certificate
+          # parameter in any PowerShell version; the .NET store API works in
+          # both Windows PowerShell and pwsh 7.)
+          $store = New-Object System.Security.Cryptography.X509Certificates.X509Store -ArgumentList 'Root', 'CurrentUser'
+          $store.Open('ReadWrite')
+          $store.Add($cert)
+          $store.Close()
           if ($cert.Thumbprint -replace '\s','' -ine $env:WINDOWS_CERT_THUMBPRINT) {
             throw "Imported cert thumbprint $($cert.Thumbprint) does not match the expected $($env:WINDOWS_CERT_THUMBPRINT)."
           }
