@@ -22,7 +22,10 @@ jobs:
   release-windows:
     name: windows-installer
     runs-on: windows-latest
-    timeout-minutes: 60
+    # 35 min is ~3x the observed cold-build time (~8-12 min): a hung step now
+    # fails and ships its partial log instead of burning the full hour
+    # (see CHG-0024 for the three hung import runs).
+    timeout-minutes: 35
 
     env:
       WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
