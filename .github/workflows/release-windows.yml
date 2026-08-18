@@ -72,16 +72,18 @@ jobs:
           $securePwd = if ($env:WINDOWS_CERT_PFX_PASSWORD) {
             ConvertTo-SecureString -String $env:WINDOWS_CERT_PFX_PASSWORD -AsPlainText -Force
           } else { New-Object SecureString }
-          Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My `
-            -Password $securePwd -Exportable:$false | Out-Null
+          $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My `
+            -Password $securePwd -Exportable:$false
           Remove-Item -Path $pfxPath -Force
-          $thumb = (Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object {
-            $_.Thumbprint -replace '\s','' -ieq $env:WINDOWS_CERT_THUMBPRINT
-          } | Select-Object -First 1).Thumbprint
-          if (-not $thumb) {
-            throw "Imported cert did not surface thumbprint $($env:WINDOWS_CERT_THUMBPRINT) in Cert:\CurrentUser\My."
+          # Trust the imported cert as a root on this ephemeral runner so
+          # `signtool verify /pa` can validate the chain end-to-end. Required
+          # for self-signed test certs; a no-op for public CAs already in the
+          # system trust store.
+          Import-Certificate -Certificate $cert -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
+          if ($cert.Thumbprint -replace '\s','' -ine $env:WINDOWS_CERT_THUMBPRINT) {
+            throw "Imported cert thumbprint $($cert.Thumbprint) does not match the expected $($env:WINDOWS_CERT_THUMBPRINT)."
           }
-          Write-Host "Cert $thumb imported into CurrentUser\My."
+          Write-Host "Cert $($cert.Thumbprint) imported into CurrentUser\My and trusted for verification."
 
       - name: Build NSIS installer (no release upload)
         uses: tauri-apps/tauri-action@v1
@@ -126,7 +128,7 @@ jobs:
           name: 'DMS Desktop ${{ steps.tag.outputs.name }}'
           body: |
             Signed NSIS installer for Windows. Verify the SHA-256 sidecar next to the binary before installing.
-            See `docs/changes/archive/CHG-0024-windows-nsis-installer-release.md` for the distribution contract.
+            See `docs/changes/active/CHG-0024-windows-nsis-installer-release.md` for the distribution contract.
           files: |
             crates/dms-desktop/target/release/bundle/nsis/*.exe
             crates/dms-desktop/target/release/bundle/nsis/*.sha256

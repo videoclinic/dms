@@ -90,7 +90,7 @@ The signed NSIS installer is published as a GitHub Release on every
 The Windows SmartScreen prompt is expected on first launch until the
 Authenticode certificate accrues enough installs; an EV code-signing
 certificate removes it entirely. See
-[`docs/changes/archive/CHG-0024-windows-nsis-installer-release.md`](docs/changes/archive/CHG-0024-windows-nsis-installer-release.md)
+[CHG-0024](docs/changes/active/CHG-0024-windows-nsis-installer-release.md)
 for the full distribution contract.
 
 The "Windows setup" section above is the **developer** path (build from
