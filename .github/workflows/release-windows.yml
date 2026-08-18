@@ -72,21 +72,22 @@ jobs:
           $securePwd = if ($env:WINDOWS_CERT_PFX_PASSWORD) {
             ConvertTo-SecureString -String $env:WINDOWS_CERT_PFX_PASSWORD -AsPlainText -Force
           } else { New-Object SecureString }
-          $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My `
-            -Password $securePwd -Exportable:$false
+          $imported = @(Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My `
+            -Password $securePwd -Exportable:$false)
           Remove-Item -Path $pfxPath -Force
-          # Trust the imported cert as a root on this ephemeral runner so
-          # `signtool verify /pa` can validate the chain end-to-end. Required
-          # for self-signed test certs; a no-op for public CAs already in the
-          # system trust store. (Import-Certificate has no -Certificate
-          # parameter in any PowerShell version; the .NET store API works in
-          # both Windows PowerShell and pwsh 7.)
-          $store = New-Object System.Security.Cryptography.X509Certificates.X509Store -ArgumentList 'Root', 'CurrentUser'
-          $store.Open('ReadWrite')
-          $store.Add($cert)
-          $store.Close()
-          if ($cert.Thumbprint -replace '\s','' -ine $env:WINDOWS_CERT_THUMBPRINT) {
-            throw "Imported cert thumbprint $($cert.Thumbprint) does not match the expected $($env:WINDOWS_CERT_THUMBPRINT)."
+          # Production PFX bundles carry the full chain; the signing cert is
+          # the one whose thumbprint the operator pinned.
+          $cert = $imported | Where-Object { $_.Thumbprint -replace '\s','' -ie $env:WINDOWS_CERT_THUMBPRINT } | Select-Object -First 1
+          if (-not $cert) { throw "No imported certificate matches thumbprint $($env:WINDOWS_CERT_THUMBPRINT)." }
+          # Trust the signing cert as a root on this ephemeral runner only
+          # when it is self-signed (the test-cert path), so `signtool verify
+          # /pa` can chain. A CA-issued leaf is not self-signed and is left
+          # to the system trust store, which keeps chain verification real.
+          if ($cert.Issuer -eq $cert.Subject) {
+            $store = New-Object System.Security.Cryptography.X509Certificates.X509Store -ArgumentList 'Root', 'CurrentUser'
+            $store.Open('ReadWrite')
+            $store.Add($cert)
+            $store.Close()
           }
           Write-Host "Cert $($cert.Thumbprint) imported into CurrentUser\My and trusted for verification."
 

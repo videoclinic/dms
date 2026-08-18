@@ -48,6 +48,7 @@ Evidence (phase 1, partial):
   - The thumbprint is a GitHub **variable** (`.env` declares it `# gh-vault: variable`), but the workflow read `secrets.WINDOWS_CERT_THUMBPRINT` → empty → cert-import warned and exited 0, sign step skipped by its `if:`. Fix: `vars.WINDOWS_CERT_THUMBPRINT`.
   - The NSIS bundle lands in the **workspace-root** `target/release/bundle/nsis` (confirmed in the build log: `D:\a\dms\dms\target\release\bundle\nsis\DMS_Desktop_0.1.0_x64-setup.exe`), not a per-crate `target/`. Fix: all three path references (sign, hash, release upload).
 - Re-run 32157572691 (workflow_dispatch, same tag) **failed at cert import**: `Import-Certificate` has no `-Certificate` parameter in any PowerShell version (PS 5.1 *and* 7). Fix: trust the cert via the .NET `X509Store` API, which works in both.
+- Re-run 32157868239 **failed at `$store.Add($cert)`**: `Import-PfxCertificate` returns an *array* (`System.Object[]`) because the first PFX build contained the cert bag twice (`-in` + `-certfile`). Two fixes: regenerate the PFX with a single cert bag, and make the import robust — pick the cert by the pinned thumbprint from whatever the PFX carries (production bundles include the full chain) and only self-trust when the cert is actually self-signed (`Issuer -eq Subject`), so a real CA leaf still verifies against the system trust store.
 
 ## Phase 1 — `release-windows.yml` + first tagged release
 
