@@ -2708,6 +2708,11 @@ pub fn run() {
             let handle = app.handle().clone();
             app.deep_link()
                 .on_open_url(move |_event| focus_main_window(&handle));
+            #[cfg(target_os = "linux")]
+            match app.deep_link().register_all() {
+                Ok(()) => {}
+                Err(error) => eprintln!("dms:// scheme registration failed: {error}"),
+            }
             if std::env::var_os("DMS_DESKTOP_SMOKE").is_some() {
                 app.handle().exit(0);
             }

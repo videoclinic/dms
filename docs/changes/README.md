@@ -20,6 +20,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
+| [CHG-0023](active/CHG-0023-os-level-dms-uri-registration.md) | OS-level `dms://` URI handler registration | in-progress | CAP-0020 |
 
 ## Archive
 
