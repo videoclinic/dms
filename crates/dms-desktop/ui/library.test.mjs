@@ -469,16 +469,84 @@ test("library markup separates source Name from DMS Title and keeps actions in t
         cancel_review: { available: false, reason: "Available only while a review is open." },
         mark_obsolete: { available: true, reason: null },
       },
-      workflow_events: [{
-        event_hash: "abc123",
-        body: {
-          event_id: "event-1",
-          event_type: "document_control_data_changed",
-          timestamp: "2026-08-11T10:00:00Z",
-          predecessor_hash: null,
-          operator_comment: "Safe <script>alert(1)</script>",
+      workflow_events: [
+        {
+          event_hash: "abc123",
+          body: {
+            event_id: "event-current-control",
+            event_type: "document_control_data_changed",
+            timestamp: "2026-08-15T10:00:00Z",
+            predecessor_hash: "previous-digest",
+            local_os_user: "Local Editor",
+            operator_comment: "Safe <script>alert(1)</script>",
+          },
         },
-      }],
+        {
+          event_hash: "current-review-digest",
+          body: {
+            event_id: "event-current-review",
+            event_type: "review_requested",
+            timestamp: "2026-08-14T10:00:00Z",
+            predecessor_hash: "abc123",
+            local_os_user: "Local Editor",
+            requester: { object_id: "editor-1", display_name: "Eva Editor", email: "editor@example.test" },
+            target_version: { major: 1, minor: 4 },
+            target_mode: "next_minor",
+            changelog: "Current draft changes",
+          },
+        },
+        {
+          event_hash: "release-digest",
+          body: {
+            event_id: "event-release",
+            event_type: "release",
+            timestamp: "2026-08-13T10:00:00Z",
+            predecessor_hash: "current-review-digest",
+            local_os_user: "Local Editor",
+            requester: { object_id: "editor-1", display_name: "Eva Editor", email: "editor@example.test" },
+            target_version: { major: 1, minor: 3 },
+            target_mode: "next_minor",
+            changelog: "Released changes",
+          },
+        },
+        {
+          event_hash: "withdrawal-digest",
+          body: {
+            event_id: "event-withdrawal",
+            event_type: "release_withdrawn",
+            timestamp: "2026-08-12T10:00:00Z",
+            predecessor_hash: "release-digest",
+            local_os_user: "Release Operator",
+            operator_comment: "Release withdrawn",
+          },
+        },
+        {
+          event_hash: "decision-digest",
+          body: {
+            event_id: "event-decision",
+            event_type: "review_decision_approved",
+            timestamp: "2026-08-11T10:00:00Z",
+            predecessor_hash: "withdrawal-digest",
+            local_os_user: "Local Editor",
+            approver: { object_id: "approver-1", display_name: "Aaron Approver", email: "approver@example.test" },
+            decision_comment: "Approved",
+          },
+        },
+        {
+          event_hash: "prior-review-digest",
+          body: {
+            event_id: "event-prior-review",
+            event_type: "review_requested",
+            timestamp: "2026-08-10T10:00:00Z",
+            predecessor_hash: "decision-digest",
+            local_os_user: "Local Editor",
+            requester: { object_id: "editor-1", display_name: "Eva Editor", email: "editor@example.test" },
+            target_version: { major: 1, minor: 3 },
+            target_mode: "next_minor",
+            changelog: "Submitted for approval",
+          },
+        },
+      ],
       workflow_verification: "valid",
       current_release: {
         release_id: "release-1",
@@ -527,6 +595,15 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /name="manualMajor"[^>]* disabled/);
   assert.doesNotMatch(markup, /View workflow evidence/);
   assert.match(markup, /Canonical workflow evidence · valid/);
+  assert.match(markup, /Current draft work/);
+  assert.match(markup, /V1\.3/);
+  assert.equal((markup.match(/class="workflow-actor-block"/g) || []).length, 5);
+  assert.match(markup, /Changes by Local Editor/);
+  assert.match(markup, /Changes by Eva Editor/);
+  assert.match(markup, /Changes by Release Operator/);
+  assert.match(markup, /Changes by Aaron Approver/);
+  assert.match(markup, /release withdrawn/);
+  assert.doesNotMatch(markup, /abc123|Hash|Predecessor|Event ID/);
   // Candidate form is listed before Cancel review inside Revision cycle.
   assert.match(
     markup,

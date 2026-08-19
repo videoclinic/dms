@@ -406,12 +406,15 @@ button { cursor: pointer; }
 .current-release-profile small { color: #61717d; }
 .workflow-evidence { padding-top: 8px; border-top: 1px solid #e3e8ec; }
 .workflow-evidence > summary { cursor: pointer; font-weight: 650; }
+.workflow-interval { display: grid; gap: 8px; margin-top: 12px; }
+.workflow-interval h5 { margin: 0; color: #52636f; font-size: 12px; }
+.workflow-actor-block { padding: 10px; border: 1px solid #dfe5ea; border-radius: 7px; background: #fbfcfd; }
+.workflow-actor-block > summary { cursor: pointer; color: #263640; font-size: 12px; font-weight: 650; }
 .workflow-event { display: grid; gap: 7px; margin-top: 10px; padding: 10px; border-radius: 7px; background: #f6f8fa; }
 .workflow-event header { display: flex; justify-content: space-between; gap: 8px; text-transform: capitalize; }
 .workflow-event time { color: #687985; font-size: 11px; }
 .workflow-event p { margin: 0; }
-.workflow-event dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 8px; margin: 0; font-size: 11px; }
-.workflow-event dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.workflow-event-target { color: #52636f; font-size: 12px; }
 .button.danger { background: #8f2f27; }
 .badge.muted { color: #5d6972; background: #eceff1; }
 .identity-list { padding-left: 20px; color: #4d5c67; font-size: 13px; }

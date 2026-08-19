@@ -910,11 +910,85 @@ function rowsMarkup(library, entries, emptyMessage) {
   return `${rows}<tr class="pagination-row"><td colspan="8"><div><label>Rows per page <select data-library-page-size><option value="10" ${library.page_size === 10 ? "selected" : ""}>10</option><option value="25" ${library.page_size === 25 ? "selected" : ""}>25</option><option value="50" ${library.page_size === 50 ? "selected" : ""}>50</option><option value="100" ${library.page_size === 100 ? "selected" : ""}>100</option></select></label><span>${paging}</span></div></td></tr>`;
 }
 
+function workflowEventActor(body) {
+  const eventType = body.event_type;
+  const person = [
+    "review_decision_approved",
+    "review_decision_rejected",
+    "review_decision_changed_requested",
+    "periodic_review_completed",
+  ].includes(eventType)
+    ? body.approver
+    : [
+      "review_requested",
+      "release",
+      "review_cancelled",
+      "decision_outcome_notified",
+      "minor_publication_notified",
+    ].includes(eventType)
+      ? body.requester
+      : null;
+  if (person?.object_id) {
+    return {
+      key: `entra:${person.object_id}`,
+      label: person.display_name || person.email || body.local_os_user || "Unknown person",
+    };
+  }
+  const localOsUser = body.local_os_user || "Unknown local user";
+  return { key: `local:${localOsUser}`, label: localOsUser };
+}
+
+function workflowEventTime(body) {
+  const timestamp = new Date(body.timestamp);
+  return Number.isNaN(timestamp.valueOf()) ? String(body.timestamp ?? "Unknown time") : timestamp.toLocaleString();
+}
+
 function workflowEventMarkup(event) {
   const body = event.body ?? {};
   const label = String(body.event_type ?? "workflow_event").replaceAll("_", " ");
-  const comment = body.operator_comment ?? body.decision_comment ?? body.changelog;
-  return `<article class="workflow-event"><header><strong>${escapeHtml(label)}</strong><time>${escapeHtml(new Date(body.timestamp).toLocaleString())}</time></header>${comment ? `<p>${escapeHtml(comment)}</p>` : ""}<dl><dt>Event ID</dt><dd>${escapeHtml(body.event_id)}</dd><dt>Hash</dt><dd><code>${escapeHtml(event.event_hash)}</code></dd><dt>Predecessor</dt><dd><code>${escapeHtml(body.predecessor_hash ?? "Chain start")}</code></dd></dl></article>`;
+  const comment = body.changelog ?? body.decision_comment ?? body.operator_comment;
+  const target = body.target_version
+    ? [formatVersionLabel(body.target_version), String(body.target_mode ?? "").replaceAll("_", " ")].filter(Boolean).join(" · ")
+    : "";
+  return `<article class="workflow-event"><header><strong>${escapeHtml(label)}</strong><time>${escapeHtml(workflowEventTime(body))}</time></header>${comment ? `<p>${escapeHtml(comment)}</p>` : ""}${target ? `<p class="workflow-event-target">Requested target · ${escapeHtml(target)}</p>` : ""}</article>`;
+}
+
+function workflowEvidenceMarkup(events) {
+  if (events.length === 0) return '<p class="source-path">No canonical workflow evidence has been recorded.</p>';
+  const intervals = [];
+  let current = { label: "Current draft work", events: [] };
+  for (const event of events) {
+    const body = event.body ?? {};
+    if (body.event_type === "release") {
+      if (current.events.length > 0) intervals.push(current);
+      current = { label: formatVersionLabel(body.target_version) || "Released work", events: [event] };
+    } else {
+      current.events.push(event);
+    }
+  }
+  if (current.events.length > 0) intervals.push(current);
+
+  return intervals.map((interval) => {
+    const groups = [];
+    const groupsByActor = new Map();
+    for (const event of interval.events) {
+      const actor = workflowEventActor(event.body ?? {});
+      let group = groupsByActor.get(actor.key);
+      if (!group) {
+        group = { ...actor, events: [] };
+        groupsByActor.set(actor.key, group);
+        groups.push(group);
+      }
+      group.events.push(event);
+    }
+    const blocks = groups.map((group) => {
+      const newest = workflowEventTime(group.events[0].body ?? {});
+      const oldest = workflowEventTime(group.events.at(-1).body ?? {});
+      const span = newest === oldest ? newest : `${newest} — ${oldest}`;
+      return `<details class="workflow-actor-block" open><summary>Changes by ${escapeHtml(group.label)} · ${group.events.length} ${group.events.length === 1 ? "event" : "events"} · ${escapeHtml(span)}</summary>${group.events.map(workflowEventMarkup).join("")}</details>`;
+    }).join("");
+    return `<section class="workflow-interval"><h5>${escapeHtml(interval.label)}</h5>${blocks}</section>`;
+  }).join("");
 }
 
 function lifecyclePanelMarkup(library, detail) {
@@ -927,8 +1001,7 @@ function lifecyclePanelMarkup(library, detail) {
     const disabled = available ? "" : "disabled";
     return `<form class="lifecycle-action" data-library-lifecycle-form="${action}"><strong>${title}</strong>${reason ? `<small>${escapeHtml(reason)}</small>` : ""}<label>Reason<textarea name="reason" required ${disabled}>${escapeHtml(draft.reason ?? "")}</textarea></label><label class="confirmation"><input type="checkbox" name="confirmed" value="yes" ${draft.confirmed ? "checked" : ""} ${disabled}> I confirm this lifecycle change.</label><button class="button ${action === "mark_obsolete" ? "danger" : "secondary"}" type="submit" ${disabled}>${title}</button></form>`;
   };
-  const events = (detail.workflow_events ?? []).map(workflowEventMarkup).join("")
-    || '<p class="source-path">No canonical workflow evidence has been recorded.</p>';
+  const events = workflowEvidenceMarkup(detail.workflow_events ?? []);
   const verification = typeof detail.workflow_verification === "string"
     ? detail.workflow_verification.replaceAll("_", " ")
     : detail.workflow_verification?.tampered_at
