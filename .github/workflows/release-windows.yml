@@ -189,3 +189,48 @@ jobs:
           fail_on_unmatched_files: true
           draft: true
           prerelease: ${{ contains(steps.tag.outputs.name, '-') }}
+
+      - name: Build winget submission kit
+        if: ${{ !contains(steps.tag.outputs.name, '-') }}
+        shell: pwsh
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          # Render the three winget-pkgs multi-file manifests (version,
+          # installer, defaultLocale) for this release so the operator can
+          # `wingetcreate submit` them. The workflow does NOT auto-PR to
+          # microsoft/winget-pkgs: the community bot rejects first-submissions
+          # from unattended workflows and auto-closes duplicate-version PRs,
+          # so the operator runs wingetcreate from a maintainer account.
+          # See scripts/winget/Build-WingetKit.ps1 and docs/winget-submission.md.
+          $nsisDir = 'target/release/bundle/nsis'
+          $exe = Get-ChildItem -Path $nsisDir -Filter '*.exe' -Recurse -File | Select-Object -First 1
+          $sidecar = Get-ChildItem -Path $nsisDir -Filter '*.sha256' -Recurse -File | Select-Object -First 1
+          if (-not $exe -or -not $sidecar) { throw "winget kit pre-flight: installer or sidecar missing under $nsisDir." }
+          $sha = (Get-Content $sidecar.FullName -Raw).Trim().Split()[0]
+          $version = (Get-Content crates/dms-desktop/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:RELEASE_TAG/$($exe.Name)"
+          $kitDir = Join-Path $env:RUNNER_TEMP 'winget-bundle'
+          if (Test-Path $kitDir) { Remove-Item -Recurse -Force $kitDir }
+          & scripts/winget/Build-WingetKit.ps1 `
+            -Version $version `
+            -InstallerUrl $url `
+            -InstallerSha256 $sha `
+            -OutputDir $kitDir `
+            -ReleaseNotesUrl "https://github.com/$env:GITHUB_REPOSITORY/releases/tag/$env:RELEASE_TAG"
+          # Echo the operator's next step into the run summary.
+          $packageId = 'Videoclinic.DMSDesktop'
+          $nl = [Environment]::NewLine
+          $summary = '## Winget submission kit' + $nl + $nl + ('- Package: ' + $packageId + ' v' + $version) + $nl + ('- Installer: ' + $url) + $nl + ('- SHA-256: ' + $sha) + $nl + $nl + 'The three manifests and SUBMIT.md are in the winget-bundle artifact. Download it, unpack, then run `wingetcreate submit --manifests <unpacked>/manifests` from your winget-pkgs fork.' + $nl + $nl + 'See docs/winget-submission.md for the full procedure.'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summary -Encoding utf8
+        # Step skipped for prerelease tags (e.g. v0.1.0-installer-preview.1) — winget
+        # only takes stable versions.
+
+      - name: Upload winget submission kit
+        if: ${{ !contains(steps.tag.outputs.name, '-') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: winget-bundle
+          path: ${{ env.RUNNER_TEMP }}/winget-bundle/
+          if-no-files-found: error

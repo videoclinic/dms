@@ -32,10 +32,11 @@
 
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
-| 1 | `release-windows.yml` tag-driven workflow + first tagged release | in-progress | Workflow file committed; tag `v0.1.0-installer-preview.1` pushed (2026-08-18) → release run 32156557691 executing with the self-signed test cert (`WINDOWS_CERT_*` synced via gh-vault); gate: green run + draft release with signed installer + `.sha256` sidecar, then operator cert swap for the production release |
+| 1 | `release-windows.yml` tag-driven workflow + first tagged release | done (2026-08-18) | Workflow file committed; tag `v0.1.0` published (run 32183590595); assets `DMS_Desktop_0.1.0_x64-setup.exe` (4.87 MB, sha256 `ed2ab70c…b91b59`) and `.sha256` sidecar; operator confirmed install + `dms://` URI on a real Windows host |
 | 2 | README install story + ADR-0027 + CAP-0005 update | done (2026-08-18) | README Windows install section present; ADR-0027 in `docs/design-decisions.md`; CAP-0005 outcome 5 references the workflow; `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `node --test crates/dms-desktop/ui/app.test.mjs` all green |
 | 3 | Smoke integration: release workflow runs do not regress the existing matrix | done (2026-08-18) | Non-tag push `f5ecc8e` triggered `Desktop platform smoke` runs 32138172649 + 32138171263, both `success`; zero `Release Windows installer` runs from the same push; `gh workflow list` shows both workflows active; `desktop-platform-smoke.yml` unmodified by this commit |
 | 4 | Records closeout: archive this CHG, refresh `docs/changes/README.md` | pending | CHG moved to `archive/`, status `done`, README active index updated, archive entry present |
+| 5 | Winget submission kit: `Build-WingetKit.ps1` + workflow step + operator runbook | in-progress | `scripts/winget/Build-WingetKit.ps1` renders the three winget-pkgs manifests (version, installer, defaultLocale) with valid ManifestVersion 1.6.0 / required fields; workflow's new `Build winget submission kit` step calls the script on every stable release and uploads the bundle as a `winget-bundle` job artifact; `docs/winget-submission.md` documents the `wingetcreate submit` flow; prerelease tags skip the step; no auto-PR (community bot rejects first-submissions for unseen publisher ids). Gate: dispatch a stable release (e.g. `v0.1.1`) and confirm the artifact contains the three manifests + `SUBMIT.md` |
 
 Mark a phase `in-progress` while running it, `done` once its gate passes (record evidence), `pending` otherwise.
 
@@ -78,6 +79,28 @@ Steps:
 4. Required CI secrets (one-time operator action, recorded in this CHG): `WINDOWS_CERT_PFX` (base64), `WINDOWS_CERT_PFX_PASSWORD`, `WINDOWS_CERT_THUMBPRINT` (SHA-1, no spaces). Without them the workflow still publishes, but with an unsigned installer and a warning — the first run is the operator setting them up.
 5. The first release tag is `v0.1.0-installer-preview.1` (matches `v*`, triggers `prerelease: true`). The release body links this CHG; the release stays a draft until the operator publishes it in the GitHub UI.
 6. Recovery: a failed run leaves a draft release with missing assets. `gh release delete <tag> --cleanup` (or the GitHub UI) removes it; the next push to the same tag re-runs cleanly.
+
+## Phase 5 — Winget submission kit
+
+**Goal:** Every stable release ships a ready-to-submit bundle of winget-pkgs manifests so the operator can publish to `winget install` in one `wingetcreate submit` call — without the workflow trying to auto-PR, which the community bot rejects for first-submissions.
+
+Steps:
+
+1. Add `scripts/winget/Build-WingetKit.ps1` — a `pwsh` script that takes `-Version`, `-InstallerUrl`, `-InstallerSha256`, `-OutputDir` (plus optional metadata overrides) and writes the three winget-pkgs multi-file manifests to `manifests/<first-letter>/<Publisher>/<PackageName>/<Version>/`:
+   - `<packageId>.yaml` (version file, `ManifestType: version`)
+   - `<packageId>.locale.en-US.yaml` (`ManifestType: defaultLocale`, with `PackageName: DMS Desktop`, `License: MIT`, `Moniker: dms-desktop`, `Tags`, `PublisherUrl`, `PrivacyUrl`, `LicenseUrl`, `ReleaseNotesUrl`)
+   - `<packageId>.installer.yaml` (`ManifestType: installer`, `InstallerType: nullsoft`, `Platform: [Windows.Desktop]`, `MinimumOSVersion: 10.0.17763.0`, `InstallModes: [silent, silentWithProgress]`, `Installers[0].Architecture: x64`, plus the real `InstallerUrl` + `InstallerSha256`).
+   - `SUBMIT.md` — the one-pager the operator follows after downloading the artifact.
+   The package id is `Videoclinic.DMSDesktop` (path drops the space, `PackageName` keeps it). `ManifestVersion: 1.6.0` (current schema; future bump is a script edit). Sanity checks in the script: publisher id matches `^[A-Za-z][A-Za-z0-9.-]{0,31}$`, sha-256 is 64 hex chars, all three required fields per file present (verified locally against the JSON schemas at `winget-cli/schemas/JSON/manifests/v1.6.0/manifest.*.json`).
+2. Add a `Build winget submission kit` step to `.github/workflows/release-windows.yml` after the publish step, gated on `!contains(steps.tag.outputs.name, '-')` so prerelease tags (e.g. `v0.1.0-installer-preview.1`) skip it — winget only takes stable versions. The step:
+   - reads the just-computed `*.sha256` sidecar and the version from `crates/dms-desktop/tauri.conf.json`,
+   - builds the canonical `https://github.com/<repo>/releases/download/<tag>/<asset>` URL,
+   - calls the script with `$env:RUNNER_TEMP/winget-bundle` as the output dir,
+   - writes a `## Winget submission kit` block to `$env:GITHUB_STEP_SUMMARY` so the operator sees the package id, version, URL, and SHA-256 right on the run page.
+3. Add an `Upload winget submission kit` step (`actions/upload-artifact@v4`, `name: winget-bundle`, `if-no-files-found: error`) so the bundle is downloadable as a run artifact.
+4. Add `docs/winget-submission.md` — the operator runbook: package identity, why no auto-PR, three-step submit flow, post-merge verification commands.
+5. No auto-PR to `microsoft/winget-pkgs`. The community bot's `Windows Package Manager` workflow rejects first-submissions for an unseen publisher id from unattended sources (the publisher has to be vouched-for by a human-trusted opener) and auto-closes duplicate-version PRs, so an automated path leaves orphan PRs the operator has to clean up. Generating the bundle deterministically keeps `wingetcreate submit` to a one-liner — the right amount of friction for a contractual moment.
+6. The v0.1.0 release did not get a bundle (this phase landed after the tag was published). The operator generates the bundle locally with the same script (`pwsh scripts/winget/Build-WingetKit.ps1 -Version 0.1.0 -InstallerUrl <url> -InstallerSha256 <sha> -OutputDir ./winget-bundle`) and submits it for v0.1.0 by hand. v0.1.1+ gets the bundle automatically.
 
 ## Phase 2 — README install story + ADR-0027 + CAP-0005 update
 
