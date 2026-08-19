@@ -46,6 +46,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # A manual dispatch names the tag in an input while GitHub otherwise
+          # checks out the default branch. Releases must always build the exact
+          # source identified by the resolved tag, regardless of trigger.
+          ref: ${{ steps.tag.outputs.name }}
 
       - name: Verify tag exists locally
         shell: bash
