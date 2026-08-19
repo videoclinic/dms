@@ -15,7 +15,7 @@ privacy, and design decisions for this repository.
 | `entra-client-setup.md` | Operator setup for the DMS Entra public-client registration and delegated Graph consent |
 | `markdown-frontmatter-and-template-variables.md` | Markdown controlled frontmatter keys, optional template variables, and Word chrome tokens |
 | `library-membership-and-obsolescence.md` | Operator comparison of library membership vs obsolescence |
-| `winget-submission.md` | Operator runbook for publishing `VideoClinic.DMSDesktop` to `microsoft/winget-pkgs`; rendered automatically by `release-windows.yml` per stable release |
+| `winget-submission.md` | Operator runbook for publishing `Videoclinic.DMSDesktop` to `microsoft/winget-pkgs`; rendered automatically by `release-windows.yml` per stable release |
 | `product/` | CAP index, capability contracts, wireframe references |
 | `changes/` | CHG lifecycle (active/archive) |
 

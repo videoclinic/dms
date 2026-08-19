@@ -5,18 +5,17 @@
 # out exactly the way the winget-pkgs repo expects, plus a one-page
 # SUBMIT.md that walks the operator through `wingetcreate submit`.
 #
-# Why a script and not a workflow PR? The microsoft/winget-pkgs community
-# repo's PR bot rejects first-submissions from unattended workflows (the
-# publisher ID has to be vouched-for by a human-trusted opener) and
-# auto-closes duplicate-version PRs. We do not try to script around that;
-# the operator runs `wingetcreate submit` themselves. This script just makes
-# the three files pain-free to generate for every release.
+# Why a script and not a workflow PR? A release workflow has no maintainer
+# fork credential and must not receive one solely to open public PRs. The
+# operator reviews the generated, version-specific manifests and submits them
+# from their own winget-pkgs fork. This script makes those three files
+# deterministic for every release.
 #
 # Usage (PowerShell 5.1 or pwsh 7+):
 #   pwsh scripts/winget/Build-WingetKit.ps1 `
 #     -Version 0.1.0 `
 #     -InstallerUrl "https://github.com/videoclinic/dms/releases/download/v0.1.0/DMS_Desktop_0.1.0_x64-setup.exe" `
-#     -InstallerSha256 ed2ab70ce12ca43e6063ba450cf9241e334f20aea327c8a44bc0ed557bc91b59 `
+#     -InstallerSha256 b37a6ad3afb855e6b97fb9a8350c8c765c0a20ceb0f3a6ade26c6a660ebd0f33 `
 #     -OutputDir /tmp/winget-bundle
 #
 # Used by .github/workflows/release-windows.yml after the GitHub Release
@@ -35,6 +34,7 @@ param(
   [string] $ShortDescription = 'Operator-controlled document control for ISO 27001-style workflows.',
   [string] $ReleaseNotesUrl = 'https://github.com/videoclinic/dms/releases/tag/v0.1.0',
   [string] $PublisherUrl = 'https://videoclinic.de/',
+  [string] $PackageUrl = 'https://github.com/videoclinic/dms',
   [string] $PrivacyUrl = 'https://github.com/videoclinic/dms/blob/main/docs/privacy.md',
   [string] $License = 'MIT',
   [string] $LicenseUrl = 'https://github.com/videoclinic/dms/blob/main/LICENSE'
@@ -42,8 +42,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# Sanity checks: schema requires lowercase PackageIdentifier, a 4-32 char
-# segment on each side of the dot, no spaces, no slashes, no colons.
+# Sanity checks: PackageIdentifier segments have no spaces, slashes, or
+# colons; the publisher portion starts with a letter and is at most 32 chars.
 if ($Publisher -notmatch '^[A-Za-z][A-Za-z0-9.-]{0,31}$') {
   throw "Publisher '$Publisher' is not a valid winget publisher id (^[A-Za-z][A-Za-z0-9.-]{0,31}$)."
 }
@@ -64,16 +64,20 @@ $null = New-Item -ItemType Directory -Path $manifestDir -Force
 # --- version file -----------------------------------------------------------
 $versionFile = Join-Path $manifestDir ("$packageId.yaml")
 @"
+# yaml-language-server: `$schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json
+
 PackageIdentifier: $packageId
 PackageVersion: $Version
 DefaultLocale: en-US
 ManifestType: version
-ManifestVersion: 1.6.0
+ManifestVersion: 1.12.0
 "@ | Set-Content -Path $versionFile -NoNewline -Encoding utf8
 
 # --- defaultLocale file -----------------------------------------------------
 $localeFile = Join-Path $manifestDir ("$packageId.locale.en-US.yaml")
 @"
+# yaml-language-server: `$schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
+
 PackageIdentifier: $packageId
 PackageVersion: $Version
 PackageLocale: en-US
@@ -81,6 +85,7 @@ Publisher: $Publisher
 PublisherUrl: $PublisherUrl
 PrivacyUrl: $PrivacyUrl
 PackageName: $PackageName
+PackageUrl: $PackageUrl
 License: $License
 LicenseUrl: $LicenseUrl
 ShortDescription: $ShortDescription
@@ -92,12 +97,14 @@ Tags:
 - tauri
 ReleaseNotesUrl: $ReleaseNotesUrl
 ManifestType: defaultLocale
-ManifestVersion: 1.6.0
+ManifestVersion: 1.12.0
 "@ | Set-Content -Path $localeFile -NoNewline -Encoding utf8
 
 # --- installer file ---------------------------------------------------------
 $installerFile = Join-Path $manifestDir ("$packageId.installer.yaml")
 @"
+# yaml-language-server: `$schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
+
 PackageIdentifier: $packageId
 PackageVersion: $Version
 Platform:
@@ -112,7 +119,7 @@ Installers:
   InstallerUrl: $InstallerUrl
   InstallerSha256: $InstallerSha256
 ManifestType: installer
-ManifestVersion: 1.6.0
+ManifestVersion: 1.12.0
 "@ | Set-Content -Path $installerFile -NoNewline -Encoding utf8
 
 # --- SUBMIT.md --------------------------------------------------------------
@@ -123,13 +130,13 @@ $submitFile = Join-Path $OutputDir 'SUBMIT.md'
 ## Files in this bundle
 
 ```
-manifests/v/$Publisher/$PackageName/$Version/
+manifests/$firstLetter/$Publisher/$packageNameForPath/$Version/
   $packageId.yaml                 # version
   $packageId.locale.en-US.yaml    # defaultLocale
   $packageId.installer.yaml       # installer
 ```
 
-These three files match the [winget-pkgs multi-file layout](https://learn.microsoft.com/en-us/windows/package-manager/package/manifest) for `manifests/<first-letter>/<Publisher>/<PackageName>/<Version>/`. The first letter is `$firstLetter`.
+These three files match the [winget-pkgs multi-file layout](https://learn.microsoft.com/en-us/windows/package-manager/package/manifest). The first-letter directory is $firstLetter.
 
 ## One-time setup
 
@@ -147,7 +154,7 @@ From the root of your winget-pkgs fork, with this bundle unpacked at `./winget-b
 wingetcreate submit --manifests ./winget-bundle/manifests
 ```
 
-`wingetcreate` will open a PR against microsoft/winget-pkgs. The first submission for a brand-new publisher id (`$Publisher`) usually takes 1-3 days of manual review by a winget-pkgs maintainer; subsequent versions are typically merged within hours.
+`wingetcreate` will open a PR against microsoft/winget-pkgs. The submission must satisfy the upstream first-contributor checklist, including validation and a manifest-only, one-version PR.
 
 ## Verification after merge
 
