@@ -652,3 +652,16 @@ test("Library folder activation and splitter controls stay direct and session-on
   assert.doesNotMatch(source, /localStorage|persistLibraryDetailWidth/);
   assert.doesNotMatch(styles, /@font-face|\.woff2?|\.ttf/i);
 });
+
+test("left menu destination icons match the wireframe navigation", () => {
+  const source = readFileSync(new URL("./app.mjs", import.meta.url), "utf8");
+  const generator = readFileSync(
+    new URL("../../../docs/product/wireframes/generate.mjs", import.meta.url),
+    "utf8",
+  );
+  const nav = [...generator.matchAll(/\{ id: "[a-z]+", label: "(.+?)", icon: "(.*?)" \}/gu)];
+  assert.ok(nav.length >= 5);
+  for (const [, label, icon] of nav) {
+    assert.match(source, new RegExp(`\\["${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}", "${icon.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"\\]`));
+  }
+});

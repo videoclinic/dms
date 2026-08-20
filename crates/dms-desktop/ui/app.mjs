@@ -68,11 +68,11 @@ import {
 } from "./reports.mjs";
 
 const DESTINATIONS = [
-  ["Library", "▦"],
-  ["Releases", "□"],
-  ["Audit & Reports", "≣"],
-  ["Maintenance", "◇"],
-  ["Configuration", "⚙"],
+  ["Library", "📚"],
+  ["Releases", "📦"],
+  ["Audit & Reports", "📋"],
+  ["Maintenance", "🧰"],
+  ["Configuration", "⚙️"],
 ];
 const RECENT_LIBRARIES_LIMIT = 10;
 const activeFormSubmissions = new WeakSet();
