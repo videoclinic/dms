@@ -21,7 +21,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
 | [CHG-0024](active/CHG-0024-windows-nsis-installer-release.md) | Windows NSIS installer and signed GitHub Release | in-progress | CAP-0005 |
-| [CHG-0025](active/CHG-0025-windows-entra-deployment-policy.md) | Windows Entra deployment policy | pending | CAP-0021 |
+| [CHG-0025](active/CHG-0025-windows-entra-deployment-policy.md) | Windows Entra deployment policy | in-progress | CAP-0021 |
 
 
 ## Archive
