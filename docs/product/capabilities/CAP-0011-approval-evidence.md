@@ -5,7 +5,7 @@
 | ID | CAP-0011 |
 | Status | not implemented |
 | Storage | `<edit-root>/.dms/` (canonical event chain) |
-| Tests | Partial phases 9e, 9f.2, and 9k evidence: [hash-chained lifecycle and delivery evidence tests](../../../crates/dms-core/tests/lifecycle.rs), [fake-backed desktop lifecycle composition](../../../crates/dms-desktop/src/lib.rs), and [newest-first in-app workflow evidence tests](../../../crates/dms-desktop/ui/library.test.mjs) |
+| Tests | Partial phases 9e, 9f.2, and 9k evidence: [hash-chained lifecycle and delivery evidence tests](../../../crates/dms-core/tests/lifecycle.rs), [fake-backed desktop lifecycle composition](../../../crates/dms-desktop/src/lib.rs), and [newest-first, person-consolidated in-app workflow evidence tests](../../../crates/dms-desktop/ui/library.test.mjs) |
 
 ## Outcomes (contract — not yet true in runtime)
 
@@ -31,12 +31,16 @@ When implemented, the following must hold:
    additionally records the interactive Microsoft Entra tenant/object ID and is
    rejected unless it matches the snapshotted effective approver (CAP-0019 /
    CAP-0021). Other workflow events do not claim Entra actor verification.
-4. The history of a document lists every event **newest first**. Each row retains
-   its event hash, predecessor hash, type, timestamp, changelog, requested target
-   version and mode, decision comment, requester, effective editor and approver,
-   revision digest, and confidentiality snapshot. Failed, rejected, cancelled,
-   and changes-requested reviews remain in that history. The list is readable
-   without leaving the desktop app.
+4. The history of a document lists every event **newest first**, consolidated
+   into one visual block per (acting person × release interval). An interval
+   closes with its `release` event and the newer open interval is **Current draft
+   work**. Each block summary identifies the person, event count, and time span;
+   its nested fine-grained events show type, timestamp, changelog or decision or
+   operator comment, and requested target version/mode when present. Failed,
+   rejected, cancelled, and changes-requested reviews remain in that history.
+   The in-app pane displays no event hash, predecessor hash, event ID, or revision
+   digest; its disclosure summary retains the Verify workflow verdict. Canonical
+   event retention and full-fidelity CAP-0012 exports are unchanged.
 5. The application exposes a **Verify workflow** routine that recomputes each
    event hash from its canonical body and confirms the chain. The result is
    `valid`, `tampered at <event-id>`, or `missing`. Verification never

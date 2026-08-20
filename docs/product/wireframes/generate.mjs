@@ -639,17 +639,19 @@ const CAPS = [
     title: "Workflow chain & evidence",
     nav: "audit",
     activity: "audit-doc-77a12bce",
-    subtitle: "Newest event first. Major approval evidence and direct minor-release publication notices are chained together.",
+    subtitle: "Newest event first, consolidated by person and release interval. Digest values remain in the canonical chain and exports, not this desktop view.",
     actions: ["Verify workflow", "Export chain"],
     body: `
       <section class="card">
-        <h3 class="card-title">Chain (newest first) — HR Data Privacy Policy</h3>
+        <h3 class="card-title">Canonical workflow evidence · valid</h3>
         <div class="stack">
-          ${event("minor_publication_notified", "2025-08-02 11:30 UTC", "—", "Minor V1.4 publication notice delivered to Anna Berg after committed export.", "5b3a…ffe5", "5b3a…ffe4")}
-          ${event("release", "2025-08-02 11:29 UTC", "Lukas Roth", "Direct minor release: atomic export committed V1.4; approval not required.", "5b3a…ffe4", "5b3a…ffe3")}
-          ${event("review_decision_approved", "2025-08-01 09:42 UTC", "Anna Berg", "Approved major target V2.0. Decision comment optional and omitted.", "5b3a…ffe3", "5b3a…ffe2")}
-          ${event("review_requested", "2025-08-01 09:14 UTC", "Lukas Roth", "Changelog: restructured control scope. Target: V2.0 (major version change).", "5b3a…ffe2", "5b3a…ffe1")}
-          ${event("review_decision_rejected", "2025-07-29 09:42 UTC", "Anna Berg", "Why was approval not granted? Optional comment: clarify the retention exception in §3.2.", "5b3a…ffe1", "—")}
+          <section><h4 class="card-title">Current draft work</h4>
+            <details class="event" open><summary><strong>Changes by Lukas Roth</strong> · 1 event · 2025-08-04 10:20 UTC</summary>${event("review_requested", "2025-08-04 10:20 UTC", "Lukas Roth", "Changelog: clarified the retention exception. Target: V1.5 (minor version change).")}</details>
+          </section>
+          <section><h4 class="card-title">V1.4</h4>
+            <details class="event" open><summary><strong>Changes by Lukas Roth</strong> · 3 events · 2025-08-02 11:30 UTC — 2025-08-01 09:14 UTC</summary>${event("minor_publication_notified", "2025-08-02 11:30 UTC", "Lukas Roth", "Minor V1.4 publication notice delivered to Anna Berg after committed export.")}${event("release", "2025-08-02 11:29 UTC", "Lukas Roth", "Direct minor release: atomic export committed V1.4; approval not required.")}${event("review_requested", "2025-08-01 09:14 UTC", "Lukas Roth", "Changelog: restructured control scope. Target: V2.0 (major version change).")}</details>
+            <details class="event" open><summary><strong>Changes by Anna Berg</strong> · 2 events · 2025-08-01 09:42 UTC — 2025-07-29 09:42 UTC</summary>${event("review_decision_approved", "2025-08-01 09:42 UTC", "Anna Berg", "Approved major target V2.0. Decision comment optional and omitted.")}${event("review_decision_rejected", "2025-07-29 09:42 UTC", "Anna Berg", "Why was approval not granted? Optional comment: clarify the retention exception in §3.2.")}</details>
+          </section>
         </div>
         <div class="callout warn">Rejected and changes-requested major decisions prompt for a reason but allow no comment. Major review requests and direct minor publications remain chain evidence.</div>
         <div class="callout ok">${badge("chain valid", "ok")} Verify workflow recomputed each event hash from its canonical body.</div>
@@ -1175,11 +1177,10 @@ function note(head, body) {
 function layer(name, desc) {
   return `<div class="layer"><strong>${name}</strong><p class="muted">${desc}</p></div>`;
 }
-function event(type, ts, who, cmt, hash, pred) {
+function event(type, ts, who, cmt) {
   return `<article class="event">
     <div class="row gap-2">${badge(type, "info")}<span class="muted">${ts}</span><span class="muted">by ${who}</span></div>
     <p>${cmt}</p>
-    <p class="hint mono">hash ${hash} ← pred ${pred}</p>
   </article>`;
 }
 function ver(v, date, cls, state, kind) {
