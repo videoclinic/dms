@@ -22,12 +22,13 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 | --- | --- | --- | --- |
 | [CHG-0024](active/CHG-0024-windows-nsis-installer-release.md) | Windows NSIS installer and signed GitHub Release | in-progress | CAP-0005 |
 | [CHG-0025](active/CHG-0025-windows-entra-deployment-policy.md) | Windows Entra deployment policy | pending | CAP-0021 |
-| [CHG-0026](active/CHG-0026-person-consolidated-workflow-evidence.md) | Person-consolidated workflow evidence without digest values | pending | CAP-0011 |
+
 
 ## Archive
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
+| [CHG-0026](archive/CHG-0026-person-consolidated-workflow-evidence.md) | Person-consolidated workflow evidence without digest values | done | CAP-0011 |
 | [CHG-0023](archive/CHG-0023-os-level-dms-uri-registration.md) | OS-level `dms://` URI handler registration | done | CAP-0020 |
 | [CHG-0020](archive/CHG-0020-foldable-library-panes.md) | Foldable Library side panes | done | CAP-0006 |
 | [CHG-0022](archive/CHG-0022-library-table-workflow-columns.md) | Workflow metadata and resizable columns in the Library table | done | CAP-0006 |

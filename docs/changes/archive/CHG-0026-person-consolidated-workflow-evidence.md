@@ -16,13 +16,13 @@ report exports remain untouched.
 **Entry checkpoint:** none
 **Context sources:** `docs/changes/AGENTS.md` (Local Contracts); `docs/product/capabilities/CAP-0011-approval-evidence.md` (whole file, especially Outcomes 4 and 8); `docs/product/capabilities/CAP-0015-document-control-data.md` (Outcome 11, pane section layout); `docs/product/capabilities/CAP-0006-library-explorer.md` (Outcome 8, selection-pane actions); `crates/dms-desktop/ui/library.mjs` (`workflowEventMarkup`, `lifecyclePanelMarkup`, `selectionMarkup`); `crates/dms-desktop/ui/styles.css` (`.workflow-evidence`, `.workflow-event` rules); `crates/dms-desktop/ui/library.test.mjs` (evidence fixture and assertions); `crates/dms-core/src/lifecycle.rs` (`WorkflowEventType`, `WorkflowEventBody`); `crates/dms-desktop/src/lib.rs` (`DocumentSelectionDetail.workflow_events`, `workflow_verification`); `docs/product/wireframes/generate.mjs` (CAP-0011 screen, `event()` helper); `docs/product/wireframes/manifest.json`
 **Produces:** A desktop build whose Library selection-pane evidence disclosure renders per-person interval blocks with no digest values, the amended CAP-0011 presentation contract, and a regenerated CAP-0011 wireframe (HTML + PNG).
-**Status:** in-progress — Phase 1 implementation is active; no code, test, or capability record change made yet.
+**Status:** done — all three phases passed their gates; this record is ready for archive.
 **Filename convention:** The repository's active-record contract requires `CHG-*.md`; `P0200` is the execution order authority for this CHG and does not conflict with CHG-0025's `P0100`.
 
 | Field | Value |
 | --- | --- |
 | ID | CHG-0026 |
-| Status | in-progress |
+| Status | done |
 | External request | Direct operator request: "The audito/changelog of a file is fine grained today. I would like to drop the digest value presentation in DMS Desktop and consolidate all changes in the UI for all changes done between releases -- as long done by the same person. If the person who makes changes result in a new visual element in the DMS Desktop UI." Follow-up confirmation: one consolidated visual block per (person × release interval); fine-grained events nested/expandable inside; digest values gone from that pane. |
 | Affected CAPs | CAP-0011 |
 | Decision records | None — capability-local presentation rule recorded in CAP-0011; the ADR-0013 canonical chain is unchanged |
@@ -90,7 +90,7 @@ ID never collides with one.
 | --- | --- | --- | --- |
 | 1 | Rebuild the evidence disclosure as per-person interval blocks without digest values | done (`node --test crates/dms-desktop/ui/library.test.mjs`, 30 passed) | `node --test crates/dms-desktop/ui/library.test.mjs` exits 0, including assertions that a two-person × two-interval fixture renders one consolidated block per (person × interval) and that the pane markup contains no `abc123`, `Hash`, or `Predecessor` presentation |
 | 2 | Amend CAP-0011 and regenerate the CAP-0011 wireframe | done (`node docs/product/wireframes/generate.mjs`; headless Chrome CAP-0011 export; manifest 21 screens) | CAP-0011 Outcome 4 states the per-person interval-block presentation and the absence of digest values in the pane; `node docs/product/wireframes/generate.mjs` exits 0; `html/CAP-0011-approval-evidence.html` and `exports/CAP-0011-approval-evidence.png` are regenerated and `manifest.json` still lists 21 screens |
-| 3 | Run the workspace gate and close the record | pending | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `node --test crates/dms-desktop/ui/*.test.mjs` all exit 0; CHG-0026 moved to `docs/changes/archive/` and `docs/changes/README.md` refreshed |
+| 3 | Run the workspace gate and close the record | done (`cargo fmt --check`; `cargo clippy --workspace --all-targets -- -D warnings`; `cargo test --workspace`; `node --test crates/dms-desktop/ui/*.test.mjs`, 98 passed) | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `node --test crates/dms-desktop/ui/*.test.mjs` all exit 0; CHG-0026 moved to `docs/changes/archive/` and `docs/changes/README.md` refreshed |
 
 Mark a phase `in-progress` while running it, `done (<evidence>)` once its gate
 passes, and `pending` otherwise.
