@@ -55,8 +55,8 @@ Recovery is to set the policy **Not Configured** (or remove both values), refres
 | 1 | Define and implement the machine-policy configuration source | done (`cargo test -p dms-desktop --lib entra_policy`; `cargo clippy -p dms-desktop --all-targets -- -D warnings`; Configuration UI test) | `cargo test -p dms-desktop --lib entra_policy` exits 0; `cargo clippy -p dms-desktop --all-targets -- -D warnings` exits 0 |
 | 2 | Show configuration provenance and disable Windows-policy controls | done (`3bfde2f`; `node --test crates/dms-desktop/ui/configuration.test.mjs`; `node docs/product/wireframes/generate.mjs`) | `node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0; `node docs/product/wireframes/generate.mjs` exits 0 |
 | 3 | Implement automatic process-environment device authorization | done (`d1e3588`; `cargo test -p dms-desktop --lib startup_device_authorization`; `node --test crates/dms-desktop/ui/configuration.test.mjs crates/dms-desktop/ui/app.test.mjs`) | `cargo test -p dms-desktop --lib startup_device_authorization` exits 0; `node --test crates/dms-desktop/ui/configuration.test.mjs crates/dms-desktop/ui/app.test.mjs` exits 0 |
-| 4 | Ship ADMX assets and manual/GPO/Intune deployment documentation | done (`python3 scripts/validate_admx.py docs/deployment/windows/admx/DMSDesktop.admx docs/deployment/windows/admx/en-US/DMSDesktop.adml`; relative links in `docs/windows-entra-deployment.md` resolve) | `python3 scripts/validate_admx.py docs/deployment/windows/admx/DMSDesktop.admx docs/deployment/windows/admx/en-US/DMSDesktop.adml` exits 0; every relative link in `docs/windows-entra-deployment.md` resolves |
-| 5 | Validate the Windows deployment path and close records | pending — after Phase 4 | Windows evidence shows the configured process presents or validates exactly one device-authorization state, `reg.exe query HKLM\SOFTWARE\Policies\Videoclinic\DMS` returns the two expected UUID values, and `cargo test --workspace`, `node --test crates/dms-desktop/ui/*.test.mjs`, and the Windows `Desktop platform smoke` job exit/pass |
+| 4 | Ship ADMX assets and manual/GPO/Intune deployment documentation | done (`0deaf8e`; `python3 scripts/validate_admx.py docs/deployment/windows/admx/DMSDesktop.admx docs/deployment/windows/admx/en-US/DMSDesktop.adml`; relative links in `docs/windows-entra-deployment.md` resolve) | `python3 scripts/validate_admx.py docs/deployment/windows/admx/DMSDesktop.admx docs/deployment/windows/admx/en-US/DMSDesktop.adml` exits 0; every relative link in `docs/windows-entra-deployment.md` resolves |
+| 5 | Validate the Windows deployment path and close records | pending — after Phase 4 `0deaf8e` | Windows evidence shows the configured process presents or validates exactly one device-authorization state, `reg.exe query HKLM\SOFTWARE\Policies\Videoclinic\DMS` returns the two expected UUID values, and `cargo test --workspace`, `node --test crates/dms-desktop/ui/*.test.mjs`, and the Windows `Desktop platform smoke` job exit/pass |
 
 Mark a phase `in-progress` while running it, `done (<evidence>)` once its gate passes, and `pending` otherwise.
 
@@ -129,6 +129,8 @@ Steps:
 Verification gate: `python3 scripts/validate_admx.py docs/deployment/windows/admx/DMSDesktop.admx docs/deployment/windows/admx/en-US/DMSDesktop.adml` exits 0; every relative link in `docs/windows-entra-deployment.md` resolves.
 
 ## Phase 5 — Validate the Windows deployment path and close records
+
+**Entry condition:** Phase 4 checkpoint `0deaf8e` exists; push it too when an operator requests a remote checkpoint.
 
 **Goal:** One Windows device proves that the deployed policy controls the DMS Entra configuration, while a process with both DMS environment values validates or completes one device-authorization flow without exposing secrets, mutating library metadata, or disabling the normal identity-source safeguards.
 
