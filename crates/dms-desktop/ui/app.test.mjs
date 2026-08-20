@@ -25,6 +25,12 @@ import {
   switchWorkspaceSession,
   toggleSavedView,
   workspaceSetupRequest,
+  applyStartupAuthorization,
+  cancelStartupAuthorizationPoll,
+  scheduleStartupAuthorizationPoll,
+  shouldPollStartupAuthorization,
+  startupAuthorizationMarkup,
+  startupAuthorizationPollDelayMs,
 } from "./app.mjs";
 
 const workspaceId = "5ef3db10-8f6d-4ae4-9d68-ecb1eaac8235";
@@ -662,6 +668,79 @@ test("left menu destination icons match the wireframe navigation", () => {
   const nav = [...generator.matchAll(/\{ id: "[a-z]+", label: "(.+?)", icon: "(.*?)" \}/gu)];
   assert.ok(nav.length >= 5);
   for (const [, label, icon] of nav) {
-    assert.match(source, new RegExp(`\\["${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}", "${icon.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"\\]`));
+    assert.match(source, new RegExp(`\\["${label.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}", "${icon.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}"\\]`));
   }
+});
+
+test("app-shell startup authorization is visible without a workspace and on later routes", () => {
+  const pending = {
+    kind: "pending",
+    user_code: "ABCD-EFGH",
+    verification_uri: "https://microsoft.com/devicelogin",
+    message: "Enter the code to sign in.",
+    expires_in_seconds: 900,
+    next_poll_delay_ms: 5000,
+  };
+  const setup = applyStartupAuthorization(createInitialState(), pending);
+  const withWorkspace = applyStartupAuthorization({
+    ...createInitialState(),
+    workspace: { workspace_id: workspaceId, edit_root: "/DMS/Edit" },
+  }, pending);
+  const markup = startupAuthorizationMarkup(setup.startup_authorization);
+
+  assert.equal(setup.workspace, null);
+  assert.ok(withWorkspace.workspace);
+  assert.match(markup, /data-startup-authorization="pending"/);
+  assert.match(markup, /ABCD-EFGH/);
+  assert.match(markup, /Open sign-in page/);
+  assert.match(markup, /data-open-external="https:\/\/microsoft.com\/devicelogin"/);
+  assert.doesNotMatch(markup, /device_code|access_token|refresh_token/);
+  assert.equal(startupAuthorizationMarkup({ kind: "inactive" }), "");
+  assert.match(startupAuthorizationMarkup({ kind: "valid", message: "Signed in to Microsoft Entra." }), /data-startup-authorization="valid"/);
+});
+
+test("startup authorization polls only while pending and cancels the previous timer", () => {
+  const calls = [];
+  const timers = {
+    setTimeout(poll, delay) {
+      calls.push(["set", delay]);
+      return calls.length;
+    },
+    clearTimeout(id) {
+      calls.push(["clear", id]);
+    },
+  };
+  const pending = { kind: "pending", next_poll_delay_ms: 4000 };
+  const first = scheduleStartupAuthorizationPoll(pending, () => {}, timers);
+  cancelStartupAuthorizationPoll(first, timers);
+  const terminal = scheduleStartupAuthorizationPoll({ kind: "expired" }, () => {}, timers);
+
+  assert.equal(shouldPollStartupAuthorization(pending), true);
+  assert.equal(startupAuthorizationPollDelayMs(pending), 4000);
+  assert.equal(shouldPollStartupAuthorization({ kind: "declined" }), false);
+  assert.equal(startupAuthorizationPollDelayMs({ kind: "declined" }), null);
+  assert.equal(shouldPollStartupAuthorization({ kind: "pending", next_poll_delay_ms: null }), false);
+  assert.deepEqual(calls, [["set", 4000], ["clear", 1]]);
+  assert.equal(terminal, null);
+});
+
+test("terminal startup authorization offers explicit reissue and unavailable does not", () => {
+  const expired = startupAuthorizationMarkup({
+    kind: "expired",
+    message: "Microsoft Entra sign-in expired.",
+  });
+  const declined = startupAuthorizationMarkup({
+    kind: "declined",
+    message: "Microsoft Entra sign-in was declined.",
+  });
+  const unavailable = startupAuthorizationMarkup({
+    kind: "unavailable",
+    message: "cannot access the OS credential store",
+  });
+
+  assert.match(expired, /Reissue code/);
+  assert.match(expired, /data-startup-reissue/);
+  assert.match(declined, /Reissue code/);
+  assert.doesNotMatch(unavailable, /Reissue code/);
+  assert.doesNotMatch(unavailable, /data-startup-reissue/);
 });

@@ -167,6 +167,7 @@ export function createInitialState(preferences = defaultPreferences()) {
     flyout: null,
     setup_edit_root: "",
     error: "",
+    startup_authorization: { kind: "inactive" },
   };
 }
 
@@ -321,6 +322,48 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+export function applyStartupAuthorization(state, status) {
+  return { ...state, startup_authorization: status ?? { kind: "inactive" } };
+}
+
+export function shouldPollStartupAuthorization(status) {
+  return status?.kind === "pending" && status.next_poll_delay_ms != null;
+}
+
+export function startupAuthorizationPollDelayMs(status) {
+  if (!shouldPollStartupAuthorization(status)) return null;
+  const delay = Number(status.next_poll_delay_ms);
+  return Number.isFinite(delay) ? Math.max(0, delay) : 0;
+}
+
+export function scheduleStartupAuthorizationPoll(status, poll, timers = globalThis) {
+  const delay = startupAuthorizationPollDelayMs(status);
+  if (delay == null) return null;
+  return timers.setTimeout(poll, delay);
+}
+
+export function cancelStartupAuthorizationPoll(timerId, timers = globalThis) {
+  if (timerId != null) timers.clearTimeout(timerId);
+}
+
+export function startupAuthorizationMarkup(status) {
+  if (!status || status.kind === "inactive") return "";
+  if (status.kind === "valid") {
+    return `<section class="startup-authorization-card" data-startup-authorization="valid"><h2>Microsoft Entra session</h2><p>${escapeHtml(status.message ?? "Signed in to Microsoft Entra.")}</p></section>`;
+  }
+  if (status.kind === "pending") {
+    const uri = escapeHtml(status.verification_uri ?? "");
+    const expiry = status.expires_in_seconds != null
+      ? `<dt>Expires in</dt><dd>${escapeHtml(String(status.expires_in_seconds))} seconds</dd>`
+      : "";
+    return `<section class="startup-authorization-card" data-startup-authorization="pending"><h2>Sign in to Microsoft Entra</h2><p>${escapeHtml(status.message ?? "")}</p><dl class="details-grid"><dt>Code</dt><dd><code>${escapeHtml(status.user_code ?? "")}</code></dd><dt>Sign-in page</dt><dd><button class="button secondary" type="button" data-open-external="${uri}">Open sign-in page</button></dd>${expiry}</dl></section>`;
+  }
+  if (status.kind === "unavailable") {
+    return `<section class="startup-authorization-card" data-startup-authorization="unavailable" role="alert"><h2>Microsoft Entra sign-in unavailable</h2><p>${escapeHtml(status.message ?? "")}</p></section>`;
+  }
+  return `<section class="startup-authorization-card" data-startup-authorization="${escapeHtml(status.kind)}"><h2>Microsoft Entra sign-in needs attention</h2><p>${escapeHtml(status.message ?? "")}</p><button class="button" type="button" data-startup-reissue>Reissue code</button></section>`;
+}
+
 function currentActivity(state) {
   return state.activities.find((activity) => activity.key === state.current_key) ?? null;
 }
@@ -375,6 +418,50 @@ function persistPreferences(state) {
   return invokeCommand("save_preferences", { preferences: state.preferences }).catch((error) => {
     console.error("Could not save preferences", error);
   });
+}
+
+async function loadStartupAuthorization() {
+  try {
+    const status = await invokeCommand("startup_authorization_status", {});
+    appState = applyStartupAuthorization(appState, status);
+  } catch (error) {
+    console.warn("Could not load Microsoft Entra startup authorization", error);
+  }
+}
+
+async function pollStartupAuthorization() {
+  try {
+    const status = await invokeCommand("poll_startup_authorization", {});
+    appState = applyStartupAuthorization(appState, status);
+  } catch (error) {
+    const current = appState.startup_authorization;
+    if (current?.kind === "pending") {
+      appState = applyStartupAuthorization(appState, {
+        ...current,
+        next_poll_delay_ms: null,
+        message: String(error),
+      });
+    } else {
+      appState = applyStartupAuthorization(appState, {
+        kind: "unavailable",
+        message: String(error),
+      });
+    }
+  }
+  render(appState);
+}
+
+async function reissueStartupAuthorization() {
+  try {
+    const status = await invokeCommand("reissue_startup_authorization", {});
+    appState = applyStartupAuthorization(appState, status);
+  } catch (error) {
+    appState = applyStartupAuthorization(appState, {
+      kind: "failed",
+      message: String(error),
+    });
+  }
+  render(appState);
 }
 
 function groupMarkup(title, items, kind) {
@@ -510,6 +597,8 @@ function activityMarkup(state, activity) {
   return `<section class="card"><span class="badge">${escapeHtml(activity.destination)}</span><h2>${escapeHtml(activity.label)}</h2><p>The desktop shell is connected to the shared Rust core. Domain workflows beyond the phase-1 shell remain unavailable until their CHG phases are implemented.</p><dl class="details-grid"><dt>Workspace ID</dt><dd>${escapeHtml(workspace.workspace_id)}</dd><dt>Edit root</dt><dd>${escapeHtml(workspace.edit_root)}</dd><dt>Publish root</dt><dd>${escapeHtml(workspace.publish_root)}</dd><dt>Controlled documents</dt><dd>${escapeHtml(workspace.document_count)}</dd></dl></section>`;
 }
 
+let startupPollTimer = null;
+
 function render(state) {
   const root = document.querySelector("#app");
   root.classList.toggle("sidebar-collapsed", !state.preferences.sidebar_expanded && !state.sidebar_overlay);
@@ -523,6 +612,16 @@ function render(state) {
   mainContent.innerHTML = state.workspace
     ? activityMarkup(state, activity)
     : setupMarkup(state.error, state.preferences.recent_libraries, state.setup_edit_root);
+  const startupHost = document.querySelector("#startup-authorization");
+  if (startupHost) {
+    const markup = startupAuthorizationMarkup(state.startup_authorization);
+    startupHost.hidden = !markup;
+    startupHost.innerHTML = markup;
+    cancelStartupAuthorizationPoll(startupPollTimer);
+    startupPollTimer = scheduleStartupAuthorizationPoll(state.startup_authorization, () => {
+      void pollStartupAuthorization();
+    });
+  }
 
   const bookmark = document.querySelector("#bookmark-view");
   const bookmarkTarget = bookmarkActivity(state);
@@ -1566,6 +1665,11 @@ async function handleClick(event) {
       }
     }
     render(appState);
+    return;
+  }
+
+  if (event.target.closest("[data-startup-reissue]")) {
+    await reissueStartupAuthorization();
     return;
   }
 
@@ -2688,6 +2792,7 @@ async function start() {
   document.addEventListener("pointercancel", finishLibraryResize);
   await registerWindowCloseHandler();
   await registerDeepLinkHandler();
+  await loadStartupAuthorization();
   document.querySelector("#collapse-sidebar").addEventListener("click", () => {
     appState = {
       ...appState,

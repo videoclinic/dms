@@ -1057,8 +1057,18 @@ const CAPS = [
     nav: "config",
     configSection: "workflow",
     configSecondary: "Identity source",
-    subtitle: "Windows machine policy can manage the Entra public client and tenant; Configuration shows each identifier's source and disables the application form when policy owns both.",
+    subtitle: "Windows machine policy can manage the Entra public client and tenant; Configuration shows each identifier's source and disables the application form when policy owns both. Process-environment launches show a persistent shell device-authorization card.",
     body: `${defaultsFirstStyles()}
+      <section class="card">
+        <div class="row between"><h3 class="card-title" style="margin:0">Microsoft Entra sign-in</h3>${badge("process environment", "info")}</div>
+        <p class="muted">Shown in the app shell before a workspace is opened and on every later route. This is OAuth device authorization, not Entra device join.</p>
+        ${kv([
+          ["Code", "<code>ABCD-EFGH</code>"],
+          ["Expires in", "15 minutes"],
+          ["Sign-in page", '<button class="btn outline">Open sign-in page</button>'],
+        ])}
+        <p class="hint">DMS polls at the provider interval without blocking the UI and does not open a browser until this control is used. A valid cached session shows no code. Expired or declined challenges offer Reissue code.</p>
+      </section>
       <section class="card">
         <h3 class="card-title">Application Entra configuration</h3>
         <p class="muted">Shared by local libraries for this OS user; not stored in <code>.dms</code>.</p>

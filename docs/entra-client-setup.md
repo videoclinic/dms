@@ -117,7 +117,11 @@ DMS_ENTRA_TENANT_ID=<Directory (tenant) ID>
 A non-empty variable overrides the corresponding saved DMS value for that
 process and makes the field read-only in Configuration. Both values must be
 valid UUIDs; an invalid or incomplete configuration blocks Graph use rather
-than silently falling back to saved settings.
+than silently falling back to saved settings. When both values are the
+effective configuration source, DMS validates the tenant's cached delegated
+session at launch or starts one non-blocking device-authorization status;
+this does not create an Entra device object and does not open a browser
+without the operator choosing **Open sign-in page**.
 
 ## Verification checklist
 

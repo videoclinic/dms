@@ -184,7 +184,11 @@ macOS.
   Each identifier is labelled as saved for this OS user, managed by process
   environment, or managed by Windows policy. A complete Windows-policy pair
   disables both application fields and Save; process-environment fields stay
-  read-only without claiming Windows policy.
+  read-only without claiming Windows policy. When both identifiers are
+  process-environment values, the app shell shows startup device-authorization
+  status before a workspace exists and on every later route: a valid cached
+  session, one pending user code with **Open sign-in page**, or an explicit
+  **Reissue code** after expiry, decline, or another terminal challenge.
   Desktop-only delegated tokens remain in the OS credential store; credentials
   never cross the frontend IPC boundary or enter `.dms`.
 - Configuration → Document defaults selects one reusable Markdown Word template

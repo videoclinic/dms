@@ -543,6 +543,34 @@ Capability-local rules stay in their CAP files.
   This decision applies only to Windows machine policy, not user-scoped policy,
   macOS profiles, or Linux configuration management.
 
+## ADR-0029 — Process-environment startup uses OAuth device authorization
+
+- **Decision:** When—and only when—both effective Entra identifiers come from
+  the process environment (`DMS_ENTRA_CLIENT_ID` and `DMS_ENTRA_TENANT_ID`),
+  desktop startup validates the tenant's cached delegated credential or starts
+  one OAuth 2.0 device-authorization challenge. A valid access token, or an
+  expired token successfully refreshed from the OS credential store, is a
+  signed-in session and creates no code. Missing, malformed, or
+  refresh-rejected cache starts one challenge. A credential-store or transient
+  network failure reports an error and neither issues nor erases a code or
+  token. Windows policy, including a policy pair that overrides conflicting
+  environment values, and saved-settings-only configuration do not start
+  interactive authorization at launch. This is device authorization for the
+  desktop user's Graph session, not Microsoft Entra device join or device
+  registration. The UI never auto-opens a browser, never returns `device_code`
+  or tokens across IPC, polls at the provider interval without blocking, and
+  offers **Reissue code** only after expiry, decline, or another terminal
+  challenge result.
+- **Why:** A process that already has both public identifiers is an
+  environment-managed launch. Operators still must complete interactive
+  delegated sign-in; the app must not block the UI thread or silently mint
+  replacement codes.
+- **Consequences:** At most one startup challenge exists for the configured
+  tenant. Identity-source preview and approver sign-in remain explicit
+  operator actions on their own surfaces and share the same single-poll
+  primitive. ADR-0021, ADR-0024, and ADR-0028 remain the identity-source,
+  app-global configuration, and Windows-policy contracts.
+
 ## ADR-0026 — Membership and obsolescence stay distinct
 
 - **Decision:** Library membership (`source_state`) and document lifecycle

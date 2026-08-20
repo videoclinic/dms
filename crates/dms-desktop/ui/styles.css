@@ -139,6 +139,21 @@ button { cursor: pointer; }
 }
 .main-header h1 { margin: 0; font-size: 16px; }
 .header-spacer { flex: 1; }
+.startup-authorization {
+  flex: 0 0 auto;
+  padding: 12px 24px 0;
+}
+.startup-authorization[hidden] { display: none; }
+.startup-authorization-card {
+  max-width: none;
+  padding: 14px 18px;
+  background: white;
+  border: 1px solid #dfe5ea;
+  border-radius: 10px;
+}
+.startup-authorization-card h2 { margin: 0 0 6px; font-size: 16px; }
+.startup-authorization-card p { margin: 0 0 10px; color: #5b6b78; }
+.startup-authorization-card .details-grid { margin: 0 0 8px; }
 .main-content { min-height: 0; flex: 1; padding: 28px; overflow: auto; overscroll-behavior: contain; }
 
 .card {

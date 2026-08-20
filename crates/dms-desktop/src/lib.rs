@@ -3,6 +3,7 @@ use std::{
     env, fs,
     path::{Component, Path, PathBuf},
     sync::Mutex,
+    time::{Duration, Instant},
 };
 
 use chrono::NaiveDate;
@@ -48,6 +49,7 @@ const DESKTOP_REASSOCIATE_RULE_UNREGISTERED: &str =
 struct DesktopIntegrations {
     graph: Mutex<graph::MicrosoftGraphClient>,
     approver_actor: Mutex<Option<AuthenticatedActor>>,
+    startup_authorization: Mutex<StartupAuthorization>,
 }
 
 impl Default for DesktopIntegrations {
@@ -55,6 +57,7 @@ impl Default for DesktopIntegrations {
         Self {
             graph: Mutex::new(graph::MicrosoftGraphClient::production(None)),
             approver_actor: Mutex::new(None),
+            startup_authorization: Mutex::new(StartupAuthorization::Inactive),
         }
     }
 }
@@ -200,6 +203,46 @@ impl EntraConfigurationSource {
     fn is_read_only(&self) -> bool {
         !matches!(self, Self::Saved)
     }
+}
+
+#[derive(Clone, Debug)]
+enum StartupAuthorization {
+    Inactive,
+    Valid,
+    Pending {
+        challenge: graph::DeviceLoginChallenge,
+        next_poll_after: Instant,
+    },
+    Declined,
+    Expired,
+    Failed {
+        message: String,
+    },
+    Unavailable {
+        message: String,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum StartupAuthorizationKind {
+    Inactive,
+    Valid,
+    Pending,
+    Declined,
+    Expired,
+    Failed,
+    Unavailable,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct StartupAuthorizationStatus {
+    pub kind: StartupAuthorizationKind,
+    pub user_code: Option<String>,
+    pub verification_uri: Option<String>,
+    pub message: Option<String>,
+    pub expires_in_seconds: Option<u64>,
+    pub next_poll_delay_ms: Option<u64>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -813,6 +856,65 @@ fn complete_approver_sign_in(
         .map_err(|_| "interactive approver sign-in state is unavailable".to_owned())? =
         Some(actor.clone());
     Ok(actor)
+}
+
+#[tauri::command]
+fn startup_authorization_status(
+    state: State<'_, DesktopIntegrations>,
+) -> Result<StartupAuthorizationStatus, String> {
+    let authorization = state
+        .startup_authorization
+        .lock()
+        .map_err(|_| "Microsoft Entra startup authorization state is unavailable".to_owned())?;
+    Ok(serialize_startup_authorization(&authorization))
+}
+
+#[tauri::command]
+fn poll_startup_authorization(
+    state: State<'_, DesktopIntegrations>,
+) -> Result<StartupAuthorizationStatus, String> {
+    let mut graph = state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
+    let mut authorization = state
+        .startup_authorization
+        .lock()
+        .map_err(|_| "Microsoft Entra startup authorization state is unavailable".to_owned())?;
+    if !matches!(*authorization, StartupAuthorization::Pending { .. }) {
+        return Ok(serialize_startup_authorization(&authorization));
+    }
+    let poll = graph.poll_startup_authorization()?;
+    *authorization = apply_startup_poll(authorization.clone(), poll);
+    Ok(serialize_startup_authorization(&authorization))
+}
+
+#[tauri::command]
+fn reissue_startup_authorization(
+    state: State<'_, DesktopIntegrations>,
+) -> Result<StartupAuthorizationStatus, String> {
+    let mut graph = state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
+    let mut authorization = state
+        .startup_authorization
+        .lock()
+        .map_err(|_| "Microsoft Entra startup authorization state is unavailable".to_owned())?;
+    match &*authorization {
+        StartupAuthorization::Declined
+        | StartupAuthorization::Expired
+        | StartupAuthorization::Failed { .. } => {}
+        _ => return Ok(serialize_startup_authorization(&authorization)),
+    }
+    let challenge = graph.reissue_startup_sign_in()?;
+    let next_poll_after =
+        Instant::now() + Duration::from_secs(challenge.poll_interval_seconds.max(1));
+    *authorization = StartupAuthorization::Pending {
+        challenge,
+        next_poll_after,
+    };
+    Ok(serialize_startup_authorization(&authorization))
 }
 
 #[tauri::command]
@@ -2172,6 +2274,132 @@ fn runtime_entra_configuration(
     }))
 }
 
+fn environment_managed_entra(effective: &GlobalEntraConfiguration) -> bool {
+    matches!(
+        (&effective.client_id_source, &effective.tenant_id_source),
+        (
+            EntraConfigurationSource::Environment,
+            EntraConfigurationSource::Environment
+        )
+    )
+}
+
+fn next_poll_delay_ms(next_poll_after: Instant) -> u64 {
+    next_poll_after
+        .saturating_duration_since(Instant::now())
+        .as_millis()
+        .min(u128::from(u64::MAX)) as u64
+}
+
+fn serialize_startup_authorization(state: &StartupAuthorization) -> StartupAuthorizationStatus {
+    match state {
+        StartupAuthorization::Inactive => StartupAuthorizationStatus {
+            kind: StartupAuthorizationKind::Inactive,
+            user_code: None,
+            verification_uri: None,
+            message: None,
+            expires_in_seconds: None,
+            next_poll_delay_ms: None,
+        },
+        StartupAuthorization::Valid => StartupAuthorizationStatus {
+            kind: StartupAuthorizationKind::Valid,
+            user_code: None,
+            verification_uri: None,
+            message: Some("Signed in to Microsoft Entra.".to_owned()),
+            expires_in_seconds: None,
+            next_poll_delay_ms: None,
+        },
+        StartupAuthorization::Pending {
+            challenge,
+            next_poll_after,
+        } => StartupAuthorizationStatus {
+            kind: StartupAuthorizationKind::Pending,
+            user_code: Some(challenge.user_code.clone()),
+            verification_uri: Some(challenge.verification_uri.clone()),
+            message: Some(challenge.message.clone()),
+            expires_in_seconds: Some(challenge.expires_in_seconds),
+            next_poll_delay_ms: Some(next_poll_delay_ms(*next_poll_after)),
+        },
+        StartupAuthorization::Declined => StartupAuthorizationStatus {
+            kind: StartupAuthorizationKind::Declined,
+            user_code: None,
+            verification_uri: None,
+            message: Some("Microsoft Entra sign-in was declined.".to_owned()),
+            expires_in_seconds: None,
+            next_poll_delay_ms: None,
+        },
+        StartupAuthorization::Expired => StartupAuthorizationStatus {
+            kind: StartupAuthorizationKind::Expired,
+            user_code: None,
+            verification_uri: None,
+            message: Some("Microsoft Entra sign-in expired.".to_owned()),
+            expires_in_seconds: None,
+            next_poll_delay_ms: None,
+        },
+        StartupAuthorization::Failed { message } => StartupAuthorizationStatus {
+            kind: StartupAuthorizationKind::Failed,
+            user_code: None,
+            verification_uri: None,
+            message: Some(message.clone()),
+            expires_in_seconds: None,
+            next_poll_delay_ms: None,
+        },
+        StartupAuthorization::Unavailable { message } => StartupAuthorizationStatus {
+            kind: StartupAuthorizationKind::Unavailable,
+            user_code: None,
+            verification_uri: None,
+            message: Some(message.clone()),
+            expires_in_seconds: None,
+            next_poll_delay_ms: None,
+        },
+    }
+}
+
+fn activate_startup_authorization(
+    graph: &mut graph::MicrosoftGraphClient,
+    effective: &GlobalEntraConfiguration,
+) -> StartupAuthorization {
+    if !environment_managed_entra(effective) {
+        return StartupAuthorization::Inactive;
+    }
+    match graph.evaluate_startup_credential() {
+        graph::StartupCredentialEvaluation::Valid => StartupAuthorization::Valid,
+        graph::StartupCredentialEvaluation::Unavailable(message) => {
+            StartupAuthorization::Unavailable { message }
+        }
+        graph::StartupCredentialEvaluation::NeedsChallenge => match graph.begin_startup_sign_in() {
+            Ok(challenge) => {
+                let next_poll_after =
+                    Instant::now() + Duration::from_secs(challenge.poll_interval_seconds.max(1));
+                StartupAuthorization::Pending {
+                    challenge,
+                    next_poll_after,
+                }
+            }
+            Err(message) => StartupAuthorization::Unavailable { message },
+        },
+    }
+}
+
+fn apply_startup_poll(
+    current: StartupAuthorization,
+    poll: graph::DeviceTokenPoll,
+) -> StartupAuthorization {
+    match poll {
+        graph::DeviceTokenPoll::Pending { next_poll_after } => match current {
+            StartupAuthorization::Pending { challenge, .. } => StartupAuthorization::Pending {
+                challenge,
+                next_poll_after,
+            },
+            other => other,
+        },
+        graph::DeviceTokenPoll::Authorized(_) => StartupAuthorization::Valid,
+        graph::DeviceTokenPoll::Declined => StartupAuthorization::Declined,
+        graph::DeviceTokenPoll::Expired => StartupAuthorization::Expired,
+        graph::DeviceTokenPoll::Failed(message) => StartupAuthorization::Failed { message },
+    }
+}
+
 fn normalize_preferences(mut preferences: Preferences) -> Preferences {
     let mut seen = BTreeSet::new();
     preferences.recent_libraries = preferences
@@ -2757,13 +2985,23 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             let settings = load_global_settings_at(&global_settings_path(&handle)?)?;
-            let runtime =
-                runtime_entra_configuration(&effective_global_entra_configuration(&settings)?)?;
-            *app.state::<DesktopIntegrations>()
+            let effective = effective_global_entra_configuration(&settings)?;
+            let runtime = runtime_entra_configuration(&effective)?;
+            let integrations = app.state::<DesktopIntegrations>();
+            let mut graph = integrations
                 .graph
                 .lock()
-                .map_err(|_| "Microsoft Graph integration state is unavailable")? =
-                graph::MicrosoftGraphClient::production(runtime);
+                .map_err(|_| "Microsoft Graph integration state is unavailable")?;
+            *graph = graph::MicrosoftGraphClient::production(runtime);
+            if std::env::var_os("DMS_DESKTOP_SMOKE").is_none() {
+                let startup = activate_startup_authorization(&mut graph, &effective);
+                *integrations
+                    .startup_authorization
+                    .lock()
+                    .map_err(|_| "Microsoft Entra startup authorization state is unavailable")? =
+                    startup;
+            }
+            drop(graph);
             let handle = app.handle().clone();
             app.deep_link()
                 .on_open_url(move |_event| focus_main_window(&handle));
@@ -2799,6 +3037,9 @@ pub fn run() {
             complete_identity_source_sign_in,
             begin_approver_sign_in,
             complete_approver_sign_in,
+            startup_authorization_status,
+            poll_startup_authorization,
+            reissue_startup_authorization,
             apply_identity_source,
             refresh_identity_source,
             configure_notifications,
@@ -3453,6 +3694,77 @@ mod tests {
         let serialized = fs::read_to_string(path).unwrap();
         assert!(!serialized.contains(&policy_client_id.to_string()));
         assert!(!serialized.contains(&policy_tenant_id.to_string()));
+    }
+
+    #[test]
+    fn startup_device_authorization_starts_only_for_an_environment_pair() {
+        let client_id = Uuid::new_v4().to_string();
+        let tenant_id = Uuid::new_v4().to_string();
+        let saved = GlobalEntraConfiguration {
+            client_id: client_id.clone(),
+            tenant_id: tenant_id.clone(),
+            client_id_source: EntraConfigurationSource::Saved,
+            tenant_id_source: EntraConfigurationSource::Saved,
+        };
+        let policy = GlobalEntraConfiguration {
+            client_id: client_id.clone(),
+            tenant_id: tenant_id.clone(),
+            client_id_source: EntraConfigurationSource::WindowsPolicy,
+            tenant_id_source: EntraConfigurationSource::WindowsPolicy,
+        };
+        let mixed = GlobalEntraConfiguration {
+            client_id: client_id.clone(),
+            tenant_id: tenant_id.clone(),
+            client_id_source: EntraConfigurationSource::Environment,
+            tenant_id_source: EntraConfigurationSource::Saved,
+        };
+        let environment = GlobalEntraConfiguration {
+            client_id,
+            tenant_id,
+            client_id_source: EntraConfigurationSource::Environment,
+            tenant_id_source: EntraConfigurationSource::Environment,
+        };
+
+        assert!(!environment_managed_entra(&saved));
+        assert!(!environment_managed_entra(&policy));
+        assert!(!environment_managed_entra(&mixed));
+        assert!(environment_managed_entra(&environment));
+        assert!(matches!(
+            activate_startup_authorization(
+                &mut graph::MicrosoftGraphClient::production(None),
+                &saved
+            ),
+            StartupAuthorization::Inactive
+        ));
+        assert!(matches!(
+            activate_startup_authorization(
+                &mut graph::MicrosoftGraphClient::production(None),
+                &policy
+            ),
+            StartupAuthorization::Inactive
+        ));
+    }
+
+    #[test]
+    fn startup_device_authorization_status_omits_tokens_and_device_code() {
+        let status = serialize_startup_authorization(&StartupAuthorization::Pending {
+            challenge: graph::DeviceLoginChallenge {
+                challenge_id: Uuid::new_v4(),
+                user_code: "ABCD-EFGH".to_owned(),
+                verification_uri: "https://microsoft.com/devicelogin".to_owned(),
+                message: "Sign in".to_owned(),
+                expires_in_seconds: 900,
+                poll_interval_seconds: 5,
+            },
+            next_poll_after: Instant::now() + Duration::from_secs(5),
+        });
+        let json = serde_json::to_string(&status).unwrap();
+
+        assert_eq!(status.kind, StartupAuthorizationKind::Pending);
+        assert_eq!(status.user_code.as_deref(), Some("ABCD-EFGH"));
+        assert!(!json.contains("device_code"));
+        assert!(!json.contains("access_token"));
+        assert!(!json.contains("refresh_token"));
     }
 
     #[test]

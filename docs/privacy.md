@@ -16,7 +16,7 @@
 | Approval-notification metadata | `<edit-root>/.dms/` | Requester/approver display name/email, approver Entra tenant/object ID on a decision, outcome, send time, and delivery-attempt result; no document content |
 | Workspace root paths | Inside `.dms` | Absolute edit/publish paths on the operator machine |
 | SMTP relay app password | OS credential store | Write-only Configuration input; never stored in `.dms`, app preferences, frontend state, IPC results, or errors |
-| Microsoft Entra delegated-token cache | OS credential store | Interactive sign-in tokens for Microsoft Graph; never stored in `.dms` |
+| Microsoft Entra delegated-token cache | OS credential store | Interactive sign-in tokens for Microsoft Graph; never stored in `.dms`. Process-environment startup may validate or refresh this cache, or start one device-authorization challenge, without exposing tokens to the WebView |
 | Workspace advisory lock | `<edit-root>/.dms/lock` | Process id, hostname, timestamp; advisory only, never contains document content |
 | Export/audit reports | `<edit-root>/.dms/exports/` (operator-chosen) | Aggregated lifecycle, approval, periodic-review, and release evidence; produced on demand. Pre-v12 release rows carry an explicit **unrecorded** date and **unresolved** owner rather than substituting the current mutable profile |
 | Workspace backup archive | Operator-chosen path | Contains `.dms`, controlled source drafts, and released PDFs; not encrypted by the app |

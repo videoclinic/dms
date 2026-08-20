@@ -6,7 +6,7 @@
 | Status | implemented |
 | Authority | Microsoft Entra ID group |
 | Storage | `<edit-root>/.dms/` group binding and display cache; OS-user app-global Entra settings; OS credential store token cache |
-| Tests | [Core policy and schema migration tests](../../../crates/dms-core/tests/policies.rs), [desktop Graph, approver-identity, and configuration tests](../../../crates/dms-desktop/src/graph.rs), [lifecycle decision tests](../../../crates/dms-core/tests/lifecycle.rs), [Library approver frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [configuration UI tests](../../../crates/dms-desktop/ui/configuration.test.mjs), and [Phase 9l configured Windows evidence](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md) |
+| Tests | [Core policy and schema migration tests](../../../crates/dms-core/tests/policies.rs), [desktop Graph, approver-identity, startup device authorization, and configuration tests](../../../crates/dms-desktop/src/graph.rs), [lifecycle decision tests](../../../crates/dms-core/tests/lifecycle.rs), [Library approver frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [configuration UI tests](../../../crates/dms-desktop/ui/configuration.test.mjs), [app-shell startup authorization tests](../../../crates/dms-desktop/ui/app.test.mjs), and [Phase 9l configured Windows evidence](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md) |
 
 ## Operational details
 
@@ -40,6 +40,17 @@
   discards expired pending challenges.
 - Saving app-global Entra settings clears any rendered challenge or preview
   invalidated when the Graph client adopts that configuration.
+- When both effective identifiers are process-environment values, desktop
+  startup validates the tenant's cached delegated token or starts one
+  non-blocking device-authorization challenge in the app shell. The shell card
+  is available before a workspace is opened and on every later route. It shows
+  the user code, expiry, and **Open sign-in page**; a valid cached or refreshed
+  session shows no code. Expired, declined, or other terminal challenge results
+  stop polling and offer **Reissue code**. A credential-store or transient
+  network failure reports an error and does not issue or erase a code or token.
+  Windows policy and saved-settings-only configuration do not start this
+  launch challenge. The WebView never receives `device_code`, access tokens, or
+  refresh tokens.
 2. Replacing a binding retains historical evidence, invalidates stale workflow
    candidates, and leaves existing role references unresolved rather than mapping
    them to the replacement group.
@@ -165,7 +176,7 @@
 - Local store: [`CAP-0001-local-folder-dms.md`](CAP-0001-local-folder-dms.md)
 - Architecture: [`../../architecture.md`](../../architecture.md)
 - Privacy: [`../../privacy.md`](../../privacy.md)
-- ADR-0021, ADR-0024: [`../../design-decisions.md`](../../design-decisions.md)
+- ADR-0021, ADR-0024, ADR-0028, ADR-0029: [`../../design-decisions.md`](../../design-decisions.md)
 - Implementation receipt: [`CHG-0001`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)
   records the broader Tauri bootstrap and Phase 9l integration evidence;
   archived [`CHG-0002`](../../changes/archive/CHG-0002-entra-configuration-ux-fixes.md)

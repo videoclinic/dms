@@ -345,6 +345,16 @@ test("failed identity-source challenge offers a same-surface restart with the la
   assert.doesNotMatch(activeMarkup, /Previous sign-in failed/);
 });
 
+test("identity-source setup does not own the app-shell startup authorization card", () => {
+  let state = applyConfigurationSnapshot(createConfigurationState(), snapshot);
+  state = openConfigurationSecondary(state, "identity-source");
+  const markup = configurationMarkup(state, assistancePolicy);
+
+  assert.doesNotMatch(markup, /data-startup-authorization/);
+  assert.doesNotMatch(markup, /data-startup-reissue/);
+  assert.match(markup, /Sign in and preview group|Library Entra group|Application Entra configuration/);
+});
+
 test("first identity-source preview requires initial edit-root roles", () => {
   let state = applyConfigurationSnapshot(createConfigurationState(), {
     ...snapshot,

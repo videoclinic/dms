@@ -23,6 +23,11 @@ const GRAPH_DISABLED_ONLY_USERS_ERROR: &str =
     "Microsoft Graph returned direct users, but none are enabled; the eligible-people cache was not changed";
 const OVERSIZED_CREDENTIAL_FRAGMENT_ERROR: &str =
     "cannot save the delegated Microsoft Entra token in the OS credential store: credential fragment exceeds the supported UTF-16 size limit";
+const REFRESH_REJECTED_ERROR: &str =
+    "Microsoft Entra rejected the delegated refresh token; sign in again";
+const STARTUP_PENDING_ALREADY_ERROR: &str =
+    "a Microsoft Entra device-authorization code is already pending";
+const ACCESS_TOKEN_VALIDITY_SKEW: ChronoDuration = ChronoDuration::seconds(60);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct RuntimeEntraConfiguration {
@@ -37,6 +42,7 @@ pub struct DeviceLoginChallenge {
     pub verification_uri: String,
     pub message: String,
     pub expires_in_seconds: u64,
+    pub poll_interval_seconds: u64,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -65,13 +71,39 @@ struct DelegatedTokenManifest {
     chunk_count: usize,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum DeviceLoginPurpose {
+    IdentitySource { group_id: Uuid },
+    Approver,
+    Startup,
+}
+
 #[derive(Clone, Debug)]
 struct PendingDeviceLogin {
     tenant_id: Uuid,
-    group_id: Option<Uuid>,
+    purpose: DeviceLoginPurpose,
     device_code: String,
+    user_code: String,
+    verification_uri: String,
+    message: String,
     expires_at: Instant,
     poll_interval: Duration,
+}
+
+#[derive(Debug)]
+pub(crate) enum DeviceTokenPoll {
+    Pending { next_poll_after: Instant },
+    Authorized(DelegatedToken),
+    Declined,
+    Expired,
+    Failed(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum StartupCredentialEvaluation {
+    Valid,
+    NeedsChallenge,
+    Unavailable(String),
 }
 
 #[derive(Clone, Debug)]
@@ -346,6 +378,39 @@ fn invalid_delegated_token_cache_error() -> String {
     "the delegated Microsoft Entra token cache is invalid; sign in again".to_owned()
 }
 
+enum TokenLoad {
+    Missing,
+    Invalid,
+    Present(DelegatedToken),
+}
+
+fn inspect_cached_token<S: TokenStore>(tokens: &S, tenant_id: Uuid) -> Result<TokenLoad, String> {
+    match tokens.load(tenant_id) {
+        Ok(None) => Ok(TokenLoad::Missing),
+        Ok(Some(token)) => Ok(TokenLoad::Present(token)),
+        Err(error) if error == invalid_delegated_token_cache_error() => Ok(TokenLoad::Invalid),
+        Err(error) => Err(error),
+    }
+}
+
+fn device_login_challenge(
+    challenge_id: Uuid,
+    pending: &PendingDeviceLogin,
+) -> DeviceLoginChallenge {
+    let remaining = pending
+        .expires_at
+        .saturating_duration_since(Instant::now())
+        .as_secs();
+    DeviceLoginChallenge {
+        challenge_id,
+        user_code: pending.user_code.clone(),
+        verification_uri: pending.verification_uri.clone(),
+        message: pending.message.clone(),
+        expires_in_seconds: remaining,
+        poll_interval_seconds: pending.poll_interval.as_secs().max(1),
+    }
+}
+
 pub(crate) trait HttpClient: Send {
     fn get(
         &mut self,
@@ -448,20 +513,39 @@ where
         &mut self,
         group_id: Uuid,
     ) -> Result<DeviceLoginChallenge, String> {
-        self.begin_delegated_sign_in(self.configured_tenant_id()?, Some(group_id))
+        self.begin_delegated_sign_in(
+            self.configured_tenant_id()?,
+            DeviceLoginPurpose::IdentitySource { group_id },
+        )
     }
 
     pub fn begin_approver_sign_in(
         &mut self,
         tenant_id: Uuid,
     ) -> Result<DeviceLoginChallenge, String> {
-        self.begin_delegated_sign_in(tenant_id, None)
+        self.begin_delegated_sign_in(tenant_id, DeviceLoginPurpose::Approver)
+    }
+
+    pub fn begin_startup_sign_in(&mut self) -> Result<DeviceLoginChallenge, String> {
+        if let Some((challenge_id, pending)) = self.active_startup_pending() {
+            return Ok(device_login_challenge(challenge_id, pending));
+        }
+        self.begin_delegated_sign_in(self.configured_tenant_id()?, DeviceLoginPurpose::Startup)
+    }
+
+    pub fn reissue_startup_sign_in(&mut self) -> Result<DeviceLoginChallenge, String> {
+        if self.active_startup_pending().is_some() {
+            return Err(STARTUP_PENDING_ALREADY_ERROR.to_owned());
+        }
+        self.pending
+            .retain(|_, pending| !matches!(pending.purpose, DeviceLoginPurpose::Startup));
+        self.begin_delegated_sign_in(self.configured_tenant_id()?, DeviceLoginPurpose::Startup)
     }
 
     fn begin_delegated_sign_in(
         &mut self,
         tenant_id: Uuid,
-        group_id: Option<Uuid>,
+        purpose: DeviceLoginPurpose,
     ) -> Result<DeviceLoginChallenge, String> {
         let now = Instant::now();
         self.pending.retain(|_, pending| pending.expires_at > now);
@@ -477,8 +561,11 @@ where
             challenge_id,
             PendingDeviceLogin {
                 tenant_id,
-                group_id,
+                purpose,
                 device_code: device.device_code,
+                user_code: device.user_code.clone(),
+                verification_uri: device.verification_uri.clone(),
+                message: device.message.clone(),
                 expires_at: Instant::now() + Duration::from_secs(device.expires_in),
                 poll_interval: Duration::from_secs(device.interval.max(1)),
             },
@@ -489,6 +576,7 @@ where
             verification_uri: device.verification_uri,
             message: device.message,
             expires_in_seconds: device.expires_in,
+            poll_interval_seconds: device.interval.max(1),
         })
     }
 
@@ -496,13 +584,16 @@ where
         &mut self,
         challenge_id: Uuid,
     ) -> Result<IdentitySourcePreview, String> {
-        let pending = self.pending.remove(&challenge_id).ok_or_else(|| {
+        let pending = self.pending.get(&challenge_id).cloned().ok_or_else(|| {
             "Microsoft Entra sign-in challenge is no longer available; start again".to_owned()
         })?;
-        let group_id = pending.group_id.ok_or_else(|| {
-            "this sign-in is for an approval decision, not an identity-source preview".to_owned()
-        })?;
-        let token = self.wait_for_device_token(&pending)?;
+        let DeviceLoginPurpose::IdentitySource { group_id } = pending.purpose else {
+            return Err(
+                "this sign-in is for an approval decision, not an identity-source preview"
+                    .to_owned(),
+            );
+        };
+        let token = self.wait_for_device_token(challenge_id)?;
         self.tokens.save(pending.tenant_id, &token)?;
         let preview = self.prepare_preview(pending.tenant_id, group_id, &token.access_token)?;
         let preview_id = Uuid::new_v4();
@@ -522,16 +613,16 @@ where
         &mut self,
         challenge_id: Uuid,
     ) -> Result<AuthenticatedActor, String> {
-        let pending = self.pending.remove(&challenge_id).ok_or_else(|| {
+        let pending = self.pending.get(&challenge_id).cloned().ok_or_else(|| {
             "Microsoft Entra sign-in challenge is no longer available; start again".to_owned()
         })?;
-        if pending.group_id.is_some() {
+        if !matches!(pending.purpose, DeviceLoginPurpose::Approver) {
             return Err(
                 "this sign-in is for an identity-source preview, not an approval decision"
                     .to_owned(),
             );
         }
-        let token = self.wait_for_device_token(&pending)?;
+        let token = self.wait_for_device_token(challenge_id)?;
         self.tokens.save(pending.tenant_id, &token)?;
         self.authenticated_actor_with_token(pending.tenant_id, &token.access_token)
     }
@@ -567,60 +658,146 @@ where
         })
     }
 
-    fn wait_for_device_token(
-        &mut self,
-        pending: &PendingDeviceLogin,
-    ) -> Result<DelegatedToken, String> {
-        let client_id = self.client_id()?.to_owned();
-        let mut interval = pending.poll_interval;
+    fn wait_for_device_token(&mut self, challenge_id: Uuid) -> Result<DelegatedToken, String> {
         loop {
-            if Instant::now() >= pending.expires_at {
-                return Err("Microsoft Entra sign-in expired; start again".to_owned());
-            }
-            let response = self.http.post_form(
-                &oauth_endpoint(pending.tenant_id, "token"),
-                &[
-                    ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-                    ("client_id", &client_id),
-                    ("device_code", &pending.device_code),
-                ],
-            )?;
-            if (200..300).contains(&response.status) {
-                return delegated_token(
-                    parse_success::<OAuthTokenResponse>(
-                        response,
-                        "complete Microsoft Entra sign-in",
-                    )?,
-                    None,
-                );
-            }
-            match oauth_error(&response.body).as_deref() {
-                Some("authorization_pending") => thread::sleep(interval),
-                Some("slow_down") => {
-                    interval += Duration::from_secs(5);
-                    thread::sleep(interval);
+            match self.poll_device_token(challenge_id)? {
+                DeviceTokenPoll::Pending { next_poll_after } => {
+                    if let Some(wait) = next_poll_after.checked_duration_since(Instant::now()) {
+                        if !wait.is_zero() {
+                            thread::sleep(wait);
+                        }
+                    }
                 }
-                Some("authorization_declined") => {
+                DeviceTokenPoll::Authorized(token) => return Ok(token),
+                DeviceTokenPoll::Declined => {
                     return Err("Microsoft Entra sign-in was declined".to_owned())
                 }
-                Some("expired_token") => {
+                DeviceTokenPoll::Expired => {
                     return Err("Microsoft Entra sign-in expired; start again".to_owned())
                 }
-                Some(error) => return Err(format!("Microsoft Entra sign-in failed: {error}")),
-                None => {
-                    return Err(
-                        "Microsoft Entra sign-in returned an invalid error response".to_owned()
-                    )
+                DeviceTokenPoll::Failed(error) => return Err(error),
+            }
+        }
+    }
+
+    fn poll_device_token(&mut self, challenge_id: Uuid) -> Result<DeviceTokenPoll, String> {
+        let now = Instant::now();
+        let Some(pending) = self.pending.get(&challenge_id).cloned() else {
+            return Ok(DeviceTokenPoll::Failed(
+                "Microsoft Entra sign-in challenge is no longer available; start again".to_owned(),
+            ));
+        };
+        if now >= pending.expires_at {
+            self.pending.remove(&challenge_id);
+            return Ok(DeviceTokenPoll::Expired);
+        }
+        let client_id = self.client_id()?.to_owned();
+        let response = self.http.post_form(
+            &oauth_endpoint(pending.tenant_id, "token"),
+            &[
+                ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
+                ("client_id", &client_id),
+                ("device_code", &pending.device_code),
+            ],
+        )?;
+        if (200..300).contains(&response.status) {
+            self.pending.remove(&challenge_id);
+            return delegated_token(
+                parse_success::<OAuthTokenResponse>(response, "complete Microsoft Entra sign-in")?,
+                None,
+            )
+            .map(DeviceTokenPoll::Authorized);
+        }
+        match oauth_error(&response.body).as_deref() {
+            Some("authorization_pending") => Ok(DeviceTokenPoll::Pending {
+                next_poll_after: Instant::now() + pending.poll_interval,
+            }),
+            Some("slow_down") => {
+                let poll_interval = pending.poll_interval + Duration::from_secs(5);
+                if let Some(stored) = self.pending.get_mut(&challenge_id) {
+                    stored.poll_interval = poll_interval;
+                }
+                Ok(DeviceTokenPoll::Pending {
+                    next_poll_after: Instant::now() + poll_interval,
+                })
+            }
+            Some("authorization_declined") => {
+                self.pending.remove(&challenge_id);
+                Ok(DeviceTokenPoll::Declined)
+            }
+            Some("expired_token") => {
+                self.pending.remove(&challenge_id);
+                Ok(DeviceTokenPoll::Expired)
+            }
+            Some(error) => {
+                self.pending.remove(&challenge_id);
+                Ok(DeviceTokenPoll::Failed(format!(
+                    "Microsoft Entra sign-in failed: {error}"
+                )))
+            }
+            None => {
+                self.pending.remove(&challenge_id);
+                Ok(DeviceTokenPoll::Failed(
+                    "Microsoft Entra sign-in returned an invalid error response".to_owned(),
+                ))
+            }
+        }
+    }
+
+    pub fn poll_startup_authorization(&mut self) -> Result<DeviceTokenPoll, String> {
+        let Some((challenge_id, _)) = self.active_startup_pending() else {
+            return Ok(DeviceTokenPoll::Failed(
+                "Microsoft Entra sign-in challenge is no longer available; start again".to_owned(),
+            ));
+        };
+        let poll = self.poll_device_token(challenge_id)?;
+        if let DeviceTokenPoll::Authorized(token) = &poll {
+            self.tokens.save(self.configured_tenant_id()?, token)?;
+        }
+        Ok(poll)
+    }
+
+    pub fn evaluate_startup_credential(&mut self) -> StartupCredentialEvaluation {
+        let tenant_id = match self.configured_tenant_id() {
+            Ok(tenant_id) => tenant_id,
+            Err(error) => return StartupCredentialEvaluation::Unavailable(error),
+        };
+        match inspect_cached_token(&self.tokens, tenant_id) {
+            Err(error) => StartupCredentialEvaluation::Unavailable(error),
+            Ok(TokenLoad::Missing | TokenLoad::Invalid) => {
+                StartupCredentialEvaluation::NeedsChallenge
+            }
+            Ok(TokenLoad::Present(token)) => {
+                if token.expires_at > Utc::now() + ACCESS_TOKEN_VALIDITY_SKEW {
+                    return StartupCredentialEvaluation::Valid;
+                }
+                match self.refresh_token(tenant_id, &token.refresh_token) {
+                    Ok(refreshed) => match self.tokens.save(tenant_id, &refreshed) {
+                        Ok(()) => StartupCredentialEvaluation::Valid,
+                        Err(error) => StartupCredentialEvaluation::Unavailable(error),
+                    },
+                    Err(error) if error == REFRESH_REJECTED_ERROR => {
+                        StartupCredentialEvaluation::NeedsChallenge
+                    }
+                    Err(error) => StartupCredentialEvaluation::Unavailable(error),
                 }
             }
         }
+    }
+
+    fn active_startup_pending(&self) -> Option<(Uuid, &PendingDeviceLogin)> {
+        let now = Instant::now();
+        self.pending.iter().find_map(|(challenge_id, pending)| {
+            (matches!(pending.purpose, DeviceLoginPurpose::Startup) && pending.expires_at > now)
+                .then_some((*challenge_id, pending))
+        })
     }
 
     fn token_for(&mut self, tenant_id: Uuid) -> Result<String, String> {
         let token = self.tokens.load(tenant_id)?.ok_or_else(|| {
             "sign in to Microsoft Entra before refreshing this identity source".to_owned()
         })?;
-        if token.expires_at > Utc::now() + ChronoDuration::seconds(60) {
+        if token.expires_at > Utc::now() + ACCESS_TOKEN_VALIDITY_SKEW {
             return Ok(token.access_token);
         }
         let refreshed = self.refresh_token(tenant_id, &token.refresh_token)?;
@@ -643,9 +820,19 @@ where
                 ("scope", GRAPH_SCOPE),
             ],
         )?;
-        let response =
-            parse_success::<OAuthTokenResponse>(response, "refresh Microsoft Entra sign-in")?;
-        delegated_token(response, Some(refresh_token))
+        if (200..300).contains(&response.status) {
+            let response =
+                parse_success::<OAuthTokenResponse>(response, "refresh Microsoft Entra sign-in")?;
+            return delegated_token(response, Some(refresh_token));
+        }
+        match oauth_error(&response.body).as_deref() {
+            Some("invalid_grant") | Some("invalid_token") => Err(REFRESH_REJECTED_ERROR.to_owned()),
+            Some(error) => Err(format!("cannot refresh Microsoft Entra sign-in: {error}")),
+            None => Err(format!(
+                "cannot refresh Microsoft Entra sign-in: Microsoft service returned HTTP {}",
+                response.status
+            )),
+        }
     }
 
     fn prepare_preview(
@@ -990,8 +1177,11 @@ mod tests {
             expired_id,
             PendingDeviceLogin {
                 tenant_id,
-                group_id: Some(group_id),
+                purpose: DeviceLoginPurpose::IdentitySource { group_id },
                 device_code: "expired-device".to_owned(),
+                user_code: "OLD-CODE".to_owned(),
+                verification_uri: "https://microsoft.com/devicelogin".to_owned(),
+                message: "Sign in".to_owned(),
                 expires_at: Instant::now() - Duration::from_secs(1),
                 poll_interval: Duration::from_secs(1),
             },
@@ -1322,5 +1512,344 @@ mod tests {
 
         let people = graph.direct_user_members(&source).unwrap();
         assert_eq!(people[0].object_id, user_id);
+    }
+
+    fn device_code_body() -> &'static str {
+        r#"{"device_code":"device","user_code":"ABCD-EFGH","verification_uri":"https://microsoft.com/devicelogin","expires_in":900,"interval":1,"message":"Sign in"}"#
+    }
+
+    fn oauth_error_body(error: &str) -> String {
+        format!(r#"{{"error":"{error}"}}"#)
+    }
+
+    struct ScriptedTokenStore {
+        load: Mutex<Result<Option<DelegatedToken>, String>>,
+        saved: Mutex<Option<DelegatedToken>>,
+    }
+
+    impl ScriptedTokenStore {
+        fn present(token: DelegatedToken) -> Self {
+            Self {
+                load: Mutex::new(Ok(Some(token))),
+                saved: Mutex::new(None),
+            }
+        }
+
+        fn missing() -> Self {
+            Self {
+                load: Mutex::new(Ok(None)),
+                saved: Mutex::new(None),
+            }
+        }
+
+        fn failing(error: &str) -> Self {
+            Self {
+                load: Mutex::new(Err(error.to_owned())),
+                saved: Mutex::new(None),
+            }
+        }
+    }
+
+    impl TokenStore for ScriptedTokenStore {
+        fn load(&self, _tenant_id: Uuid) -> Result<Option<DelegatedToken>, String> {
+            match &*self.load.lock().unwrap() {
+                Ok(token) => Ok(token.clone()),
+                Err(error) => Err(error.clone()),
+            }
+        }
+
+        fn save(&self, _tenant_id: Uuid, token: &DelegatedToken) -> Result<(), String> {
+            *self.saved.lock().unwrap() = Some(token.clone());
+            Ok(())
+        }
+    }
+
+    struct FailingHttp;
+
+    impl HttpClient for FailingHttp {
+        fn get(
+            &mut self,
+            _url: &str,
+            _bearer: Option<&str>,
+            _eventual_consistency: bool,
+        ) -> Result<HttpResponse, String> {
+            Err("Microsoft Entra or Graph request failed: connection reset".to_owned())
+        }
+
+        fn post_form(
+            &mut self,
+            _url: &str,
+            _form: &[(&str, &str)],
+        ) -> Result<HttpResponse, String> {
+            Err("Microsoft Entra or Graph request failed: connection reset".to_owned())
+        }
+    }
+
+    fn valid_token() -> DelegatedToken {
+        DelegatedToken {
+            access_token: "access".to_owned(),
+            refresh_token: "refresh".to_owned(),
+            expires_at: Utc::now() + ChronoDuration::hours(1),
+        }
+    }
+
+    fn expired_token() -> DelegatedToken {
+        DelegatedToken {
+            access_token: "expired".to_owned(),
+            refresh_token: "refresh".to_owned(),
+            expires_at: Utc::now() - ChronoDuration::seconds(1),
+        }
+    }
+
+    mod startup_device_authorization {
+        use super::*;
+
+        #[test]
+        fn valid_cached_access_token_skips_a_challenge() {
+            let mut graph = MicrosoftGraphClient::with_parts(
+                "client",
+                Uuid::new_v4(),
+                FakeHttp::with_responses(Vec::new()),
+                ScriptedTokenStore::present(valid_token()),
+            );
+
+            assert_eq!(
+                graph.evaluate_startup_credential(),
+                StartupCredentialEvaluation::Valid
+            );
+        }
+
+        #[test]
+        fn refresh_success_keeps_a_valid_session() {
+            let tokens = ScriptedTokenStore::present(expired_token());
+            let mut graph = MicrosoftGraphClient::with_parts(
+                "client",
+                Uuid::new_v4(),
+                FakeHttp::with_responses(vec![response(
+                    200,
+                    r#"{"access_token":"fresh","refresh_token":"rotated","expires_in":3600}"#,
+                )]),
+                tokens,
+            );
+
+            assert_eq!(
+                graph.evaluate_startup_credential(),
+                StartupCredentialEvaluation::Valid
+            );
+        }
+
+        #[test]
+        fn refresh_rejection_starts_a_challenge() {
+            let mut graph = MicrosoftGraphClient::with_parts(
+                "client",
+                Uuid::new_v4(),
+                FakeHttp::with_responses(vec![response(400, &oauth_error_body("invalid_grant"))]),
+                ScriptedTokenStore::present(expired_token()),
+            );
+
+            assert_eq!(
+                graph.evaluate_startup_credential(),
+                StartupCredentialEvaluation::NeedsChallenge
+            );
+        }
+
+        #[test]
+        fn missing_cache_starts_a_challenge() {
+            let mut graph = MicrosoftGraphClient::with_parts(
+                "client",
+                Uuid::new_v4(),
+                FakeHttp::with_responses(Vec::new()),
+                ScriptedTokenStore::missing(),
+            );
+
+            assert_eq!(
+                graph.evaluate_startup_credential(),
+                StartupCredentialEvaluation::NeedsChallenge
+            );
+        }
+
+        #[test]
+        fn malformed_cache_starts_a_challenge() {
+            let mut graph = MicrosoftGraphClient::with_parts(
+                "client",
+                Uuid::new_v4(),
+                FakeHttp::with_responses(Vec::new()),
+                ScriptedTokenStore::failing(&invalid_delegated_token_cache_error()),
+            );
+
+            assert_eq!(
+                graph.evaluate_startup_credential(),
+                StartupCredentialEvaluation::NeedsChallenge
+            );
+        }
+
+        #[test]
+        fn credential_store_failure_does_not_start_or_erase_a_challenge() {
+            let mut graph = MicrosoftGraphClient::with_parts(
+                "client",
+                Uuid::new_v4(),
+                FakeHttp::with_responses(Vec::new()),
+                ScriptedTokenStore::failing(
+                    "cannot access the OS credential store for the delegated Microsoft Entra token: denied",
+                ),
+            );
+
+            assert!(matches!(
+                graph.evaluate_startup_credential(),
+                StartupCredentialEvaluation::Unavailable(error)
+                    if error.contains("cannot access the OS credential store")
+            ));
+            assert!(graph.pending.is_empty());
+        }
+
+        #[test]
+        fn transient_refresh_failure_does_not_start_or_erase_a_challenge() {
+            let mut graph = MicrosoftGraphClient::with_parts(
+                "client",
+                Uuid::new_v4(),
+                FailingHttp,
+                ScriptedTokenStore::present(expired_token()),
+            );
+
+            assert!(matches!(
+                graph.evaluate_startup_credential(),
+                StartupCredentialEvaluation::Unavailable(error)
+                    if error.contains("connection reset")
+            ));
+            assert!(graph.pending.is_empty());
+        }
+
+        #[test]
+        fn authorization_pending_returns_the_provider_interval() {
+            let mut graph = MicrosoftGraphClient::with_parts(
+                "client",
+                Uuid::new_v4(),
+                FakeHttp::with_responses(vec![
+                    response(200, device_code_body()),
+                    response(400, &oauth_error_body("authorization_pending")),
+                ]),
+                ScriptedTokenStore::missing(),
+            );
+            graph.begin_startup_sign_in().unwrap();
+            let before = Instant::now();
+
+            let DeviceTokenPoll::Pending { next_poll_after } =
+                graph.poll_startup_authorization().unwrap()
+            else {
+                panic!("expected pending");
+            };
+
+            assert!(next_poll_after >= before + Duration::from_secs(1));
+            assert_eq!(graph.pending.len(), 1);
+        }
+
+        #[test]
+        fn slow_down_increases_the_poll_interval() {
+            let mut graph = MicrosoftGraphClient::with_parts(
+                "client",
+                Uuid::new_v4(),
+                FakeHttp::with_responses(vec![
+                    response(200, device_code_body()),
+                    response(400, &oauth_error_body("slow_down")),
+                ]),
+                ScriptedTokenStore::missing(),
+            );
+            graph.begin_startup_sign_in().unwrap();
+            let before = Instant::now();
+
+            let DeviceTokenPoll::Pending { next_poll_after } =
+                graph.poll_startup_authorization().unwrap()
+            else {
+                panic!("expected pending");
+            };
+
+            assert!(next_poll_after >= before + Duration::from_secs(6));
+            let pending = graph.pending.values().next().unwrap();
+            assert_eq!(pending.poll_interval, Duration::from_secs(6));
+        }
+
+        #[test]
+        fn authorization_success_saves_the_token_and_clears_the_challenge() {
+            let tokens = ScriptedTokenStore::missing();
+            let mut graph = MicrosoftGraphClient::with_parts(
+                "client",
+                Uuid::new_v4(),
+                FakeHttp::with_responses(vec![
+                    response(200, device_code_body()),
+                    response(
+                        200,
+                        r#"{"access_token":"access","refresh_token":"refresh","expires_in":3600}"#,
+                    ),
+                ]),
+                tokens,
+            );
+            graph.begin_startup_sign_in().unwrap();
+
+            assert!(matches!(
+                graph.poll_startup_authorization().unwrap(),
+                DeviceTokenPoll::Authorized(_)
+            ));
+            assert!(graph.pending.is_empty());
+        }
+
+        #[test]
+        fn expiry_is_terminal() {
+            let mut graph = MicrosoftGraphClient::with_parts(
+                "client",
+                Uuid::new_v4(),
+                FakeHttp::with_responses(vec![
+                    response(200, device_code_body()),
+                    response(400, &oauth_error_body("expired_token")),
+                ]),
+                ScriptedTokenStore::missing(),
+            );
+            graph.begin_startup_sign_in().unwrap();
+
+            assert!(matches!(
+                graph.poll_startup_authorization().unwrap(),
+                DeviceTokenPoll::Expired
+            ));
+            assert!(graph.pending.is_empty());
+        }
+
+        #[test]
+        fn decline_is_terminal() {
+            let mut graph = MicrosoftGraphClient::with_parts(
+                "client",
+                Uuid::new_v4(),
+                FakeHttp::with_responses(vec![
+                    response(200, device_code_body()),
+                    response(400, &oauth_error_body("authorization_declined")),
+                ]),
+                ScriptedTokenStore::missing(),
+            );
+            graph.begin_startup_sign_in().unwrap();
+
+            assert!(matches!(
+                graph.poll_startup_authorization().unwrap(),
+                DeviceTokenPoll::Declined
+            ));
+            assert!(graph.pending.is_empty());
+        }
+
+        #[test]
+        fn duplicate_reissue_is_rejected_while_a_code_is_pending() {
+            let mut graph = MicrosoftGraphClient::with_parts(
+                "client",
+                Uuid::new_v4(),
+                FakeHttp::with_responses(vec![response(200, device_code_body())]),
+                ScriptedTokenStore::missing(),
+            );
+            let first = graph.begin_startup_sign_in().unwrap();
+
+            let error = graph.reissue_startup_sign_in().unwrap_err();
+
+            assert_eq!(error, STARTUP_PENDING_ALREADY_ERROR);
+            assert_eq!(graph.pending.len(), 1);
+            assert_eq!(
+                graph.begin_startup_sign_in().unwrap().challenge_id,
+                first.challenge_id
+            );
+        }
     }
 }
