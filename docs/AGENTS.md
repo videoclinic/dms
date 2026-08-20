@@ -3,7 +3,7 @@
 ## Purpose
 
 Own product behaviour contracts, change-progress records, architecture,
-privacy, and design decisions for this repository.
+privacy, design decisions, and Windows deployment assets for this repository.
 
 ## Ownership
 
@@ -13,11 +13,13 @@ privacy, and design decisions for this repository.
 | `privacy.md` | Data classes and local-processing principles |
 | `design-decisions.md` | Cross-cutting ADRs |
 | `entra-client-setup.md` | Operator setup for the DMS Entra public-client registration and delegated Graph consent |
+| `windows-entra-deployment.md` | Operator runbook for manual, GPO, and Intune Entra identifier deployment |
 | `markdown-frontmatter-and-template-variables.md` | Markdown controlled frontmatter keys, optional template variables, and Word chrome tokens |
 | `library-membership-and-obsolescence.md` | Operator comparison of library membership vs obsolescence |
 | `winget-submission.md` | Operator runbook for publishing `Videoclinic.DMSDesktop` to `microsoft/winget-pkgs`; rendered automatically by `release-windows.yml` per stable release |
 | `product/` | CAP index, capability contracts, wireframe references |
 | `changes/` | CHG lifecycle (active/archive) |
+| `deployment/` | Windows ADMX/ADML assets |
 
 ## Local Contracts
 
@@ -51,5 +53,6 @@ privacy, and design decisions for this repository.
 | --- | --- | --- |
 | `product/AGENTS.md` | Capability contracts | CAP files or product index |
 | `changes/AGENTS.md` | Change-progress records | CHG files or changes index |
+| `deployment/AGENTS.md` | Windows ADMX/ADML assets and deployment runbook ownership | Policy templates or Windows Entra deployment docs |
 
 Parent: `../AGENTS.md`.

@@ -123,7 +123,7 @@ ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
 
 | Child | Owns | Read when editing… |
 | --- | --- | --- |
-| `docs/AGENTS.md` | Architecture, privacy, ADRs, CAP/CHG product records | Product behaviour, progress records, or design docs |
+| `docs/AGENTS.md` | Architecture, privacy, ADRs, CAP/CHG product records, Windows deployment assets | Product behaviour, progress records, design docs, or Windows policy templates |
 | `crates/AGENTS.md` | Rust workspace, shared core, and CLI contracts | Rust source, packages, or tests |
 | `skills/AGENTS.md` | Repository-local agent playbooks under `skills/` | Skill authoring, skill layout, or playbook contracts |
 
@@ -139,8 +139,8 @@ ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
 | `rust-toolchain.toml` | Exact Rust 1.88.0 toolchain with `clippy` and `rustfmt`; `Cargo.toml` retains the 1.88 MSRV |
 | Native Windows desktop development | Requires the MSVC Rust toolchain selected by `rust-toolchain.toml`, Visual Studio Build Tools with Desktop development with C++, and the WebView2 Evergreen Runtime; WSL is not a Windows desktop-integration substitute |
 | Ubuntu on WSL2 development | Uses Rustup-selected Linux Rust 1.88.0, Node.js, and Tauri's Ubuntu development libraries; keep the checkout under the Linux filesystem and treat any WSLg launch only as Linux-adapter validation |
-| `.github/workflows/desktop-platform-smoke.yml` | Rust 1.88 workspace gate on Windows, macOS, and Linux; desktop launch smoke; Linux job additionally verifies the `dms://` XDG scheme registration; Markdown-to-template-DOCX fake-backed export coverage; NSIS/DMG packaging smoke; installed-Word evidence remains an external host gate |
-| `.github/workflows/release-windows.yml` | Tag-driven (`v*`) Windows release: NSIS installer built, Authenticode-signed (`signtool` + DigiCert TSA, cert from `WINDOWS_CERT_*` secrets), and published as a draft GitHub Release with a `.sha256` sidecar; operator publishes the draft; also renders a `winget-bundle` job artifact (`scripts/winget/Build-WingetKit.ps1`) for the operator's `wingetcreate submit` to `microsoft/winget-pkgs`; contract in ADR-0027 and CHG-0024 |
+| `.github/workflows/desktop-platform-smoke.yml` | Rust 1.88 workspace gate on Windows, macOS, and Linux; desktop launch smoke; Linux job additionally verifies the `dms://` XDG scheme registration and ADMX templates; Markdown-to-template-DOCX fake-backed export coverage; NSIS/DMG packaging smoke; installed-Word evidence remains an external host gate |
+| `.github/workflows/release-windows.yml` | Tag-driven (`v*`) Windows release: NSIS installer built, Authenticode-signed (`signtool` + DigiCert TSA, cert from `WINDOWS_CERT_*` secrets), and published as a draft GitHub Release with a `.sha256` sidecar and `dms-desktop-admx.zip`; operator publishes the draft; also renders a `winget-bundle` job artifact (`scripts/winget/Build-WingetKit.ps1`) for the operator's `wingetcreate submit` to `microsoft/winget-pkgs`; contract in ADR-0027, ADR-0028, CHG-0024, and CHG-0025 |
 
 ### Index scope
 

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<policyDefinitions
+    revision="1.0"
+    schemaVersion="1.0"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <policyNamespaces>
+    <target prefix="dmsdesktop" namespace="Videoclinic.Policies.DMSDesktop" />
+  </policyNamespaces>
+  <resources minRequiredRevision="1.0" />
+  <supportedOn>
+    <definitions>
+      <definition name="SUPPORTED_Windows10" displayName="$(string.SUPPORTED_Windows10)" />
+    </definitions>
+  </supportedOn>
+  <categories>
+    <category name="Videoclinic" displayName="$(string.Videoclinic)" />
+    <category name="DMSDesktop" displayName="$(string.DMSDesktop)">
+      <parentCategory ref="Videoclinic" />
+    </category>
+  </categories>
+  <policies>
+    <policy
+        name="EntraIdentifiers"
+        class="Machine"
+        displayName="$(string.EntraIdentifiers)"
+        explainText="$(string.EntraIdentifiers_Explain)"
+        presentation="$(presentation.EntraIdentifiers)"
+        key="SOFTWARE\Policies\Videoclinic\DMS">
+      <parentCategory ref="DMSDesktop" />
+      <supportedOn ref="SUPPORTED_Windows10" />
+      <elements>
+        <text id="EntraClientId" valueName="EntraClientId" required="true" maxLength="36" />
+        <text id="EntraTenantId" valueName="EntraTenantId" required="true" maxLength="36" />
+      </elements>
+    </policy>
+  </policies>
+</policyDefinitions>

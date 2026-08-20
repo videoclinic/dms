@@ -121,7 +121,9 @@ than silently falling back to saved settings. When both values are the
 effective configuration source, DMS validates the tenant's cached delegated
 session at launch or starts one non-blocking device-authorization status;
 this does not create an Entra device object and does not open a browser
-without the operator choosing **Open sign-in page**.
+without the operator choosing **Open sign-in page**. Use these variables only
+as a process-launch override. For computer policy, Group Policy, or Intune,
+follow [Windows Entra identifier deployment](windows-entra-deployment.md).
 
 ## Verification checklist
 
@@ -154,9 +156,10 @@ Filesystem and SharePoint/OneDrive permissions remain separately administered.
 
 ## Related DMS records
 
+- [Windows Entra identifier deployment](windows-entra-deployment.md)
 - [Microsoft Entra workflow identity contract](product/capabilities/CAP-0021-microsoft-entra-workflow-identity.md)
 - [Architecture](architecture.md)
-- [ADR-0021 and ADR-0024](design-decisions.md)
+- [ADR-0021, ADR-0024, ADR-0028, and ADR-0029](design-decisions.md)
 - [Privacy](privacy.md)
 
 ## Sources

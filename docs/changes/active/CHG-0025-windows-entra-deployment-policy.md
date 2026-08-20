@@ -9,20 +9,20 @@ Produce Windows deployment support that lets an administrator configure the DMS 
 **Entry checkpoint:** none
 **Context sources:** `docs/entra-client-setup.md` (Configure DMS, Environment-managed configuration); `docs/architecture.md` (Runtime shape, Trust and control boundary); `docs/privacy.md` (Data classes); `docs/design-decisions.md` (ADR-0021, ADR-0024); `docs/product/capabilities/CAP-0021-microsoft-entra-workflow-identity.md` (Operational details, Outcomes); `docs/product/wireframes/generate.mjs` (CAP-0021); `crates/dms-desktop/src/lib.rs` (`DesktopIntegrations`, `GlobalSettings`, `effective_global_entra_configuration*`, `runtime_entra_configuration`, `run`); `crates/dms-desktop/src/graph.rs` (`begin_delegated_sign_in`, `wait_for_device_token`, `TokenStore`); `crates/dms-desktop/ui/configuration.mjs` (Application Entra configuration); `crates/dms-desktop/ui/app.mjs` (`handleSubmit`); `crates/dms-desktop/ui/configuration.test.mjs`; `.github/workflows/desktop-platform-smoke.yml`; `.github/workflows/release-windows.yml`
 **Produces:** A released DMS Desktop build resolves a valid computer policy from `HKLM\SOFTWARE\Policies\Videoclinic\DMS` before environment or saved configuration, exposes policy ownership read-only in Configuration, and, only when both process `DMS_ENTRA_*` values are present, validates the tenant's cached delegated token or starts one non-blocking device-authorization challenge with polling and explicit reissue. It also ships a validated `DMSDesktop.admx` plus `en-US\DMSDesktop.adml` and operator documentation for manual, GPO, and Intune deployment.
-**Status:** in-progress — Phase 3 committed as `d1e3588`; Phase 4 is pending.
+**Status:** in-progress — Phase 4 done; Phase 5 pending.
 **Filename convention:** The repository's active-record contract requires `CHG-*.md`; `P0100` is the execution order authority for this CHG and no conflicting active execution slot exists.
 
 | Field | Value |
 | --- | --- |
 | ID | CHG-0025 |
-| Status | in-progress — Phase 3 committed as `d1e3588`; Phase 4 is pending |
+| Status | in-progress — Phase 4 done; Phase 5 pending |
 | External request | Direct operator request: when both `DMS_ENTRA_CLIENT_ID` and `DMS_ENTRA_TENANT_ID` are set, DMS Desktop must automatically validate the current Entra sign-in or begin and poll a device-authorization code, then let the user explicitly reissue a code after failure or expiry. Amendment: show each effective configuration source, and gray out application controls when Windows system policy supplies the identifiers. |
 | Affected CAPs | CAP-0021 |
 | Decision records | ADR-0028, ADR-0029; ADR-0021 and ADR-0024 remain applicable |
 
 ## Current state
 
-- DMS resolves a Windows machine-policy pair through a target-specific `winreg` dependency before process environment or OS-user configuration. There is still no ADMX, ADML, GPO/Intune deployment artifact, or deployment runbook.
+- DMS resolves a Windows machine-policy pair through a target-specific `winreg` dependency before process environment or OS-user configuration. `docs/deployment/windows/admx/` ships `DMSDesktop.admx` and `en-US/DMSDesktop.adml`; `docs/windows-entra-deployment.md` is the operator runbook for manual, GPO, and Intune paths.
 - `crates/dms-desktop/src/lib.rs` rejects a partial or invalid machine-policy pair before fallback and returns explicit saved, environment, or Windows-policy ownership for each effective identifier. Process-environment startup authorization is app-global state, not workspace or `.dms` state.
 - `ui/configuration.mjs` captions every identifier as **Saved for this OS user**, **Managed by process environment**, or **Managed by Windows policy**. A complete Windows-policy pair disables both inputs and Save, grays the application form, and omits the save mutation. Process-environment fields stay read-only without claiming Windows policy.
 - CAP-0021, ADR-0028, ADR-0029, and the CAP-0021 wireframe show per-identifier source provenance, the disabled Windows-policy application form, and the process-environment shell device-authorization card.
@@ -36,8 +36,8 @@ Produce Windows deployment support that lets an administrator configure the DMS 
   credential or starts one non-blocking device-authorization challenge. The app
   shell card is available before a workspace is opened and on every later route.
 - CAP-0021, ADR-0028, ADR-0029, `docs/architecture.md`, and `docs/privacy.md` place the client/tenant pair outside workspace metadata, record Windows-policy precedence, and distinguish OAuth device authorization from Entra device registration. The per-library Entra group binding, first editor/approver selection, and identity-source preview remain explicit interactive operations.
-- `docs/entra-client-setup.md` documents manual Configuration entry and that an effective process-environment pair starts non-blocking device authorization at launch. It does not yet describe ADMX, GPO, or Intune deployment.
-- The Windows smoke job already runs the complete Rust test suite and NSIS packaging. The tag release workflow currently publishes only the installer, checksum, and stable-release winget bundle.
+- `docs/entra-client-setup.md` documents manual Configuration entry and that an effective process-environment pair starts non-blocking device authorization at launch. It points to `docs/windows-entra-deployment.md` for computer policy, Group Policy, and Intune.
+- The Windows smoke job runs the complete Rust test suite and NSIS packaging. The Linux smoke job also runs `scripts/validate_admx.py` against the shipped templates. The tag release workflow publishes the installer, checksum, `dms-desktop-admx.zip`, and the stable-release winget bundle.
 - Microsoft documents custom ADMX/ADML import for Intune as public preview; it accepts one `en-US` ADML per template. Standard Group Policy uses language-neutral ADMX plus language-specific ADML from a Central Store. Sources: <https://learn.microsoft.com/en-us/intune/device-configuration/settings-catalog/import-custom-admx-templates> and <https://learn.microsoft.com/en-us/troubleshoot/windows-client/group-policy/create-and-manage-central-store>.
 
 ## Risk call-out
@@ -55,7 +55,7 @@ Recovery is to set the policy **Not Configured** (or remove both values), refres
 | 1 | Define and implement the machine-policy configuration source | done (`cargo test -p dms-desktop --lib entra_policy`; `cargo clippy -p dms-desktop --all-targets -- -D warnings`; Configuration UI test) | `cargo test -p dms-desktop --lib entra_policy` exits 0; `cargo clippy -p dms-desktop --all-targets -- -D warnings` exits 0 |
 | 2 | Show configuration provenance and disable Windows-policy controls | done (`3bfde2f`; `node --test crates/dms-desktop/ui/configuration.test.mjs`; `node docs/product/wireframes/generate.mjs`) | `node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0; `node docs/product/wireframes/generate.mjs` exits 0 |
 | 3 | Implement automatic process-environment device authorization | done (`d1e3588`; `cargo test -p dms-desktop --lib startup_device_authorization`; `node --test crates/dms-desktop/ui/configuration.test.mjs crates/dms-desktop/ui/app.test.mjs`) | `cargo test -p dms-desktop --lib startup_device_authorization` exits 0; `node --test crates/dms-desktop/ui/configuration.test.mjs crates/dms-desktop/ui/app.test.mjs` exits 0 |
-| 4 | Ship ADMX assets and manual/GPO/Intune deployment documentation | pending — after Phase 3 | `python3 scripts/validate_admx.py docs/deployment/windows/admx/DMSDesktop.admx docs/deployment/windows/admx/en-US/DMSDesktop.adml` exits 0; every relative link in `docs/windows-entra-deployment.md` resolves |
+| 4 | Ship ADMX assets and manual/GPO/Intune deployment documentation | done (`python3 scripts/validate_admx.py docs/deployment/windows/admx/DMSDesktop.admx docs/deployment/windows/admx/en-US/DMSDesktop.adml`; relative links in `docs/windows-entra-deployment.md` resolve) | `python3 scripts/validate_admx.py docs/deployment/windows/admx/DMSDesktop.admx docs/deployment/windows/admx/en-US/DMSDesktop.adml` exits 0; every relative link in `docs/windows-entra-deployment.md` resolves |
 | 5 | Validate the Windows deployment path and close records | pending — after Phase 4 | Windows evidence shows the configured process presents or validates exactly one device-authorization state, `reg.exe query HKLM\SOFTWARE\Policies\Videoclinic\DMS` returns the two expected UUID values, and `cargo test --workspace`, `node --test crates/dms-desktop/ui/*.test.mjs`, and the Windows `Desktop platform smoke` job exit/pass |
 
 Mark a phase `in-progress` while running it, `done (<evidence>)` once its gate passes, and `pending` otherwise.

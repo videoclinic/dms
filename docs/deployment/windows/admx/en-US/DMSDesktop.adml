@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<policyDefinitionResources
+    revision="1.0"
+    schemaVersion="1.0"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <displayName>DMS Desktop</displayName>
+  <description>Administrative template for DMS Desktop Microsoft Entra public-client identifiers.</description>
+  <resources>
+    <stringTable>
+      <string id="Videoclinic">Videoclinic</string>
+      <string id="DMSDesktop">DMS Desktop</string>
+      <string id="SUPPORTED_Windows10">Windows 10 version 1809 and later, and Windows 11</string>
+      <string id="EntraIdentifiers">Microsoft Entra public-client identifiers</string>
+      <string id="EntraIdentifiers_Explain">Sets the Microsoft Entra public-client ID and tenant ID used by DMS Desktop on this computer. Both values must be UUID strings. DMS reads only EntraClientId and EntraTenantId from HKLM\SOFTWARE\Policies\Videoclinic\DMS. If either value exists, both must be present and valid; an incomplete or invalid pair fails closed and does not fall back to process environment or saved settings. This policy does not create an Entra app registration, store secrets or tokens, bind a library group, or start OAuth device authorization. Set the policy to Not Configured to remove both values, then restart DMS.</string>
+    </stringTable>
+    <presentationTable>
+      <presentation id="EntraIdentifiers">
+        <textBox refId="EntraClientId">
+          <label>Application (client) ID</label>
+        </textBox>
+        <textBox refId="EntraTenantId">
+          <label>Directory (tenant) ID</label>
+        </textBox>
+      </presentation>
+    </presentationTable>
+  </resources>
+</policyDefinitionResources>

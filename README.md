@@ -106,6 +106,9 @@ source with the MSVC toolchain); this section is the **end-user** path
 - [Microsoft Entra application setup](docs/entra-client-setup.md) — create the
   DMS public-client registration, grant delegated Graph consent, and configure
   DMS with its client, tenant, and group IDs.
+- [Windows Entra identifier deployment](docs/windows-entra-deployment.md) —
+  manual Configuration, Group Policy, and Intune paths for the public-client
+  and tenant IDs; ADMX/ADML live in `docs/deployment/windows/admx/`.
 - [Product capabilities](docs/product/README.md) — current capability contracts
   and wireframe index.
 - [Library membership and obsolescence](docs/library-membership-and-obsolescence.md)
