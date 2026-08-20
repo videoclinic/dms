@@ -528,8 +528,10 @@ Capability-local rules stay in their CAP files.
   UUIDs; otherwise Graph configuration fails closed without using process or
   saved settings. A valid pair takes precedence over `DMS_ENTRA_CLIENT_ID` /
   `DMS_ENTRA_TENANT_ID` process overrides, which in turn take precedence over
-  OS-user `global-settings.json`. Policy-managed fields are read-only in
-  Configuration and explicitly labelled **Managed by Windows policy**.
+  OS-user `global-settings.json`. A complete Windows-policy pair is labelled
+  **Managed by Windows policy** and disables both Configuration inputs and Save;
+  process-environment fields stay read-only and labelled **Managed by process
+  environment**.
 - **Why:** The public-client/tenant pair identifies an organization-level Entra
   application shared by every user of a managed device. Computer policy lets an
   administrator enforce that identity without copying it into workspace metadata

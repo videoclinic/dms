@@ -187,7 +187,43 @@ test("workflow route configures folder roles and opens identity source in place"
   assert.equal(closeConfigurationSecondary(state).secondary, null);
 });
 
-test("policy-managed Entra identifiers are read-only and labelled in Configuration", () => {
+test("configuration identifiers caption saved, environment, and Windows-policy sources", () => {
+  let state = applyConfigurationSnapshot(createConfigurationState(), snapshot);
+  state = openConfigurationSecondary(state, "identity-source");
+  const mixed = configurationMarkup(state, assistancePolicy);
+
+  assert.match(mixed, /name="clientId" value="client-1"\s*>/);
+  assert.match(mixed, /name="clientId"[^>]*>[\s\S]*?Saved for this OS user/);
+  assert.match(mixed, /name="tenantId"[^>]*readonly[\s\S]*?Managed by process environment/);
+  assert.doesNotMatch(mixed, /name="clientId"[^>]*disabled/);
+  assert.doesNotMatch(mixed, /name="tenantId"[^>]*disabled/);
+  assert.match(mixed, /data-configuration-form="global-entra"/);
+  assert.match(mixed, /<button class="button" type="submit">Save application configuration<\/button>/);
+  assert.doesNotMatch(mixed, /Windows policy owns these identifiers/);
+  assert.doesNotMatch(mixed, /Managed by Windows policy/);
+
+  const environmentState = applyConfigurationSnapshot(createConfigurationState(), {
+    ...snapshot,
+    global_entra_configuration: {
+      client_id: "env-client",
+      tenant_id: "env-tenant",
+      client_id_source: "environment",
+      tenant_id_source: "environment",
+    },
+  });
+  const environmentMarkup = configurationMarkup(
+    openConfigurationSecondary(environmentState, "identity-source"),
+    assistancePolicy,
+  );
+  assert.match(environmentMarkup, /name="clientId"[^>]*readonly[\s\S]*?Managed by process environment/);
+  assert.match(environmentMarkup, /name="tenantId"[^>]*readonly[\s\S]*?Managed by process environment/);
+  assert.doesNotMatch(environmentMarkup, /name="clientId"[^>]*disabled/);
+  assert.doesNotMatch(environmentMarkup, /Managed by Windows policy/);
+  assert.match(environmentMarkup, /data-configuration-form="global-entra"/);
+  assert.match(environmentMarkup, /<button class="button" type="submit">Save application configuration<\/button>/);
+});
+
+test("complete Windows-policy Entra identifiers disable the application form", () => {
   let state = applyConfigurationSnapshot(createConfigurationState(), {
     ...snapshot,
     global_entra_configuration: {
@@ -200,9 +236,37 @@ test("policy-managed Entra identifiers are read-only and labelled in Configurati
   state = openConfigurationSecondary(state, "identity-source");
 
   const markup = configurationMarkup(state, assistancePolicy);
-  assert.match(markup, /name="clientId"[^>]*readonly/);
-  assert.match(markup, /name="tenantId"[^>]*readonly/);
+  assert.match(markup, /name="clientId"[^>]*disabled/);
+  assert.match(markup, /name="tenantId"[^>]*disabled/);
   assert.match(markup, /Managed by Windows policy/);
+  assert.match(markup, /Windows policy owns these identifiers/);
+  assert.match(markup, /A Windows administrator must change the policy/);
+  assert.match(markup, /<button class="button" type="button" disabled>Save application configuration<\/button>/);
+  assert.doesNotMatch(markup, /data-configuration-form="global-entra"/);
+  assert.doesNotMatch(markup, /name="clientId"[^>]*readonly/);
+  assert.doesNotMatch(markup, /Managed by process environment/);
+
+  const mixedPolicy = configurationMarkup(
+    openConfigurationSecondary(
+      applyConfigurationSnapshot(createConfigurationState(), {
+        ...snapshot,
+        global_entra_configuration: {
+          client_id: "policy-client",
+          tenant_id: "env-tenant",
+          client_id_source: "windows_policy",
+          tenant_id_source: "environment",
+        },
+      }),
+      "identity-source",
+    ),
+    assistancePolicy,
+  );
+  assert.match(mixedPolicy, /name="clientId"[^>]*readonly[\s\S]*?Managed by Windows policy/);
+  assert.match(mixedPolicy, /name="tenantId"[^>]*readonly[\s\S]*?Managed by process environment/);
+  assert.doesNotMatch(mixedPolicy, /name="clientId"[^>]*disabled/);
+  assert.doesNotMatch(mixedPolicy, /name="tenantId"[^>]*disabled/);
+  assert.match(mixedPolicy, /data-configuration-form="global-entra"/);
+  assert.doesNotMatch(mixedPolicy, /Windows policy owns these identifiers/);
 });
 
 test("identity-source overview shows effective global IDs and opens the encoded group page", () => {

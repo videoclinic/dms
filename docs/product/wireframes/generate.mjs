@@ -1057,19 +1057,28 @@ const CAPS = [
     nav: "config",
     configSection: "workflow",
     configSecondary: "Identity source",
-    subtitle: "Windows machine policy can manage the Entra public client and tenant; each library retains only its bound group and display cache.",
+    subtitle: "Windows machine policy can manage the Entra public client and tenant; Configuration shows each identifier's source and disables the application form when policy owns both.",
     body: `${defaultsFirstStyles()}
+      <section class="card">
+        <h3 class="card-title">Application Entra configuration</h3>
+        <p class="muted">Shared by local libraries for this OS user; not stored in <code>.dms</code>.</p>
+        <div class="callout warn">Windows policy owns these identifiers. A Windows administrator must change the policy; this form cannot save them.</div>
+        <div class="grid-2" style="margin-top:0.75rem">
+          <label><span class="label">Public client ID</span><input disabled value="3e7f6750-4052-4db4-8638-234f9a85c2a1" aria-label="Public client ID" style="width:100%;height:2rem;margin-top:0.35rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.5rem;background:var(--muted);color:var(--muted-foreground)"/><span class="hint">Managed by Windows policy</span></label>
+          <label><span class="label">Tenant ID</span><input disabled value="8d29cb1d-1d51-43ad-a225-3721792d0bf3" aria-label="Tenant ID" style="width:100%;height:2rem;margin-top:0.35rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.5rem;background:var(--muted);color:var(--muted-foreground)"/><span class="hint">Managed by Windows policy</span></label>
+        </div>
+        <div class="row gap-2" style="margin-top:0.75rem"><button class="btn" disabled style="opacity:0.55;cursor:default">Save application configuration</button></div>
+      </section>
       <section class="card">
         <div class="row between"><h3 class="card-title" style="margin:0">Current Microsoft Entra identity source</h3>${badge("configured", "ok")}</div>
         ${kv([
           ["Public client ID", "3e7f6750-4052-4db4-8638-234f9a85c2a1"],
           ["Tenant ID", "8d29cb1d-1d51-43ad-a225-3721792d0bf3"],
-          ["Configuration source", badge("Managed by Windows policy", "info")],
           ["Library group", "DMS Workflow Users"],
           ["Group ID", '<button class="btn outline" aria-label="Open Microsoft 365 group page for Group ID 9c14e7bf-87a4-409f-83ba-f8761b72bf72"><code>9c14e7bf-87a4-409f-83ba-f8761b72bf72</code> · Open group page</button>'],
           ["Last refresh", "2026-08-14 10:42 UTC"],
         ])}
-        <p class="hint">The effective app-global IDs are managed by Windows policy and read only. A partial or invalid policy blocks Graph rather than falling back. The library retains only its group binding and display cache; the Group ID control opens Microsoft My Account in the host browser.</p>
+        <p class="hint">The effective app-global IDs are managed by Windows policy and disabled in Application Entra configuration. A partial or invalid policy blocks Graph rather than falling back. The library retains only its group binding and display cache; the Group ID control opens Microsoft My Account in the host browser.</p>
       </section>
       <div class="grid-2">
         <section class="card">

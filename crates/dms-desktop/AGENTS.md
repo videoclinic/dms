@@ -181,6 +181,10 @@ macOS.
   The current-source overview shows the effective app-global public-client and
   tenant IDs alongside the library-bound group; its Group ID control opens the
   encoded Microsoft My Account group page through the host-browser boundary.
+  Each identifier is labelled as saved for this OS user, managed by process
+  environment, or managed by Windows policy. A complete Windows-policy pair
+  disables both application fields and Save; process-environment fields stay
+  read-only without claiming Windows policy.
   Desktop-only delegated tokens remain in the OS credential store; credentials
   never cross the frontend IPC boundary or enter `.dms`.
 - Configuration → Document defaults selects one reusable Markdown Word template

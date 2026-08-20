@@ -56,11 +56,15 @@
    a complete non-secret `HKLM\SOFTWARE\Policies\Videoclinic\DMS` policy pair
    (`EntraClientId`, `EntraTenantId`) takes precedence over non-empty
    `DMS_ENTRA_CLIENT_ID` / `DMS_ENTRA_TENANT_ID` process values and OS-user
-   settings. A partial or invalid policy fails closed; policy-managed fields
-   are read-only and labelled **Managed by Windows policy** in Configuration.
-   Without policy, non-empty process values override their stored counterparts
-   and are read-only as process-managed values; invalid non-empty values fail
-   closed. Policy values are never copied to `global-settings.json` or `.dms`.
+   settings. A partial or invalid policy fails closed; each effective identifier is
+   labelled **Saved for this OS user**, **Managed by process environment**, or
+   **Managed by Windows policy**. A complete Windows-policy pair disables both
+   application inputs and Save so native disabled styling grays the form; a
+   Windows administrator must change the policy, and the surface does not submit
+   those values. Without policy, non-empty process values override their stored
+   counterparts and stay read-only as process-managed values without claiming
+   Windows policy; invalid non-empty values fail closed. Policy values are never
+   copied to `global-settings.json` or `.dms`.
    The identity-source overview shows these effective IDs with the library-bound
    group label and object ID. Its Group ID control opens
    `https://myaccount.microsoft.com/groups/<encoded-group-id>` through the host
@@ -80,7 +84,8 @@
    connection state, eligible-person count, and last refresh in a compact
    summary. **Manage identity source** opens a secondary surface whose
    current-source overview shows the effective app-global public-client ID and
-   tenant ID separately from the library-bound group label/object ID. Its Group
+   tenant ID separately from the library-bound group label/object ID, each with
+   its configuration source. Its Group
    ID is a host-browser control for
    `https://myaccount.microsoft.com/groups/<encoded-group-id>`. First setup and
    replacement stay on this secondary surface with a visible return to Workflow;

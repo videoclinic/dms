@@ -348,9 +348,21 @@ function identitySourceMarkup(state) {
     ? "Managed by Windows policy"
     : source === "environment"
       ? "Managed by process environment"
-      : "";
-  const globalField = (label, name, value, source) => `<label>${label}<input name="${name}" value="${escapeHtml(value ?? "")}" ${source !== "saved" ? "readonly" : ""}>${sourceLabel(source) ? `<span class="subtle">${sourceLabel(source)}</span>` : ""}</label>`;
-  const globalMarkup = `<section class="card configuration-card"><h3>Application Entra configuration</h3><p>Shared by local libraries for this OS user; not stored in <code>.dms</code>.</p><form class="configuration-form" data-configuration-form="global-entra">${globalField("Public client ID", "clientId", global?.client_id, global?.client_id_source ?? "saved")}${globalField("Tenant ID", "tenantId", global?.tenant_id, global?.tenant_id_source ?? "saved")}<button class="button" type="submit">Save application configuration</button></form></section>`;
+      : "Saved for this OS user";
+  const clientSource = global?.client_id_source ?? "saved";
+  const tenantSource = global?.tenant_id_source ?? "saved";
+  const policyManaged = clientSource === "windows_policy" && tenantSource === "windows_policy";
+  const globalField = (label, name, value, source) => {
+    const lock = policyManaged ? " disabled" : source !== "saved" ? " readonly" : "";
+    return `<label>${label}<input name="${name}" value="${escapeHtml(value ?? "")}"${lock}><span class="subtle">${sourceLabel(source)}</span></label>`;
+  };
+  const fields = `${globalField("Public client ID", "clientId", global?.client_id, clientSource)}${globalField("Tenant ID", "tenantId", global?.tenant_id, tenantSource)}`;
+  const policyStatus = policyManaged
+    ? '<p class="status" role="status">Windows policy owns these identifiers. A Windows administrator must change the policy; this form cannot save them.</p>'
+    : "";
+  const globalMarkup = policyManaged
+    ? `<section class="card configuration-card"><h3>Application Entra configuration</h3><p>Shared by local libraries for this OS user; not stored in <code>.dms</code>.</p>${policyStatus}<div class="configuration-form">${fields}<button class="button" type="button" disabled>Save application configuration</button></div></section>`
+    : `<section class="card configuration-card"><h3>Application Entra configuration</h3><p>Shared by local libraries for this OS user; not stored in <code>.dms</code>.</p><form class="configuration-form" data-configuration-form="global-entra">${fields}<button class="button" type="submit">Save application configuration</button></form></section>`;
   return `<section class="configuration-secondary"><button class="button secondary" type="button" data-configuration-secondary-close>← Back to Workflow</button><div class="configuration-grid">${globalMarkup}<section class="card configuration-card"><span class="badge">Secondary configuration</span><h2>Microsoft Entra identity source</h2>${details}</section>${setupMarkup}<section class="card configuration-card"><h3>Eligible people — read only</h3><p>Only direct, enabled user members returned by Microsoft Graph can be assigned.</p>${rows}<form data-configuration-form="identity-source-refresh"><button class="button secondary" type="submit" ${source ? "" : "disabled"}>Refresh people</button></form></section></div></section>`;
 }
 
