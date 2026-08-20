@@ -520,6 +520,27 @@ Capability-local rules stay in their CAP files.
   bundler. macOS DMG and Linux package distribution are out of scope
   until a future ADR.
 
+## ADR-0028 — Windows machine policy owns app-global Entra identifiers
+
+- **Decision:** On Windows, DMS reads only `EntraClientId` and `EntraTenantId`
+  string values from `HKLM\SOFTWARE\Policies\Videoclinic\DMS`. A policy with
+  neither value is absent. If either value exists, both must be present and valid
+  UUIDs; otherwise Graph configuration fails closed without using process or
+  saved settings. A valid pair takes precedence over `DMS_ENTRA_CLIENT_ID` /
+  `DMS_ENTRA_TENANT_ID` process overrides, which in turn take precedence over
+  OS-user `global-settings.json`. Policy-managed fields are read-only in
+  Configuration and explicitly labelled **Managed by Windows policy**.
+- **Why:** The public-client/tenant pair identifies an organization-level Entra
+  application shared by every user of a managed device. Computer policy lets an
+  administrator enforce that identity without copying it into workspace metadata
+  or requiring every OS user to configure it independently.
+- **Consequences:** The two identifiers are non-secret but remain outside
+  `.dms`, delegated-token storage, group binding, and workflow-role selection.
+  DMS never persists policy values to `global-settings.json`; removing the
+  policy restores the existing process-then-saved resolution path after restart.
+  This decision applies only to Windows machine policy, not user-scoped policy,
+  macOS profiles, or Linux configuration management.
+
 ## ADR-0026 — Membership and obsolescence stay distinct
 
 - **Decision:** Library membership (`source_state`) and document lifecycle

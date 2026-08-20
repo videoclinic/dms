@@ -20,7 +20,7 @@ PDFs under a **publish root**, with integrity checksums.
 | Workspace Word template | One reusable `.docx` asset under the edit root supplies styles, page setup, headers, footers, media, and controlled-field locations for every Markdown release; it is configuration, not a controlled document |
 | Claude Desktop (optional host app) | Operator-mediated, consented handoff for advisory target-version mode and changelog wording; not a callable local model or lifecycle authority |
 | Microsoft Entra ID + Microsoft Graph | App-global public-client and tenant configuration plus a per-workspace group supplies eligible workflow people; delegated interactive sign-in verifies review decisions; never reads or synchronizes document content |
-| OS-user app config | `preferences.json` plus `global-settings.json`; the latter stores only the non-secret Entra public-client ID and tenant ID shared by local libraries |
+| App-global Entra configuration | Windows machine policy at `HKLM\SOFTWARE\Policies\Videoclinic\DMS` when present, otherwise OS-user `global-settings.json`; both hold only the non-secret public-client ID and tenant ID shared by local libraries |
 | `<edit-root>/.dms/` | Roots config, library registry, active Markdown export-template identity/relative locator/validation digest, DMS-managed document control data, Entra group binding + read-only display cache, SMTP relay settings (no secrets), folder confidentiality and workflow-role policies, notes, approval/release history, evidence hashes, checksums, advisory lock |
 | Edit root tree | Operator-edited Microsoft Office and Markdown source drafts (library members are a subset) |
 | Publish root tree | Versioned released PDFs in a directory tree mirrored from edit-relative paths |
@@ -84,8 +84,10 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
 - Workflow roles select individual, direct user members of the workspace's
   configured Microsoft Entra group. `.dms` records only the group object ID,
   group label, display cache, and role references to immutable Entra user
-  object IDs. The public-client and tenant IDs are app-global OS-user
-  configuration, not workspace metadata. It does not keep an
+  object IDs. The public-client and tenant IDs are app-global configuration,
+  not workspace metadata. On Windows, a complete machine policy pair takes
+  precedence over process environment overrides and OS-user settings; policy
+  values remain read-only and are never copied to either persisted store. It does not keep an
   application-managed user roster. A group may be a Microsoft 365 group when
   its membership is exactly the intended workflow population.
 - Owner, editor, and approver authority is keyed only by the tenant-scoped

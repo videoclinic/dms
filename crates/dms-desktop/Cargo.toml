@@ -35,6 +35,9 @@ url.workspace = true
 uuid.workspace = true
 zip.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+winreg.workspace = true
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

@@ -31,6 +31,7 @@ mod assistance;
 pub mod export;
 mod graph;
 pub mod notify;
+mod policy;
 
 use assistance::ClaudeDesktopApp;
 
@@ -183,8 +184,22 @@ struct GlobalSettings {
 pub struct GlobalEntraConfiguration {
     pub client_id: String,
     pub tenant_id: String,
-    pub client_id_environment_managed: bool,
-    pub tenant_id_environment_managed: bool,
+    pub client_id_source: EntraConfigurationSource,
+    pub tenant_id_source: EntraConfigurationSource,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum EntraConfigurationSource {
+    Saved,
+    Environment,
+    WindowsPolicy,
+}
+
+impl EntraConfigurationSource {
+    fn is_read_only(&self) -> bool {
+        !matches!(self, Self::Saved)
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -615,10 +630,10 @@ fn configure_global_entra(
     let path = global_settings_path(&app)?;
     let mut settings = load_global_settings_at(&path)?;
     let effective = effective_global_entra_configuration(&settings)?;
-    if !effective.client_id_environment_managed {
+    if !effective.client_id_source.is_read_only() {
         settings.entra_client_id = client_id.trim().to_owned();
     }
-    if !effective.tenant_id_environment_managed {
+    if !effective.tenant_id_source.is_read_only() {
         settings.entra_tenant_id = tenant_id.trim().to_owned();
     }
     let effective = effective_global_entra_configuration(&settings)?;
@@ -2062,18 +2077,54 @@ fn nonempty_environment(name: &str) -> Result<Option<String>, String> {
 fn effective_global_entra_configuration(
     settings: &GlobalSettings,
 ) -> Result<GlobalEntraConfiguration, String> {
-    effective_global_entra_configuration_with_overrides(
+    effective_global_entra_configuration_with_sources(
         settings,
+        policy::load_machine_entra_policy()?,
         nonempty_environment("DMS_ENTRA_CLIENT_ID")?,
         nonempty_environment("DMS_ENTRA_TENANT_ID")?,
     )
 }
 
+#[cfg(test)]
 fn effective_global_entra_configuration_with_overrides(
     settings: &GlobalSettings,
     client_override: Option<String>,
     tenant_override: Option<String>,
 ) -> Result<GlobalEntraConfiguration, String> {
+    effective_global_entra_configuration_with_sources(
+        settings,
+        policy::MachineEntraPolicy::default(),
+        client_override,
+        tenant_override,
+    )
+}
+
+fn effective_global_entra_configuration_with_sources(
+    settings: &GlobalSettings,
+    machine_policy: policy::MachineEntraPolicy,
+    client_override: Option<String>,
+    tenant_override: Option<String>,
+) -> Result<GlobalEntraConfiguration, String> {
+    if machine_policy.client_id.is_some() || machine_policy.tenant_id.is_some() {
+        let client_id = machine_policy.client_id.ok_or_else(|| {
+            "Windows policy must configure both EntraClientId and EntraTenantId".to_owned()
+        })?;
+        let tenant_id = machine_policy.tenant_id.ok_or_else(|| {
+            "Windows policy must configure both EntraClientId and EntraTenantId".to_owned()
+        })?;
+        Uuid::parse_str(&client_id).map_err(|_| {
+            "Windows policy public-client ID must be an application UUID".to_owned()
+        })?;
+        Uuid::parse_str(&tenant_id)
+            .map_err(|_| "Windows policy tenant ID must be a directory UUID".to_owned())?;
+        return Ok(GlobalEntraConfiguration {
+            client_id,
+            tenant_id,
+            client_id_source: EntraConfigurationSource::WindowsPolicy,
+            tenant_id_source: EntraConfigurationSource::WindowsPolicy,
+        });
+    }
+
     let client_id = client_override
         .clone()
         .unwrap_or_else(|| settings.entra_client_id.trim().to_owned());
@@ -2088,8 +2139,16 @@ fn effective_global_entra_configuration_with_overrides(
     Ok(GlobalEntraConfiguration {
         client_id,
         tenant_id,
-        client_id_environment_managed: client_override.is_some(),
-        tenant_id_environment_managed: tenant_override.is_some(),
+        client_id_source: if client_override.is_some() {
+            EntraConfigurationSource::Environment
+        } else {
+            EntraConfigurationSource::Saved
+        },
+        tenant_id_source: if tenant_override.is_some() {
+            EntraConfigurationSource::Environment
+        } else {
+            EntraConfigurationSource::Saved
+        },
     })
 }
 
@@ -3276,8 +3335,14 @@ mod tests {
         .unwrap();
         assert_eq!(effective.client_id, client_id.to_string());
         assert_eq!(effective.tenant_id, tenant_id.to_string());
-        assert!(effective.client_id_environment_managed);
-        assert!(effective.tenant_id_environment_managed);
+        assert_eq!(
+            effective.client_id_source,
+            EntraConfigurationSource::Environment
+        );
+        assert_eq!(
+            effective.tenant_id_source,
+            EntraConfigurationSource::Environment
+        );
         assert_eq!(
             runtime_entra_configuration(&effective)
                 .unwrap()
@@ -3312,6 +3377,82 @@ mod tests {
         )
         .unwrap_err()
         .contains("public-client ID"));
+    }
+
+    #[test]
+    fn entra_policy_precedes_environment_and_saved_settings_and_fails_closed() {
+        let saved_client_id = Uuid::new_v4();
+        let saved_tenant_id = Uuid::new_v4();
+        let settings = GlobalSettings {
+            entra_client_id: saved_client_id.to_string(),
+            entra_tenant_id: saved_tenant_id.to_string(),
+        };
+        let environment_client_id = Uuid::new_v4();
+        let environment_tenant_id = Uuid::new_v4();
+
+        let absent = effective_global_entra_configuration_with_sources(
+            &settings,
+            policy::MachineEntraPolicy::default(),
+            Some(environment_client_id.to_string()),
+            Some(environment_tenant_id.to_string()),
+        )
+        .unwrap();
+        assert_eq!(absent.client_id, environment_client_id.to_string());
+        assert_eq!(absent.tenant_id, environment_tenant_id.to_string());
+        assert_eq!(
+            absent.client_id_source,
+            EntraConfigurationSource::Environment
+        );
+
+        let policy_client_id = Uuid::new_v4();
+        let policy_tenant_id = Uuid::new_v4();
+        let managed = effective_global_entra_configuration_with_sources(
+            &settings,
+            policy::MachineEntraPolicy::new(
+                Some(policy_client_id.to_string()),
+                Some(policy_tenant_id.to_string()),
+            ),
+            Some(environment_client_id.to_string()),
+            Some(environment_tenant_id.to_string()),
+        )
+        .unwrap();
+        assert_eq!(managed.client_id, policy_client_id.to_string());
+        assert_eq!(managed.tenant_id, policy_tenant_id.to_string());
+        assert_eq!(
+            managed.client_id_source,
+            EntraConfigurationSource::WindowsPolicy
+        );
+        assert_eq!(
+            managed.tenant_id_source,
+            EntraConfigurationSource::WindowsPolicy
+        );
+
+        assert!(effective_global_entra_configuration_with_sources(
+            &settings,
+            policy::MachineEntraPolicy::new(Some(policy_client_id.to_string()), None),
+            None,
+            None,
+        )
+        .unwrap_err()
+        .contains("Windows policy must configure both"));
+        assert!(effective_global_entra_configuration_with_sources(
+            &settings,
+            policy::MachineEntraPolicy::new(
+                Some("not-a-client-id".to_owned()),
+                Some(policy_tenant_id.to_string()),
+            ),
+            None,
+            None,
+        )
+        .unwrap_err()
+        .contains("Windows policy public-client ID"));
+
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join(GLOBAL_SETTINGS_FILENAME);
+        save_global_settings_at(&path, &settings).unwrap();
+        let serialized = fs::read_to_string(path).unwrap();
+        assert!(!serialized.contains(&policy_client_id.to_string()));
+        assert!(!serialized.contains(&policy_tenant_id.to_string()));
     }
 
     #[test]

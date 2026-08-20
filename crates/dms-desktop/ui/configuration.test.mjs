@@ -72,8 +72,8 @@ const snapshot = {
   global_entra_configuration: {
     client_id: "client-1",
     tenant_id: "tenant-1",
-    client_id_environment_managed: false,
-    tenant_id_environment_managed: true,
+    client_id_source: "saved",
+    tenant_id_source: "environment",
   },
   smtp_credential_configured: true,
 };
@@ -102,8 +102,8 @@ test("configuration snapshot rejects a global Entra result without a workspace s
   const savedGlobalEntra = {
     client_id: "client-2",
     tenant_id: "tenant-2",
-    client_id_environment_managed: false,
-    tenant_id_environment_managed: false,
+    client_id_source: "saved",
+    tenant_id_source: "saved",
   };
   const initial = applyConfigurationSnapshot(createConfigurationState(), snapshot);
   const saved = applyConfigurationSnapshot(
@@ -130,8 +130,8 @@ test("saving global Entra configuration clears backend-invalidated setup state",
   const savedGlobalEntra = {
     client_id: "client-2",
     tenant_id: "tenant-2",
-    client_id_environment_managed: false,
-    tenant_id_environment_managed: false,
+    client_id_source: "saved",
+    tenant_id_source: "saved",
   };
   const initial = {
     ...applyConfigurationSnapshot(createConfigurationState(), snapshot),
@@ -185,6 +185,24 @@ test("workflow route configures folder roles and opens identity source in place"
   assert.match(markup, /name="tenantId"[^>]*readonly/);
   assert.match(markup, /Library Entra group/);
   assert.equal(closeConfigurationSecondary(state).secondary, null);
+});
+
+test("policy-managed Entra identifiers are read-only and labelled in Configuration", () => {
+  let state = applyConfigurationSnapshot(createConfigurationState(), {
+    ...snapshot,
+    global_entra_configuration: {
+      client_id: "policy-client",
+      tenant_id: "policy-tenant",
+      client_id_source: "windows_policy",
+      tenant_id_source: "windows_policy",
+    },
+  });
+  state = openConfigurationSecondary(state, "identity-source");
+
+  const markup = configurationMarkup(state, assistancePolicy);
+  assert.match(markup, /name="clientId"[^>]*readonly/);
+  assert.match(markup, /name="tenantId"[^>]*readonly/);
+  assert.match(markup, /Managed by Windows policy/);
 });
 
 test("identity-source overview shows effective global IDs and opens the encoded group page", () => {

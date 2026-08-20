@@ -1057,18 +1057,19 @@ const CAPS = [
     nav: "config",
     configSection: "workflow",
     configSecondary: "Identity source",
-    subtitle: "Configure the Entra public client and tenant once for this OS user; each library retains only its bound group and display cache.",
+    subtitle: "Windows machine policy can manage the Entra public client and tenant; each library retains only its bound group and display cache.",
     body: `${defaultsFirstStyles()}
       <section class="card">
         <div class="row between"><h3 class="card-title" style="margin:0">Current Microsoft Entra identity source</h3>${badge("configured", "ok")}</div>
         ${kv([
           ["Public client ID", "3e7f6750-4052-4db4-8638-234f9a85c2a1"],
           ["Tenant ID", "8d29cb1d-1d51-43ad-a225-3721792d0bf3"],
+          ["Configuration source", badge("Managed by Windows policy", "info")],
           ["Library group", "DMS Workflow Users"],
           ["Group ID", '<button class="btn outline" aria-label="Open Microsoft 365 group page for Group ID 9c14e7bf-87a4-409f-83ba-f8761b72bf72"><code>9c14e7bf-87a4-409f-83ba-f8761b72bf72</code> · Open group page</button>'],
           ["Last refresh", "2026-08-14 10:42 UTC"],
         ])}
-        <p class="hint">The effective app-global IDs are environment-managed and read only. The library retains only its group binding and display cache; the Group ID control opens Microsoft My Account in the host browser.</p>
+        <p class="hint">The effective app-global IDs are managed by Windows policy and read only. A partial or invalid policy blocks Graph rather than falling back. The library retains only its group binding and display cache; the Group ID control opens Microsoft My Account in the host browser.</p>
       </section>
       <div class="grid-2">
         <section class="card">

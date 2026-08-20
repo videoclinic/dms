@@ -293,7 +293,7 @@ tr:last-child td { border-bottom: 0; }
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Configure the Entra public client and tenant once for this OS user; each library retains only its bound group and display cache.</p>
+      <p class="subtitle">Windows machine policy can manage the Entra public client and tenant; each library retains only its bound group and display cache.</p>
       <section class="configuration-nav" aria-label="Configuration navigation">
     <div class="config-nav-head"><div><h3>Configuration</h3><p>Set up the workspace once, then choose the task that matches the setting you need.</p></div><div class="config-secondary"><span>Workflow</span><span aria-hidden="true">›</span><strong>Identity source</strong><button class="btn outline config-back">← Back to Workflow</button></div></div>
     <nav class="config-tabs" aria-label="Configuration sections"><a class="config-tab" href="#"><strong>Workspace</strong><span>Roots and local metadata</span></a><a class="config-tab" href="#"><strong>Document defaults</strong><span>Classification and catalogues</span></a><a class="config-tab active" href="#" aria-current="page"><strong>Workflow</strong><span>People and role routing</span></a><a class="config-tab" href="#"><strong>Notifications</strong><span>Review and release email</span></a></nav>
@@ -310,8 +310,8 @@ tr:last-child td { border-bottom: 0; }
   </style>
       <section class="card">
         <div class="row between"><h3 class="card-title" style="margin:0">Current Microsoft Entra identity source</h3><span class="badge ok">configured</span></div>
-        <dl class="kv"><div><dt>Public client ID</dt><dd>3e7f6750-4052-4db4-8638-234f9a85c2a1</dd></div><div><dt>Tenant ID</dt><dd>8d29cb1d-1d51-43ad-a225-3721792d0bf3</dd></div><div><dt>Library group</dt><dd>DMS Workflow Users</dd></div><div><dt>Group ID</dt><dd><button class="btn outline" aria-label="Open Microsoft 365 group page for Group ID 9c14e7bf-87a4-409f-83ba-f8761b72bf72"><code>9c14e7bf-87a4-409f-83ba-f8761b72bf72</code> · Open group page</button></dd></div><div><dt>Last refresh</dt><dd>2026-08-14 10:42 UTC</dd></div></dl>
-        <p class="hint">The effective app-global IDs are environment-managed and read only. The library retains only its group binding and display cache; the Group ID control opens Microsoft My Account in the host browser.</p>
+        <dl class="kv"><div><dt>Public client ID</dt><dd>3e7f6750-4052-4db4-8638-234f9a85c2a1</dd></div><div><dt>Tenant ID</dt><dd>8d29cb1d-1d51-43ad-a225-3721792d0bf3</dd></div><div><dt>Configuration source</dt><dd><span class="badge info">Managed by Windows policy</span></dd></div><div><dt>Library group</dt><dd>DMS Workflow Users</dd></div><div><dt>Group ID</dt><dd><button class="btn outline" aria-label="Open Microsoft 365 group page for Group ID 9c14e7bf-87a4-409f-83ba-f8761b72bf72"><code>9c14e7bf-87a4-409f-83ba-f8761b72bf72</code> · Open group page</button></dd></div><div><dt>Last refresh</dt><dd>2026-08-14 10:42 UTC</dd></div></dl>
+        <p class="hint">The effective app-global IDs are managed by Windows policy and read only. A partial or invalid policy blocks Graph rather than falling back. The library retains only its group binding and display cache; the Group ID control opens Microsoft My Account in the host browser.</p>
       </section>
       <div class="grid-2">
         <section class="card">

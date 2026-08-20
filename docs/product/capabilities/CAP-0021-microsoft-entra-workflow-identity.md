@@ -52,12 +52,17 @@
 4. An approver sign-in command uses delegated device authorization, resolves
    `/me` to an immutable tenant/object-ID actor, and leaves the actor available
    for one lifecycle decision.
-5. The public-client and tenant IDs are app-global OS-user configuration.
-   Non-empty `DMS_ENTRA_CLIENT_ID` and `DMS_ENTRA_TENANT_ID` process values
-   override their stored counterparts and are read-only in Configuration;
-   invalid non-empty values fail closed. The identity-source overview shows
-   these effective IDs with the library-bound group label and object ID. Its
-   Group ID control opens
+5. The public-client and tenant IDs are app-global configuration. On Windows,
+   a complete non-secret `HKLM\SOFTWARE\Policies\Videoclinic\DMS` policy pair
+   (`EntraClientId`, `EntraTenantId`) takes precedence over non-empty
+   `DMS_ENTRA_CLIENT_ID` / `DMS_ENTRA_TENANT_ID` process values and OS-user
+   settings. A partial or invalid policy fails closed; policy-managed fields
+   are read-only and labelled **Managed by Windows policy** in Configuration.
+   Without policy, non-empty process values override their stored counterparts
+   and are read-only as process-managed values; invalid non-empty values fail
+   closed. Policy values are never copied to `global-settings.json` or `.dms`.
+   The identity-source overview shows these effective IDs with the library-bound
+   group label and object ID. Its Group ID control opens
    `https://myaccount.microsoft.com/groups/<encoded-group-id>` through the host
    browser rather than navigating the app WebView. Delegated access and refresh
    tokens are stored only in the OS credential store; `.dms` retains neither
@@ -67,6 +72,7 @@
 
 1. Before a workspace can configure workflow roles or submit a review, app-global
    configuration provides a valid Microsoft Entra public-client ID and tenant ID,
+   with a complete Windows machine policy pair taking precedence when present,
    and the workspace has an identity-source binding containing one group object
    ID and a display label. The application does not
    create or modify the Entra group.
