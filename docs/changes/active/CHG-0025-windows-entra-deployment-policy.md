@@ -9,13 +9,13 @@ Produce Windows deployment support that lets an administrator configure the DMS 
 **Entry checkpoint:** none
 **Context sources:** `docs/entra-client-setup.md` (Configure DMS, Environment-managed configuration); `docs/architecture.md` (Runtime shape, Trust and control boundary); `docs/privacy.md` (Data classes); `docs/design-decisions.md` (ADR-0021, ADR-0024); `docs/product/capabilities/CAP-0021-microsoft-entra-workflow-identity.md` (Operational details, Outcomes); `docs/product/wireframes/generate.mjs` (CAP-0021); `crates/dms-desktop/src/lib.rs` (`DesktopIntegrations`, `GlobalSettings`, `effective_global_entra_configuration*`, `runtime_entra_configuration`, `run`); `crates/dms-desktop/src/graph.rs` (`begin_delegated_sign_in`, `wait_for_device_token`, `TokenStore`); `crates/dms-desktop/ui/configuration.mjs` (Application Entra configuration); `crates/dms-desktop/ui/app.mjs` (`handleSubmit`); `crates/dms-desktop/ui/configuration.test.mjs`; `.github/workflows/desktop-platform-smoke.yml`; `.github/workflows/release-windows.yml`
 **Produces:** A released DMS Desktop build resolves a valid computer policy from `HKLM\SOFTWARE\Policies\Videoclinic\DMS` before environment or saved configuration, exposes policy ownership read-only in Configuration, and, only when both process `DMS_ENTRA_*` values are present, validates the tenant's cached delegated token or starts one non-blocking device-authorization challenge with polling and explicit reissue. It also ships a validated `DMSDesktop.admx` plus `en-US\DMSDesktop.adml` and operator documentation for manual, GPO, and Intune deployment.
-**Status:** in-progress — Phase 2 gate passed; startup authorization remains Phase 3.
+**Status:** in-progress — Phase 2 committed as `3bfde2f`; Phase 3 is pending.
 **Filename convention:** The repository's active-record contract requires `CHG-*.md`; `P0100` is the execution order authority for this CHG and no conflicting active execution slot exists.
 
 | Field | Value |
 | --- | --- |
 | ID | CHG-0025 |
-| Status | in-progress — Phase 2 gate passed |
+| Status | in-progress — Phase 2 committed as `3bfde2f`; Phase 3 is pending |
 | External request | Direct operator request: when both `DMS_ENTRA_CLIENT_ID` and `DMS_ENTRA_TENANT_ID` are set, DMS Desktop must automatically validate the current Entra sign-in or begin and poll a device-authorization code, then let the user explicitly reissue a code after failure or expiry. Amendment: show each effective configuration source, and gray out application controls when Windows system policy supplies the identifiers. |
 | Affected CAPs | CAP-0021 |
 | Decision records | New ADR for Windows machine-policy precedence and startup device authorization; ADR-0021 and ADR-0024 remain applicable |
@@ -46,8 +46,8 @@ Recovery is to set the policy **Not Configured** (or remove both values), refres
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
 | 1 | Define and implement the machine-policy configuration source | done (`cargo test -p dms-desktop --lib entra_policy`; `cargo clippy -p dms-desktop --all-targets -- -D warnings`; Configuration UI test) | `cargo test -p dms-desktop --lib entra_policy` exits 0; `cargo clippy -p dms-desktop --all-targets -- -D warnings` exits 0 |
-| 2 | Show configuration provenance and disable Windows-policy controls | done (`node --test crates/dms-desktop/ui/configuration.test.mjs`; `node docs/product/wireframes/generate.mjs`) | `node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0; `node docs/product/wireframes/generate.mjs` exits 0 |
-| 3 | Implement automatic process-environment device authorization | pending — after Phase 2 | `cargo test -p dms-desktop --lib startup_device_authorization` exits 0; `node --test crates/dms-desktop/ui/configuration.test.mjs crates/dms-desktop/ui/app.test.mjs` exits 0 |
+| 2 | Show configuration provenance and disable Windows-policy controls | done (`3bfde2f`; `node --test crates/dms-desktop/ui/configuration.test.mjs`; `node docs/product/wireframes/generate.mjs`) | `node --test crates/dms-desktop/ui/configuration.test.mjs` exits 0; `node docs/product/wireframes/generate.mjs` exits 0 |
+| 3 | Implement automatic process-environment device authorization | pending — after Phase 2 checkpoint `3bfde2f` | `cargo test -p dms-desktop --lib startup_device_authorization` exits 0; `node --test crates/dms-desktop/ui/configuration.test.mjs crates/dms-desktop/ui/app.test.mjs` exits 0 |
 | 4 | Ship ADMX assets and manual/GPO/Intune deployment documentation | pending — after Phase 3 | `python3 scripts/validate_admx.py docs/deployment/windows/admx/DMSDesktop.admx docs/deployment/windows/admx/en-US/DMSDesktop.adml` exits 0; every relative link in `docs/windows-entra-deployment.md` resolves |
 | 5 | Validate the Windows deployment path and close records | pending — after Phase 4 | Windows evidence shows the configured process presents or validates exactly one device-authorization state, `reg.exe query HKLM\SOFTWARE\Policies\Videoclinic\DMS` returns the two expected UUID values, and `cargo test --workspace`, `node --test crates/dms-desktop/ui/*.test.mjs`, and the Windows `Desktop platform smoke` job exit/pass |
 
@@ -85,7 +85,7 @@ Verification gate: `node --test crates/dms-desktop/ui/configuration.test.mjs` ex
 
 ## Phase 3 — Implement automatic process-environment device authorization
 
-**Entry condition:** Phase 2 is done and committed.
+**Entry condition:** Phase 2 checkpoint `3bfde2f` exists; push it too when an operator requests a remote checkpoint.
 
 **Goal:** When—and only when—both `DMS_ENTRA_CLIENT_ID` and `DMS_ENTRA_TENANT_ID` are the effective process-environment source rather than superseded by machine policy, desktop startup validates the tenant's cached delegated credential or starts one visible device-authorization challenge that the UI polls without blocking.
 
