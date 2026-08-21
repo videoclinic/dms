@@ -24,6 +24,7 @@ import {
   libraryOpenRequest,
   membershipKind,
   normalizeLibraryPath,
+  openVersionHistory,
   paginateLibraryEntries,
   previewTargetVersions,
   resizeLibraryDetailWidth,
@@ -586,6 +587,7 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /Employee handbook/);
   assert.match(markup, /data-library-open-source/);
   assert.match(markup, /data-library-open-release/);
+  assert.match(markup, /data-library-open-history/);
   assert.match(markup, /Create release candidate/);
   assert.match(markup, /Review content-check override reason \(only when needed\)/);
   assert.match(markup, /Next minor · V1\.3 \(approval optional\)/);
@@ -593,8 +595,9 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /Effective target: V1\.3 · stays in draft for direct PDF export/);
   assert.match(markup, /data-candidate-manual-field hidden/);
   assert.match(markup, /name="manualMajor"[^>]* disabled/);
-  assert.doesNotMatch(markup, /View workflow evidence/);
-  assert.match(markup, /Canonical workflow evidence · valid/);
+  assert.doesNotMatch(markup, /View workflow evidence|Canonical workflow evidence/);
+  assert.match(markup, /View version history &amp; changes/);
+  assert.match(markup, /Version history &amp; changes · valid/);
   assert.match(markup, /Current draft work/);
   assert.match(markup, /V1\.3/);
   assert.equal((markup.match(/class="workflow-actor-block"/g) || []).length, 5);
@@ -631,7 +634,7 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /id="library-confidentiality-form"/);
   assert.match(markup, /<option value="restricted" selected>Restricted<\/option>/);
   assert.match(markup, /data-library-lifecycle-form="mark_obsolete"/);
-  assert.match(markup, /Canonical workflow evidence · valid/);
+  assert.match(markup, /Version history &amp; changes · valid/);
   assert.match(markup, /document control data changed/);
   assert.doesNotMatch(markup, /<script>alert/);
   library.detail.workflow_verification = { tampered_at: "event-1" };
@@ -657,7 +660,9 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(scrollBody, /data-library-section="control"/);
   assert.match(scrollBody, /data-library-section="schedule"/);
   assert.match(scrollBody, /data-library-section="revision"/);
+  assert.match(scrollBody, /data-library-section="history"/);
   assert.match(scrollBody, /data-library-section="releases"/);
+  assert.match(scrollBody, /data-library-section="revision"[\s\S]*data-library-section="history"[\s\S]*data-library-section="releases"/);
   assert.doesNotMatch(scrollBody, /data-library-open-source|data-library-open-release|data-library-open-notes|data-library-copy-permalink|data-library-unregister|id="library-reassociate-form"/);
   assert.match(actionsFooter, /data-library-section="actions" open/);
   assert.match(actionsFooter, /selection-section-chevron/);
@@ -671,6 +676,7 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /data-library-section="control"/);
   assert.match(markup, /data-library-section="schedule"/);
   assert.match(markup, /data-library-section="revision"/);
+  assert.match(markup, /data-library-section="history"/);
   assert.match(markup, /data-library-section="releases"/);
   assert.match(markup, /selection-section-chevron/);
   assert.match(markup, /class="badge muted">draft</);
@@ -684,12 +690,14 @@ test("selection section folds stay open or closed across document switches", () 
   assert.equal(selectionSectionOpen(library, "actions"), true);
   library = setSelectionSectionOpen(library, "control", false);
   library = setSelectionSectionOpen(library, "schedule", false);
+  library = setSelectionSectionOpen(library, "history", false);
   library = setSelectionSectionOpen(library, "releases", false);
   library = setSelectionSectionOpen(library, "revision", true);
   library = setSelectionSectionOpen(library, "actions", false);
   library = toggleLibrarySelection(library, "Policies/A.md");
   assert.equal(selectionSectionOpen(library, "control"), false);
   assert.equal(selectionSectionOpen(library, "schedule"), false);
+  assert.equal(selectionSectionOpen(library, "history"), false);
   assert.equal(selectionSectionOpen(library, "releases"), false);
   assert.equal(selectionSectionOpen(library, "revision"), true);
   assert.equal(selectionSectionOpen(library, "actions"), false);
@@ -699,6 +707,7 @@ test("selection section folds stay open or closed across document switches", () 
     control: { title: "A" },
   });
   assert.equal(selectionSectionOpen(library, "control"), false);
+  assert.equal(selectionSectionOpen(library, "history"), false);
   assert.equal(selectionSectionOpen(library, "actions"), false);
   const registered = file("Handbook.md", { in_library: { document_id: "doc-1" } }, {
     id: "doc-1",
@@ -751,6 +760,18 @@ test("selection section folds stay open or closed across document switches", () 
   assert.match(markup, /data-library-section="revision" open/);
   assert.match(markup, /data-library-section="releases"(?! open)/);
   assert.match(markup, /data-library-section="actions"(?! open)/);
+});
+
+test("opening version history changes only its session-only fold state", () => {
+  let library = createLibraryState();
+  library = setSelectionSectionOpen(library, "history", false);
+
+  const opened = openVersionHistory(library);
+
+  assert.equal(selectionSectionOpen(opened, "history"), true);
+  assert.equal(selectionSectionOpen(opened, "control"), true);
+  assert.equal(selectionSectionOpen(opened, "revision"), true);
+  assert.equal(selectionSectionOpen(opened, "actions"), true);
 });
 
 test("library file actions map only to host-mediated document commands", () => {
@@ -1226,7 +1247,7 @@ test("updated document selection refreshes the detail and visible row in place",
   const updated = applyDocumentSelection(library, detail, true);
   assert.equal(updated.detail, detail);
   assert.equal(updated.detail_error, "");
-  assert.equal(updated.evidence_open, true);
+  assert.equal(selectionSectionOpen(updated, "history"), true);
   assert.equal(updated.folder.entries[0].document.control.title, "Employee handbook");
   assert.equal(updated.results[0].document.control.document_number, "HR-001");
 });

@@ -47,6 +47,7 @@ export const DEFAULT_SELECTION_OPEN = {
   control: true,
   schedule: true,
   revision: true,
+  history: true,
   releases: true,
   actions: true,
 };
@@ -68,6 +69,10 @@ export function setSelectionSectionOpen(library, key, isOpen) {
   };
 }
 
+export function openVersionHistory(library) {
+  return setSelectionSectionOpen(library, "history", true);
+}
+
 export function createLibraryState() {
   return {
     tree: [],
@@ -76,7 +81,6 @@ export function createLibraryState() {
     detail: null,
     detail_error: "",
     reassociate_path: "",
-    evidence_open: false,
     selection_open: { ...DEFAULT_SELECTION_OPEN },
     lifecycle_drafts: {},
     results: null,
@@ -176,7 +180,6 @@ export function applyLibrarySnapshot(library, snapshot, target, historyMode = "p
     detail: null,
     detail_error: "",
     reassociate_path: "",
-    evidence_open: false,
     lifecycle_drafts: {},
     results: null,
     query: "",
@@ -254,7 +257,6 @@ export function toggleLibrarySelection(library, relativePath, additive = false) 
     detail: null,
     detail_error: "",
     reassociate_path: "",
-    evidence_open: false,
     lifecycle_drafts: {},
   };
 }
@@ -724,7 +726,7 @@ export function lifecycleActionRequest(action, values, detail) {
   };
 }
 
-export function applyDocumentSelection(library, detail, openEvidence = false) {
+export function applyDocumentSelection(library, detail, openHistory = false) {
   const updateEntry = (entry) => entryDocumentId(entry) === detail.document_id
     ? { ...entry, document: { ...entry.document, lifecycle: detail.lifecycle, control: detail.control } }
     : entry;
@@ -732,7 +734,7 @@ export function applyDocumentSelection(library, detail, openEvidence = false) {
     ...library,
     detail,
     detail_error: "",
-    evidence_open: openEvidence,
+    selection_open: openHistory ? { ...(library.selection_open ?? {}), history: true } : library.selection_open,
     lifecycle_drafts: {},
     folder: { ...library.folder, entries: (library.folder?.entries ?? []).map(updateEntry) },
     results: library.results?.map(updateEntry) ?? null,
@@ -954,7 +956,7 @@ function workflowEventMarkup(event) {
 }
 
 function workflowEvidenceMarkup(events) {
-  if (events.length === 0) return '<p class="source-path">No canonical workflow evidence has been recorded.</p>';
+  if (events.length === 0) return '<p class="source-path">No version history has been recorded.</p>';
   const intervals = [];
   let current = { label: "Current draft work", events: [] };
   for (const event of events) {
@@ -1001,14 +1003,17 @@ function lifecyclePanelMarkup(library, detail) {
     const disabled = available ? "" : "disabled";
     return `<form class="lifecycle-action" data-library-lifecycle-form="${action}"><strong>${title}</strong>${reason ? `<small>${escapeHtml(reason)}</small>` : ""}<label>Reason<textarea name="reason" required ${disabled}>${escapeHtml(draft.reason ?? "")}</textarea></label><label class="confirmation"><input type="checkbox" name="confirmed" value="yes" ${draft.confirmed ? "checked" : ""} ${disabled}> I confirm this lifecycle change.</label><button class="button ${action === "mark_obsolete" ? "danger" : "secondary"}" type="submit" ${disabled}>${title}</button></form>`;
   };
-  const events = workflowEvidenceMarkup(detail.workflow_events ?? []);
+  const external = externalLifecycleMarkup(library, detail);
+  return `<div class="lifecycle-panel" aria-label="Revision cycle actions"><div class="lifecycle-actions">${external}${form("cancel_review", "Cancel review", cancel.available, cancel.reason)}${form("mark_obsolete", "Mark obsolete", obsolete.available, obsolete.reason)}</div></div>`;
+}
+
+function versionHistoryMarkup(detail) {
   const verification = typeof detail.workflow_verification === "string"
     ? detail.workflow_verification.replaceAll("_", " ")
     : detail.workflow_verification?.tampered_at
       ? `tampered at ${detail.workflow_verification.tampered_at}`
       : "invalid";
-  const external = externalLifecycleMarkup(library, detail);
-  return `<div class="lifecycle-panel" aria-label="Revision cycle actions"><div class="lifecycle-actions">${external}${form("cancel_review", "Cancel review", cancel.available, cancel.reason)}${form("mark_obsolete", "Mark obsolete", obsolete.available, obsolete.reason)}</div><details class="workflow-evidence" data-library-evidence ${library.evidence_open ? "open" : ""}><summary>Canonical workflow evidence · ${escapeHtml(verification)}</summary>${events}</details></div>`;
+  return `<div class="workflow-evidence version-history"><p class="source-path">Versions and related workflow changes are grouped by the recorded actor. Expand a person to inspect individual events.</p><strong>Version history &amp; changes · ${escapeHtml(verification)}</strong>${workflowEvidenceMarkup(detail.workflow_events ?? [])}</div>`;
 }
 
 function externalLifecycleMarkup(library, detail) {
@@ -1140,7 +1145,7 @@ function selectionMarkup(library) {
     : `<div class="document-control-editor" aria-labelledby="document-control-editor-heading"><h4 id="document-control-editor-heading">Edit document control data</h4><p class="source-path">Applies to ${escapeHtml(detail.source_name)} · ${escapeHtml(detail.relative_path)}</p>${library.detail_error ? `<p class="library-detail-error" role="alert">${escapeHtml(library.detail_error)}</p>` : ""}${ownerSelectable ? "" : '<p class="library-detail-error" role="status">No eligible Microsoft Entra owner is available. Identity placeholders and legacy owner text are display-only.</p>'}<form id="library-document-control-form"><div class="document-control-fields"><label>Title<input name="title" required value="${escapeHtml(detail.control.title)}"></label><label>Document number<input name="documentNumber" value="${escapeHtml(detail.control.document_number ?? "")}"></label><label>Document type<select name="documentType"><option value="">Not set</option>${documentTypeOptions}</select></label><label>Owner<select name="ownerObjectId" required ${ownerSelectable ? "" : "disabled"}>${unresolvedOwnerOption}${ownerOptions}</select></label></div><button class="button" type="submit" ${ownerSelectable ? "" : "disabled"}>Save document control</button></form><form id="library-confidentiality-form" class="confidentiality-editor"><label>Confidentiality override<select name="confidentialityTypeId"><option value="">Use inherited folder policy</option>${confidentialityOptions}</select></label><button class="button secondary" type="submit">Apply confidentiality</button></form></div>`;
   const openAttr = (key) => (selectionSectionOpen(library, key) ? " open" : "");
   const section = (key, title, body, extraClass = "") =>
-    `<details class="selection-section${extraClass ? ` ${extraClass}` : ""}" data-library-section="${key}"${openAttr(key)}><summary><span class="selection-section-chevron" aria-hidden="true"></span><span class="selection-section-title">${title}</span><span class="selection-section-hint" aria-hidden="true"></span></summary><div class="selection-section-body">${body}</div></details>`;
+    `<details${key === "history" ? ' id="library-version-history"' : ""} class="selection-section${extraClass ? ` ${extraClass}` : ""}" data-library-section="${key}"${openAttr(key)}><summary><span class="selection-section-chevron" aria-hidden="true"></span><span class="selection-section-title">${title}</span><span class="selection-section-hint" aria-hidden="true"></span></summary><div class="selection-section-body">${body}</div></details>`;
   const controlSummary = `<dl class="selection-details"><dt>Document type</dt><dd>${escapeHtml(detail.control.document_type ?? "Not set")}</dd><dt>Owner</dt><dd>${escapeHtml(identityLabel(currentOwner, "Not set"))}</dd><dt>Confidentiality</dt><dd>${escapeHtml(confidentiality?.label ?? "Not configured")}${confidentiality ? ` · ${escapeHtml(confidentiality.document_override ? "override" : `from ${confidentiality.source_folder}`)}` : ""}</dd><dt>Editor</dt><dd>${escapeHtml(role(roles?.editor, "<editor>"))}</dd><dt>Approver</dt><dd>${escapeHtml(role(roles?.approver, "Not configured"))}</dd></dl>`;
   const controlBody = `${controlSummary}${editor}`;
   const reassociatePath = library.reassociate_path || detail.relative_path;
@@ -1163,8 +1168,9 @@ function selectionMarkup(library) {
   const lostBanner = sourceLost
     ? '<p class="library-detail-error" role="status">The draft file is not at the stored path. Most actions stay disabled until you reassociate the source.</p>'
     : "";
+  const historyEntry = `<button class="button secondary" type="button" data-library-open-history aria-controls="library-version-history">View version history &amp; changes</button><p class="source-path">${release ? `Current release · V${escapeHtml(release.version)}` : "No released version yet"}</p>`;
   return selectionScroll(
-    `<div class="selection-header"><div class="selection-header-badges">${membershipBadge}${lifecycleBadge}</div><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><h3>${escapeHtml(detail.control.title)}</h3>${detail.control.document_number ? `<p class="document-number">${escapeHtml(detail.control.document_number)}</p>` : ""}${lostBanner}<div class="source-identity"><strong>Source file</strong><span>${escapeHtml(detail.source_name)}</span><small>${escapeHtml(detail.relative_path)}</small></div>${section("control", "Document control data", controlBody)}${section("schedule", "Document review schedule", scheduleMarkup)}${section("revision", "Revision cycle", sourceLost ? '<p class="source-path">Revision cycle actions are unavailable while the source is Lost source.</p>' : lifecyclePanelMarkup(library, detail))}${section("releases", "Releases", releasesBody)}`,
+    `<div class="selection-header"><div class="selection-header-badges">${membershipBadge}${lifecycleBadge}</div><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><h3>${escapeHtml(detail.control.title)}</h3>${detail.control.document_number ? `<p class="document-number">${escapeHtml(detail.control.document_number)}</p>` : ""}${lostBanner}<div class="source-identity"><strong>Source file</strong><span>${escapeHtml(detail.source_name)}</span><small>${escapeHtml(detail.relative_path)}</small></div>${historyEntry}${section("control", "Document control data", controlBody)}${section("schedule", "Document review schedule", scheduleMarkup)}${section("revision", "Revision cycle", sourceLost ? '<p class="source-path">Revision cycle actions are unavailable while the source is Lost source.</p>' : lifecyclePanelMarkup(library, detail))}${section("history", "Version history &amp; changes", versionHistoryMarkup(detail))}${section("releases", "Releases", releasesBody)}`,
     actionsFooter,
   );
 }

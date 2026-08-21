@@ -130,11 +130,15 @@
      confidentiality with its source and inherited/overridden status, effective
      editor/approver, current release, draft-newer marker)
    - **document actions** for that selection
+   Directly below Source file identity, **View version history & changes** opens
+   the existing history topic in the same pane; it does not create a new
+   activity or reload the document.
    CAP-0015 owns field rules and revision/obsolescence semantics; CAP-0006 owns
    navigation, selection, and pane placement. Its **Document control data**,
-   **Document review schedule**, **Revision cycle**, and **Releases** sections
-   live in the pane's main document-detail scroller and are independently
-   foldable and frameless as defined by CAP-0015; each summary exposes a
+   **Document review schedule**, **Revision cycle**, **Version history &
+   changes**, and **Releases** sections live in the pane's main
+   document-detail scroller and are independently foldable and frameless as
+   defined by CAP-0015; each summary exposes a
    disclosure chevron plus Expand/Collapse cue. **Actions** is an independently
    foldable disclosure docked at the bottom of the pane, outside that scroller,
    expanded by default, using the same chevron and Expand/Collapse cue. Its
@@ -172,7 +176,8 @@
      lifecycle allows (CAP-0002 / CAP-0015)
    - **Mark obsolete** (CAP-0015)
    - **Notes** (CAP-0003)
-   - **Workflow chain / evidence** (CAP-0011)
+   - **View version history & changes** (CAP-0011) — a visible direct entry to
+     the pane topic; it unfolds and focuses that topic without a backend call
    - **Verify release integrity** (CAP-0004)
    - **Start periodic review** when due rules allow (CAP-0017)
    - **Reassociate source** when the selected document is **Lost source**

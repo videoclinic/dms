@@ -85,8 +85,8 @@
     inherited/overridden status (CAP-0008), and effective editor/approver
     (CAP-0019). For exactly one selected document, the pane's main
     document-detail scroller groups **Document control data**, **Document
-    review schedule**, **Revision cycle**, and **Releases** into independently
-    foldable, frameless sections (no surrounding card frames around those
+    review schedule**, **Revision cycle**, **Version history & changes**, and
+    **Releases** into independently foldable, frameless sections (no surrounding card frames around those
     topics). Each section summary shows a disclosure chevron and Expand/Collapse
     cue so foldability is visible. **Actions** is a separately foldable
     disclosure docked at the bottom of the pane, outside that scroller, expanded
@@ -135,8 +135,9 @@
     content-check override reason (only when needed)**, shows the resolved
     effective target version for Next minor / Next major / Manual, labels later
     Next minor options **approval optional**, and keeps Manual major/minor
-    disabled unless Manual target is selected. Canonical workflow evidence is a single
-    foldable disclosure in that section. There is no **Begin revision** action:
+    disabled unless Manual target is selected. **Version history & changes** is
+    a separate foldable topic reached from its direct entry below Source file
+    identity; it is not part of Revision cycle. There is no **Begin revision** action:
     Draft/Released follows CAP-0002 digest rules. These actions are not offered
     as multi-select batch actions unless a future CAP explicitly allows bulk
     obsolescence.

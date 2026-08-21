@@ -390,8 +390,8 @@ const CAPS = [
               <tr>
                 <td></td><td><strong>${wireframeIcon("folder")} Templates ${badge("+1", "ok")}</strong></td><td>—</td><td>Folder</td><td>—</td><td>—</td>
               </tr>
-              <tr>
-                <td><span class="check">☐</span></td>
+              <tr class="selected">
+                <td><span class="check on">☑</span></td>
                 <td>${wireframeIcon("file")} Handbook.docx</td>
                 <td>${badge("In library", "ok")}</td>
                 <td>HR Data Privacy Policy · DOC-014</td>
@@ -430,8 +430,8 @@ const CAPS = [
                 <td>—</td>
                 <td>—</td>
               </tr>
-              <tr class="selected">
-                <td><span class="check on">☑</span></td>
+              <tr>
+                <td><span class="check">☐</span></td>
                 <td style="font-style:italic">Backup_config.docx</td>
                 <td>${badge("Lost source", "danger")}</td>
                 <td style="font-style:italic">Backup Config · DOC-031</td>
@@ -452,9 +452,7 @@ const CAPS = [
           <p class="hint"><strong>Name is the source file:</strong> it always shows the exact filesystem name, including the extension. Registered files show the independent DMS title and number under Document. The configured Markdown Word template is managed only under Configuration, so it never appears in these rows, counters, selections, or actions.</p>
         </section>
         <div role="separator" aria-label="Resize document details" aria-orientation="vertical" style="cursor:col-resize;background:var(--border);border-radius:999px" title="Drag or use Left/Right; Escape cancels"></div>
-        <aside class="card detail-pane selection-pane-layout">
-          ${lostSourceSelectionPane()}
-        </aside>
+        ${documentControlDataSelectionPane()}
       </div>
       ${batchSelectionPane()}`,
   },
@@ -643,7 +641,7 @@ const CAPS = [
     actions: ["Verify workflow", "Export chain"],
     body: `
       <section class="card">
-        <h3 class="card-title">Canonical workflow evidence · valid</h3>
+        <h3 class="card-title">Version history &amp; changes · valid</h3>
         <div class="stack">
           <section><h4 class="card-title">Current draft work</h4>
             <details class="event" open><summary><strong>Changes by Lukas Roth</strong> · 1 event · 2025-08-04 10:20 UTC</summary>${event("review_requested", "2025-08-04 10:20 UTC", "Lukas Roth", "Changelog: clarified the retention exception. Target: V1.5 (minor version change).")}</details>
@@ -1284,6 +1282,7 @@ function documentControlDataSelectionPane() {
       <div class="mono" style="margin-top:0.3rem">Handbook.docx</div>
       <div class="muted" style="font-size:0.75rem;margin-top:0.2rem">Folder: policies/HR</div>
     </div>
+    <button class="btn outline" style="width:100%;margin-top:0.7rem">View version history &amp; changes <span class="muted">· V1.3 current</span></button>
     <p class="hint">Document topics scroll here. Actions stays docked at the pane bottom and uses the same session-only fold state.</p>
     <details class="selection-section" open>
       <summary><span class="selection-section-title">Document control data</span><span class="selection-section-meta">Mutable · managed in DMS Desktop</span></summary>
@@ -1330,11 +1329,15 @@ function documentControlDataSelectionPane() {
         <button class="btn">Create release candidate</button>
         <button class="btn outline">Cancel review</button>
         <button class="btn danger">Mark obsolete</button>
-        <details open>
-          <summary>Canonical workflow evidence · valid</summary>
-          <p class="hint" style="margin:0.5rem 0 0">Hash-chained lifecycle events (newest first). Fold this disclosure to hide evidence.</p>
-        </details>
         <p class="hint">Document-control-data changes while a review is open invalidate that review. Copy permalink uses workspace + document IDs only.</p>
+      </div>
+    </details>
+    <details class="selection-section" open>
+      <summary><span class="selection-section-title">Version history &amp; changes</span><span class="selection-section-meta">Workflow valid</span></summary>
+      <div class="selection-section-body stack">
+        <p class="hint" style="margin:0">Versions and related workflow changes are grouped by the recorded actor. Expand a person to inspect individual events.</p>
+        <section><h4 class="card-title" style="margin-bottom:0.35rem">Current draft work</h4><details class="event" open><summary><strong>Changes by Lukas Roth</strong> · 1 event · 2025-08-04 10:20 UTC</summary>${event("review requested", "2025-08-04 10:20 UTC", "Lukas Roth", "Changelog: clarified the retention exception. Target: V1.5 (minor version change).")}</details></section>
+        <section><h4 class="card-title" style="margin-bottom:0.35rem">V1.3</h4><details class="event" open><summary><strong>Changes by Lukas Roth</strong> · 2 events · 2025-08-01 09:44 UTC — 09:14 UTC</summary>${event("release", "2025-08-01 09:44 UTC", "Lukas Roth", "Atomic export committed V1.3.")}${event("review requested", "2025-08-01 09:14 UTC", "Lukas Roth", "Changelog: restructured control scope.")}</details><details class="event"><summary><strong>Changes by Anna Berg</strong> · 1 event · 2025-08-01 09:42 UTC</summary></details></section>
       </div>
     </details>
     <details class="selection-section" open>

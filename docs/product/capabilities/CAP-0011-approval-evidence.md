@@ -3,13 +3,11 @@
 | Field | Value |
 | --- | --- |
 | ID | CAP-0011 |
-| Status | not implemented |
+| Status | implemented |
 | Storage | `<edit-root>/.dms/` (canonical event chain) |
-| Tests | Partial phases 9e, 9f.2, and 9k evidence: [hash-chained lifecycle and delivery evidence tests](../../../crates/dms-core/tests/lifecycle.rs), [fake-backed desktop lifecycle composition](../../../crates/dms-desktop/src/lib.rs), and [newest-first, person-consolidated in-app workflow evidence tests](../../../crates/dms-desktop/ui/library.test.mjs) |
+| Tests | [Hash-chained lifecycle and delivery evidence tests](../../../crates/dms-core/tests/lifecycle.rs), [fake-backed desktop lifecycle composition](../../../crates/dms-desktop/src/lib.rs), and [newest-first, person-consolidated in-app workflow evidence tests](../../../crates/dms-desktop/ui/library.test.mjs) |
 
-## Outcomes (contract — not yet true in runtime)
-
-When implemented, the following must hold:
+## Outcomes
 
 1. Every workflow event follows the canonical event body defined in ADR-0013:
    stable document ID, event type, predecessor event hash, ISO-8601 UTC
@@ -31,8 +29,12 @@ When implemented, the following must hold:
    additionally records the interactive Microsoft Entra tenant/object ID and is
    rejected unless it matches the snapshotted effective approver (CAP-0019 /
    CAP-0021). Other workflow events do not claim Entra actor verification.
-4. The history of a document lists every event **newest first**, consolidated
-   into one visual block per (acting person × release interval). An interval
+4. The selected document's Library pane exposes **View version history &
+   changes** directly below Source file identity. It unfolds and focuses the
+   session-only **Version history & changes** topic without opening a new
+   activity, reloading the document, or making a backend call. The topic lists
+   every event **newest first**, consolidated into one visual block per (acting
+   person × release interval). An interval
    closes with its `release` event and the newer open interval is **Current draft
    work**. Each block summary identifies the person, event count, and time span;
    its nested fine-grained events show type, timestamp, changelog or decision or

@@ -385,8 +385,8 @@ tr:last-child td { border-bottom: 0; }
               <tr>
                 <td></td><td><strong><svg aria-hidden="true" viewBox="0 0 24 24" style="width:1rem;height:1rem;display:inline-block;vertical-align:-0.18rem;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M3 6h7l2 2h9v11H3z"/><path d="M3 6V4h7l2 2"/></svg> Templates <span class="badge ok">+1</span></strong></td><td>—</td><td>Folder</td><td>—</td><td>—</td>
               </tr>
-              <tr>
-                <td><span class="check">☐</span></td>
+              <tr class="selected">
+                <td><span class="check on">☑</span></td>
                 <td><svg aria-hidden="true" viewBox="0 0 24 24" style="width:1rem;height:1rem;display:inline-block;vertical-align:-0.18rem;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h4"/></svg> Handbook.docx</td>
                 <td><span class="badge ok">In library</span></td>
                 <td>HR Data Privacy Policy · DOC-014</td>
@@ -425,8 +425,8 @@ tr:last-child td { border-bottom: 0; }
                 <td>—</td>
                 <td>—</td>
               </tr>
-              <tr class="selected">
-                <td><span class="check on">☑</span></td>
+              <tr>
+                <td><span class="check">☐</span></td>
                 <td style="font-style:italic">Backup_config.docx</td>
                 <td><span class="badge danger">Lost source</span></td>
                 <td style="font-style:italic">Backup Config · DOC-031</td>
@@ -450,47 +450,99 @@ tr:last-child td { border-bottom: 0; }
           <p class="hint"><strong>Name is the source file:</strong> it always shows the exact filesystem name, including the extension. Registered files show the independent DMS title and number under Document. The configured Markdown Word template is managed only under Configuration, so it never appears in these rows, counters, selections, or actions.</p>
         </section>
         <div role="separator" aria-label="Resize document details" aria-orientation="vertical" style="cursor:col-resize;background:var(--border);border-radius:999px" title="Drag or use Left/Right; Escape cancels"></div>
-        <aside class="card detail-pane selection-pane-layout">
-          <div class="selection-scroll">
-      <div class="row between mb">
-      <div class="row gap-2"><span class="badge danger">Lost source</span></div>
+        <aside class="card detail-pane selection-pane-layout" aria-label="Document selection details">
+    <div class="selection-scroll">
+    <div class="row between mb">
+      <div class="row gap-2"><span class="badge muted">In library</span><span class="badge info">in_review</span></div>
       <button class="btn outline">Clear</button>
     </div>
-    <h3 class="card-title" style="margin:0">Backup Config <span class="muted" style="font-size:0.78rem;font-weight:500">· DOC-031</span></h3>
-    <p class="hint">Draft missing at the stored path. Reassociate the source before other actions.</p>
+    <h3 class="card-title" style="margin:0">HR Data Privacy Policy</h3>
+    <p class="muted">Document number: <span class="mono">DOC-014</span></p>
     <div class="source-identity-plain">
       <div class="label">Source file <span style="font-weight:400">· from filesystem</span></div>
-      <div class="mono" style="margin-top:0.2rem">Backup_config.docx · policies/HR</div>
+      <div class="mono" style="margin-top:0.3rem">Handbook.docx</div>
+      <div class="muted" style="font-size:0.75rem;margin-top:0.2rem">Folder: policies/HR</div>
     </div>
-    <details class="selection-section">
-      <summary><span class="selection-section-title">Document control data</span></summary>
-      <div class="selection-section-body"><p class="hint">Document control and confidentiality changes are unavailable while the source is Lost source.</p></div>
+    <button class="btn outline" style="width:100%;margin-top:0.7rem">View version history &amp; changes <span class="muted">· V1.3 current</span></button>
+    <p class="hint">Document topics scroll here. Actions stays docked at the pane bottom and uses the same session-only fold state.</p>
+    <details class="selection-section" open>
+      <summary><span class="selection-section-title">Document control data</span><span class="selection-section-meta">Mutable · managed in DMS Desktop</span></summary>
+      <div class="selection-section-body"><dl class="kv"><div><dt>Title</dt><dd>HR Data Privacy Policy</dd></div><div><dt>Document number</dt><dd>DOC-014 (unique in workspace)</dd></div><div><dt>Document type</dt><dd>policy</dd></div><div><dt>Owner</dt><dd>Lukas Roth · lukas@vc.de · object ID 8a1f…</dd></div><div><dt>Eligible-person assignment</dt><dd>Select submits object ID only; name/email are refreshable display data</dd></div><div><dt>Legacy owner label</dt><dd>— <span class="muted">(pre-v12 text would be shown unresolved here)</span></dd></div><div><dt>Effective editor</dt><dd>Lukas Roth · object ID 8a1f…</dd></div><div><dt>Effective approver</dt><dd>Anna Berg · object ID 41c2…</dd></div><div><dt>Confidentiality</dt><dd>Internal (inherited from policies/HR)</dd></div></dl><p class="hint">Stored under <code>.dms</code>. Effective date is not editable profile data.</p>
+      <div class="stack" style="margin-top:0.75rem">
+        <label class="label">Title <input value="HR Data Privacy Policy"></label>
+        <label class="label">Owner <select><option>Lukas Roth · lukas@vc.de</option></select></label>
+        <button class="btn">Save document control</button>
+      </div></div>
     </details>
-    <details class="selection-section">
-      <summary><span class="selection-section-title">Document review schedule</span></summary>
-      <div class="selection-section-body"><p class="hint">Review schedule editing is unavailable while the source is Lost source.</p></div>
+    <details class="selection-section" open>
+      <summary><span class="selection-section-title">Document review schedule</span><span class="selection-section-meta">Mutable</span></summary>
+      <div class="selection-section-body"><dl class="kv"><div><dt>Resolved interval</dt><dd>12 months (workspace default)</dd></div><div><dt>Next review due</dt><dd>2026-08-01</dd></div><div><dt>Exemption</dt><dd>None</dd></div></dl><p class="hint">Due date = current release effective date + resolved interval. Schedule changes do not invalidate content approval.</p>
+      <div class="stack" style="margin-top:0.75rem">
+        <label class="label">Schedule <select><option selected>Use workspace interval (12 months)</option><option>Document interval override</option><option>Exempt document</option></select></label>
+        <button class="btn outline" disabled>Update review schedule</button>
+      </div></div>
+    </details>
+    <details class="selection-section" open>
+      <summary><span class="selection-section-title">Revision cycle</span></summary>
+      <div class="selection-section-body stack">
+        <p class="muted" style="font-size:0.85rem;margin:0">Create a release candidate here in the workspace (not an external upload). Lifecycle is <code>released</code> while the draft matches the current release digest, and becomes <code>draft</code> when the draft changes or was never released. PDFs and history remain preserved.</p>
+        <strong>Create release candidate</strong>
+        <label class="label">Effective date * <input type="date" value="2025-08-15" required></label>
+        <label class="label">Target * <select><option value="next_minor" selected>Next minor · V1.4 (approval optional)</option><option value="next_major">Next major · V2.0 (approval required)</option><option value="manual">Manual target</option></select></label>
+        <p class="hint">Effective target: V1.4 · stays in draft for direct PDF export. Manual major/minor stay disabled until Manual target is selected.</p>
+        <label class="label">Requesting editor * <select><option value="8a1f">Lukas Roth · lukas@vc.de</option></select></label>
+        <label class="label">Changelog * <textarea required>Updated retention table to 24 months.</textarea></label>
+        <label class="label">Review content-check override reason (only when needed) <textarea></textarea></label>
+        <button class="btn">Create release candidate</button>
+        <button class="btn outline">Cancel review</button>
+        <button class="btn danger">Mark obsolete</button>
+        <p class="hint">Document-control-data changes while a review is open invalidate that review. Copy permalink uses workspace + document IDs only.</p>
+      </div>
+    </details>
+    <details class="selection-section" open>
+      <summary><span class="selection-section-title">Version history &amp; changes</span><span class="selection-section-meta">Workflow valid</span></summary>
+      <div class="selection-section-body stack">
+        <p class="hint" style="margin:0">Versions and related workflow changes are grouped by the recorded actor. Expand a person to inspect individual events.</p>
+        <section><h4 class="card-title" style="margin-bottom:0.35rem">Current draft work</h4><details class="event" open><summary><strong>Changes by Lukas Roth</strong> · 1 event · 2025-08-04 10:20 UTC</summary><article class="event">
+    <div class="row gap-2"><span class="badge info">review requested</span><span class="muted">2025-08-04 10:20 UTC</span><span class="muted">by Lukas Roth</span></div>
+    <p>Changelog: clarified the retention exception. Target: V1.5 (minor version change).</p>
+  </article></details></section>
+        <section><h4 class="card-title" style="margin-bottom:0.35rem">V1.3</h4><details class="event" open><summary><strong>Changes by Lukas Roth</strong> · 2 events · 2025-08-01 09:44 UTC — 09:14 UTC</summary><article class="event">
+    <div class="row gap-2"><span class="badge info">release</span><span class="muted">2025-08-01 09:44 UTC</span><span class="muted">by Lukas Roth</span></div>
+    <p>Atomic export committed V1.3.</p>
+  </article><article class="event">
+    <div class="row gap-2"><span class="badge info">review requested</span><span class="muted">2025-08-01 09:14 UTC</span><span class="muted">by Lukas Roth</span></div>
+    <p>Changelog: restructured control scope.</p>
+  </article></details><details class="event"><summary><strong>Changes by Anna Berg</strong> · 1 event · 2025-08-01 09:42 UTC</summary></details></section>
+      </div>
+    </details>
+    <details class="selection-section" open>
+      <summary><span class="selection-section-title">Releases</span><span class="selection-section-meta">4 recorded</span></summary>
+      <div class="selection-section-body stack">
+        <dl class="kv"><div><dt>Current released PDF</dt><dd>V1.3 · policies/HR/…_V1.3_internal.pdf</dd></div><div><dt>Effective date</dt><dd>2025-08-01</dd></div><div><dt>Captured title</dt><dd>HR Data Privacy Policy</dd></div><div><dt>Captured owner</dt><dd>Lukas Roth · object ID 8a1f…</dd></div><div><dt>Draft</dt><dd><span class="badge warn">newer than last release</span></dd></div></dl>
+        <button class="btn outline">Open latest released PDF</button>
+        <div class="ver"><div class="row gap-2"><strong>V1.3</strong><span class="badge ok">current</span></div><p class="muted">effective 2025-08-01 · released 2025-08-01 09:44 UTC · owner 8a1f…</p><p>Substantive / major</p></div>
+        <div class="ver"><div class="row gap-2"><strong>V1.2</strong><span class="badge muted">superseded</span></div><p class="muted">effective 2025-07-12 · released 2025-07-12 12:01 UTC</p><p>Cosmetic / minor</p></div>
+        <div class="ver"><div class="row gap-2"><strong>V1.1</strong><span class="badge muted">superseded</span></div><p class="muted">2025-06-05 14:30 UTC</p><p>Substantive / major</p></div>
+        <div class="ver"><div class="row gap-2"><strong>V1.0</strong><span class="badge warn">withdrawn</span></div><p class="muted">2025-05-09 10:12 UTC</p><p>Cosmetic / minor</p></div>
+        <p class="hint">Pre-v12 missing profile or effective-date evidence is labelled <strong>unrecorded</strong>; the mutable profile is never substituted.</p>
+      </div>
     </details>
     </div>
     <details class="selection-section selection-actions-footer" open>
       <summary><span class="selection-section-title">Actions</span></summary>
       <div class="selection-section-body stack">
         <div class="selection-actions">
-          <button class="btn outline" disabled>Open source draft</button>
-          <button class="btn outline">Open current released PDF</button>
-          <button class="btn outline">Open notes</button>
-          <button class="btn outline">Copy permalink</button>
-          <button class="btn danger">Unregister</button>
+        <button class="btn outline">Open source draft</button>
+        <button class="btn outline">Open current released PDF</button>
+        <button class="btn outline">Open notes</button>
+        <button class="btn outline">Evaluate changes with Claude</button>
+        <button class="btn outline">Copy permalink</button>
+        <button class="btn danger">Unregister</button>
         </div>
-        <p class="hint">Choose another supported file under the edit root.</p>
-        <label class="label" for="reassociate-path">Reassociate source</label>
-        <div class="directory-field">
-          <input id="reassociate-path" value="policies/HR/Backup_config.docx" aria-label="New edit-root-relative source path">
-          <button class="btn outline">Browse…</button>
-        </div>
-        <button class="btn">Reassociate source</button>
       </div>
     </details>
-        </aside>
+  </aside>
       </div>
       <section class="batch-selection-demo">
     <div>
