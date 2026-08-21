@@ -10,6 +10,8 @@ Own Windows deployment runbooks and administrative-template assets for DMS Deskt
 | --- | --- |
 | `windows/admx/DMSDesktop.admx` | Language-neutral Computer Configuration policy |
 | `windows/admx/en-US/DMSDesktop.adml` | English strings and presentation for that policy |
+| `windows/DMSDesktop-test-policy.reg` | Elevated local Phase 5 policy-validation fixture |
+| `windows/DMSDesktop-clear-test-policy.reg` | Elevated local Phase 5 policy-fixture cleanup |
 | `../windows-entra-deployment.md` | Operator guide for manual, GPO, and Intune Entra identifier deployment |
 
 ## Local Contracts
@@ -18,6 +20,7 @@ Own Windows deployment runbooks and administrative-template assets for DMS Deskt
 - One Computer (`class="Machine"`) policy writes only `EntraClientId` and `EntraTenantId` under `SOFTWARE\Policies\Videoclinic\DMS`.
 - Ship `en-US` only. Intune custom-template import accepts one language file per ADMX.
 - Do not put the ADMX tree in the NSIS installer. Releases attach `dms-desktop-admx.zip` for Central Store and Intune administrators.
+- The test-fixture pair writes or removes only the exact `EntraClientId` and `EntraTenantId` machine-policy names and is not GPO or Intune delivery evidence.
 
 ## Work Guidance
 

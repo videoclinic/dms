@@ -18,6 +18,30 @@ Use this path for a single workstation or when no computer policy is assigned.
 
 Windows computer policy, when present, supersedes this path. See [ADR-0028](design-decisions.md) and [ADR-0029](design-decisions.md).
 
+## Elevated local policy test fixture
+
+`deployment/windows/DMSDesktop-test-policy.reg` writes the supplied public
+client and tenant UUIDs to the exact machine-policy values (`EntraClientId` and
+`EntraTenantId`). Import it only from an elevated Windows session to exercise
+the installed app's policy precedence and Configuration state before a managed
+rollout:
+
+```text
+reg.exe import DMSDesktop-test-policy.reg
+reg.exe query HKLM\SOFTWARE\Policies\Videoclinic\DMS
+```
+
+Restart DMS Desktop and confirm both identifiers are **Managed by Windows
+policy**. This fixture does not establish GPO or Intune delivery evidence.
+Before the process-environment scenario or after the check, import
+`DMSDesktop-clear-test-policy.reg` from an elevated Windows session, then
+restart DMS Desktop. It removes only the two DMS policy values and preserves
+the containing registry key:
+
+```text
+reg.exe import DMSDesktop-clear-test-policy.reg
+```
+
 ## Domain Group Policy
 
 Standard Group Policy uses the language-neutral ADMX plus the `en-US` ADML from a Central Store.[1]

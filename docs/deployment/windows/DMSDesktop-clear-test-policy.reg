@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; Elevated local Phase 5 cleanup fixture. This is not GPO or Intune delivery evidence.
+; Remove only the two DMS machine-policy values; do not delete the containing key.
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Videoclinic\DMS]
+"EntraClientId"=-
+"EntraTenantId"=-

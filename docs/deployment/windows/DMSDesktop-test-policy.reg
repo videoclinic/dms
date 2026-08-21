@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; Elevated local Phase 5 fixture. This is not GPO or Intune delivery evidence.
+; Values are public Microsoft Entra identifiers; no credential or token is stored.
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Videoclinic\DMS]
+"EntraClientId"="af905150-f91a-4ef3-9e50-3e2fcd46a155"
+"EntraTenantId"="8ca54532-1c5c-4c0e-bfea-44304982f34c"
