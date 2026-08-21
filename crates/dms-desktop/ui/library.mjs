@@ -966,6 +966,7 @@ function workflowEvidenceMarkup(events) {
   }
   if (current.events.length > 0) intervals.push(current);
 
+  let expandNewestActorBlock = true;
   return intervals.map((interval) => {
     const groups = [];
     const groupsByActor = new Map();
@@ -983,7 +984,9 @@ function workflowEvidenceMarkup(events) {
       const newest = workflowEventTime(group.events[0].body ?? {});
       const oldest = workflowEventTime(group.events.at(-1).body ?? {});
       const span = newest === oldest ? newest : `${newest} — ${oldest}`;
-      return `<details class="workflow-actor-block" open><summary>Changes by ${escapeHtml(group.label)} · ${group.events.length} ${group.events.length === 1 ? "event" : "events"} · ${escapeHtml(span)}</summary>${group.events.map(workflowEventMarkup).join("")}</details>`;
+      const open = expandNewestActorBlock ? " open" : "";
+      expandNewestActorBlock = false;
+      return `<details class="workflow-actor-block"${open}><summary>Changes by ${escapeHtml(group.label)} · ${group.events.length} ${group.events.length === 1 ? "event" : "events"} · ${escapeHtml(span)}</summary>${group.events.map(workflowEventMarkup).join("")}</details>`;
     }).join("");
     return `<section class="workflow-interval"><h5>${escapeHtml(interval.label)}</h5>${blocks}</section>`;
   }).join("");

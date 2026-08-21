@@ -128,8 +128,9 @@ macOS.
   effective target version, labels later Next minor options **approval
   optional**, keeps Manual major/minor disabled until Manual target is
   selected. **Version history & changes** owns the per-person, release-interval
-  workflow evidence and its verification verdict; it is separate from Revision
-  cycle. There is no **Begin revision** control: library
+  workflow evidence and its verification verdict; only its newest actor block
+  starts expanded, while older actor blocks start folded. It is separate from
+  Revision cycle. There is no **Begin revision** control: library
   load and document selection reconcile Draft/Released from the draft digest
   versus the latest release. The adapter supplies lifecycle availability and precondition explanations
   rather than duplicating core transitions in the frontend. `mailto:` delivery

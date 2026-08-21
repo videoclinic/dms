@@ -39,6 +39,8 @@
    its nested fine-grained events show type, timestamp, changelog or decision or
    operator comment, and requested target version/mode when present. Failed,
    rejected, cancelled, and changes-requested reviews remain in that history.
+   Only the first actor block in the newest interval is initially expanded;
+   every older actor block starts folded.
    The in-app pane displays no event hash, predecessor hash, event ID, or revision
    digest; its disclosure summary retains the Verify workflow verdict. Canonical
    event retention and full-fidelity CAP-0012 exports are unchanged.

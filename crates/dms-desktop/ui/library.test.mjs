@@ -599,6 +599,8 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /Current draft work/);
   assert.match(markup, /V1\.3/);
   assert.equal((markup.match(/class="workflow-actor-block"/g) || []).length, 5);
+  assert.equal((markup.match(/class="workflow-actor-block" open/g) || []).length, 1);
+  assert.match(markup, /Current draft work[\s\S]*class="workflow-actor-block" open/);
   assert.match(markup, /Changes by Local Editor/);
   assert.match(markup, /Changes by Eva Editor/);
   assert.match(markup, /Changes by Release Operator/);
