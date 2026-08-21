@@ -28,6 +28,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
+| [CHG-0028](archive/CHG-0028-document-pane-defaults.md) | Document-pane initial disclosure state | done | CAP-0006, CAP-0011, CAP-0015 |
 | [CHG-0027](archive/CHG-0027-version-history-discoverability.md) | Discoverable version history and person-consolidated changes | done | CAP-0006, CAP-0011, CAP-0015 |
 | [CHG-0026](archive/CHG-0026-person-consolidated-workflow-evidence.md) | Person-consolidated workflow evidence without digest values | done | CAP-0011 |
 | [CHG-0023](archive/CHG-0023-os-level-dms-uri-registration.md) | OS-level `dms://` URI handler registration | done | CAP-0020 |

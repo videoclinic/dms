@@ -12,7 +12,6 @@ import {
   createInitialState,
   defaultPreferences,
   finishFormSubmission,
-  focusVersionHistorySummary,
   lifecycleFailureLibraryState,
   lifecycleSuccessLibraryState,
   notesLibraryReturnTarget,
@@ -74,27 +73,6 @@ test("an active form submission suppresses duplicate IPC dispatch", () => {
   finishFormSubmission(form, submitter);
 });
 
-test("opening version history focuses its summary without a backend request", () => {
-  const calls = [];
-  const summary = {
-    focus(options) { calls.push(["focus", options]); },
-    scrollIntoView(options) { calls.push(["scroll", options]); },
-  };
-  const document_ = {
-    querySelector(selector) {
-      calls.push(["query", selector]);
-      return summary;
-    },
-  };
-
-  assert.equal(focusVersionHistorySummary(document_), true);
-  assert.deepEqual(calls, [
-    ["query", '[data-library-section="history"] > summary'],
-    ["focus", { preventScroll: true }],
-    ["scroll", { block: "nearest" }],
-  ]);
-  assert.equal(focusVersionHistorySummary({ querySelector: () => null }), false);
-});
 
 test("a failed decision consumes the one-time approver sign-in in frontend state", () => {
   const library = {

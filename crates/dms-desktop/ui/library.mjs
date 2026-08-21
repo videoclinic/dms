@@ -44,10 +44,10 @@ export function toggleLibraryPaneFold(library, side) {
 }
 
 export const DEFAULT_SELECTION_OPEN = {
-  control: true,
-  schedule: true,
-  revision: true,
-  history: true,
+  control: false,
+  schedule: false,
+  revision: false,
+  history: false,
   releases: true,
   actions: true,
 };
@@ -67,10 +67,6 @@ export function setSelectionSectionOpen(library, key, isOpen) {
       [key]: Boolean(isOpen),
     },
   };
-}
-
-export function openVersionHistory(library) {
-  return setSelectionSectionOpen(library, "history", true);
 }
 
 export function createLibraryState() {
@@ -1145,7 +1141,7 @@ function selectionMarkup(library) {
     : `<div class="document-control-editor" aria-labelledby="document-control-editor-heading"><h4 id="document-control-editor-heading">Edit document control data</h4><p class="source-path">Applies to ${escapeHtml(detail.source_name)} · ${escapeHtml(detail.relative_path)}</p>${library.detail_error ? `<p class="library-detail-error" role="alert">${escapeHtml(library.detail_error)}</p>` : ""}${ownerSelectable ? "" : '<p class="library-detail-error" role="status">No eligible Microsoft Entra owner is available. Identity placeholders and legacy owner text are display-only.</p>'}<form id="library-document-control-form"><div class="document-control-fields"><label>Title<input name="title" required value="${escapeHtml(detail.control.title)}"></label><label>Document number<input name="documentNumber" value="${escapeHtml(detail.control.document_number ?? "")}"></label><label>Document type<select name="documentType"><option value="">Not set</option>${documentTypeOptions}</select></label><label>Owner<select name="ownerObjectId" required ${ownerSelectable ? "" : "disabled"}>${unresolvedOwnerOption}${ownerOptions}</select></label></div><button class="button" type="submit" ${ownerSelectable ? "" : "disabled"}>Save document control</button></form><form id="library-confidentiality-form" class="confidentiality-editor"><label>Confidentiality override<select name="confidentialityTypeId"><option value="">Use inherited folder policy</option>${confidentialityOptions}</select></label><button class="button secondary" type="submit">Apply confidentiality</button></form></div>`;
   const openAttr = (key) => (selectionSectionOpen(library, key) ? " open" : "");
   const section = (key, title, body, extraClass = "") =>
-    `<details${key === "history" ? ' id="library-version-history"' : ""} class="selection-section${extraClass ? ` ${extraClass}` : ""}" data-library-section="${key}"${openAttr(key)}><summary><span class="selection-section-chevron" aria-hidden="true"></span><span class="selection-section-title">${title}</span><span class="selection-section-hint" aria-hidden="true"></span></summary><div class="selection-section-body">${body}</div></details>`;
+    `<details class="selection-section${extraClass ? ` ${extraClass}` : ""}" data-library-section="${key}"${openAttr(key)}><summary><span class="selection-section-chevron" aria-hidden="true"></span><span class="selection-section-title">${title}</span><span class="selection-section-hint" aria-hidden="true"></span></summary><div class="selection-section-body">${body}</div></details>`;
   const controlSummary = `<dl class="selection-details"><dt>Document type</dt><dd>${escapeHtml(detail.control.document_type ?? "Not set")}</dd><dt>Owner</dt><dd>${escapeHtml(identityLabel(currentOwner, "Not set"))}</dd><dt>Confidentiality</dt><dd>${escapeHtml(confidentiality?.label ?? "Not configured")}${confidentiality ? ` · ${escapeHtml(confidentiality.document_override ? "override" : `from ${confidentiality.source_folder}`)}` : ""}</dd><dt>Editor</dt><dd>${escapeHtml(role(roles?.editor, "<editor>"))}</dd><dt>Approver</dt><dd>${escapeHtml(role(roles?.approver, "Not configured"))}</dd></dl>`;
   const controlBody = `${controlSummary}${editor}`;
   const reassociatePath = library.reassociate_path || detail.relative_path;
@@ -1168,9 +1164,8 @@ function selectionMarkup(library) {
   const lostBanner = sourceLost
     ? '<p class="library-detail-error" role="status">The draft file is not at the stored path. Most actions stay disabled until you reassociate the source.</p>'
     : "";
-  const historyEntry = `<button class="button secondary" type="button" data-library-open-history aria-controls="library-version-history">View version history &amp; changes</button><p class="source-path">${release ? `Current release · V${escapeHtml(release.version)}` : "No released version yet"}</p>`;
   return selectionScroll(
-    `<div class="selection-header"><div class="selection-header-badges">${membershipBadge}${lifecycleBadge}</div><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><h3>${escapeHtml(detail.control.title)}</h3>${detail.control.document_number ? `<p class="document-number">${escapeHtml(detail.control.document_number)}</p>` : ""}${lostBanner}<div class="source-identity"><strong>Source file</strong><span>${escapeHtml(detail.source_name)}</span><small>${escapeHtml(detail.relative_path)}</small></div>${historyEntry}${section("control", "Document control data", controlBody)}${section("schedule", "Document review schedule", scheduleMarkup)}${section("revision", "Revision cycle", sourceLost ? '<p class="source-path">Revision cycle actions are unavailable while the source is Lost source.</p>' : lifecyclePanelMarkup(library, detail))}${section("history", "Version history &amp; changes", versionHistoryMarkup(detail))}${section("releases", "Releases", releasesBody)}`,
+    `<div class="selection-header"><div class="selection-header-badges">${membershipBadge}${lifecycleBadge}</div><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><h3>${escapeHtml(detail.control.title)}</h3>${detail.control.document_number ? `<p class="document-number">${escapeHtml(detail.control.document_number)}</p>` : ""}${lostBanner}<div class="source-identity"><strong>Source file</strong><span>${escapeHtml(detail.source_name)}</span><small>${escapeHtml(detail.relative_path)}</small></div>${section("control", "Document control data", controlBody)}${section("schedule", "Document review schedule", scheduleMarkup)}${section("revision", "Revision cycle", sourceLost ? '<p class="source-path">Revision cycle actions are unavailable while the source is Lost source.</p>' : lifecyclePanelMarkup(library, detail))}${section("history", "Version history &amp; changes", versionHistoryMarkup(detail))}${section("releases", "Releases", releasesBody)}`,
     actionsFooter,
   );
 }

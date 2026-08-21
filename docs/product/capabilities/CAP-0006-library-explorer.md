@@ -130,9 +130,6 @@
      confidentiality with its source and inherited/overridden status, effective
      editor/approver, current release, draft-newer marker)
    - **document actions** for that selection
-   Directly below Source file identity, **View version history & changes** opens
-   the existing history topic in the same pane; it does not create a new
-   activity or reload the document.
    CAP-0015 owns field rules and revision/obsolescence semantics; CAP-0006 owns
    navigation, selection, and pane placement. Its **Document control data**,
    **Document review schedule**, **Revision cycle**, **Version history &
@@ -145,7 +142,9 @@
    summary stays fully visible at heading height. Unfolding it shows every
    action; the main details scroller shrinks first. The
    selection header (including lifecycle badge) and Source file identity remain
-   visible. Section fold
+   visible. A fresh Library activity expands **Releases** and folds **Document
+   control data**, **Document review schedule**, **Revision cycle**, and
+   **Version history & changes**; **Actions** remains expanded. Section fold
    open/closed state, including Actions, is session-only and survives document
    switches within the Library activity. The centre/details divider is pointer- and
    keyboard-resizable for the active Library session between 280 and 640 pixels
@@ -176,8 +175,7 @@
      lifecycle allows (CAP-0002 / CAP-0015)
    - **Mark obsolete** (CAP-0015)
    - **Notes** (CAP-0003)
-   - **View version history & changes** (CAP-0011) — a visible direct entry to
-     the pane topic; it unfolds and focuses that topic without a backend call
+   - **Version history & changes** (CAP-0011)
    - **Verify release integrity** (CAP-0004)
    - **Start periodic review** when due rules allow (CAP-0017)
    - **Reassociate source** when the selected document is **Lost source**

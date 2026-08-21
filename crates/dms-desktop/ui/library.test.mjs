@@ -24,7 +24,6 @@ import {
   libraryOpenRequest,
   membershipKind,
   normalizeLibraryPath,
-  openVersionHistory,
   paginateLibraryEntries,
   previewTargetVersions,
   resizeLibraryDetailWidth,
@@ -587,7 +586,7 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /Employee handbook/);
   assert.match(markup, /data-library-open-source/);
   assert.match(markup, /data-library-open-release/);
-  assert.match(markup, /data-library-open-history/);
+  assert.doesNotMatch(markup, /data-library-open-history|View version history &amp; changes/);
   assert.match(markup, /Create release candidate/);
   assert.match(markup, /Review content-check override reason \(only when needed\)/);
   assert.match(markup, /Next minor · V1\.3 \(approval optional\)/);
@@ -596,7 +595,6 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /data-candidate-manual-field hidden/);
   assert.match(markup, /name="manualMajor"[^>]* disabled/);
   assert.doesNotMatch(markup, /View workflow evidence|Canonical workflow evidence/);
-  assert.match(markup, /View version history &amp; changes/);
   assert.match(markup, /Version history &amp; changes · valid/);
   assert.match(markup, /Current draft work/);
   assert.match(markup, /V1\.3/);
@@ -686,7 +684,11 @@ test("library markup separates source Name from DMS Title and keeps actions in t
 
 test("selection section folds stay open or closed across document switches", () => {
   let library = createLibraryState();
-  assert.equal(selectionSectionOpen(library, "control"), true);
+  assert.equal(selectionSectionOpen(library, "control"), false);
+  assert.equal(selectionSectionOpen(library, "schedule"), false);
+  assert.equal(selectionSectionOpen(library, "revision"), false);
+  assert.equal(selectionSectionOpen(library, "history"), false);
+  assert.equal(selectionSectionOpen(library, "releases"), true);
   assert.equal(selectionSectionOpen(library, "actions"), true);
   library = setSelectionSectionOpen(library, "control", false);
   library = setSelectionSectionOpen(library, "schedule", false);
@@ -762,16 +764,15 @@ test("selection section folds stay open or closed across document switches", () 
   assert.match(markup, /data-library-section="actions"(?! open)/);
 });
 
-test("opening version history changes only its session-only fold state", () => {
-  let library = createLibraryState();
-  library = setSelectionSectionOpen(library, "history", false);
+test("fresh selection defaults foreground Releases without changing Actions", () => {
+  const library = createLibraryState();
 
-  const opened = openVersionHistory(library);
-
-  assert.equal(selectionSectionOpen(opened, "history"), true);
-  assert.equal(selectionSectionOpen(opened, "control"), true);
-  assert.equal(selectionSectionOpen(opened, "revision"), true);
-  assert.equal(selectionSectionOpen(opened, "actions"), true);
+  assert.equal(selectionSectionOpen(library, "control"), false);
+  assert.equal(selectionSectionOpen(library, "schedule"), false);
+  assert.equal(selectionSectionOpen(library, "revision"), false);
+  assert.equal(selectionSectionOpen(library, "history"), false);
+  assert.equal(selectionSectionOpen(library, "releases"), true);
+  assert.equal(selectionSectionOpen(library, "actions"), true);
 });
 
 test("library file actions map only to host-mediated document commands", () => {

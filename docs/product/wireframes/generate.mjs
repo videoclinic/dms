@@ -1282,9 +1282,8 @@ function documentControlDataSelectionPane() {
       <div class="mono" style="margin-top:0.3rem">Handbook.docx</div>
       <div class="muted" style="font-size:0.75rem;margin-top:0.2rem">Folder: policies/HR</div>
     </div>
-    <button class="btn outline" style="width:100%;margin-top:0.7rem">View version history &amp; changes <span class="muted">· V1.3 current</span></button>
     <p class="hint">Document topics scroll here. Actions stays docked at the pane bottom and uses the same session-only fold state.</p>
-    <details class="selection-section" open>
+    <details class="selection-section">
       <summary><span class="selection-section-title">Document control data</span><span class="selection-section-meta">Mutable · managed in DMS Desktop</span></summary>
       <div class="selection-section-body">${kv([
         ["Title", "HR Data Privacy Policy"],
@@ -1303,7 +1302,7 @@ function documentControlDataSelectionPane() {
         <button class="btn">Save document control</button>
       </div></div>
     </details>
-    <details class="selection-section" open>
+    <details class="selection-section">
       <summary><span class="selection-section-title">Document review schedule</span><span class="selection-section-meta">Mutable</span></summary>
       <div class="selection-section-body">${kv([
         ["Resolved interval", "12 months (workspace default)"],
@@ -1315,7 +1314,7 @@ function documentControlDataSelectionPane() {
         <button class="btn outline" disabled>Update review schedule</button>
       </div></div>
     </details>
-    <details class="selection-section" open>
+    <details class="selection-section">
       <summary><span class="selection-section-title">Revision cycle</span></summary>
       <div class="selection-section-body stack">
         <p class="muted" style="font-size:0.85rem;margin:0">Create a release candidate here in the workspace (not an external upload). Lifecycle is <code>released</code> while the draft matches the current release digest, and becomes <code>draft</code> when the draft changes or was never released. PDFs and history remain preserved.</p>
@@ -1332,7 +1331,7 @@ function documentControlDataSelectionPane() {
         <p class="hint">Document-control-data changes while a review is open invalidate that review. Copy permalink uses workspace + document IDs only.</p>
       </div>
     </details>
-    <details class="selection-section" open>
+    <details class="selection-section">
       <summary><span class="selection-section-title">Version history &amp; changes</span><span class="selection-section-meta">Workflow valid</span></summary>
       <div class="selection-section-body stack">
         <p class="hint" style="margin:0">Versions and related workflow changes are grouped by the recorded actor. Expand a person to inspect individual events.</p>

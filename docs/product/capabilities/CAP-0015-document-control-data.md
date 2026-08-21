@@ -96,7 +96,8 @@
     first; the Actions body scrolls only if the pane is shorter than the
     heading plus those actions. The document
     identity, lifecycle badge, and Source file identity remain visible while any
-    section is folded. Fold open/closed state, including Actions, is
+    section is folded. A fresh Library activity expands **Releases** and folds
+    the other four main topics; **Actions** remains expanded. Fold open/closed state, including Actions, is
     session-only Library UI state shared across document switches in the open
     Library activity; it is not stored in `.dms`, preferences, or saved views.
     When a
@@ -136,8 +137,7 @@
     effective target version for Next minor / Next major / Manual, labels later
     Next minor options **approval optional**, and keeps Manual major/minor
     disabled unless Manual target is selected. **Version history & changes** is
-    a separate foldable topic reached from its direct entry below Source file
-    identity; it is not part of Revision cycle. There is no **Begin revision** action:
+    a separate foldable topic; it is not part of Revision cycle. There is no **Begin revision** action:
     Draft/Released follows CAP-0002 digest rules. These actions are not offered
     as multi-select batch actions unless a future CAP explicitly allows bulk
     obsolescence.

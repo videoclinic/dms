@@ -102,13 +102,12 @@ macOS.
   document-control editing, the document confidentiality override, candidate
   creation, review decision, release, local lifecycle actions, and canonical
   workflow evidence; file rows remain selection-only and preserve exact source
-  names. Below Source file identity, **View version history & changes** unfolds
-  and focuses the existing history topic without a backend call or a new
-  activity. For one selected library document it groups **Document control
+  names. For one selected library document it groups **Document control
   data**, **Document review schedule**, **Revision cycle**, **Version history &
   changes**, and **Releases** into frameless independently foldable sections
   with a visible disclosure chevron and Expand/Collapse cue on each summary.
-  Those topics live in the pane's main document-detail scroller. **Actions** is a separately foldable disclosure
+  A fresh Library activity expands **Releases** and folds the other four main
+  topics; later fold choices remain session-only. Those topics live in the pane's main document-detail scroller. **Actions** is a separately foldable disclosure
   docked at the bottom of the pane, expanded by default, using the same chevron
   and cue; its summary stays fully visible at heading height, and unfolding it
   shows every action while the main details scroller shrinks first. Its

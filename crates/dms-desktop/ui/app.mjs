@@ -13,7 +13,6 @@ import {
   libraryOpenRequest,
   membershipKind,
   normalizeLibraryPath,
-  openVersionHistory,
   resizeLibraryDetailWidth,
   resizeLibraryTreeWidth,
   selectedEntries,
@@ -107,14 +106,6 @@ export function lifecycleSuccessLibraryState(library, lifecycleAction, detail) {
   return lifecycleAction === "decide_review"
     ? { ...updated, approver_sign_in: null }
     : updated;
-}
-
-export function focusVersionHistorySummary(document_) {
-  const summary = document_.querySelector('[data-library-section="history"] > summary');
-  if (!summary) return false;
-  summary.focus({ preventScroll: true });
-  summary.scrollIntoView({ block: "nearest" });
-  return true;
 }
 
 export function defaultPreferences() {
@@ -1336,12 +1327,6 @@ async function handleLibraryClick(event) {
   if (fold) {
     appState = { ...appState, library: toggleLibraryPaneFold(appState.library, fold) };
     render(appState);
-    return true;
-  }
-  if (event.target.closest("[data-library-open-history]")) {
-    appState = { ...appState, library: openVersionHistory(appState.library) };
-    render(appState);
-    focusVersionHistorySummary(document);
     return true;
   }
   const visibility = event.target.closest("[data-library-visibility]")?.dataset.libraryVisibility;
