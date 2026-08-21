@@ -12,7 +12,7 @@ existing release intervals and per-person consolidated event blocks.
 **Entry checkpoint:** Operator approved the review wireframe and plan in chat on 2026-08-21.
 **Context sources:** `docs/changes/AGENTS.md` (Local Contracts); `docs/product/capabilities/CAP-0006-library-explorer.md` (Outcomes 2, 6, 8); `docs/product/capabilities/CAP-0011-approval-evidence.md` (Outcome 4); `docs/product/capabilities/CAP-0015-document-control-data.md` (Outcome 11); `crates/dms-desktop/ui/library.mjs` (`DEFAULT_SELECTION_OPEN`, `workflowEvidenceMarkup`, `lifecyclePanelMarkup`, `selectionMarkup`); `crates/dms-desktop/ui/app.mjs` (`handleLibraryClick`, `handleLibraryToggle`); `crates/dms-desktop/ui/library.test.mjs` (selection-pane and fold-state coverage); `crates/dms-desktop/ui/app.test.mjs` (Library click orchestration); `docs/product/wireframes/generate.mjs` (CAP-0006 and CAP-0011 screens).
 **Produces:** A discoverable, direct entry to the existing per-document version history, updated CAP contracts and production wireframes, frontend regression coverage, and a closed implementation receipt.
-**Status:** done — all verification gates passed in commit `7572c11`.
+**Status:** done — all verification gates passed.
 **Filename convention:** The repository's active-record contract requires `CHG-*.md`; `P0300` is this CHG's execution-order authority and does not change that filename convention.
 
 | Field | Value |
@@ -104,7 +104,7 @@ tests, CAPs, and generated wireframes; no workspace data migration is involved.
 | 0 | Operator review and approval | done (operator approval in chat, 2026-08-21) | Operator explicitly approves the linked review wireframe and this CHG in chat; then update this row and Status before any implementation edit |
 | 1 | Make the existing history directly discoverable in the Library pane | done (`node --test crates/dms-desktop/ui/library.test.mjs crates/dms-desktop/ui/app.test.mjs`, 63 passed) | `node --test crates/dms-desktop/ui/library.test.mjs` and `node --test crates/dms-desktop/ui/app.test.mjs` exit 0 with direct-entry, focus/open, placement, and session-fold-state assertions |
 | 2 | Update capability contracts and CAP-linked wireframes | done (`node docs/product/wireframes/generate.mjs`; Chrome exported CAP-0006/CAP-0011 PNGs; 21 HTML + 21 PNG pairs) | CAP-0006, CAP-0011, and CAP-0015 state the new topic and direct entry; `node docs/product/wireframes/generate.mjs` exits 0; CAP-0006/CAP-0011 HTML+PNG exports and manifest remain synchronized |
-| 3 | Run workspace gates and close the record | done (`7572c11`; `cargo fmt --check`; `cargo clippy --workspace --all-targets -- -D warnings`; `cargo test --workspace`; `node --test crates/dms-desktop/ui/*.test.mjs`, 107 passed) | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `node --test crates/dms-desktop/ui/*.test.mjs` all exit 0; CHG is archived and indexes are accurate |
+| 3 | Run workspace gates and close the record | done (`cargo fmt --check`; `cargo clippy --workspace --all-targets -- -D warnings`; `cargo test --workspace`; `node --test crates/dms-desktop/ui/*.test.mjs`, 107 passed) | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `node --test crates/dms-desktop/ui/*.test.mjs` all exit 0; CHG is archived and indexes are accurate |
 
 Mark a phase `in-progress` while running it, `done (<evidence>)` once its gate
 passes, and `pending` otherwise.
