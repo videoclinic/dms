@@ -522,7 +522,7 @@ button { cursor: pointer; }
 .configuration-template .configuration-enabled { max-width: 700px; font-weight: 500; }
 .configuration-form { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; padding-top: 14px; border-top: 1px solid #edf1f3; }
 .configuration-form label { display: grid; min-width: 220px; flex: 1; gap: 6px; font-size: 13px; font-weight: 700; }
-.configuration-form input, .configuration-form select, .configuration-type-row input { width: 100%; height: 38px; padding: 0 10px; background: white; border: 1px solid #bdc9d2; border-radius: 7px; }
+.configuration-form input, .configuration-form select, .configuration-type-row input, .configuration-type-row select { width: 100%; height: 38px; padding: 0 10px; background: white; border: 1px solid #bdc9d2; border-radius: 7px; }
 .configuration-form input:disabled { color: #5f6f7b; background: #e8ecef; cursor: default; }
 .configuration-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 14px 18px; background: white; border: 1px solid #dfe5ea; border-radius: 10px; }
 .configuration-summary > div { display: grid; flex: 1; gap: 3px; }
@@ -546,6 +546,7 @@ button { cursor: pointer; }
 .configuration-type-row.create { grid-template-columns: minmax(130px, .7fr) minmax(180px, 1fr) auto auto; }
 .configuration-type-row.confidentiality { grid-template-columns: minmax(180px, 1fr) minmax(120px, .6fr) auto auto auto; }
 .configuration-type-row.confidentiality.create { grid-template-columns: minmax(130px, .7fr) minmax(180px, 1fr) auto auto auto; }
+.configuration-type-row.confidentiality.migration { grid-template-columns: minmax(120px, .6fr) minmax(240px, 1fr) auto; }
 .configuration-enabled { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 13px; }
 .configuration-enabled input { width: auto; height: auto; }
 .configuration-secondary { display: grid; gap: 14px; }
@@ -573,5 +574,5 @@ button { cursor: pointer; }
   .configuration-routes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .configuration-grid, .configuration-defaults-grid { grid-template-columns: 1fr; }
   .configuration-notification-form > .configuration-grid { grid-template-columns: 1fr; }
-  .configuration-type-row, .configuration-type-row.create, .configuration-type-row.confidentiality, .configuration-type-row.confidentiality.create { grid-template-columns: 1fr; }
+  .configuration-type-row, .configuration-type-row.create, .configuration-type-row.confidentiality, .configuration-type-row.confidentiality.create, .configuration-type-row.confidentiality.migration { grid-template-columns: 1fr; }
 }

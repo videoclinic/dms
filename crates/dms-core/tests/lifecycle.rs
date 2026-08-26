@@ -1594,6 +1594,98 @@ fn markdown_frontmatter_is_rewritten_from_dms_control_before_review() {
 }
 
 #[test]
+fn confidentiality_type_migration_replaces_only_the_next_markdown_release() {
+    let mut fixture = Fixture::new("# Handbook\n", NotificationTransport::Smtp);
+    fixture
+        .workspace
+        .configure_confidentiality_type("restricted", "Restricted", true)
+        .expect("replacement type");
+    let mut graph = fixture.graph();
+    fixture
+        .workspace
+        .submit_candidate(
+            fixture.candidate_request(TargetSelection::NextMajor),
+            &mut graph,
+            &mut FakeNotifier::accepted(),
+        )
+        .expect("old-type candidate");
+    assert!(fs::read_to_string(&fixture.source_path)
+        .expect("frontmatter")
+        .contains("confidentiality: internal"));
+
+    fixture
+        .workspace
+        .migrate_confidentiality_type("internal", "restricted")
+        .expect("type migration");
+    assert_eq!(
+        fixture
+            .workspace
+            .candidates(fixture.document_id)
+            .expect("candidates")[0]
+            .status,
+        CandidateStatus::Invalidated
+    );
+    assert!(fs::read_to_string(&fixture.source_path)
+        .expect("frontmatter")
+        .contains("confidentiality: internal"));
+
+    let submission = fixture
+        .workspace
+        .submit_candidate(
+            fixture.candidate_request(TargetSelection::NextMajor),
+            &mut graph,
+            &mut FakeNotifier::accepted(),
+        )
+        .expect("replacement-type candidate");
+    let candidate = fixture
+        .workspace
+        .candidates(fixture.document_id)
+        .expect("candidates")
+        .into_iter()
+        .find(|candidate| candidate.id == submission.candidate_id)
+        .expect("active candidate");
+    assert_eq!(candidate.metadata.confidentiality.type_id, "restricted");
+    assert!(fs::read_to_string(&fixture.source_path)
+        .expect("frontmatter")
+        .contains("confidentiality: restricted"));
+
+    fixture
+        .workspace
+        .decide_review(
+            fixture.document_id,
+            ReviewDecision::Approved,
+            None,
+            &mut graph,
+            &mut FakeNotifier::accepted(),
+        )
+        .expect("approval");
+    let outcome = fixture
+        .workspace
+        .release_candidate(
+            fixture.document_id,
+            None,
+            &mut graph,
+            &mut FakeNotifier::default(),
+            &mut FakeExporter::successful(),
+        )
+        .expect("release");
+    assert_eq!(outcome.release.confidentiality.type_id, "restricted");
+    assert!(outcome
+        .release
+        .relative_pdf_path
+        .to_string_lossy()
+        .ends_with("_restricted.pdf"));
+    assert_eq!(
+        fixture
+            .workspace
+            .effective_confidentiality(fixture.document_id)
+            .expect("current confidentiality")
+            .type_id,
+        "internal"
+    );
+}
+
+#[test]
 fn false_positive_override_is_revision_bound_and_hash_chained() {
     let mut fixture = Fixture::new(
         "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",

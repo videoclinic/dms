@@ -172,7 +172,11 @@ macOS.
   policy, lock takeover, and confirmation are supplied to `dms-core`.
 - Configuration remains one session activity across Workspace, Document
   defaults, Workflow, and Notifications routes. Confidentiality catalogue and
-  identity-source management are in-place secondary surfaces. Folder role
+  identity-source management are in-place secondary surfaces. Confidentiality
+  type migrations retain the source ID and leave reference validation,
+  non-cyclic enabled-target resolution, candidate invalidation, and Markdown
+  projection to `dms-core`; the frontend submits only explicit source and
+  replacement IDs. Folder role
   pickers refresh then use the core-owned eligible-person cache. The identity
   surface accepts administrator-supplied app-global public-client/tenant IDs and
   a library-bound group ID, drives delegated device authorization, previews and

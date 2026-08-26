@@ -531,6 +531,9 @@ test("confidentiality catalogue is a secondary surface that returns to document 
 
   assert.match(markup, /Back to Document defaults/);
   assert.match(markup, /data-configuration-form="confidentiality-type"/);
+  assert.match(markup, /data-configuration-form="confidentiality-type-migration"/);
+  assert.match(markup, /Future release type/);
+  assert.match(markup, /IDs are retained metadata keys/);
   assert.match(markup, /Create confidentiality type/);
 });
 
@@ -721,6 +724,17 @@ test("configuration mutations map forms to narrow desktop commands", () => {
         enabled: true,
         workspaceDefault: false,
       },
+    },
+  );
+  assert.deepEqual(
+    configurationMutationRequest(
+      "confidentiality-type-migration",
+      new Map([["sourceTypeId", " internal "], ["replacementTypeId", " restricted "]]),
+      ".",
+    ),
+    {
+      command: "migrate_confidentiality_type",
+      arguments: { sourceTypeId: "internal", replacementTypeId: "restricted" },
     },
   );
 });

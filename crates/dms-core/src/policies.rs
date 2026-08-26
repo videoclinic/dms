@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs,
     path::{Component, Path},
 };
@@ -20,6 +20,8 @@ pub struct ConfidentialityType {
     pub id: String,
     pub label: String,
     pub enabled: bool,
+    #[serde(default)]
+    pub replacement_type_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -162,7 +164,15 @@ impl Workspace {
                 || self
                     .documents
                     .values()
-                    .any(|document| document.confidentiality_override.as_deref() == Some(id)))
+                    .any(|document| document.confidentiality_override.as_deref() == Some(id))
+                || self
+                    .confidentiality_types
+                    .values()
+                    .any(|configured| configured.replacement_type_id.as_deref() == Some(id))
+                || self
+                    .confidentiality_types
+                    .get(id)
+                    .is_some_and(|configured| configured.replacement_type_id.is_some()))
         {
             return Err(DmsError::ConfidentialityTypeInUse(id.to_owned()));
         }
@@ -170,11 +180,34 @@ impl Workspace {
             id: id.to_owned(),
             label: configured_text(label, "confidentiality label")?,
             enabled,
+            replacement_type_id: self
+                .confidentiality_types
+                .get(id)
+                .and_then(|configured| configured.replacement_type_id.clone()),
         };
         self.confidentiality_types
             .insert(configured.id.clone(), configured.clone());
         self.sync_all_registered_markdown_frontmatter()?;
         Ok(configured)
+    }
+
+    pub fn migrate_confidentiality_type(
+        &mut self,
+        source_type_id: &str,
+        replacement_type_id: &str,
+    ) -> Result<ConfidentialityType> {
+        let source_type_id = source_type_id.trim();
+        let replacement_type_id = replacement_type_id.trim();
+        validate_portable_id(source_type_id, DmsError::InvalidConfidentialityTypeId)?;
+        validate_portable_id(replacement_type_id, DmsError::InvalidConfidentialityTypeId)?;
+        self.validate_confidentiality_type_migration(source_type_id, replacement_type_id)?;
+
+        let mut source = self.require_confidentiality_type(source_type_id)?.clone();
+        source.replacement_type_id = Some(replacement_type_id.to_owned());
+        self.confidentiality_types
+            .insert(source.id.clone(), source.clone());
+        self.invalidate_stale_candidates();
+        Ok(source)
     }
 
     pub fn set_confidentiality_policy(
@@ -251,6 +284,20 @@ impl Workspace {
             label: configured.label.clone(),
             source_folder: policy.folder.clone(),
             document_override: false,
+        })
+    }
+
+    pub(crate) fn release_confidentiality(
+        &self,
+        document_id: Uuid,
+    ) -> Result<EffectiveConfidentiality> {
+        let current = self.effective_confidentiality(document_id)?;
+        let replacement = self.release_confidentiality_type(&current.type_id)?;
+        Ok(EffectiveConfidentiality {
+            type_id: replacement.id.clone(),
+            label: replacement.label.clone(),
+            source_folder: current.source_folder,
+            document_override: current.document_override,
         })
     }
 
@@ -381,6 +428,11 @@ impl Workspace {
                 self.require_enabled_confidentiality_type(type_id)?;
             }
         }
+        for (type_id, configured) in &self.confidentiality_types {
+            if let Some(replacement_type_id) = configured.replacement_type_id.as_deref() {
+                self.validate_confidentiality_type_migration(type_id, replacement_type_id)?;
+            }
+        }
         if self.identity_source.is_some() {
             let root = self
                 .workflow_policies
@@ -453,6 +505,53 @@ impl Workspace {
             return Err(DmsError::DisabledConfidentialityType(type_id.to_owned()));
         }
         Ok(configured)
+    }
+
+    fn validate_confidentiality_type_migration(
+        &self,
+        source_type_id: &str,
+        replacement_type_id: &str,
+    ) -> Result<()> {
+        self.require_confidentiality_type(source_type_id)?;
+        if source_type_id == replacement_type_id {
+            return Err(DmsError::InvalidConfidentialityTypeMigration {
+                from_type_id: source_type_id.to_owned(),
+                replacement: replacement_type_id.to_owned(),
+            });
+        }
+
+        let mut seen = BTreeSet::new();
+        let mut current = replacement_type_id.to_owned();
+        loop {
+            if !seen.insert(current.clone()) || current == source_type_id {
+                return Err(DmsError::InvalidConfidentialityTypeMigration {
+                    from_type_id: source_type_id.to_owned(),
+                    replacement: replacement_type_id.to_owned(),
+                });
+            }
+            let configured = self.require_enabled_confidentiality_type(&current)?;
+            let Some(next) = configured.replacement_type_id.as_deref() else {
+                return Ok(());
+            };
+            current = next.to_owned();
+        }
+    }
+
+    fn release_confidentiality_type(&self, type_id: &str) -> Result<&ConfidentialityType> {
+        let mut seen = BTreeSet::new();
+        let mut current = self.require_enabled_confidentiality_type(type_id)?;
+        loop {
+            if !seen.insert(current.id.clone()) {
+                return Err(DmsError::InvalidConfidentialityTypeMigration {
+                    from_type_id: type_id.to_owned(),
+                    replacement: current.id.clone(),
+                });
+            }
+            let Some(next) = current.replacement_type_id.as_deref() else {
+                return Ok(current);
+            };
+            current = self.require_enabled_confidentiality_type(next)?;
+        }
     }
 
     fn apply_role_update(

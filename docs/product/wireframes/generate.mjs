@@ -517,6 +517,7 @@ const CAPS = [
     id: "CAP-0008",
     file: "CAP-0008-confidentiality-classification",
     title: "Confidentiality policies",
+    status: "implemented",
     nav: "config",
     configSection: "document-defaults",
     subtitle: "Set the root default, then add only the folder exceptions that need a different confidentiality type.",
@@ -570,7 +571,19 @@ const CAPS = [
           })}
           <p class="hint">Remove restores the nearest remaining default. The edit-root policy is required and cannot be removed; review and release snapshots do not change.</p>
         </section>
-      </div>`,
+      </div>
+      <section class="card" style="margin-top:1rem">
+        <div class="row between mb"><div><span class="badge muted">Secondary configuration</span><h3 class="card-title" style="margin-top:0.5rem">Confidentiality type IDs</h3></div><button class="btn outline">← Back to Document defaults</button></div>
+        <p class="muted">IDs remain retained metadata keys. Policies and document overrides stay on the source ID; a migration uses an enabled replacement for future release candidates only.</p>
+        ${table(
+          ["Display label", "Retained type ID", "Future release type", "Action"],
+          [
+            ["Internal", "<code>internal</code>", "<select aria-label=\"Future release type for internal\" style=\"height:2rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.5rem;background:var(--background);color:var(--foreground)\"><option selected>Restricted (restricted)</option><option>Confidential (confidential)</option></select>", "<button class=\"btn outline\">Migrate future releases</button>"],
+            ["Restricted", "<code>restricted</code>", "<select aria-label=\"Future release type for restricted\" style=\"height:2rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.5rem;background:var(--background);color:var(--foreground)\"><option selected>Choose a replacement type</option><option>Internal (internal)</option><option>Confidential (confidential)</option></select>", "<button class=\"btn outline\">Migrate future releases</button>"],
+          ],
+        )}
+        <p class="hint">A migration invalidates an open candidate when its release classification changes. Registered Markdown frontmatter changes to the replacement ID while the next candidate is prepared; released records and PDFs remain unchanged.</p>
+      </section>`,
   },
   {
     id: "CAP-0009",

@@ -64,9 +64,10 @@ When implemented, the following must hold:
    person from that group (CAP-0019 / CAP-0021).
 7. **Confidentiality catalogue maintenance.** The operator can add, rename the
    display label of, and disable confidentiality types; their stable type IDs
-   never change. A type referenced by an inheriting folder policy or by a
-   historical release cannot be deleted; it can be disabled so future documents
-   cannot select it (CAP-0008).
+   never change or delete. A type referenced by an inheriting folder policy,
+   document override, or retained type-ID migration cannot be disabled. A
+   migration retains those source references and changes only the classification
+   snapshot used by future release candidates (CAP-0008).
 8. **Withdraw a release.** The operator can mark an active release as
    `withdrawn`. The PDF remains on disk, the workflow event records the
    withdrawal, and the explorer no longer surfaces the release as the

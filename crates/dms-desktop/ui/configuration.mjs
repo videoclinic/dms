@@ -256,12 +256,22 @@ function confidentialityTypesMarkup(state) {
   const rootTypeId = snapshot.confidentiality_policies.find((policy) => policy.folder === ".")?.type_id;
   const rows = snapshot.confidentiality_types.length === 0
     ? '<p class="subtle">No confidentiality types configured.</p>'
-    : snapshot.confidentiality_types.map((type) => `<form class="configuration-type-row confidentiality" data-configuration-form="confidentiality-type"><input type="hidden" name="id" value="${escapeHtml(type.id)}"><label><span class="visually-hidden">Label for ${escapeHtml(type.id)}</span><input name="label" required value="${escapeHtml(type.label)}"></label><code>${escapeHtml(type.id)}</code><label class="configuration-enabled"><input type="checkbox" name="enabled" ${type.enabled ? "checked" : ""}> Enabled</label><label class="configuration-enabled"><input type="checkbox" name="workspaceDefault" ${type.id === rootTypeId ? "checked" : ""}> Workspace default</label><button class="button secondary" type="submit">Save</button></form>`).join("");
+    : snapshot.confidentiality_types.map((type) => {
+      const replacements = snapshot.confidentiality_types
+        .filter((candidate) => candidate.enabled && candidate.id !== type.id);
+      const canMigrate = replacements.length > 0;
+      const replacementOptions = [
+        `<option value="" disabled ${type.replacement_type_id ? "" : "selected"}>Choose a replacement type</option>`,
+        ...replacements.map((candidate) => `<option value="${escapeHtml(candidate.id)}" ${candidate.id === type.replacement_type_id ? "selected" : ""}>${escapeHtml(candidate.label)} (${escapeHtml(candidate.id)})</option>`),
+      ].join("");
+      const migrationLabel = type.replacement_type_id ? "Update future-release migration" : "Migrate future releases";
+      return `<form class="configuration-type-row confidentiality" data-configuration-form="confidentiality-type"><input type="hidden" name="id" value="${escapeHtml(type.id)}"><label><span class="visually-hidden">Label for ${escapeHtml(type.id)}</span><input name="label" required value="${escapeHtml(type.label)}"></label><code>${escapeHtml(type.id)}</code><label class="configuration-enabled"><input type="checkbox" name="enabled" ${type.enabled ? "checked" : ""}> Enabled</label><label class="configuration-enabled"><input type="checkbox" name="workspaceDefault" ${type.id === rootTypeId ? "checked" : ""}> Workspace default</label><button class="button secondary" type="submit">Save</button></form><form class="configuration-type-row confidentiality migration" data-configuration-form="confidentiality-type-migration"><input type="hidden" name="sourceTypeId" value="${escapeHtml(type.id)}"><code>${escapeHtml(type.id)}</code><label>Future release type<select name="replacementTypeId" required ${canMigrate ? "" : "disabled"}>${replacementOptions}</select></label><button class="button secondary" type="submit" ${canMigrate ? "" : "disabled"}>${migrationLabel}</button></form>`;
+    }).join("");
   const firstType = snapshot.confidentiality_types.length === 0;
   const firstDefault = firstType
     ? '<input type="hidden" name="workspaceDefault" value="on"><label class="configuration-enabled"><input type="checkbox" checked disabled> Workspace default</label>'
     : '<label class="configuration-enabled"><input type="checkbox" name="workspaceDefault"> Workspace default</label>';
-  return `<section class="configuration-secondary"><button class="button secondary" type="button" data-configuration-secondary-close>← Back to Document defaults</button><section class="card configuration-card configuration-catalogue"><span class="badge">Secondary configuration</span><h2>Confidentiality types</h2><p>IDs are stable metadata keys. Labels can change; types in use cannot be disabled.</p>${rows}<form class="configuration-type-row confidentiality create" data-configuration-form="confidentiality-type"><label><span class="visually-hidden">New confidentiality type ID</span><input name="id" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="type-id"></label><label><span class="visually-hidden">New confidentiality type label</span><input name="label" required placeholder="Display label"></label><label class="configuration-enabled"><input type="checkbox" name="enabled" checked> Enabled</label>${firstDefault}<button class="button" type="submit">Create confidentiality type</button></form></section></section>`;
+  return `<section class="configuration-secondary"><button class="button secondary" type="button" data-configuration-secondary-close>← Back to Document defaults</button><section class="card configuration-card configuration-catalogue"><span class="badge">Secondary configuration</span><h2>Confidentiality types</h2><p>IDs are retained metadata keys. A migration keeps existing policies and document overrides on the old ID, then uses the selected enabled replacement for future releases.</p>${rows}<form class="configuration-type-row confidentiality create" data-configuration-form="confidentiality-type"><label><span class="visually-hidden">New confidentiality type ID</span><input name="id" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="type-id"></label><label><span class="visually-hidden">New confidentiality type label</span><input name="label" required placeholder="Display label"></label><label class="configuration-enabled"><input type="checkbox" name="enabled" checked> Enabled</label>${firstDefault}<button class="button" type="submit">Create confidentiality type</button></form></section></section>`;
 }
 
 function roleSelectMarkup(snapshot, policy, roleName, rootFolder) {
@@ -522,6 +532,15 @@ export function configurationMutationRequest(kind, values, selectedFolder) {
         label: formValue(values, "label"),
         enabled: values.has("enabled"),
         workspaceDefault: values.has("workspaceDefault"),
+      },
+    };
+  }
+  if (kind === "confidentiality-type-migration") {
+    return {
+      command: "migrate_confidentiality_type",
+      arguments: {
+        sourceTypeId: formValue(values, "sourceTypeId"),
+        replacementTypeId: formValue(values, "replacementTypeId"),
       },
     };
   }

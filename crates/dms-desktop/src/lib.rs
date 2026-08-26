@@ -734,6 +734,19 @@ fn configure_confidentiality_type(
 }
 
 #[tauri::command]
+fn migrate_confidentiality_type(
+    edit_root: String,
+    source_type_id: String,
+    replacement_type_id: String,
+) -> Result<WorkspaceConfiguration, String> {
+    mutate_workspace_configuration(Path::new(&edit_root), |workspace| {
+        workspace
+            .migrate_confidentiality_type(&source_type_id, &replacement_type_id)
+            .map(|_| ())
+    })
+}
+
+#[tauri::command]
 fn set_confidentiality_policy(
     edit_root: String,
     folder: String,
@@ -3030,6 +3043,7 @@ pub fn run() {
             configure_default_review_interval,
             configure_document_type,
             configure_confidentiality_type,
+            migrate_confidentiality_type,
             set_confidentiality_policy,
             remove_confidentiality_policy,
             set_workflow_policy,
@@ -3557,6 +3571,30 @@ mod tests {
         )
         .unwrap();
         assert_eq!(catalogue.confidentiality_types[0].id, "restricted");
+        configure_confidentiality_type(
+            edit_root.path().to_string_lossy().into_owned(),
+            "internal".into(),
+            "Internal".into(),
+            true,
+            false,
+        )
+        .unwrap();
+        let migrated = migrate_confidentiality_type(
+            edit_root.path().to_string_lossy().into_owned(),
+            "restricted".into(),
+            "internal".into(),
+        )
+        .unwrap();
+        assert_eq!(
+            migrated
+                .confidentiality_types
+                .iter()
+                .find(|configured| configured.id == "restricted")
+                .unwrap()
+                .replacement_type_id
+                .as_deref(),
+            Some("internal")
+        );
     }
 
     #[test]

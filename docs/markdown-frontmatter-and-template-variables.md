@@ -11,6 +11,12 @@ them when document control, effective confidentiality, or the candidate target
 version changes. Non-controlled keys are preserved. Frontmatter never updates
 `.dms` control data.
 
+When a confidentiality type ID has a retained migration, the policy or document
+override and an idle draft stay on the source ID. Preparing the next release
+candidate resolves the enabled replacement and overwrites `confidentiality`
+with that replacement ID before the candidate's content check. Existing
+candidates and released records are not rewritten.
+
 | Key | Required | Value | Notes |
 | --- | --- | --- | --- |
 | `title` | yes (when synced) | DMS document title | Defaults from file stem on first add |

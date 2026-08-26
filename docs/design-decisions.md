@@ -175,13 +175,19 @@ Capability-local rules stay in their CAP files.
   root always has a direct policy and a non-root folder may add, replace, or
   remove its own direct policy. A document derives its default from the nearest
   configured ancestor, including the root, and may retain an explicit override.
-  Release records snapshot the effective type.
+  A retained source type ID may point to a different enabled, non-cyclic
+  replacement for future releases. Policies and document overrides retain the
+  source ID; future candidate snapshots resolve the replacement. Release records
+  snapshot that release type.
 - **Why:** Operators can classify a folder tree once while retaining an
   exception path for individual documents.
 - **Consequences:** Changing a folder policy, or removing a non-root policy,
   updates only descendants without a nearer policy or document override; the
-  removed policy is not copied into records. Classification is metadata for
-  handling and audit; filesystem ACLs remain the access-control boundary.
+  removed policy is not copied into records. A type-ID migration invalidates an
+  open candidate whose release classification changed, rewrites registered
+  Markdown controlled frontmatter only when a new candidate is prepared, and
+  never rewrites historical evidence. Classification is metadata for handling
+  and audit; filesystem ACLs remain the access-control boundary.
 
 ## ADR-0011 — Host OS editor opens source drafts
 

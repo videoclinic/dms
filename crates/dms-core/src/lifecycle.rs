@@ -624,7 +624,7 @@ impl Workspace {
                     binding_id,
                     object_id,
                 });
-        let confidentiality = self.effective_confidentiality(request.document_id)?;
+        let confidentiality = self.release_confidentiality(request.document_id)?;
         let roles = self.effective_workflow_roles(request.document_id)?;
         let mut control = document.control.clone();
         if let Some(owner) = staged_owner {
@@ -665,9 +665,9 @@ impl Workspace {
         let changelog = configured_text(&request.changelog, "release changelog")?;
         // DMS is authoritative for controlled Markdown frontmatter: rewrite the
         // candidate target version first so digest and content checks match.
-        self.sync_markdown_control_frontmatter_with_version(
+        self.sync_markdown_release_frontmatter_with_version(
             request.document_id,
-            Some(&format!("{}.{}", version.major, version.minor)),
+            &format!("{}.{}", version.major, version.minor),
         )?;
         let source_path = self.edit_root.join(&document.relative_path);
         let source_digest = sha256_file(&source_path)?;
@@ -1853,7 +1853,7 @@ impl Workspace {
             control.owner = Some(owner);
             control.legacy_owner_label = None;
         }
-        let confidentiality = self.effective_confidentiality(document_id)?;
+        let confidentiality = self.release_confidentiality(document_id)?;
         let roles = self.effective_workflow_roles(document_id)?;
         let editor = match candidate.staged_editor {
             Some(editor) => self.person_snapshot(editor.object_id, tenant_id)?,

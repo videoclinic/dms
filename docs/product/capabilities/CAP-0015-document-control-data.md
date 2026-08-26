@@ -21,9 +21,12 @@
    properties. For registered Markdown library members, DMS is the source of
    truth for the controlled frontmatter keys `title`, `document_number`,
    `version`, and `confidentiality`: it prefills them from library defaults and
-   overwrites them when DMS control data, effective confidentiality, or the
-   candidate target version changes. Frontmatter `confidentiality` holds the
-   catalogue type ID (not the display label). Frontmatter never mutates `.dms`
+   overwrites them when DMS control data, current policy/override
+   confidentiality, or the candidate target version changes. A retained
+   confidentiality type-ID migration leaves the current draft on its source ID
+   until candidate preparation writes the replacement ID for that future
+   release. Frontmatter `confidentiality` holds the catalogue type ID (not the
+   display label). Frontmatter never mutates `.dms`
    control data. The draft filename stem supplies the title's one-time default only
    when the document is added; it is not a continuing metadata source.
 2. Document control data for the **currently selected library document** is

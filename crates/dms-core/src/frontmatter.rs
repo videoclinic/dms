@@ -354,6 +354,23 @@ impl Workspace {
         document_id: Uuid,
         version_override: Option<&str>,
     ) -> Result<()> {
+        self.sync_markdown_control_frontmatter_with(document_id, version_override, false)
+    }
+
+    pub(crate) fn sync_markdown_release_frontmatter_with_version(
+        &self,
+        document_id: Uuid,
+        version: &str,
+    ) -> Result<()> {
+        self.sync_markdown_control_frontmatter_with(document_id, Some(version), true)
+    }
+
+    fn sync_markdown_control_frontmatter_with(
+        &self,
+        document_id: Uuid,
+        version_override: Option<&str>,
+        use_release_confidentiality: bool,
+    ) -> Result<()> {
         let document = self.document(document_id)?;
         if document.source_state != SourceState::Registered {
             return Ok(());
@@ -366,7 +383,11 @@ impl Workspace {
             path: path.clone(),
             source,
         })?;
-        let confidentiality = match self.effective_confidentiality(document_id) {
+        let confidentiality = match if use_release_confidentiality {
+            self.release_confidentiality(document_id)
+        } else {
+            self.effective_confidentiality(document_id)
+        } {
             Ok(value) => value.type_id,
             Err(DmsError::MissingConfidentialityPolicy) => return Ok(()),
             Err(error) => return Err(error),

@@ -183,7 +183,10 @@
     For registered Markdown library members, DMS owns those controlled
     frontmatter keys: it prefills them from document control and library
     settings on add/reassociate and overwrites them whenever DMS control data,
-    effective confidentiality, or the candidate target version changes.
+    the current policy/override confidentiality, or the candidate target version
+    changes. A retained confidentiality type-ID migration leaves the current
+    draft unchanged until a new candidate is prepared; candidate preparation
+    resolves the replacement type and writes its ID before content checking.
     Frontmatter `confidentiality` stores the catalogue **type ID**; the display
     label is used for Office markers and export chrome only. Frontmatter never
     supplies authoritative values into `.dms`. Additional flat

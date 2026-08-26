@@ -17,7 +17,7 @@ persistence.
 | `src/library.rs` | Folder/file discovery, membership, search, registration state, reassociation, and permalinks |
 | `src/lifecycle.rs` | Version candidates, Entra/notification/export ports, content conformance, review decisions, release commits, and hash-chained evidence |
 | `src/maintenance.rs` | Release checksum verification, workspace review defaults, periodic-review scheduling and transitions, and full-workspace ZIP backup with SHA-256 manifest |
-| `src/policies.rs` | Folder-policy tree, confidentiality inheritance, Entra display binding, and workflow-role resolution |
+| `src/policies.rs` | Folder-policy tree, retained confidentiality type-ID migrations, Entra display binding, and workflow-role resolution |
 | `src/frontmatter.rs` | Strict flat Markdown parsing, controlled-key rewrite from DMS, optional template-variable map, and expected/detected comparison |
 | `src/template.rs` | Reusable workspace Word-template identity, validation, CommonMark-to-OOXML assembly, and frontmatter variable fill |
 | `tests/` | Domain, migration-fixture, and persistence behaviour tests |
@@ -75,7 +75,10 @@ persistence.
   controlled frontmatter keys from document control, effective confidentiality
   type ID, and candidate target version (one-way; never imports frontmatter into
   `.dms`). Sync is skipped until a confidentiality policy exists; policy/type/label
-  changes re-sync all registered Markdown members. Export chrome
+  changes re-sync all registered Markdown members. A retained type-ID migration
+  leaves current policy/override references and idle drafts unchanged, invalidates
+  an affected active candidate, then projects the enabled non-cyclic replacement
+  ID while preparing the next candidate. Export chrome
   `{CONFIDENTIALITY}` still uses the display label.
 - One optional stable workspace Word-template asset may reference an ordinary
   in-root non-symlink `.docx`. It is configuration rather than a controlled
@@ -164,6 +167,9 @@ persistence.
   retains `v12.json.bak`; SMTP passwords remain outside core metadata.
 - Schema v14 adds the optional Markdown Word-template record without assigning
   an implicit asset. Its v13 migration retains `v13.json.bak`.
+- Schema v15 adds optional confidentiality replacement IDs. Its v14 migration
+  writes `replacement_type_id: null` for every catalogue entry and retains
+  `v14.json.bak`.
 
 ## Verification
 

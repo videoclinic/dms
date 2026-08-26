@@ -24,7 +24,7 @@ linked tests is a coverage gap, not implemented proof.
 | [CAP-0005](capabilities/CAP-0005-desktop-shell.md) | Tauri desktop shell (Windows and macOS) | not implemented |
 | [CAP-0006](capabilities/CAP-0006-library-explorer.md) | Folder-first controlled library explorer | implemented |
 | [CAP-0007](capabilities/CAP-0007-draft-pdf-export.md) | Application-driven source draft → PDF export | not implemented |
-| [CAP-0008](capabilities/CAP-0008-confidentiality-classification.md) | Inherited document confidentiality classification | not implemented |
+| [CAP-0008](capabilities/CAP-0008-confidentiality-classification.md) | Inherited document confidentiality classification | implemented |
 | [CAP-0009](capabilities/CAP-0009-release-editor.md) | Release editor (host source editor) | not implemented |
 | [CAP-0010](capabilities/CAP-0010-notification-transport.md) | Notification transport (SMTP or host mail handler) | implemented |
 | [CAP-0011](capabilities/CAP-0011-approval-evidence.md) | Approval evidence (changelog and decision comments, chain) | not implemented |
@@ -40,7 +40,7 @@ linked tests is a coverage gap, not implemented proof.
 | [CAP-0021](capabilities/CAP-0021-microsoft-entra-workflow-identity.md) | Microsoft Entra workflow identity source | implemented |
 | [CAP-0022](capabilities/CAP-0022-headless-core-cli.md) | Headless DMS core CLI | implemented |
 
-CAP-0001, CAP-0002, CAP-0003, CAP-0006, CAP-0010, CAP-0012, CAP-0015,
+CAP-0001, CAP-0002, CAP-0003, CAP-0006, CAP-0008, CAP-0010, CAP-0012, CAP-0015,
 CAP-0017, CAP-0019, CAP-0021, and CAP-0022 are implemented. CAP-0022 is a
 Tauri-independent core surface; CAP-0003 uses that same core through the desktop
 adapter. The remaining CAPs keep their bounded `not implemented` status.

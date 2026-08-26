@@ -32,7 +32,7 @@ pub use maintenance::*;
 pub use policies::*;
 pub use template::*;
 
-pub const SCHEMA_VERSION: u32 = 14;
+pub const SCHEMA_VERSION: u32 = 15;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 
@@ -126,8 +126,13 @@ pub enum DmsError {
     DisabledDocumentType(String),
     #[error("document type {0:?} is referenced by a document")]
     DocumentTypeInUse(String),
-    #[error("confidentiality type {0:?} is referenced by a live policy or document")]
+    #[error("confidentiality type {0:?} is referenced by a live policy, document, or migration")]
     ConfidentialityTypeInUse(String),
+    #[error("confidentiality type migration from {from_type_id:?} to {replacement:?} must use different non-cyclic enabled type IDs")]
+    InvalidConfidentialityTypeMigration {
+        from_type_id: String,
+        replacement: String,
+    },
     #[error("migration backup at {0} does not match the workspace being migrated")]
     MigrationBackupConflict(PathBuf),
     #[error("library folder {0} must be an existing edit-root-relative directory")]
@@ -448,7 +453,7 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = matches!(found, 1..=13);
+        let migrated = matches!(found, 1..=14);
         if found == 1 {
             migrate_v1_catalogues(&mut value)?;
         }
@@ -460,6 +465,9 @@ impl Workspace {
         }
         if found <= 12 {
             migrate_v12_smtp_identity(&mut value);
+        }
+        if found <= 14 {
+            migrate_v14_confidentiality_type_replacements(&mut value);
         }
         if migrated {
             value["schema_version"] = serde_json::Value::from(SCHEMA_VERSION);
@@ -1042,6 +1050,23 @@ fn migrate_v12_smtp_identity(value: &mut serde_json::Value) {
     };
     smtp.insert("login_user".to_owned(), sender.clone());
     smtp.insert("from_mailbox".to_owned(), sender);
+}
+
+fn migrate_v14_confidentiality_type_replacements(value: &mut serde_json::Value) {
+    let Some(types) = value
+        .get_mut("confidentiality_types")
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return;
+    };
+    for configured in types.values_mut() {
+        let Some(configured) = configured.as_object_mut() else {
+            continue;
+        };
+        configured
+            .entry("replacement_type_id".to_owned())
+            .or_insert(serde_json::Value::Null);
+    }
 }
 
 fn canonical_existing_directory(path: &Path, label: &str) -> Result<PathBuf> {

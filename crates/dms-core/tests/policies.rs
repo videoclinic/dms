@@ -253,6 +253,109 @@ fn confidentiality_policies_inherit_and_document_overrides_survive_policy_change
 }
 
 #[test]
+fn confidentiality_type_migration_retains_references_and_persists_the_replacement() {
+    let (_temp, mut workspace) = initialized_workspace();
+    configure_confidentiality(&mut workspace);
+    fs::write(workspace.edit_root.join("Handbook.md"), "# Handbook").expect("source");
+    let document = workspace
+        .add_document(Path::new("Handbook.md"))
+        .expect("document");
+    workspace
+        .set_document_confidentiality(document.id, Some("internal"))
+        .expect("document override");
+    let frontmatter_before_migration =
+        fs::read_to_string(workspace.edit_root.join("Handbook.md")).expect("frontmatter");
+
+    let migrated = workspace
+        .migrate_confidentiality_type("internal", "restricted")
+        .expect("type migration");
+    assert_eq!(migrated.replacement_type_id.as_deref(), Some("restricted"));
+    assert_eq!(
+        workspace
+            .document_confidentiality_override(document.id)
+            .expect("document override"),
+        Some("internal")
+    );
+    assert_eq!(
+        workspace
+            .effective_confidentiality(document.id)
+            .expect("current confidentiality")
+            .type_id,
+        "internal"
+    );
+    assert_eq!(
+        fs::read_to_string(workspace.edit_root.join("Handbook.md")).expect("frontmatter"),
+        frontmatter_before_migration
+    );
+    assert!(matches!(
+        workspace.configure_confidentiality_type("restricted", "Restricted", false),
+        Err(DmsError::ConfidentialityTypeInUse(value)) if value == "restricted"
+    ));
+    assert!(matches!(
+        workspace.configure_confidentiality_type("internal", "Internal", false),
+        Err(DmsError::ConfidentialityTypeInUse(value)) if value == "internal"
+    ));
+    assert!(matches!(
+        workspace.migrate_confidentiality_type("restricted", "internal"),
+        Err(DmsError::InvalidConfidentialityTypeMigration { .. })
+    ));
+    assert!(matches!(
+        workspace.migrate_confidentiality_type("internal", "internal"),
+        Err(DmsError::InvalidConfidentialityTypeMigration { .. })
+    ));
+
+    workspace.save().expect("persist migration");
+    let reopened = Workspace::open(&workspace.edit_root).expect("reopen workspace");
+    assert_eq!(
+        reopened
+            .confidentiality_types()
+            .into_iter()
+            .find(|configured| configured.id == "internal")
+            .expect("internal type")
+            .replacement_type_id
+            .as_deref(),
+        Some("restricted")
+    );
+}
+
+#[test]
+fn schema_v14_migrates_confidentiality_replacements_with_a_backup() {
+    let (_temp, mut workspace) = initialized_workspace();
+    configure_confidentiality(&mut workspace);
+    workspace.save().expect("workspace metadata");
+    let metadata_path = workspace.edit_root.join(".dms/workspace.json");
+    let mut metadata: Value = serde_json::from_slice(&fs::read(&metadata_path).expect("metadata"))
+        .expect("metadata JSON");
+    metadata["schema_version"] = Value::from(14);
+    for configured in metadata["confidentiality_types"]
+        .as_object_mut()
+        .expect("confidentiality types")
+        .values_mut()
+    {
+        configured
+            .as_object_mut()
+            .expect("confidentiality type")
+            .remove("replacement_type_id");
+    }
+    fs::write(
+        &metadata_path,
+        serde_json::to_vec_pretty(&metadata).expect("metadata serialization"),
+    )
+    .expect("v14 metadata");
+
+    let migrated = Workspace::open(&workspace.edit_root).expect("migrated workspace");
+    assert_eq!(migrated.schema_version, SCHEMA_VERSION);
+    assert!(migrated
+        .confidentiality_types()
+        .iter()
+        .all(|configured| configured.replacement_type_id.is_none()));
+    assert!(workspace
+        .edit_root
+        .join(".dms/workspace.v14.json.bak")
+        .is_file());
+}
+
+#[test]
 fn workflow_roles_inherit_independently_and_binding_replacement_unresolves_live_roles() {
     let (_temp, mut workspace) = initialized_workspace();
     configure_confidentiality(&mut workspace);

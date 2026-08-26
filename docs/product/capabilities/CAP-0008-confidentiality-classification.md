@@ -3,19 +3,21 @@
 | Field | Value |
 | --- | --- |
 | ID | CAP-0008 |
-| Status | not implemented |
+| Status | implemented |
 | Storage | `<edit-root>/.dms/` |
-| Tests | Partial phases 2, 9f.1, 9f.3, 9f.4, and CHG-0005 evidence: [core policy tests](../../../crates/dms-core/tests/policies.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [Library override-form tests](../../../crates/dms-desktop/ui/library.test.mjs), [configuration route, catalogue, and semantic confidentiality-tree tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
+| Tests | [Core policy, persisted-schema, candidate-invalidation, and Markdown-release migration tests](../../../crates/dms-core/tests/policies.rs), [desktop adapter commands](../../../crates/dms-desktop/src/lib.rs), [Library override-form tests](../../../crates/dms-desktop/ui/library.test.mjs), [configuration route, catalogue, and semantic confidentiality-tree tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
 
-## Outcomes (contract — not yet true in runtime)
-
-When implemented, the following must hold:
+## Outcomes
 
 1. The operator configures a workspace list of confidentiality types. Each type
    has a stable, portable filename-safe ID (lowercase letters, digits, and
    hyphens; for example `restricted`) and a display label. Renaming a label
-   never changes its ID. Deletion is rejected while a folder policy, document,
-   or historical release references the ID.
+   never changes its ID; no operation deletes a type ID. A type referenced by a
+   live folder policy, document override, or type-ID migration cannot be
+   disabled. An operator can migrate one retained source ID to a different
+   enabled replacement ID. The mapping is non-cyclic, keeps folder policies and
+   document overrides on the source ID, and never rewrites candidates or
+   released snapshots.
 2. Under **Configuration → Document defaults**, confidentiality uses the same
    defaults-first policy layout as CAP-0019: a compact workspace-default summary
    identifies the edit root's type and enabled-type count, while direct folder
@@ -24,7 +26,9 @@ When implemented, the following must hold:
    not a dead-end page. **Manage confidentiality types** opens catalogue
    administration as a secondary surface and returns to Document defaults when
    dismissed; the full type list and its controls do not occupy a permanent
-   Configuration column.
+   Configuration column. Each retained source ID has a **Future release type**
+   selector that sends its migration to core validation; the UI does not infer
+   document references or implement cycle checks itself.
 3. The folder-policy editor shows a semantic, independently expandable
    edit-root-relative folder tree containing the edit root and every accessible
    descendant folder, including empty folders and folders without library
@@ -66,17 +70,24 @@ When implemented, the following must hold:
 9. Changing, adding, or removing a folder policy immediately changes the
    effective type of inheriting descendants only. Explicit document overrides
    and nearer folder policies are unchanged.
-10. A review request and a released version snapshot the effective type ID and
-   display label in their immutable workflow/release evidence. Later policy
-   changes or label renames do not rewrite historical records or PDF filenames.
-11. If a document's effective confidentiality type changes while an
-   approval-required content review is open or after approval but before release,
-   the request/approval is invalidated and a new review is required. Historical
-   snapshots remain unchanged.
-12. Registered Markdown drafts store the effective type **ID** in frontmatter
-   key `confidentiality` (CAP-0002 / CAP-0007). Office visible markers and
-   export chrome continue to use the display label. PDF filenames always use
-   the type ID.
+10. A review request and a released version snapshot the effective release type
+    ID and display label in their immutable workflow/release evidence. Later
+    policy changes, label renames, or type-ID migrations do not rewrite
+    historical records or PDF filenames. A candidate created after a migration
+    snapshots the terminal replacement ID and its released PDF filename uses
+    that ID.
+11. If a document's effective release confidentiality changes while an
+    approval-required content review is open or after approval but before
+    release, the request/approval is invalidated and a new review is required.
+    A type-ID migration has the same invalidation effect. Historical snapshots
+    remain unchanged.
+12. Registered Markdown drafts normally store the current policy or document
+    override type **ID** in frontmatter key `confidentiality` (CAP-0002 /
+    CAP-0007). Preparing the next release candidate applies any retained
+    type-ID migration and overwrites that key with the candidate's replacement
+    ID before content checking. Office visible markers and export chrome
+    continue to use the display label. PDF filenames always use the release
+    snapshot's type ID.
 
 ## Non-goals
 
