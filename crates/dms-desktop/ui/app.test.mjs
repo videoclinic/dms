@@ -31,6 +31,7 @@ import {
   shouldPollStartupAuthorization,
   startupAuthorizationMarkup,
   startupAuthorizationPollDelayMs,
+  workspaceFootMarkup,
 } from "./app.mjs";
 
 const workspaceId = "5ef3db10-8f6d-4ae4-9d68-ecb1eaac8235";
@@ -289,6 +290,22 @@ test("preferences start expanded and persist no session activities", () => {
   assert.deepEqual(state.preferences.saved_views, []);
   assert.deepEqual(state.preferences.recent_libraries, []);
   assert.deepEqual(state.activities, []);
+});
+
+test("the expanded sidebar identifies the local author recorded for workspace changes", () => {
+  const markup = workspaceFootMarkup({
+    workspace_id: workspaceId,
+    change_author: "Ada <operator>",
+    edit_root: "/DMS/Edit",
+    publish_root: "/DMS/Publish",
+  });
+
+  assert.match(markup, /Changes recorded as/);
+  assert.match(markup, /Ada &lt;operator&gt;/);
+  assert.match(markup, new RegExp(workspaceId));
+  assert.match(markup, /edit: \/DMS\/Edit/);
+  assert.match(markup, /publish: \/DMS\/Publish/);
+  assert.equal(workspaceFootMarkup(null), "No workspace open");
 });
 
 test("recent libraries are unique, most-recent-first, capped at ten, and removable", () => {

@@ -28,6 +28,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
+| [CHG-0031](archive/CHG-0031-library-change-author-identity.md) | Library change-author identity | done | CAP-0005 |
 | [CHG-0030](archive/CHG-0030-confidentiality-type-id-migration.md) | Confidentiality type-ID migration | done | CAP-0002, CAP-0008, CAP-0013, CAP-0015 |
 | [CHG-0029](archive/CHG-0029-newest-history-entry-default.md) | Newest version-history entry expanded by default | done | CAP-0011 |
 | [CHG-0028](archive/CHG-0028-document-pane-defaults.md) | Document-pane initial disclosure state | done | CAP-0006, CAP-0011, CAP-0015 |

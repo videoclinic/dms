@@ -244,7 +244,7 @@ const CAPS = [
                 <div>Audit · HR Data Privacy Policy · DOC-014 <span>×</span></div>
                 <div>Review · HR Data Privacy Policy · DOC-014 <span>×</span></div>
               </div>
-              <div class="mini-foot">ws-9c3b7d1a<br/>edit: /dms/edit<br/>publish: /dms/publish</div>
+              <div class="mini-foot"><span class="foot-label">Changes recorded as</span><strong>Lukas Roth</strong><br/>ws-9c3b7d1a<br/>edit: /dms/edit<br/>publish: /dms/publish</div>
             </div>
             <div class="mini-main"><div class="mini-header">Library · policies/HR <span class="mini-bookmark">☆ Bookmark this view</span></div><p class="muted" style="padding:0.75rem;margin:0;font-size:0.75rem">The selected Open pane and this header identify the current surface.</p></div>
           </div>
@@ -1574,6 +1574,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .pane-close { color: var(--muted-foreground); font-size: 0.85rem; line-height: 1; padding: 0 0.15rem; }
 .pane-remove { color: var(--muted-foreground); font-size: 0.95rem; line-height: 1; padding: 0 0.15rem; }
 .sidebar-foot { margin-top: auto; padding: 0.75rem 0.625rem; font-size: 0.75rem; color: var(--muted-foreground); line-height: 1.5; border-top: 1px solid var(--sidebar-border); }
+.foot-label { display: block; color: var(--muted-foreground); font-size: 0.6rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.sidebar-foot > strong, .mini-foot > strong { display: block; margin-bottom: 0.35rem; color: var(--foreground); }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--background); }
 .header { height: 3.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.75rem; padding: 0 1.25rem; }
 .header h1 { font-size: 0.95rem; font-weight: 600; margin: 0; }
@@ -1786,6 +1788,8 @@ tr:last-child td { border-bottom: 0; }
     <div class="pane-sec">Open panes</div>
     <div class="pane-tabs">${openTabs}</div>
     <div class="sidebar-foot">
+      <span class="foot-label">Changes recorded as</span>
+      <strong>Lukas Roth</strong>
       ws-9c3b7d1a<br/>
       edit: /dms/edit<br/>
       publish: /dms/publish

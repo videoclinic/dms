@@ -120,9 +120,12 @@ When implemented, the following must hold:
     An inaccessible workspace or missing document is shown as unavailable and
     remains removable. Saved views are per-user app preferences in the OS
     app-config store, not `.dms` workflow or process evidence.
-14. The left menu foot shows the current workspace identity (display name or
-    workspace ID) and root path summary when expanded; the foot is hidden
-    when the menu is collapsed to keep the rail narrow.
+14. The expanded left-menu foot labels **Changes recorded as** with the local OS
+    user identity that DMS records for ordinary local mutations, followed by the
+    current workspace identity (display name or workspace ID) and root-path
+    summary. It does not represent a Microsoft Entra session, which is only an
+    approval-decision identity. The foot is hidden when the menu is collapsed to
+    keep the rail narrow.
 15. The application shell is contained to the current window viewport. The
     sidebar brand, primary destinations, workspace foot, and main activity
     header do not move when activity content scrolls. Ordinary activities

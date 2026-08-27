@@ -138,6 +138,7 @@ pub struct WorkspaceSummary {
     pub edit_root: String,
     pub publish_root: String,
     pub document_count: usize,
+    pub change_author: String,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -2486,6 +2487,7 @@ fn workspace_summary_from(workspace: &Workspace) -> WorkspaceSummary {
         edit_root: workspace.edit_root.to_string_lossy().into_owned(),
         publish_root: workspace.publish_root.to_string_lossy().into_owned(),
         document_count: workspace.documents().len(),
+        change_author: WorkspaceLock::current().os_user,
     }
 }
 
@@ -3398,6 +3400,7 @@ mod tests {
 
         assert_eq!(summary.workspace_id, workspace.workspace_id.to_string());
         assert_eq!(summary.document_count, 0);
+        assert_eq!(summary.change_author, WorkspaceLock::current().os_user);
         assert_eq!(summary.edit_root, workspace.edit_root.to_string_lossy());
         assert_eq!(
             summary.publish_root,

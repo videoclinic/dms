@@ -364,6 +364,11 @@ export function startupAuthorizationMarkup(status) {
   return `<section class="startup-authorization-card" data-startup-authorization="${escapeHtml(status.kind)}"><h2>Microsoft Entra sign-in needs attention</h2><p>${escapeHtml(status.message ?? "")}</p><button class="button" type="button" data-startup-reissue>Reissue code</button></section>`;
 }
 
+export function workspaceFootMarkup(workspace) {
+  if (!workspace) return "No workspace open";
+  return `<span class="workspace-foot-label">Changes recorded as</span><strong class="workspace-change-author">${escapeHtml(workspace.change_author ?? "local operator")}</strong><span class="workspace-foot-meta"><strong>${escapeHtml(workspace.workspace_id)}</strong><br>edit: ${escapeHtml(workspace.edit_root)}<br>publish: ${escapeHtml(workspace.publish_root)}</span>`;
+}
+
 function currentActivity(state) {
   return state.activities.find((activity) => activity.key === state.current_key) ?? null;
 }
@@ -633,9 +638,7 @@ function render(state) {
   bookmark.setAttribute("aria-pressed", String(Boolean(bookmarked)));
 
   const foot = document.querySelector("#workspace-foot");
-  foot.innerHTML = state.workspace
-    ? `<strong>${escapeHtml(state.workspace.workspace_id)}</strong><br>edit: ${escapeHtml(state.workspace.edit_root)}<br>publish: ${escapeHtml(state.workspace.publish_root)}`
-    : "No workspace open";
+  foot.innerHTML = workspaceFootMarkup(state.workspace);
   bindReviewScheduleForm(document.querySelector("#library-review-schedule-form"));
   bindCandidateTargetForm(document.querySelector('[data-library-lifecycle-form="submit_candidate"]'));
 }
