@@ -137,6 +137,7 @@ ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
 | Root `LICENSE` | MIT license for project source and documentation |
 | `Cargo.toml`, `Cargo.lock`, `crates/` | Rust workspace: shared `dms-core`, standalone `dms` CLI, and Tauri `dms-desktop` adapter |
 | `rust-toolchain.toml` | Exact Rust 1.88.0 toolchain with `clippy` and `rustfmt`; `Cargo.toml` retains the 1.88 MSRV |
+| `scripts/` | Operator and release support scripts. `Get-OneDriveM365Group.ps1` is a standalone diagnostic that maps local OneDrive Business paths to backing Microsoft 365 Groups through interactive delegated Graph access; it is outside the DMS application's Graph permission boundary. |
 | Native Windows desktop development | Requires the MSVC Rust toolchain selected by `rust-toolchain.toml`, Visual Studio Build Tools with Desktop development with C++, and the WebView2 Evergreen Runtime; WSL is not a Windows desktop-integration substitute |
 | Ubuntu on WSL2 development | Uses Rustup-selected Linux Rust 1.88.0, Node.js, and Tauri's Ubuntu development libraries; keep the checkout under the Linux filesystem and treat any WSLg launch only as Linux-adapter validation |
 | `.github/workflows/desktop-platform-smoke.yml` | Rust 1.88 workspace gate on Windows, macOS, and Linux; desktop launch smoke; Linux job additionally verifies the `dms://` XDG scheme registration and ADMX templates; Markdown-to-template-DOCX fake-backed export coverage; NSIS/DMG packaging smoke; installed-Word evidence remains an external host gate |
