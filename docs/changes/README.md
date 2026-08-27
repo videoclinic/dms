@@ -20,6 +20,8 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
+| [CHG-0032](active/CHG-0032-windows-edit-root-library-shortcut.md) | Windows edit-root library shortcut | pending | CAP-0001, CAP-0006, CAP-0020 |
+| [CHG-0033](active/CHG-0033-bounded-office-source-history-import.md) | Bounded Office source-history import | pending | CAP-0006, CAP-0011, CAP-0012, CAP-0015 |
 | [CHG-0024](active/CHG-0024-windows-nsis-installer-release.md) | Windows NSIS installer and signed GitHub Release | in-progress | CAP-0005 |
 | [CHG-0025](active/CHG-0025-windows-entra-deployment-policy.md) | Windows Entra deployment policy | in-progress | CAP-0021 |
 
@@ -29,6 +31,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
 | [CHG-0031](archive/CHG-0031-library-change-author-identity.md) | Library change-author identity | done | CAP-0005 |
+| [CHG-0034](archive/CHG-0034-user-scoped-notification-transport.md) | User-scoped notification transport | done | CAP-0001, CAP-0002, CAP-0010, CAP-0017 |
 | [CHG-0030](archive/CHG-0030-confidentiality-type-id-migration.md) | Confidentiality type-ID migration | done | CAP-0002, CAP-0008, CAP-0013, CAP-0015 |
 | [CHG-0029](archive/CHG-0029-newest-history-entry-default.md) | Newest version-history entry expanded by default | done | CAP-0011 |
 | [CHG-0028](archive/CHG-0028-document-pane-defaults.md) | Document-pane initial disclosure state | done | CAP-0006, CAP-0011, CAP-0015 |

@@ -1315,6 +1315,10 @@ fn withdrawal_preserves_history_falls_back_to_prior_release_and_advances_version
     );
     fixture.workspace.save().unwrap();
     fixture.workspace = Workspace::open(&fixture.workspace.edit_root).unwrap();
+    fixture
+        .workspace
+        .configure_notifications(NotificationTransport::Mailto, None)
+        .unwrap();
     assert!(fixture
         .workspace
         .releases(fixture.document_id)

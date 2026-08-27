@@ -297,7 +297,7 @@ tr:last-child td { border-bottom: 0; }
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Major review requests and post-release minor-publication notices use SMTP or mailto:.</p>
+      <p class="subtitle">This DMS user's SMTP relay or mailto: setting delivers major review requests and post-release minor-publication notices for every opened library.</p>
       <section class="configuration-nav" aria-label="Configuration navigation">
     <div class="config-nav-head"><div><h3>Configuration</h3><p>Set up the workspace once, then choose the task that matches the setting you need.</p></div><span class="badge info">Current: Notifications</span></div>
     <nav class="config-tabs" aria-label="Configuration sections"><a class="config-tab" href="#"><strong>Workspace</strong><span>Roots and local metadata</span></a><a class="config-tab" href="#"><strong>Document defaults</strong><span>Classification and catalogues</span></a><a class="config-tab" href="#"><strong>Workflow</strong><span>People and role routing</span></a><a class="config-tab active" href="#" aria-current="page"><strong>Notifications</strong><span>Review and release email</span></a></nav>
@@ -305,10 +305,10 @@ tr:last-child td { border-bottom: 0; }
       
       <div class="grid-2">
         <section class="card">
-          <div class="row gap-2 mb"><h3 class="card-title">SMTP relay</h3><span class="badge ok">credential configured</span></div>
+          <div class="row gap-2 mb"><h3 class="card-title">SMTP relay</h3><span class="badge ok">configured for this DMS user</span></div>
           <dl class="kv"><div><dt>Host</dt><dd>smtp.videoclinic.de</dd></div><div><dt>Port</dt><dd>587 (STARTTLS)</dd></div><div><dt>SMTP login user</dt><dd>dms-relay@videoclinic.de</dd></div><div><dt>From address</dt><dd>&quot;Doc Mgmt&quot; &lt;dms@videoclinic.de&gt;</dd></div><div><dt>Microsoft 365 app password</dt><dd>*** · write-only · stored in OS credential store</dd></div><div><dt>Test target</dt><dd>dms@videoclinic.de (parsed From mailbox)</dd></div><div><dt>Minor-publication recipient</dt><dd>anna@videoclinic.de (effective approver snapshot)</dd></div></dl>
           <div class="row gap-2" style="margin-top:0.75rem"><button class="btn outline">Send test email to “Doc Mgmt” &lt;dms@videoclinic.de&gt;</button></div>
-          <p class="hint">A blank password input retains the existing OS credential. The login user authenticates only; the formatted From mailbox supplies the message identity and fixed test recipient. Changing to <code>mailto:</code> removes the workspace-scoped credential. No password is returned or written to <code>.dms</code>.</p>
+          <p class="hint">Relay fields are saved in this OS user's DMS app configuration and a blank password input retains their OS credential. The login user authenticates only; the formatted From mailbox supplies the message identity and fixed test recipient. Changing to <code>mailto:</code> removes this user's credential. No relay field or password is returned or written to <code>.dms</code>.</p>
         </section>
         <section class="card">
           <div class="row gap-2 mb"><h3 class="card-title">Minor-publication notice</h3><span class="badge ok">released V1.4</span></div>

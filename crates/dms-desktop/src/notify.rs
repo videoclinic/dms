@@ -8,37 +8,33 @@ use lettre::{
     transport::smtp::authentication::Credentials,
     Message, SmtpTransport, Transport,
 };
-use uuid::Uuid;
-
 const KEYRING_SERVICE: &str = "dms-desktop";
 const SMTP_PASSWORD_PURPOSE: &str = "smtp-password";
 
 pub trait CredentialStore: Send + Sync {
-    fn smtp_password(&self, workspace_id: Uuid) -> Result<String, String>;
-    fn set_smtp_password(&self, workspace_id: Uuid, password: &str) -> Result<(), String>;
-    fn delete_smtp_password(&self, workspace_id: Uuid) -> Result<(), String>;
-    fn smtp_password_exists(&self, workspace_id: Uuid) -> Result<bool, String>;
+    fn smtp_password(&self) -> Result<String, String>;
+    fn set_smtp_password(&self, password: &str) -> Result<(), String>;
+    fn delete_smtp_password(&self) -> Result<(), String>;
+    fn smtp_password_exists(&self) -> Result<bool, String>;
 }
 
 #[derive(Default)]
 pub struct OsCredentialStore;
 
 impl CredentialStore for OsCredentialStore {
-    fn smtp_password(&self, workspace_id: Uuid) -> Result<String, String> {
-        let entry = smtp_password_entry(workspace_id)
+    fn smtp_password(&self) -> Result<String, String> {
+        let entry = smtp_password_entry()
             .map_err(|error| format!("cannot access the OS credential store: {error}"))?;
         entry.get_password().map_err(|error| {
-            format!(
-                "SMTP password is not available in the OS credential store for workspace {workspace_id}: {error}"
-            )
+            format!("SMTP password is not available in the OS credential store: {error}")
         })
     }
 
-    fn set_smtp_password(&self, workspace_id: Uuid, password: &str) -> Result<(), String> {
+    fn set_smtp_password(&self, password: &str) -> Result<(), String> {
         if password.trim().is_empty() {
             return Err("SMTP app password cannot be empty".to_owned());
         }
-        smtp_password_entry(workspace_id)
+        smtp_password_entry()
             .map_err(|error| format!("cannot access the OS credential store: {error}"))?
             .set_password(password)
             .map_err(|error| {
@@ -46,8 +42,8 @@ impl CredentialStore for OsCredentialStore {
             })
     }
 
-    fn delete_smtp_password(&self, workspace_id: Uuid) -> Result<(), String> {
-        let entry = smtp_password_entry(workspace_id)
+    fn delete_smtp_password(&self) -> Result<(), String> {
+        let entry = smtp_password_entry()
             .map_err(|error| format!("cannot access the OS credential store: {error}"))?;
         match entry.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
@@ -57,8 +53,8 @@ impl CredentialStore for OsCredentialStore {
         }
     }
 
-    fn smtp_password_exists(&self, workspace_id: Uuid) -> Result<bool, String> {
-        let entry = match smtp_password_entry(workspace_id) {
+    fn smtp_password_exists(&self) -> Result<bool, String> {
+        let entry = match smtp_password_entry() {
             Ok(entry) => entry,
             // A system without any default credential store (for example a
             // headless CI runner) cannot hold an SMTP password, so the
@@ -78,16 +74,13 @@ impl CredentialStore for OsCredentialStore {
 }
 
 impl OsCredentialStore {
-    pub fn smtp_password_exists(workspace_id: Uuid) -> Result<bool, String> {
-        CredentialStore::smtp_password_exists(&Self, workspace_id)
+    pub fn smtp_password_exists() -> Result<bool, String> {
+        CredentialStore::smtp_password_exists(&Self)
     }
 }
 
-fn smtp_password_entry(workspace_id: Uuid) -> Result<Entry, keyring::Error> {
-    Entry::new(
-        KEYRING_SERVICE,
-        &format!("{workspace_id}/{SMTP_PASSWORD_PURPOSE}"),
-    )
+fn smtp_password_entry() -> Result<Entry, keyring::Error> {
+    Entry::new(KEYRING_SERVICE, SMTP_PASSWORD_PURPOSE)
 }
 
 pub(crate) trait SmtpSender {
@@ -128,7 +121,6 @@ impl SmtpSender for ProductionSmtpSender {
 pub(crate) struct DesktopNotifier<C, S = ProductionSmtpSender> {
     credentials: C,
     smtp_sender: S,
-    workspace_id: Uuid,
     mailto_confirmed: bool,
     open_uri: fn(&str) -> Result<(), String>,
 }
@@ -136,30 +128,20 @@ pub(crate) struct DesktopNotifier<C, S = ProductionSmtpSender> {
 impl<C> DesktopNotifier<C, ProductionSmtpSender> {
     pub fn new(
         credentials: C,
-        workspace_id: Uuid,
         mailto_confirmed: bool,
         open_uri: fn(&str) -> Result<(), String>,
     ) -> Self {
         Self {
             credentials,
             smtp_sender: ProductionSmtpSender,
-            workspace_id,
             mailto_confirmed,
             open_uri,
         }
     }
 }
 
-pub(crate) fn production_notifier(
-    workspace_id: Uuid,
-    mailto_confirmed: bool,
-) -> DesktopNotifier<OsCredentialStore> {
-    DesktopNotifier::new(
-        OsCredentialStore,
-        workspace_id,
-        mailto_confirmed,
-        open_host_mail_handler,
-    )
+pub(crate) fn production_notifier(mailto_confirmed: bool) -> DesktopNotifier<OsCredentialStore> {
+    DesktopNotifier::new(OsCredentialStore, mailto_confirmed, open_host_mail_handler)
 }
 
 fn open_host_mail_handler(uri: &str) -> Result<(), String> {
@@ -223,7 +205,7 @@ impl<C: CredentialStore, S: SmtpSender> NotificationClient for DesktopNotifier<C
                         message.html_body.clone(),
                     ))
                     .map_err(|error| format!("cannot build notification message: {error}"))?;
-                let password = self.credentials.smtp_password(self.workspace_id)?;
+                let password = self.credentials.smtp_password()?;
                 self.smtp_sender.send(smtp, password, &email)
             }
         }
@@ -238,20 +220,20 @@ mod tests {
     struct FakeCredentials;
 
     impl CredentialStore for FakeCredentials {
-        fn smtp_password(&self, _workspace_id: Uuid) -> Result<String, String> {
+        fn smtp_password(&self) -> Result<String, String> {
             Ok("not-used-for-mailto".to_owned())
         }
 
-        fn set_smtp_password(&self, _workspace_id: Uuid, _password: &str) -> Result<(), String> {
+        fn set_smtp_password(&self, _password: &str) -> Result<(), String> {
             Ok(())
         }
 
-        fn delete_smtp_password(&self, _workspace_id: Uuid) -> Result<(), String> {
+        fn delete_smtp_password(&self) -> Result<(), String> {
             Ok(())
         }
 
-        fn smtp_password_exists(&self, _workspace_id: Uuid) -> Result<bool, String> {
-            Ok(false)
+        fn smtp_password_exists(&self) -> Result<bool, String> {
+            Ok(true)
         }
     }
 
@@ -305,8 +287,7 @@ mod tests {
 
     #[test]
     fn mailto_requires_explicit_operator_confirmation() {
-        let mut notifier =
-            DesktopNotifier::new(FakeCredentials, Uuid::new_v4(), false, host_mail_handler);
+        let mut notifier = DesktopNotifier::new(FakeCredentials, false, host_mail_handler);
 
         let receipt = notifier.send(&mailto_settings(), &message()).unwrap();
 
@@ -315,8 +296,7 @@ mod tests {
 
     #[test]
     fn confirmed_mailto_records_confirmed_delivery() {
-        let mut notifier =
-            DesktopNotifier::new(FakeCredentials, Uuid::new_v4(), true, host_mail_handler);
+        let mut notifier = DesktopNotifier::new(FakeCredentials, true, host_mail_handler);
 
         let receipt = notifier.send(&mailto_settings(), &message()).unwrap();
 
@@ -329,8 +309,7 @@ mod tests {
             Err("the confirmation must not open mail again".to_owned())
         }
 
-        let mut notifier =
-            DesktopNotifier::new(FakeCredentials, Uuid::new_v4(), true, unexpected_handler);
+        let mut notifier = DesktopNotifier::new(FakeCredentials, true, unexpected_handler);
 
         let receipt = notifier.send(&mailto_settings(), &message()).unwrap();
 
@@ -342,7 +321,6 @@ mod tests {
         let mut notifier = DesktopNotifier {
             credentials: FakeCredentials,
             smtp_sender: FakeSmtpSender::default(),
-            workspace_id: Uuid::new_v4(),
             mailto_confirmed: false,
             open_uri: host_mail_handler,
         };

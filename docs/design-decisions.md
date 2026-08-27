@@ -157,8 +157,8 @@ Capability-local rules stay in their CAP files.
   CAP-0020 permalink (ADR-0020) whose target is the review request. The URI
   identifies the stable workspace, document, and review request; the receiving
   app resolves it only against an accessible registered workspace. SMTP
-  credentials live in the OS credential store; `.dms` stores only non-secret
-  relay configuration and delivery-attempt metadata.
+  relay fields live in OS-user DMS app configuration and credentials live in the
+  OS credential store; `.dms` stores only delivery-attempt metadata.
 - **Why:** This gives approvers a direct notification without building a server
   or a browser portal.
 - **Consequences:** Each approver needs the application and access to the same
@@ -203,17 +203,18 @@ Capability-local rules stay in their CAP files.
   no longer matches the review digest, the app marks the approval invalidated
   and requires a new request. The app never blocks on the opened editor process.
 
-## ADR-0012 — Configurable notification transport with mailto fallback
+## ADR-0012 — User-scoped notification transport with mailto fallback
 
-- **Decision:** The workspace's notification transport is selectable. The
-  default is the configured SMTP relay (ADR-0009). When SMTP is absent or
+- **Decision:** Each DMS OS user's notification transport is selectable and
+  shared by every library that user opens. The default is the configured SMTP
+  relay (ADR-0009). When SMTP is absent or
   disabled, the app falls back to the host's default mail handler via a
   pre-filled `mailto:` URI. The lifecycle state never advances to `in_review`
   on `mailto:` submission alone; it requires an explicit operator confirmation
   inside the app that the message was sent.
-- **Why:** The operator wants a notification path that uses the host's mail
-  application when a relay is not appropriate, without forcing every workspace
-  to host a relay.
+- **Why:** A relay identifies the DMS user sending workflow notices, not a
+  portable library. Keeping it out of workspace metadata avoids copying mail
+  topology or configuration between users and libraries.
 - **Consequences:** The contract for "review requested" is identical for both
   transports; only the message-creation step differs. SMTP messages are
   `multipart/alternative` (plain text plus an HTML alternative whose only
@@ -429,7 +430,7 @@ Capability-local rules stay in their CAP files.
   separate operational roles. Saved Configuration views retain the active route;
   the no-workspace setup route cannot imply that missing policy settings exist.
 
-## ADR-0024 — App-global Entra runtime configuration and write-only SMTP credentials
+## ADR-0024 — OS-user Entra and notification runtime configuration
 
 - **Decision:** The Entra public-client ID and tenant ID are non-secret,
   app-global OS-user settings in Tauri's app-config directory, shared by all
@@ -437,19 +438,22 @@ Capability-local rules stay in their CAP files.
   at process start; each non-empty valid value overrides its stored counterpart
   and is read-only in Configuration, while an invalid non-empty value blocks
   Graph work without fallback. `.dms` retains only the library's group binding,
-  display cache, role references, and historical workflow evidence. SMTP app
-  passwords are write-only Configuration input and live only in OS credential
-  storage keyed by workspace ID.
+  display cache, role references, and historical workflow evidence. Notification
+  transport and non-secret SMTP relay fields are also OS-user settings shared by
+  local libraries. SMTP app passwords are write-only Configuration input and
+  live only in that OS user's credential storage.
 - **Why:** A public-client/tenant pair identifies the desktop application and
   organization rather than an individual library. Keeping it out of portable
   workspace metadata avoids leaking tenant topology into copied libraries and
-  lets one operator configure it once. SMTP credentials must not cross the UI
+  lets one operator configure it once. The same user-owned scope applies to
+  their notification transport; SMTP credentials must not cross the UI
   persistence or IPC read boundary.
 - **Consequences:** A global tenant change never rewrites library metadata; the
   next group refresh revalidates access and fails closed on mismatch or
   inaccessibility. Tokens remain tenant-scoped in OS credential storage.
-  Switching a workspace to `mailto:` removes its SMTP credential. Environment
-  configuration is a process-level override, not a save target.
+  Switching to `mailto:` removes that DMS user's SMTP credential and relay
+  fields without touching any workspace. Environment configuration is a
+  process-level override, not a save target.
 
 ## ADR-0025 — Release-bound control data, immutable owner identity, and review schedule separation
 

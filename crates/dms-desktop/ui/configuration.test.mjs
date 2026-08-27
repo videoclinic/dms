@@ -697,12 +697,14 @@ test("configuration mutations map forms to narrow desktop commands", () => {
     {
       command: "configure_notifications",
       arguments: {
-        transport: "smtp",
-        relayHost: "smtp.example.test",
-        relayPort: 587,
-        loginUser: "smtp-login@example.test",
-        fromMailbox: "\"Doc Mgmt\" <dms@example.test>",
-        smtpAppPassword: "one-way-secret",
+        input: {
+          transport: "smtp",
+          relayHost: "smtp.example.test",
+          relayPort: 587,
+          loginUser: "smtp-login@example.test",
+          fromMailbox: "\"Doc Mgmt\" <dms@example.test>",
+          smtpAppPassword: "one-way-secret",
+        },
       },
     },
   );

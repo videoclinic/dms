@@ -32,7 +32,7 @@ pub use maintenance::*;
 pub use policies::*;
 pub use template::*;
 
-pub const SCHEMA_VERSION: u32 = 15;
+pub const SCHEMA_VERSION: u32 = 16;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 
@@ -296,7 +296,7 @@ pub struct Workspace {
     pub(crate) identity_cache: BTreeMap<Uuid, EntraPerson>,
     #[serde(default)]
     pub(crate) workflow_policies: BTreeMap<String, WorkflowPolicy>,
-    #[serde(default)]
+    #[serde(skip)]
     pub(crate) notification_settings: Option<NotificationSettings>,
     #[serde(default = "default_review_interval_months")]
     pub(crate) default_review_interval_months: u32,
@@ -453,7 +453,7 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = matches!(found, 1..=14);
+        let migrated = matches!(found, 1..=15);
         if found == 1 {
             migrate_v1_catalogues(&mut value)?;
         }
@@ -468,6 +468,9 @@ impl Workspace {
         }
         if found <= 14 {
             migrate_v14_confidentiality_type_replacements(&mut value);
+        }
+        if found <= 15 {
+            migrate_v15_remove_notification_settings(&mut value);
         }
         if migrated {
             value["schema_version"] = serde_json::Value::from(SCHEMA_VERSION);
@@ -1067,6 +1070,13 @@ fn migrate_v14_confidentiality_type_replacements(value: &mut serde_json::Value) 
             .entry("replacement_type_id".to_owned())
             .or_insert(serde_json::Value::Null);
     }
+}
+
+fn migrate_v15_remove_notification_settings(value: &mut serde_json::Value) {
+    let Some(workspace) = value.as_object_mut() else {
+        return;
+    };
+    workspace.remove("notification_settings");
 }
 
 fn canonical_existing_directory(path: &Path, label: &str) -> Result<PathBuf> {

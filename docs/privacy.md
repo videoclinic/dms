@@ -15,7 +15,8 @@
 | Confidentiality policy and effective document label | `<edit-root>/.dms/` | Local classification metadata; a label does not enforce access control |
 | Approval-notification metadata | `<edit-root>/.dms/` | Requester/approver display name/email, approver Entra tenant/object ID on a decision, outcome, send time, and delivery-attempt result; no document content |
 | Workspace root paths | Inside `.dms` | Absolute edit/publish paths on the operator machine |
-| SMTP relay app password | OS credential store | Write-only Configuration input; never stored in `.dms`, app preferences, frontend state, IPC results, or errors |
+| User notification transport and SMTP relay settings | OS-user app-config `global-settings.json` | Non-secret relay host/port/login/From and selected transport shared by libraries opened by that DMS user; never stored in `.dms` |
+| SMTP relay app password | OS credential store | Write-only OS-user Configuration input; never stored in `.dms`, app preferences, frontend state, IPC results, or errors |
 | Microsoft Entra delegated-token cache | OS credential store | Interactive sign-in tokens for Microsoft Graph; never stored in `.dms`. Process-environment startup may validate or refresh this cache, or start one device-authorization challenge, without exposing tokens to the WebView |
 | Workspace advisory lock | `<edit-root>/.dms/lock` | Process id, hostname, timestamp; advisory only, never contains document content |
 | Export/audit reports | `<edit-root>/.dms/exports/` (operator-chosen) | Aggregated lifecycle, approval, periodic-review, and release evidence; produced on demand. Pre-v12 release rows carry an explicit **unrecorded** date and **unresolved** owner rather than substituting the current mutable profile |

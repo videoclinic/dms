@@ -170,6 +170,9 @@ persistence.
 - Schema v15 adds optional confidentiality replacement IDs. Its v14 migration
   writes `replacement_type_id: null` for every catalogue entry and retains
   `v14.json.bak`.
+- Schema v16 removes notification transport and SMTP relay fields from portable
+  workspace metadata. Desktop injects the current OS user's validated settings
+  only for a lifecycle operation; the v15 migration retains `v15.json.bak`.
 
 ## Verification
 

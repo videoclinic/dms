@@ -182,6 +182,7 @@ pub struct SmtpTestResult {
 struct GlobalSettings {
     entra_client_id: String,
     entra_tenant_id: String,
+    notification_settings: Option<NotificationSettings>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -1017,29 +1018,21 @@ fn refresh_identity_source(
 
 #[tauri::command]
 fn configure_notifications(
+    app: AppHandle,
     edit_root: String,
-    transport: String,
-    relay_host: String,
-    relay_port: u16,
-    login_user: String,
-    from_mailbox: String,
-    smtp_app_password: String,
+    input: NotificationConfigurationInput,
 ) -> Result<WorkspaceConfiguration, String> {
     let credentials = notify::OsCredentialStore;
     configure_notifications_with_credentials(
+        &global_settings_path(&app)?,
         &edit_root,
-        NotificationConfigurationInput {
-            transport,
-            relay_host,
-            relay_port,
-            login_user,
-            from_mailbox,
-            smtp_app_password,
-        },
+        input,
         &credentials,
     )
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct NotificationConfigurationInput {
     transport: String,
     relay_host: String,
@@ -1050,6 +1043,7 @@ struct NotificationConfigurationInput {
 }
 
 fn configure_notifications_with_credentials<C: notify::CredentialStore>(
+    global_settings_path: &Path,
     edit_root: &str,
     input: NotificationConfigurationInput,
     credentials: &C,
@@ -1068,50 +1062,50 @@ fn configure_notifications_with_credentials<C: notify::CredentialStore>(
         value => return Err(format!("unknown notification transport: {value}")),
     };
     let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
-    workspace
+    let settings = workspace
         .configure_notifications(transport, smtp)
         .map_err(|error| error.to_string())?;
     match transport {
         NotificationTransport::Smtp if !input.smtp_app_password.trim().is_empty() => {
-            credentials.set_smtp_password(workspace.workspace_id, &input.smtp_app_password)?
+            credentials.set_smtp_password(&input.smtp_app_password)?
         }
-        NotificationTransport::Smtp
-            if !credentials.smtp_password_exists(workspace.workspace_id)? =>
-        {
+        NotificationTransport::Smtp if !credentials.smtp_password_exists()? => {
             return Err(
                 "SMTP configuration requires a Microsoft 365 app password in the OS credential store"
                     .to_owned(),
             );
         }
-        NotificationTransport::Mailto => {
-            credentials.delete_smtp_password(workspace.workspace_id)?
-        }
+        NotificationTransport::Mailto => credentials.delete_smtp_password()?,
         _ => {}
     }
-    workspace.save().map_err(|error| error.to_string())?;
+    let mut global_settings = load_global_settings_at(global_settings_path)?;
+    global_settings.notification_settings = Some(settings);
+    save_global_settings_at(global_settings_path, &global_settings)?;
     workspace_configuration_from_with_global_and_credentials(
         &workspace,
-        effective_global_entra_configuration(&GlobalSettings::default())?,
+        &global_settings,
         credentials,
     )
 }
 
 #[tauri::command]
-fn test_smtp_notification(edit_root: String) -> Result<SmtpTestResult, String> {
-    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+fn test_smtp_notification(app: AppHandle, edit_root: String) -> Result<SmtpTestResult, String> {
+    Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
     let credentials = notify::OsCredentialStore;
-    let mut notifier = notify::production_notifier(workspace.workspace_id, false);
-    test_smtp_notification_with(&workspace, &credentials, &mut notifier)
+    let global_settings = load_global_settings_at(&global_settings_path(&app)?)?;
+    let settings = global_settings
+        .notification_settings
+        .as_ref()
+        .ok_or_else(|| "SMTP test requires saved notification settings".to_owned())?;
+    let mut notifier = notify::production_notifier(false);
+    test_smtp_notification_with(settings, &credentials, &mut notifier)
 }
 
 fn test_smtp_notification_with<C: notify::CredentialStore, N: NotificationClient>(
-    workspace: &Workspace,
+    settings: &NotificationSettings,
     credentials: &C,
     notifier: &mut N,
 ) -> Result<SmtpTestResult, String> {
-    let settings = workspace
-        .notification_settings()
-        .ok_or_else(|| "SMTP test requires saved notification settings".to_owned())?;
     if settings.transport != NotificationTransport::Smtp {
         return Err("SMTP test is unavailable for mailto notification transport".to_owned());
     }
@@ -1120,7 +1114,7 @@ fn test_smtp_notification_with<C: notify::CredentialStore, N: NotificationClient
         .as_ref()
         .ok_or_else(|| "SMTP test requires saved relay settings".to_owned())?;
     if !credentials
-        .smtp_password_exists(workspace.workspace_id)
+        .smtp_password_exists()
         .map_err(|_| "Cannot verify the saved SMTP credential.".to_owned())?
     {
         return Err("SMTP test requires a configured app password".to_owned());
@@ -1446,20 +1440,27 @@ struct CandidateSubmissionInput {
     mailto_confirmed: bool,
 }
 
+struct ReviewDecisionContext {
+    actor: AuthenticatedActor,
+    settings: NotificationSettings,
+}
+
+fn user_notification_settings(app: &AppHandle) -> Result<NotificationSettings, String> {
+    load_global_settings_at(&global_settings_path(app)?)?
+        .notification_settings
+        .ok_or_else(|| "notification transport is not configured for this DMS user".to_owned())
+}
+
 fn production_notifier(
-    edit_root: &str,
     mailto_confirmed: bool,
-) -> Result<notify::DesktopNotifier<notify::OsCredentialStore>, String> {
-    let workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
-    Ok(notify::production_notifier(
-        workspace.workspace_id,
-        mailto_confirmed,
-    ))
+) -> notify::DesktopNotifier<notify::OsCredentialStore> {
+    notify::production_notifier(mailto_confirmed)
 }
 
 fn submit_document_candidate_with<G: GraphClient, N: NotificationClient>(
     edit_root: &str,
     input: CandidateSubmissionInput,
+    settings: &NotificationSettings,
     graph: &mut G,
     notifier: &mut N,
 ) -> Result<DocumentSelection, String> {
@@ -1468,6 +1469,9 @@ fn submit_document_candidate_with<G: GraphClient, N: NotificationClient>(
         .map_err(|_| "effective date must use YYYY-MM-DD".to_owned())?;
     let document_id = input.document_id;
     let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .configure_notifications(settings.transport, settings.smtp.clone())
+        .map_err(|error| error.to_string())?;
     workspace
         .submit_candidate(
             CandidateRequest {
@@ -1493,9 +1497,13 @@ fn submit_document_candidate_with<G: GraphClient, N: NotificationClient>(
 fn retry_review_notification_with<N: NotificationClient>(
     edit_root: &str,
     document_id: Uuid,
+    settings: &NotificationSettings,
     notifier: &mut N,
 ) -> Result<DocumentSelection, String> {
     let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .configure_notifications(settings.transport, settings.smtp.clone())
+        .map_err(|error| error.to_string())?;
     workspace
         .retry_review_notification(document_id, notifier)
         .map_err(|error| error.to_string())?;
@@ -1508,12 +1516,18 @@ fn decide_document_review_with<G: GraphClient + ?Sized, N: NotificationClient>(
     document_id: Uuid,
     decision: ReviewDecision,
     comment: String,
-    actor: AuthenticatedActor,
+    context: ReviewDecisionContext,
     graph: &mut G,
     notifier: &mut N,
 ) -> Result<DocumentSelection, String> {
     let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
-    let mut signed_in_graph = SignedInActorGraph { graph, actor };
+    workspace
+        .configure_notifications(context.settings.transport, context.settings.smtp.clone())
+        .map_err(|error| error.to_string())?;
+    let mut signed_in_graph = SignedInActorGraph {
+        graph,
+        actor: context.actor,
+    };
     workspace
         .decide_review(
             document_id,
@@ -1531,11 +1545,15 @@ fn release_document_candidate_with<G: GraphClient, N: NotificationClient, E: Pdf
     edit_root: &str,
     document_id: Uuid,
     release_override_reason: String,
+    settings: &NotificationSettings,
     graph: &mut G,
     notifier: &mut N,
     exporter: &mut E,
 ) -> Result<DocumentSelection, String> {
     let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .configure_notifications(settings.transport, settings.smtp.clone())
+        .map_err(|error| error.to_string())?;
     workspace
         .release_candidate(
             document_id,
@@ -1552,9 +1570,13 @@ fn retry_decision_notification_with<N: NotificationClient>(
     edit_root: &str,
     document_id: Uuid,
     candidate_id: Uuid,
+    settings: &NotificationSettings,
     notifier: &mut N,
 ) -> Result<DocumentSelection, String> {
     let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .configure_notifications(settings.transport, settings.smtp.clone())
+        .map_err(|error| error.to_string())?;
     workspace
         .retry_decision_notification(document_id, candidate_id, notifier)
         .map_err(|error| error.to_string())?;
@@ -1565,9 +1587,13 @@ fn retry_minor_publication_notification_with<N: NotificationClient>(
     edit_root: &str,
     document_id: Uuid,
     release_id: Uuid,
+    settings: &NotificationSettings,
     notifier: &mut N,
 ) -> Result<DocumentSelection, String> {
     let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .configure_notifications(settings.transport, settings.smtp.clone())
+        .map_err(|error| error.to_string())?;
     workspace
         .retry_minor_publication_notification(document_id, release_id, notifier)
         .map_err(|error| error.to_string())?;
@@ -1576,30 +1602,35 @@ fn retry_minor_publication_notification_with<N: NotificationClient>(
 
 #[tauri::command]
 fn submit_document_candidate(
+    app: AppHandle,
     edit_root: String,
     input: CandidateSubmissionInput,
     state: State<'_, DesktopIntegrations>,
 ) -> Result<DocumentSelection, String> {
-    let mut notifier = production_notifier(&edit_root, input.mailto_confirmed)?;
+    let settings = user_notification_settings(&app)?;
+    let mut notifier = production_notifier(input.mailto_confirmed);
     let mut graph = state
         .graph
         .lock()
         .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
-    submit_document_candidate_with(&edit_root, input, &mut *graph, &mut notifier)
+    submit_document_candidate_with(&edit_root, input, &settings, &mut *graph, &mut notifier)
 }
 
 #[tauri::command]
 fn retry_review_notification(
+    app: AppHandle,
     edit_root: String,
     document_id: Uuid,
     mailto_confirmed: bool,
 ) -> Result<DocumentSelection, String> {
-    let mut notifier = production_notifier(&edit_root, mailto_confirmed)?;
-    retry_review_notification_with(&edit_root, document_id, &mut notifier)
+    let settings = user_notification_settings(&app)?;
+    let mut notifier = production_notifier(mailto_confirmed);
+    retry_review_notification_with(&edit_root, document_id, &settings, &mut notifier)
 }
 
 #[tauri::command]
 fn decide_document_review(
+    app: AppHandle,
     edit_root: String,
     document_id: Uuid,
     decision: String,
@@ -1616,7 +1647,8 @@ fn decide_document_review(
         .ok_or_else(|| {
             "complete interactive approver sign-in before recording a decision".to_owned()
         })?;
-    let mut notifier = production_notifier(&edit_root, mailto_confirmed)?;
+    let settings = user_notification_settings(&app)?;
+    let mut notifier = production_notifier(mailto_confirmed);
     let mut graph = state
         .graph
         .lock()
@@ -1626,7 +1658,7 @@ fn decide_document_review(
         document_id,
         decision,
         comment,
-        actor,
+        ReviewDecisionContext { actor, settings },
         &mut *graph,
         &mut notifier,
     )
@@ -1634,13 +1666,15 @@ fn decide_document_review(
 
 #[tauri::command]
 fn release_document_candidate(
+    app: AppHandle,
     edit_root: String,
     document_id: Uuid,
     release_override_reason: String,
     mailto_confirmed: bool,
     state: State<'_, DesktopIntegrations>,
 ) -> Result<DocumentSelection, String> {
-    let mut notifier = production_notifier(&edit_root, mailto_confirmed)?;
+    let settings = user_notification_settings(&app)?;
+    let mut notifier = production_notifier(mailto_confirmed);
     let mut graph = state
         .graph
         .lock()
@@ -1650,6 +1684,7 @@ fn release_document_candidate(
         &edit_root,
         document_id,
         release_override_reason,
+        &settings,
         &mut *graph,
         &mut notifier,
         &mut exporter,
@@ -1658,24 +1693,40 @@ fn release_document_candidate(
 
 #[tauri::command]
 fn retry_decision_notification(
+    app: AppHandle,
     edit_root: String,
     document_id: Uuid,
     candidate_id: Uuid,
     mailto_confirmed: bool,
 ) -> Result<DocumentSelection, String> {
-    let mut notifier = production_notifier(&edit_root, mailto_confirmed)?;
-    retry_decision_notification_with(&edit_root, document_id, candidate_id, &mut notifier)
+    let settings = user_notification_settings(&app)?;
+    let mut notifier = production_notifier(mailto_confirmed);
+    retry_decision_notification_with(
+        &edit_root,
+        document_id,
+        candidate_id,
+        &settings,
+        &mut notifier,
+    )
 }
 
 #[tauri::command]
 fn retry_minor_publication_notification(
+    app: AppHandle,
     edit_root: String,
     document_id: Uuid,
     release_id: Uuid,
     mailto_confirmed: bool,
 ) -> Result<DocumentSelection, String> {
-    let mut notifier = production_notifier(&edit_root, mailto_confirmed)?;
-    retry_minor_publication_notification_with(&edit_root, document_id, release_id, &mut notifier)
+    let settings = user_notification_settings(&app)?;
+    let mut notifier = production_notifier(mailto_confirmed);
+    retry_minor_publication_notification_with(
+        &edit_root,
+        document_id,
+        release_id,
+        &settings,
+        &mut notifier,
+    )
 }
 
 #[tauri::command]
@@ -1882,6 +1933,7 @@ fn remind_periodic_review_with<N: NotificationClient + ?Sized>(
     document_id: Uuid,
     review_id: Uuid,
     confirmed: bool,
+    settings: &NotificationSettings,
     notifier: &mut N,
 ) -> Result<DeliveryAttempt, String> {
     if !confirmed {
@@ -1889,19 +1941,31 @@ fn remind_periodic_review_with<N: NotificationClient + ?Sized>(
     }
     let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
     workspace
+        .configure_notifications(settings.transport, settings.smtp.clone())
+        .map_err(|error| error.to_string())?;
+    workspace
         .remind_periodic_review(document_id, review_id, notifier)
         .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 fn remind_periodic_review(
+    app: AppHandle,
     edit_root: String,
     document_id: Uuid,
     review_id: Uuid,
     confirmed: bool,
 ) -> Result<DeliveryAttempt, String> {
-    let mut notifier = production_notifier(&edit_root, false)?;
-    remind_periodic_review_with(&edit_root, document_id, review_id, confirmed, &mut notifier)
+    let settings = user_notification_settings(&app)?;
+    let mut notifier = production_notifier(false);
+    remind_periodic_review_with(
+        &edit_root,
+        document_id,
+        review_id,
+        confirmed,
+        &settings,
+        &mut notifier,
+    )
 }
 
 #[tauri::command]
@@ -2497,33 +2561,27 @@ fn workspace_configuration(
 ) -> Result<WorkspaceConfiguration, String> {
     let workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
     let settings = load_global_settings_at(&global_settings_path(app)?)?;
-    workspace_configuration_from_with_global(
-        &workspace,
-        effective_global_entra_configuration(&settings)?,
-    )
+    workspace_configuration_from_with_global(&workspace, &settings)
 }
 
 fn workspace_configuration_from(workspace: &Workspace) -> Result<WorkspaceConfiguration, String> {
-    workspace_configuration_from_with_global(
-        workspace,
-        effective_global_entra_configuration(&GlobalSettings::default())?,
-    )
+    workspace_configuration_from_with_global(workspace, &GlobalSettings::default())
 }
 
 fn workspace_configuration_from_with_global(
     workspace: &Workspace,
-    global_entra_configuration: GlobalEntraConfiguration,
+    global_settings: &GlobalSettings,
 ) -> Result<WorkspaceConfiguration, String> {
     workspace_configuration_from_with_global_and_credentials(
         workspace,
-        global_entra_configuration,
+        global_settings,
         &notify::OsCredentialStore,
     )
 }
 
 fn workspace_configuration_from_with_global_and_credentials<C: notify::CredentialStore>(
     workspace: &Workspace,
-    global_entra_configuration: GlobalEntraConfiguration,
+    global_settings: &GlobalSettings,
     credentials: &C,
 ) -> Result<WorkspaceConfiguration, String> {
     Ok(WorkspaceConfiguration {
@@ -2548,9 +2606,9 @@ fn workspace_configuration_from_with_global_and_credentials<C: notify::Credentia
         identity_source: workspace.identity_source().cloned(),
         eligible_people: workspace.eligible_people().into_iter().cloned().collect(),
         workflow_policies: workspace.workflow_policies(),
-        notification_settings: workspace.notification_settings().cloned(),
-        global_entra_configuration,
-        smtp_credential_configured: credentials.smtp_password_exists(workspace.workspace_id)?,
+        notification_settings: global_settings.notification_settings.clone(),
+        global_entra_configuration: effective_global_entra_configuration(global_settings)?,
+        smtp_credential_configured: credentials.smtp_password_exists()?,
     })
 }
 
@@ -3605,6 +3663,7 @@ mod tests {
         let settings = GlobalSettings {
             entra_client_id: Uuid::new_v4().to_string(),
             entra_tenant_id: Uuid::new_v4().to_string(),
+            ..GlobalSettings::default()
         };
         let tenant_id = Uuid::new_v4();
         let client_id = Uuid::new_v4();
@@ -3668,6 +3727,7 @@ mod tests {
         let settings = GlobalSettings {
             entra_client_id: saved_client_id.to_string(),
             entra_tenant_id: saved_tenant_id.to_string(),
+            ..GlobalSettings::default()
         };
         let environment_client_id = Uuid::new_v4();
         let environment_tenant_id = Uuid::new_v4();
@@ -3818,6 +3878,7 @@ mod tests {
         let settings = GlobalSettings {
             entra_client_id: Uuid::new_v4().to_string(),
             entra_tenant_id: Uuid::new_v4().to_string(),
+            ..GlobalSettings::default()
         };
 
         save_global_settings_at(&path, &settings).unwrap();
@@ -3834,7 +3895,7 @@ mod tests {
         }
 
         impl notify::CredentialStore for MemoryCredentials {
-            fn smtp_password(&self, _workspace_id: Uuid) -> Result<String, String> {
+            fn smtp_password(&self) -> Result<String, String> {
                 self.password
                     .lock()
                     .map_err(|_| "credential test store is unavailable".to_owned())?
@@ -3842,7 +3903,7 @@ mod tests {
                     .ok_or_else(|| "SMTP app password is missing".to_owned())
             }
 
-            fn set_smtp_password(&self, _workspace_id: Uuid, password: &str) -> Result<(), String> {
+            fn set_smtp_password(&self, password: &str) -> Result<(), String> {
                 *self
                     .password
                     .lock()
@@ -3851,7 +3912,7 @@ mod tests {
                 Ok(())
             }
 
-            fn delete_smtp_password(&self, _workspace_id: Uuid) -> Result<(), String> {
+            fn delete_smtp_password(&self) -> Result<(), String> {
                 *self
                     .password
                     .lock()
@@ -3859,7 +3920,7 @@ mod tests {
                 Ok(())
             }
 
-            fn smtp_password_exists(&self, _workspace_id: Uuid) -> Result<bool, String> {
+            fn smtp_password_exists(&self) -> Result<bool, String> {
                 Ok(self
                     .password
                     .lock()
@@ -3873,6 +3934,7 @@ mod tests {
         Workspace::init(edit_root.path(), publish_root.path()).unwrap();
         let credentials = MemoryCredentials::default();
         let root = edit_root.path().to_string_lossy().into_owned();
+        let global_path = publish_root.path().join(GLOBAL_SETTINGS_FILENAME);
         let smtp_input = |smtp_app_password: &str| NotificationConfigurationInput {
             transport: "smtp".to_owned(),
             relay_host: "smtp.example.test".to_owned(),
@@ -3882,16 +3944,19 @@ mod tests {
             smtp_app_password: smtp_app_password.to_owned(),
         };
 
-        let error = configure_notifications_with_credentials(&root, smtp_input(""), &credentials)
-            .unwrap_err();
+        let error = configure_notifications_with_credentials(
+            &global_path,
+            &root,
+            smtp_input(""),
+            &credentials,
+        )
+        .unwrap_err();
 
         assert!(error.contains("requires a Microsoft 365 app password"));
-        assert!(Workspace::open(edit_root.path())
-            .unwrap()
-            .notification_settings()
-            .is_none());
+        assert!(!global_path.exists());
 
         let configured = configure_notifications_with_credentials(
+            &global_path,
             &root,
             smtp_input("one-way-secret"),
             &credentials,
@@ -3904,11 +3969,19 @@ mod tests {
         assert!(
             !fs::read_to_string(edit_root.path().join(".dms/workspace.json"))
                 .unwrap()
-                .contains("one-way-secret")
+                .contains("smtp.example.test")
         );
+        assert!(fs::read_to_string(&global_path)
+            .unwrap()
+            .contains("smtp.example.test"));
 
-        let retained =
-            configure_notifications_with_credentials(&root, smtp_input(""), &credentials).unwrap();
+        let retained = configure_notifications_with_credentials(
+            &global_path,
+            &root,
+            smtp_input(""),
+            &credentials,
+        )
+        .unwrap();
         assert!(retained.smtp_credential_configured);
 
         #[derive(Default)]
@@ -3929,9 +4002,9 @@ mod tests {
             }
         }
 
-        let workspace = Workspace::open(edit_root.path()).unwrap();
+        let settings = configured.notification_settings.as_ref().unwrap();
         let mut notifier = RecordingNotifier::default();
-        let result = test_smtp_notification_with(&workspace, &credentials, &mut notifier).unwrap();
+        let result = test_smtp_notification_with(settings, &credentials, &mut notifier).unwrap();
         assert_eq!(result.recipient, "dms@example.test");
         assert_eq!(result.response_code, Some(250));
         assert_eq!(notifier.recipient.as_deref(), Some("dms@example.test"));
@@ -3952,8 +4025,8 @@ mod tests {
             }
         }
 
-        let error = test_smtp_notification_with(&workspace, &credentials, &mut FailingNotifier)
-            .unwrap_err();
+        let error =
+            test_smtp_notification_with(settings, &credentials, &mut FailingNotifier).unwrap_err();
         assert_eq!(
             error,
             "SMTP test delivery failed. Verify the saved relay, identity, From mailbox, and app password."
@@ -3961,6 +4034,7 @@ mod tests {
         assert!(!error.contains("relay details"));
 
         let mailto = configure_notifications_with_credentials(
+            &global_path,
             &root,
             NotificationConfigurationInput {
                 transport: "mailto".to_owned(),
@@ -4213,9 +4287,18 @@ mod tests {
             false,
         )
         .unwrap_err();
-        let reminder =
-            remind_periodic_review_with("missing", Uuid::nil(), Uuid::nil(), false, &mut notifier)
-                .unwrap_err();
+        let reminder = remind_periodic_review_with(
+            "missing",
+            Uuid::nil(),
+            Uuid::nil(),
+            false,
+            &NotificationSettings {
+                transport: NotificationTransport::Mailto,
+                smtp: None,
+            },
+            &mut notifier,
+        )
+        .unwrap_err();
 
         assert!(completion.contains("explicit confirmation"));
         assert!(cancellation.contains("explicit confirmation"));
@@ -4517,6 +4600,15 @@ mod tests {
                 }),
             )
             .unwrap();
+        let settings = NotificationSettings {
+            transport: NotificationTransport::Smtp,
+            smtp: Some(SmtpSettings {
+                relay_host: "smtp.example.test".to_owned(),
+                relay_port: 587,
+                login_user: "dms@example.test".to_owned(),
+                from_mailbox: "dms@example.test".to_owned(),
+            }),
+        };
         let source = edit_root.path().join("Policies/Handbook.md");
         fs::write(
             &source,
@@ -4559,6 +4651,7 @@ mod tests {
                 review_override_reason: String::new(),
                 mailto_confirmed: false,
             },
+            &settings,
             &mut graph,
             &mut notifier,
         )
@@ -4573,9 +4666,12 @@ mod tests {
             document.id,
             ReviewDecision::Approved,
             "Ready for release".to_owned(),
-            AuthenticatedActor {
-                tenant_id,
-                object_id: approver_id,
+            ReviewDecisionContext {
+                actor: AuthenticatedActor {
+                    tenant_id,
+                    object_id: approver_id,
+                },
+                settings: settings.clone(),
             },
             &mut graph,
             &mut notifier,
@@ -4590,6 +4686,7 @@ mod tests {
             &root,
             document.id,
             String::new(),
+            &settings,
             &mut graph,
             &mut notifier,
             &mut TestExporter,

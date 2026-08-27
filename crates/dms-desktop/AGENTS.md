@@ -208,7 +208,9 @@ macOS.
   selection expands only its ancestor chain; direct Editor/Approver assignments
   and direct confidentiality types are badged without labelling inherited values
   as direct.
-- SMTP configuration keeps relay authentication login separate from the RFC 5322
+- Notification transport and non-secret SMTP relay fields are OS-user settings
+  shared by every library that user opens; `.dms` never persists them. SMTP
+  configuration keeps relay authentication login separate from the RFC 5322
   `From` mailbox. Credential presence is exposed only as `***`; the test action
   targets the parsed saved `From` address, sends fixed non-document content, and
   reports only a sanitized result with an optional relay response code.

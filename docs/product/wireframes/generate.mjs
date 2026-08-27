@@ -615,11 +615,11 @@ const CAPS = [
     title: "Notification transport",
     nav: "config",
     configSection: "notifications",
-    subtitle: "Major review requests and post-release minor-publication notices use SMTP or mailto:.",
+    subtitle: "This DMS user's SMTP relay or mailto: setting delivers major review requests and post-release minor-publication notices for every opened library.",
     body: `
       <div class="grid-2">
         <section class="card">
-          <div class="row gap-2 mb"><h3 class="card-title">SMTP relay</h3>${badge("credential configured", "ok")}</div>
+          <div class="row gap-2 mb"><h3 class="card-title">SMTP relay</h3>${badge("configured for this DMS user", "ok")}</div>
           ${kv([
             ["Host", "smtp.videoclinic.de"],
             ["Port", "587 (STARTTLS)"],
@@ -630,7 +630,7 @@ const CAPS = [
             ["Minor-publication recipient", "anna@videoclinic.de (effective approver snapshot)"],
           ])}
           <div class="row gap-2" style="margin-top:0.75rem"><button class="btn outline">Send test email to “Doc Mgmt” &lt;dms@videoclinic.de&gt;</button></div>
-          <p class="hint">A blank password input retains the existing OS credential. The login user authenticates only; the formatted From mailbox supplies the message identity and fixed test recipient. Changing to <code>mailto:</code> removes the workspace-scoped credential. No password is returned or written to <code>.dms</code>.</p>
+          <p class="hint">Relay fields are saved in this OS user's DMS app configuration and a blank password input retains their OS credential. The login user authenticates only; the formatted From mailbox supplies the message identity and fixed test recipient. Changing to <code>mailto:</code> removes this user's credential. No relay field or password is returned or written to <code>.dms</code>.</p>
         </section>
         <section class="card">
           <div class="row gap-2 mb"><h3 class="card-title">Minor-publication notice</h3>${badge("released V1.4", "ok")}</div>

@@ -10,18 +10,20 @@
 ## Outcomes
 
 1. **Configuration → Notifications** stores the selected notification transport
-   (`smtp` or `mailto`) and the non-secret SMTP relay settings. SMTP stores a
+   (`smtp` or `mailto`) and the non-secret SMTP relay settings for the current
+   DMS OS user, shared by every library that user opens. SMTP stores a
    login user used only for relay authentication and a separate RFC 5322 `From`
    mailbox that may include a display name. For SMTP it also
    accepts a write-only Microsoft 365 app-password field that writes directly to
    OS credential storage after relay validation; the value is never pre-filled,
    serialized, or returned. A blank field retains an existing credential, while
-   SMTP cannot be saved or used without one. Switching to `mailto` deletes the
-   workspace-scoped SMTP credential. The persistent
+   SMTP cannot be saved or used without one. Switching to `mailto` deletes that
+   OS user's SMTP credential. The persistent
    Configuration navigation also exposes Workspace, Document defaults, and
    Workflow so notification settings remain a discoverable peer rather than an
    isolated page. The relay password is always resolved from the OS credential
-   store, never stored in `.dms`. Once saved, the UI represents credential
+   store, never stored in `.dms`. The non-secret relay fields are stored outside
+   `.dms` in OS-user app configuration. Once saved, the UI represents credential
    presence only as `***`; it never reconstructs or returns the password.
 2. When the transport is `smtp`, a review request uses the configured relay to
    send the canonical review-request notification below. The SMTP message is
@@ -57,9 +59,10 @@
    the release; SMTP failure or unconfirmed `mailto:` send records a retryable
    delivery attempt and never reverses the committed release. Minor releases do
    not send a review request before release.
-7. A workspace may switch transport at any time. Switching from `mailto` to
-   `smtp` requires a relay configuration; switching from `smtp` to `mailto`
-   clears the relay settings but keeps Microsoft Entra workflow-role bindings.
+7. A DMS user may switch transport at any time. Switching from `mailto` to
+   `smtp` requires that user's relay configuration; switching from `smtp` to
+   `mailto` clears that user's relay settings and credential without changing
+   any library's Microsoft Entra workflow-role bindings.
 8. The workflow history records each review-request, decision-outcome, and
    minor-publication notification with its recipient, transport, delivery status,
    SMTP response code (or `mailto`-sent confirmation), and timestamp. An
@@ -165,3 +168,4 @@ prefills.
 - Privacy: [`../../privacy.md`](../../privacy.md)
 - ADR-0009, ADR-0012, ADR-0020: [`../../design-decisions.md`](../../design-decisions.md)
 - Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)
+- User-scoped transport receipt: [`../../changes/archive/CHG-0034-user-scoped-notification-transport.md`](../../changes/archive/CHG-0034-user-scoped-notification-transport.md)

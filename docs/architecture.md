@@ -21,7 +21,8 @@ PDFs under a **publish root**, with integrity checksums.
 | Claude Desktop (optional host app) | Operator-mediated, consented handoff for advisory target-version mode and changelog wording; not a callable local model or lifecycle authority |
 | Microsoft Entra ID + Microsoft Graph | App-global public-client and tenant configuration plus a per-workspace group supplies eligible workflow people; delegated interactive sign-in verifies review decisions; never reads or synchronizes document content. When both effective identifiers are process-environment values, startup validates the cached delegated session or starts one non-blocking OAuth device-authorization challenge; Windows policy and saved-settings-only configuration do not |
 | App-global Entra configuration | Windows machine policy at `HKLM\SOFTWARE\Policies\Videoclinic\DMS` when present, otherwise OS-user `global-settings.json`; both hold only the non-secret public-client ID and tenant ID shared by local libraries |
-| `<edit-root>/.dms/` | Roots config, library registry, active Markdown export-template identity/relative locator/validation digest, DMS-managed document control data, Entra group binding + read-only display cache, SMTP relay settings (no secrets), folder confidentiality and workflow-role policies, notes, approval/release history, evidence hashes, checksums, advisory lock |
+| `<edit-root>/.dms/` | Roots config, library registry, active Markdown export-template identity/relative locator/validation digest, DMS-managed document control data, Entra group binding + read-only display cache, folder confidentiality and workflow-role policies, notes, approval/release history, evidence hashes, checksums, advisory lock |
+| OS-user `global-settings.json` | Non-secret public-client/tenant IDs plus notification transport/SMTP relay settings shared by every local library opened by that DMS user |
 | Edit root tree | Operator-edited Microsoft Office and Markdown source drafts (library members are a subset) |
 | Publish root tree | Versioned released PDFs in a directory tree mirrored from edit-relative paths |
 
@@ -112,9 +113,11 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
   The signed-in tenant/object ID must match the review's snapshotted effective
   approver and still be eligible in the bound group. This verifies the decision
   actor; it does not grant source-file access or turn the app into a web portal.
-- The application sends notification email through a configured SMTP relay. The
-  Microsoft 365 app password is a write-only Configuration input and is held in
-  the OS credential store, never in `.dms`, frontend state, or an IPC response.
+- The application sends notification email through the DMS user's configured SMTP
+  relay or host mail handler. The non-secret transport and relay settings live in
+  OS-user app configuration, while the Microsoft 365 app password is a write-only
+  input held in the OS credential store. Neither is stored in `.dms`, frontend
+  state, or an IPC response.
 - When SMTP is not configured, the desktop app opens the host's default email
   handler with a pre-filled `mailto:` URI as a fallback notification path; this
   is an outbound mail draft, not a server-issued message, and the lifecycle

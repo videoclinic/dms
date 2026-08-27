@@ -384,7 +384,7 @@ function notificationsMarkup(snapshot) {
   const testAction = transport === "smtp"
     ? `<form data-configuration-form="smtp-test"><button class="button secondary" type="submit" ${canTest ? "" : "disabled"}>Send test email to ${escapeHtml(smtp?.from_mailbox ?? "From address")}</button></form>`
     : "";
-  return `<section class="card configuration-card configuration-notifications"><span class="badge">Workspace notification transport</span><h2>Review and release email</h2><p>Choose one transport for workflow notices. Delivery credentials stay in the OS credential store and are never written to <code>.dms</code>.</p><form class="configuration-form configuration-notification-form" data-configuration-form="notifications"><label>Transport<select name="transport" required><option value="smtp" ${transport === "smtp" ? "selected" : ""}>SMTP relay</option><option value="mailto" ${transport === "mailto" ? "selected" : ""}>Host mail app (mailto)</option></select></label><div class="configuration-grid"><label>SMTP relay host<input name="relayHost" value="${escapeHtml(smtp?.relay_host ?? "")}" placeholder="smtp.example.com"></label><label>SMTP relay port<input name="relayPort" type="number" min="1" max="65535" value="${escapeHtml(smtp?.relay_port ?? 587)}"></label><label>SMTP login user<input name="loginUser" value="${escapeHtml(smtp?.login_user ?? "")}" placeholder="smtp-user@example.com"></label><label>From mailbox<input name="fromMailbox" value="${escapeHtml(smtp?.from_mailbox ?? "")}" placeholder="&quot;Doc Mgmt&quot; &lt;dms@example.com&gt;"></label><label>Microsoft 365 app password<input name="smtpAppPassword" type="password" autocomplete="new-password" placeholder="${snapshot.smtp_credential_configured ? "***" : ""}"></label></div><p class="subtle">${snapshot.smtp_credential_configured ? "Credential configured. Leave the password blank to retain it." : "No credential configured."}</p><button class="button" type="submit">Save notification transport</button></form>${testAction}</section>`;
+  return `<section class="card configuration-card configuration-notifications"><span class="badge">DMS user notification transport</span><h2>Review and release email</h2><p>Choose one transport for workflow notices sent by this DMS user across every opened library. Relay settings stay in the OS-user app configuration; delivery credentials stay in the OS credential store. Neither is written to <code>.dms</code>.</p><form class="configuration-form configuration-notification-form" data-configuration-form="notifications"><label>Transport<select name="transport" required><option value="smtp" ${transport === "smtp" ? "selected" : ""}>SMTP relay</option><option value="mailto" ${transport === "mailto" ? "selected" : ""}>Host mail app (mailto)</option></select></label><div class="configuration-grid"><label>SMTP relay host<input name="relayHost" value="${escapeHtml(smtp?.relay_host ?? "")}" placeholder="smtp.example.com"></label><label>SMTP relay port<input name="relayPort" type="number" min="1" max="65535" value="${escapeHtml(smtp?.relay_port ?? 587)}"></label><label>SMTP login user<input name="loginUser" value="${escapeHtml(smtp?.login_user ?? "")}" placeholder="smtp-user@example.com"></label><label>From mailbox<input name="fromMailbox" value="${escapeHtml(smtp?.from_mailbox ?? "")}" placeholder="&quot;Doc Mgmt&quot; &lt;dms@example.com&gt;"></label><label>Microsoft 365 app password<input name="smtpAppPassword" type="password" autocomplete="new-password" placeholder="${snapshot.smtp_credential_configured ? "***" : ""}"></label></div><p class="subtle">${snapshot.smtp_credential_configured ? "Credential configured. Leave the password blank to retain it." : "No credential configured."}</p><button class="button" type="submit">Save user notification transport</button></form>${testAction}</section>`;
 }
 
 function unavailableRouteMarkup(route) {
@@ -480,12 +480,14 @@ export function configurationMutationRequest(kind, values, selectedFolder) {
     return {
       command: "configure_notifications",
       arguments: {
-        transport: formValue(values, "transport"),
-        relayHost: formValue(values, "relayHost"),
-        relayPort: Number(formValue(values, "relayPort")),
-        loginUser: formValue(values, "loginUser"),
-        fromMailbox: formValue(values, "fromMailbox"),
-        smtpAppPassword: formValue(values, "smtpAppPassword"),
+        input: {
+          transport: formValue(values, "transport"),
+          relayHost: formValue(values, "relayHost"),
+          relayPort: Number(formValue(values, "relayPort")),
+          loginUser: formValue(values, "loginUser"),
+          fromMailbox: formValue(values, "fromMailbox"),
+          smtpAppPassword: formValue(values, "smtpAppPassword"),
+        },
       },
     };
   }

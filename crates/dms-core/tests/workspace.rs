@@ -1,8 +1,8 @@
 use std::{fs, path::PathBuf, thread, time::Duration};
 
 use dms_core::{
-    ControlUpdate, DmsError, NotificationTransport, SmtpSettings, WorkflowEventType, Workspace,
-    METADATA_DIRECTORY, METADATA_FILENAME, SCHEMA_VERSION,
+    ControlUpdate, DmsError, WorkflowEventType, Workspace, METADATA_DIRECTORY, METADATA_FILENAME,
+    SCHEMA_VERSION,
 };
 use tempfile::TempDir;
 
@@ -159,56 +159,44 @@ fn schema_v11_migration_preserves_legacy_owner_without_assigning_authority() {
 }
 
 #[test]
-fn schema_v12_migration_splits_smtp_sender_and_retains_backup() {
-    let (edit_root, _publish_root, mut workspace) = initialized_workspace();
-    workspace
-        .configure_notifications(
-            NotificationTransport::Smtp,
-            Some(SmtpSettings {
-                relay_host: "smtp.example.test".to_owned(),
-                relay_port: 587,
-                login_user: "legacy@example.test".to_owned(),
-                from_mailbox: "legacy@example.test".to_owned(),
-            }),
-        )
-        .expect("current SMTP configuration");
+fn schema_v15_migration_removes_workspace_notification_settings_and_retains_backup() {
+    let (edit_root, _publish_root, workspace) = initialized_workspace();
     workspace.save().expect("current metadata");
 
     let metadata_path = edit_root.path().join(".dms/workspace.json");
     let mut metadata: serde_json::Value =
         serde_json::from_slice(&fs::read(&metadata_path).expect("metadata"))
             .expect("metadata JSON");
-    metadata["schema_version"] = serde_json::Value::from(12);
-    let smtp = metadata["notification_settings"]["smtp"]
-        .as_object_mut()
-        .expect("SMTP settings");
-    smtp.remove("login_user");
-    smtp.remove("from_mailbox");
-    smtp.insert(
-        "sender".to_owned(),
-        serde_json::Value::String("legacy@example.test".to_owned()),
-    );
+    metadata["schema_version"] = serde_json::Value::from(15);
+    metadata["notification_settings"] = serde_json::json!({
+        "transport": "smtp",
+        "smtp": {
+            "relay_host": "smtp.example.test",
+            "relay_port": 587,
+            "login_user": "legacy@example.test",
+            "from_mailbox": "legacy@example.test"
+        }
+    });
     fs::write(
         &metadata_path,
         serde_json::to_vec_pretty(&metadata).unwrap(),
     )
     .unwrap();
 
-    let migrated = Workspace::open(edit_root.path()).expect("schema v12 migration");
+    let migrated = Workspace::open(edit_root.path()).expect("schema v15 migration");
     assert_eq!(migrated.schema_version, SCHEMA_VERSION);
-    let smtp = migrated
-        .notification_settings()
-        .and_then(|settings| settings.smtp.as_ref())
-        .expect("migrated SMTP settings");
-    assert_eq!(smtp.login_user, "legacy@example.test");
-    assert_eq!(smtp.from_mailbox, "legacy@example.test");
+    assert!(migrated.notification_settings().is_none());
+    let current: serde_json::Value =
+        serde_json::from_slice(&fs::read(&metadata_path).expect("migrated metadata"))
+            .expect("migrated metadata JSON");
+    assert!(current.get("notification_settings").is_none());
     let backup: serde_json::Value = serde_json::from_slice(
-        &fs::read(edit_root.path().join(".dms/workspace.v12.json.bak")).expect("migration backup"),
+        &fs::read(edit_root.path().join(".dms/workspace.v15.json.bak")).expect("migration backup"),
     )
     .expect("backup JSON");
-    assert_eq!(backup["schema_version"], 12);
+    assert_eq!(backup["schema_version"], 15);
     assert_eq!(
-        backup["notification_settings"]["smtp"]["sender"],
+        backup["notification_settings"]["smtp"]["login_user"],
         "legacy@example.test"
     );
 }
