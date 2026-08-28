@@ -7,7 +7,7 @@
 **Entry checkpoint:** none
 **Context sources:** `AGENTS.md` (Architectural decisions, Application records); `docs/AGENTS.md` (Local Contracts, Work Guidance); `docs/changes/AGENTS.md`; `docs/product/AGENTS.md`; `docs/architecture.md` (Runtime shape, Dual-root path model, Trust and control boundary); `docs/privacy.md` (Data classes, Processing principles); `docs/product/capabilities/CAP-0001-local-folder-dms.md` (Outcomes); `docs/product/capabilities/CAP-0006-library-explorer.md` (Outcomes); `docs/product/capabilities/CAP-0020-document-permalinks.md` (Outcomes, Canonical form); `crates/AGENTS.md`; `crates/dms-desktop/AGENTS.md`; `crates/dms-core/src/lifecycle.rs` (`Workspace::resolve_permalink`); `crates/dms-core/src/library.rs` (`Workspace::collect_library_inventory`, `Workspace::file_entry`); `crates/dms-desktop/src/lib.rs` (`initialize_workspace`, `open_workspace`, `resolve_registered_permalink_from`); `crates/dms-desktop/ui/app.mjs` (`openPermalink`, `activateWorkspace`); `docs/changes/archive/CHG-0023-os-level-dms-uri-registration.md`
 **Produces:** On Windows, every DMS-created or explicitly reopened workspace has `<edit-root>/Open in DMS.lnk`. Activating it sends `dms://open?workspace=<stable-workspace-id>` through the registered handler and opens that registered accessible workspace's root Library activity without a document selection. The link contains no edit-root or publish-root path and never appears as an unsupported Library file.
-**Status:** in-progress — Phase 1 verified; commit checkpoint pending.
+**Status:** in-progress — Phase 2 verified; commit checkpoint pending.
 
 Create a Windows Shell Link named `Open in DMS.lnk` in each workspace edit root; it opens that workspace through a workspace-only `dms://` URI, not an executable path or a filesystem path.
 
@@ -23,10 +23,12 @@ Create a Windows Shell Link named `Open in DMS.lnk` in each workspace edit root;
 
 - `Workspace::workspace_permalink` creates the exact workspace-only URI. `Workspace::resolve_permalink` resolves it only for a matching workspace UUID, rejects `target`, `review`, and malformed document values without a document target, and preserves document/review/notes resolution (`crates/dms-core/src/library.rs`, `crates/dms-core/src/lifecycle.rs`).
 - The desktop resolver scans only accessible edit roots in the per-user recent-library registry, then resolves through `dms-core` to either a root Library target without document data or a document target; it deliberately does not infer an arbitrary root from a URI (`crates/dms-desktop/src/lib.rs`).
-- Confirmed workspace initialization currently creates `.dms` through `Workspace::init` and returns a summary; it creates no Windows filesystem helper (`crates/dms-desktop/src/lib.rs:428-439`). Explicit reopening similarly only reads the workspace summary (`crates/dms-desktop/src/lib.rs:409-411`, `2479-2492`).
+- On Windows, confirmed initialization and explicit workspace open write or replace only `<edit-root>/Open in DMS.lnk` after valid workspace metadata opens. The adapter uses `IShellLinkW` and `IPersistFile` with the system `rundll32.exe` target and the canonical workspace URI; non-Windows targets are no-ops (`crates/dms-desktop/src/shortcut.rs`, `crates/dms-desktop/src/lib.rs`).
 - Inbound workspace and document permalinks activate through the normal session/lock path. A workspace URI focuses the singleton `Library · /` activity and reloads the root without document selection; the registered `dms://` handler ships in the Windows NSIS installer (CHG-0023).
 - The exact root `Open in DMS.lnk` helper is excluded from inventory counters and Library rows; nested or differently named `.lnk` files remain unsupported Library files (`crates/dms-core/src/library.rs`).
-- The repository has no Shell Link, `IShellLink`, `WScript`, `rundll32`, or `url.dll` implementation (`git grep -nE 'ShellLink|IShellLink|WScript|rundll32|url\.dll' -- crates` returns no matches). `dms-desktop` already uses a target-specific Windows dependency section (`crates/dms-desktop/Cargo.toml:38-39`).
+- `dms-desktop` declares a target-specific `windows` dependency only for the COM/Shell adapter. It does not use PowerShell, `WScript`, a batch file, or a path-bearing DMS URI.
+- Native Windows `cargo test -p dms-desktop` compiles the repaired installed-Word fixture and passes 73 tests with its one explicit installed-Word smoke still ignored. The shortcut test parses both the initialized and reopened workspace links and verifies the target, arguments, description, and absence of workspace-root paths.
+- On this host, the Windows Cargo invocation against the WSL-backed `L:\home\raphael\src\vc\dms` checkout requires `CARGO_INCREMENTAL=0`; otherwise the backing filesystem rejects Cargo's incremental session-lock file before compilation.
 
 ## Risk call-out
 
@@ -39,8 +41,8 @@ The writer may fail on a read-only/share-unavailable root after `.dms` has alrea
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
 | 1 | Add workspace-only URI resolution and hide the DMS helper file | done (`cargo test -p dms-core --test library`: 9 passed; `node --test crates/dms-desktop/ui/app.test.mjs`: 32 passed; `cargo test -p dms-desktop`: 70 passed) | `cargo test -p dms-core --test library` and `node --test crates/dms-desktop/ui/app.test.mjs` exit 0, including workspace-only URI and root-Library activation cases |
-| 2 | Generate and refresh the Windows Shell Link | pending — after the Phase 1 commit checkpoint | Windows `cargo test -p dms-desktop` exits 0 and a new workspace contains `Open in DMS.lnk` whose parsed target invokes the exact canonical workspace URI |
-| 3 | Prove packaged activation and update current-state records | pending | On a Windows host with the NSIS installation, double-clicking the generated link opens the expected workspace root; workspace gates and the Windows `Desktop platform smoke` job pass; CAPs and CHG index agree |
+| 2 | Generate and refresh the Windows Shell Link | done (Windows `CARGO_INCREMENTAL=0 cargo test -p dms-desktop`: 73 passed, 1 ignored; Linux `cargo test -p dms-desktop`: 70 passed) | Windows `cargo test -p dms-desktop` exits 0 and a new workspace contains `Open in DMS.lnk` whose parsed target invokes the exact canonical workspace URI |
+| 3 | Prove packaged activation and update current-state records | pending — after the Phase 2 commit checkpoint | On a Windows host with the NSIS installation, double-clicking the generated link opens the expected workspace root; workspace gates and the Windows `Desktop platform smoke` job pass; CAPs and CHG index agree |
 
 Mark a phase `in-progress` while running it, `done (<evidence>)` once its gate passes, and `pending` otherwise.
 
@@ -69,6 +71,7 @@ Steps:
 3. Call the adapter only after `Workspace::init` has persisted valid metadata and after the explicit `open_workspace` path has successfully opened a valid workspace. On non-Windows targets it is a no-op; do not create `.url` files, fake `.lnk` text files, or platform-specific artefacts under other OSes.
 4. Reserve the exact root-level filename `Open in DMS.lnk`: replace that DMS helper on each successful Windows init/open, return a contextual shortcut-write error when it cannot be written, and leave `.dms` valid for a later retry. Do not touch any other file, including nested links and root links with different names.
 5. Add Windows-gated adapter tests that initialize and reopen a temporary workspace, parse the saved Shell Link through the same COM API, and assert its filename, `rundll32.exe` target, exact URI argument, and absence of edit-root/publish-root strings. Keep cross-platform tests green without requiring a Windows runner.
+6. Repair the Windows-only installed-Word test fixture for the current notification-aware lifecycle helper signatures so `cargo test -p dms-desktop` compiles and retains its installed-Word export coverage.
 
 Verification gate: on Windows, `cargo test -p dms-desktop` exits 0 and a new temporary workspace contains `Open in DMS.lnk` whose parsed target invokes the exact canonical `dms://open?workspace=<workspace-id>` URI.
 

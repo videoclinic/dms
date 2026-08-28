@@ -31,6 +31,11 @@ macOS.
 - Before a workspace exists, expose only Set up workspace. Opening requires an
   existing edit root; initialization requires explicit edit + publish roots and
   confirmation before the adapter may create `.dms` or the publish root.
+- On Windows, a successful workspace initialization or explicit open replaces
+  only `<edit-root>/Open in DMS.lnk` with the canonical workspace-only `dms://`
+  URI through the system `rundll32.exe` handler. A shortcut-write failure leaves
+  valid `.dms` metadata intact for a later open retry; non-Windows targets create
+  no shortcut artifact.
 - Opening or switching workspace sessions acquires the destination advisory
   lock before activation, offers explicit stale takeover and a separately
   warned override-any-lock option from setup, releases the previous lock only

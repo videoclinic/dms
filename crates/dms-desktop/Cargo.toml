@@ -37,6 +37,7 @@ zip.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 winreg.workspace = true
+windows.workspace = true
 
 [features]
 default = ["custom-protocol"]

@@ -33,6 +33,7 @@ pub mod export;
 mod graph;
 pub mod notify;
 mod policy;
+mod shortcut;
 
 use assistance::ClaudeDesktopApp;
 
@@ -408,7 +409,9 @@ async fn select_directory(app: AppHandle) -> Result<Option<String>, String> {
 
 #[tauri::command]
 fn open_workspace(edit_root: String) -> Result<WorkspaceSummary, String> {
-    workspace_summary(Path::new(&edit_root))
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    shortcut::ensure_workspace_shortcut(&workspace)?;
+    Ok(workspace_summary_from(&workspace))
 }
 
 #[tauri::command]
@@ -434,9 +437,10 @@ fn initialize_workspace(
     if !confirmed {
         return Err("workspace initialization requires explicit confirmation".to_owned());
     }
-    Workspace::init(Path::new(&edit_root), Path::new(&publish_root))
+    let workspace = Workspace::init(Path::new(&edit_root), Path::new(&publish_root))
         .map_err(|error| error.to_string())?;
-    workspace_summary(Path::new(&edit_root))
+    shortcut::ensure_workspace_shortcut(&workspace)?;
+    Ok(workspace_summary_from(&workspace))
 }
 
 #[tauri::command]
@@ -2552,11 +2556,6 @@ fn configuration_role_update(value: &str) -> Result<RoleUpdate, String> {
     }
 }
 
-fn workspace_summary(edit_root: &Path) -> Result<WorkspaceSummary, String> {
-    let workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
-    Ok(workspace_summary_from(&workspace))
-}
-
 fn workspace_summary_from(workspace: &Workspace) -> WorkspaceSummary {
     WorkspaceSummary {
         workspace_id: workspace.workspace_id.to_string(),
@@ -3458,6 +3457,57 @@ mod tests {
         assert_eq!(reopened, initialized);
         assert!(edit_root.join(".dms/workspace.json").is_file());
         assert!(publish_root.is_dir());
+        #[cfg(not(target_os = "windows"))]
+        assert!(!edit_root
+            .join(dms_core::DMS_WORKSPACE_SHORTCUT_FILENAME)
+            .exists());
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_workspace_shortcut_is_created_and_refreshed_on_workspace_open() {
+        let directory = tempfile::tempdir().unwrap();
+        let edit_root = directory.path().join("edit");
+        let publish_root = directory.path().join("publish");
+        fs::create_dir(&edit_root).unwrap();
+        let root = edit_root.to_string_lossy().into_owned();
+        let initialized = initialize_workspace(
+            root.clone(),
+            publish_root.to_string_lossy().into_owned(),
+            true,
+        )
+        .unwrap();
+        let shortcut_path = edit_root.join(dms_core::DMS_WORKSPACE_SHORTCUT_FILENAME);
+        let expected_uri = format!("dms://open?workspace={}", initialized.workspace_id);
+        let assert_shortcut = || {
+            let details = shortcut::platform::read_shortcut(&shortcut_path).unwrap();
+            assert!(Path::new(&details.target).is_file());
+            assert_eq!(
+                Path::new(&details.target)
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy(),
+                "rundll32.exe"
+            );
+            assert_eq!(
+                details.arguments,
+                format!("url.dll,FileProtocolHandler \"{expected_uri}\"")
+            );
+            assert_eq!(details.description, "Open DMS workspace");
+            let edit_root = edit_root.to_string_lossy();
+            let publish_root = publish_root.to_string_lossy();
+            assert!(!details.target.contains(edit_root.as_ref()));
+            assert!(!details.arguments.contains(edit_root.as_ref()));
+            assert!(!details.target.contains(publish_root.as_ref()));
+            assert!(!details.arguments.contains(publish_root.as_ref()));
+        };
+
+        assert!(shortcut_path.is_file());
+        assert_shortcut();
+        fs::remove_file(&shortcut_path).unwrap();
+        open_workspace(root).unwrap();
+        assert!(shortcut_path.is_file());
+        assert_shortcut();
     }
 
     #[test]
@@ -3466,7 +3516,7 @@ mod tests {
         let publish_root = tempfile::tempdir().unwrap();
         let workspace = Workspace::init(edit_root.path(), publish_root.path()).unwrap();
 
-        let summary = workspace_summary(edit_root.path()).unwrap();
+        let summary = workspace_summary_from(&workspace);
 
         assert_eq!(summary.workspace_id, workspace.workspace_id.to_string());
         assert_eq!(summary.document_count, 0);
@@ -4868,6 +4918,7 @@ mod tests {
                 },
             )
             .unwrap();
+        let settings = workspace.notification_settings().unwrap().clone();
         workspace.save().unwrap();
 
         let root = edit_root.to_string_lossy().into_owned();
@@ -4888,6 +4939,7 @@ mod tests {
                 review_override_reason: String::new(),
                 mailto_confirmed: false,
             },
+            &settings,
             &mut graph,
             &mut notifier,
         )
@@ -4901,9 +4953,12 @@ mod tests {
             document.id,
             ReviewDecision::Approved,
             "Installed-Word smoke approved".to_owned(),
-            AuthenticatedActor {
-                tenant_id,
-                object_id: approver_id,
+            ReviewDecisionContext {
+                actor: AuthenticatedActor {
+                    tenant_id,
+                    object_id: approver_id,
+                },
+                settings: settings.clone(),
             },
             &mut graph,
             &mut notifier,
@@ -4914,6 +4969,7 @@ mod tests {
             &root,
             document.id,
             String::new(),
+            &settings,
             &mut graph,
             &mut notifier,
             &mut exporter,

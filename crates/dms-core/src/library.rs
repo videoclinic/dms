@@ -102,8 +102,10 @@ pub struct LibraryFolder {
     pub entries: Vec<LibraryEntry>,
 }
 
+pub const DMS_WORKSPACE_SHORTCUT_FILENAME: &str = "Open in DMS.lnk";
+
 fn is_dms_edit_root_helper_path(relative_path: &Path) -> bool {
-    relative_path == Path::new("Open in DMS.lnk")
+    relative_path == Path::new(DMS_WORKSPACE_SHORTCUT_FILENAME)
 }
 
 impl Workspace {
