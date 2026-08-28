@@ -9,19 +9,19 @@ A DMS Desktop user activating a library with a Microsoft Entra ID group binding 
 **Entry checkpoint:** none
 **Context sources:** `AGENTS.md` (Architectural decisions, Application records); `docs/AGENTS.md` (Local Contracts, Work Guidance); `docs/changes/AGENTS.md`; `docs/product/AGENTS.md`; `docs/architecture.md` (Runtime shape, Trust and control boundary); `docs/privacy.md` (Data classes, Processing principles); `docs/design-decisions.md` (ADR-0013, ADR-0021, ADR-0024, ADR-0028, ADR-0029); `docs/product/capabilities/CAP-0011-approval-evidence.md` (Outcomes 1, 3); `docs/product/capabilities/CAP-0021-microsoft-entra-workflow-identity.md` (Operational details, Outcomes 5, 6, 8, 9); `crates/AGENTS.md`; `crates/dms-core/AGENTS.md`; `crates/dms-desktop/AGENTS.md`; `crates/dms-core/src/lib.rs` (`default_author`, `Workspace::update_control`); `crates/dms-core/src/lifecycle.rs` (`AuthenticatedActor`, `WorkflowEventBody`, `GraphClient`, event appenders); `crates/dms-core/src/library.rs`; `crates/dms-core/src/maintenance.rs`; `crates/dms-core/src/audit.rs`; `crates/dms-desktop/src/graph.rs` (`MicrosoftGraphClient::authenticated_actor`, `direct_user_members_with_token`, token/device-flow primitives); `crates/dms-desktop/src/lib.rs` (`open_workspace`, `WorkspaceSummary`, `update_document_control_with`, startup authorization); `crates/dms-desktop/ui/app.mjs` (`switchWorkspaceSession`, startup-authorization card); `crates/dms-desktop/ui/configuration.mjs`; `crates/dms-desktop/ui/library.mjs`; `docs/product/wireframes/AGENTS.md`; `docs/product/wireframes/generate.mjs`
 **Produces:** A group-bound desktop workspace cannot activate until its signed-in Entra actor is freshly confirmed as an enabled direct member of its bound group. New metadata, note, lifecycle, report, and workflow evidence records that actor's tenant/object ID without a local-OS-user principal; unbound libraries retain the existing local-operator behavior.
-**Status:** pending — queued after P0300; no predecessor evidence is required.
+**Status:** in-progress — Phase 1 is verified; Phase 2 starts after this checkpoint.
 
 | Field | Value |
 | --- | --- |
 | ID | CHG-0035 |
-| Status | pending |
+| Status | in-progress |
 | External request | Direct operator request: "If an library is connected to a Entry ID Microsoft 365 Group, the user using DMS need a valid Entra ID login/session in order to be identified as the Entra ID user (not the local user)" |
 | Affected CAPs | CAP-0011, CAP-0021 |
 | Decision records | Add ADR-0031. ADR-0013, ADR-0021, ADR-0024, ADR-0028, and ADR-0029 remain applicable. |
 
 ## Current state
 
-- An Entra identity source already binds one tenant/group pair to a workspace, but the group is described as the source of workflow people and review-decision verification rather than as the identity gate for every desktop user (`docs/product/capabilities/CAP-0021-microsoft-entra-workflow-identity.md:114-155`; `docs/design-decisions.md:370-411`).
+- An Entra identity source persists a group binding and display cache but no tenant ID, so the current schema cannot compare an actor tenant to the library binding (`crates/dms-core/src/policies.rs:49-57,335-356`).
 - `open_workspace` returns a summary directly from the local workspace; frontend workspace switching acquires only the advisory lock before activation. Neither path establishes a group-bound actor (`crates/dms-desktop/src/lib.rs:410-412`; `crates/dms-desktop/ui/app.mjs:685-724`).
 - `MicrosoftGraphClient::authenticated_actor` obtains a token from the OS credential store and resolves `/me`; its direct-member query filters the bound group to enabled user accounts. Those primitives can validate an actor, but only existing lifecycle paths compose them (`crates/dms-desktop/src/graph.rs:879-997`).
 - Process-environment startup authorization intentionally does not start for saved settings or Windows policy, and its `valid` result proves only a tenant credential rather than membership in a selected library group (`docs/design-decisions.md:556-582`; `crates/dms-desktop/src/lib.rs:2436-2460`).
@@ -38,7 +38,7 @@ The event body is hash-chained evidence. Changing `local_os_user` from required 
 
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
-| 1 | Define the group-bound session and evidence principal | pending | `cargo test -p dms-core --test lifecycle --test workspace` and `cargo test -p dms-desktop --lib group_bound_session` exit 0, proving legacy hash verification plus actor/tenant/member validation cases |
+| 1 | Define the group-bound session and evidence principal | done (`cargo fmt --all -- --check`; `cargo test -p dms-core`; `cargo test -p dms-desktop --lib group_bound_session`; `cargo check --workspace`; `git diff --check`) | `cargo test -p dms-core --test lifecycle --test workspace` and `cargo test -p dms-desktop --lib group_bound_session` exit 0, proving legacy hash verification plus actor/tenant/member validation cases |
 | 2 | Gate desktop activation and route every bound mutation through the Entra actor | pending | `cargo test -p dms-desktop` and `node --test crates/dms-desktop/ui/app.test.mjs crates/dms-desktop/ui/configuration.test.mjs crates/dms-desktop/ui/library.test.mjs` exit 0, including no-session, non-member, sign-in, switch, and event-principal cases |
 | 3 | Publish current-state contracts and the session-required screen | pending | `node docs/product/wireframes/generate.mjs`, the CAP-0021 PNG render command, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `node --test crates/dms-desktop/ui/*.test.mjs` exit 0; CAP/ADR/CHG indexes agree |
 
@@ -51,10 +51,22 @@ Mark a phase `in-progress` while running it, `done (<evidence>)` once its gate p
 Steps:
 
 1. Add ADR-0031 to `docs/design-decisions.md`. It must fix these boundaries: an `EntraIdentitySource` makes desktop activation session-required; valid means an effective configured tenant, a cached or refreshed delegated credential, `/me` resolving to that tenant/object ID, and a fresh Graph direct-member response containing that enabled actor; a bound group may be either a security group or a Microsoft 365 group. Session identity is authorization truth only for the active desktop session and is never persisted in `.dms`.
-2. Introduce a Tauri-independent mutation-principal input in `dms-core` rather than importing Graph or a desktop session into the core. It must distinguish local OS actor from authenticated Entra actor, require the latter when `Workspace::identity_source()` exists, and reject an Entra actor whose tenant differs from the binding. Preserve the unbound local actor behavior.
-3. Update the canonical event-body contract so new group-bound records carry `authenticated_actor` and omit `local_os_user`; new unbound records retain `local_os_user`. Deserialize and reserialize historical records without changing their canonical JSON or hashes. Do not invent Entra identities for historic local events, and do not rewrite existing event chains.
-4. Thread the explicit principal through every core mutation that currently reaches `default_author()`: document-control updates, note writes, candidate/review/release and local lifecycle operations, periodic-review events, source reassociation, and report generation. Audit public core mutation entry points so a future caller cannot silently select `default_author()` for a bound workspace.
-5. Add core tests for unbound local events, bound Entra events, missing/mismatched actor rejection without mutation, and successful verification of pre-change hash fixtures. Add fake-backed Graph/desktop tests for a valid cached token, refresh success, missing/expired credential, tenant mismatch, disabled account, and signed-in non-member.
+2. Extend the persisted identity source with the bound tenant ID. Schema v18 migrates an existing group-only binding to an explicitly unverified binding that fails closed until an operator explicitly reapplies the source; it must not infer a tenant from mutable OS-user configuration, the display cache, or historical evidence. New/replaced bindings persist the effective tenant ID.
+3. Introduce a Tauri-independent mutation-principal input in `dms-core` rather than importing Graph or a desktop session into the core. It must distinguish local OS actor from authenticated Entra actor, require the latter when `Workspace::identity_source()` exists, reject an Entra actor whose tenant differs from the binding, and reject an unverified legacy binding. Preserve the unbound local actor behavior.
+4. Update the canonical event-body contract so new group-bound records carry `authenticated_actor` and omit `local_os_user`; new unbound records retain `local_os_user`. Deserialize and reserialize historical records without changing their canonical JSON or hashes. Do not invent Entra identities for historic local events, and do not rewrite existing event chains.
+5. Thread the explicit principal through every core mutation that currently reaches `default_author()`: document-control updates, note writes, candidate/review/release and local lifecycle operations, periodic-review events, source reassociation, and report generation. Audit public core mutation entry points so a future caller cannot silently select `default_author()` for a bound workspace.
+6. Add core tests for unbound local events, bound Entra events, missing/mismatched actor rejection without mutation, legacy-binding rejection, and successful verification of pre-change hash fixtures. Add fake-backed Graph/desktop tests for a valid cached token, refresh success, missing/expired credential, tenant mismatch, disabled account, and signed-in non-member.
+
+Implementation finding: schema v17's group-only identity binding cannot validate the required tenant/object-ID pair. Tenant binding and its fail-closed legacy migration are required in this phase because every group-bound mutation depends on that comparison.
+
+Implementation audit finding: lifecycle and periodic-review entry points still
+constructed event bodies with `default_author()` after the first principal-aware
+paths landed. This is current-phase work, not a later adapter concern: their
+public core APIs must require and serialize the explicit principal so the CLI
+cannot bypass a bound-library session before Phase 2 routes desktop commands.
+This remains one atomic Phase 1 change despite its cross-module signature
+updates: split entry points would leave a compiled mutation bypass or evidence
+with an incorrect principal.
 
 Verification gate: `cargo test -p dms-core --test lifecycle --test workspace` and `cargo test -p dms-desktop --lib group_bound_session` exit 0, including unchanged historic-hash verification and all actor/tenant/member validation cases.
 

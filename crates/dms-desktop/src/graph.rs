@@ -997,6 +997,29 @@ where
     }
 }
 
+pub(crate) fn verify_group_bound_actor(
+    source: &EntraIdentitySource,
+    configured_tenant_id: Uuid,
+    actor: AuthenticatedActor,
+    people: &[EntraPerson],
+) -> Result<AuthenticatedActor, String> {
+    let bound_tenant_id = source.tenant_id.ok_or_else(|| {
+        "the library's Entra identity source is unverified; reapply it before opening the library"
+            .to_owned()
+    })?;
+    if bound_tenant_id != configured_tenant_id || actor.tenant_id != bound_tenant_id {
+        return Err("the signed-in Microsoft Entra tenant does not match this library".to_owned());
+    }
+    if people
+        .iter()
+        .any(|person| person.account_enabled && person.object_id == actor.object_id)
+    {
+        Ok(actor)
+    } else {
+        Err("the signed-in Microsoft Entra user is not an enabled direct member of this library group".to_owned())
+    }
+}
+
 fn delegated_token(
     response: OAuthTokenResponse,
     previous_refresh_token: Option<&str>,
@@ -1505,6 +1528,7 @@ mod tests {
         let mut graph = MicrosoftGraphClient::with_parts("client", tenant_id, http, tokens);
         let source = EntraIdentitySource {
             binding_id: Uuid::new_v4(),
+            tenant_id: Some(tenant_id),
             group_id,
             group_label: "Quality".to_owned(),
             last_refreshed_at: None,
@@ -1512,6 +1536,36 @@ mod tests {
 
         let people = graph.direct_user_members(&source).unwrap();
         assert_eq!(people[0].object_id, user_id);
+    }
+
+    #[test]
+    fn group_bound_session_requires_matching_enabled_direct_member() {
+        let tenant_id = Uuid::new_v4();
+        let actor_id = Uuid::new_v4();
+        let source = EntraIdentitySource {
+            binding_id: Uuid::new_v4(),
+            tenant_id: Some(tenant_id),
+            group_id: Uuid::new_v4(),
+            group_label: "Quality".to_owned(),
+            last_refreshed_at: None,
+        };
+        let actor = AuthenticatedActor {
+            tenant_id,
+            object_id: actor_id,
+        };
+        assert_eq!(
+            verify_group_bound_actor(
+                &source,
+                tenant_id,
+                actor.clone(),
+                &[EntraPerson::eligible(actor_id, "Ada", "ada@example.test")],
+            )
+            .unwrap(),
+            actor
+        );
+        assert!(verify_group_bound_actor(&source, tenant_id, actor, &[])
+            .unwrap_err()
+            .contains("enabled direct member"));
     }
 
     fn device_code_body() -> &'static str {

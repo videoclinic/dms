@@ -137,6 +137,7 @@ fn document_type_catalogue_is_persisted_and_controls_document_values() {
                 document_type: Some(Some("procedure".to_owned())),
                 ..ControlUpdate::default()
             },
+            &dms_core::MutationPrincipal::local_os_user("test-operator"),
         )
         .expect("document control");
     workspace.save().expect("persist document type");
@@ -158,7 +159,8 @@ fn document_type_catalogue_is_persisted_and_controls_document_values() {
             ControlUpdate {
                 document_type: Some(Some("unknown".to_owned())),
                 ..ControlUpdate::default()
-            }
+            },
+            &dms_core::MutationPrincipal::local_os_user("test-operator"),
         ),
         Err(DmsError::UnknownDocumentType(value)) if value == "unknown"
     ));
@@ -369,6 +371,7 @@ fn workflow_roles_inherit_independently_and_binding_replacement_unresolves_live_
         .add_document(Path::new("policies/IT/Access.md"))
         .expect("document");
 
+    let tenant_id = Uuid::new_v4();
     let group_id = Uuid::new_v4();
     let editor_id = Uuid::new_v4();
     let approver_id = Uuid::new_v4();
@@ -386,7 +389,7 @@ fn workflow_roles_inherit_independently_and_binding_replacement_unresolves_live_
         },
     ];
     workspace
-        .replace_identity_source(group_id, "DMS workflow", people.clone())
+        .replace_identity_source(tenant_id, group_id, "DMS workflow", people.clone())
         .expect("identity source");
     workspace
         .update_workflow_policy(
@@ -428,7 +431,7 @@ fn workflow_roles_inherit_independently_and_binding_replacement_unresolves_live_
     assert_eq!(approver.state, ResolutionState::Resolved);
 
     workspace
-        .replace_identity_source(Uuid::new_v4(), "Replacement workflow", people)
+        .replace_identity_source(tenant_id, Uuid::new_v4(), "Replacement workflow", people)
         .expect("replacement source");
     let unresolved = workspace
         .effective_workflow_roles(document.id)
@@ -448,7 +451,7 @@ fn workflow_roles_inherit_independently_and_binding_replacement_unresolves_live_
     workspace.save().expect("persist routing");
     let metadata =
         fs::read_to_string(workspace.edit_root.join(".dms/workspace.json")).expect("metadata");
-    assert!(!metadata.contains("tenant_id"));
+    assert!(metadata.contains(&tenant_id.to_string()));
     assert!(!metadata.contains("client_secret"));
     assert!(!metadata.contains("access_token"));
 }
@@ -462,6 +465,7 @@ fn schema_v10_identity_source_migrates_to_a_group_only_binding_with_a_backup() {
     let approver_id = Uuid::new_v4();
     workspace
         .replace_identity_source(
+            tenant_id,
             group_id,
             "DMS workflow",
             vec![
@@ -509,9 +513,7 @@ fn schema_v10_identity_source_migrates_to_a_group_only_binding_with_a_backup() {
     let migrated_metadata: Value =
         serde_json::from_slice(&fs::read(&metadata_path).expect("migrated metadata"))
             .expect("migrated metadata JSON");
-    assert!(migrated_metadata["identity_source"]
-        .get("tenant_id")
-        .is_none());
+    assert!(migrated_metadata["identity_source"]["tenant_id"].is_null());
     assert!(migrated_metadata["identity_source"]
         .get("tenant_display")
         .is_none());

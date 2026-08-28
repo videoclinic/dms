@@ -1,16 +1,21 @@
 use std::{fs, path::PathBuf, thread, time::Duration};
 
 use dms_core::{
-    ControlUpdate, DmsError, WorkflowEventType, Workspace, METADATA_DIRECTORY, METADATA_FILENAME,
-    SCHEMA_VERSION,
+    AuthenticatedActor, ControlUpdate, DmsError, EntraPerson, MutationPrincipal, RoleUpdate,
+    WorkflowEventType, Workspace, METADATA_DIRECTORY, METADATA_FILENAME, SCHEMA_VERSION,
 };
 use tempfile::TempDir;
+use uuid::Uuid;
 
 fn initialized_workspace() -> (TempDir, TempDir, Workspace) {
     let edit_root = tempfile::tempdir().expect("edit root");
     let publish_root = tempfile::tempdir().expect("publish root");
     let workspace = Workspace::init(edit_root.path(), publish_root.path()).expect("workspace init");
     (edit_root, publish_root, workspace)
+}
+
+fn local_principal() -> MutationPrincipal {
+    MutationPrincipal::local_os_user("test-operator")
 }
 
 fn add_markdown_document(
@@ -78,6 +83,7 @@ fn document_control_is_persisted_independently_from_source_locator() {
                 document_type: Some(Some("procedure".to_owned())),
                 ..ControlUpdate::default()
             },
+            &local_principal(),
         )
         .expect("update control data");
     workspace.save().expect("save workspace");
@@ -119,6 +125,156 @@ fn document_control_is_persisted_independently_from_source_locator() {
     assert_eq!(change.before.title, "Onboarding");
     assert_eq!(change.after, stored.control);
     assert!(workspace.verify_workflow(document.id).unwrap().is_valid());
+}
+
+#[test]
+fn group_bound_control_events_require_matching_entra_principal() {
+    let (edit_root, _publish_root, mut workspace) = initialized_workspace();
+    let document = add_markdown_document(&mut workspace, &edit_root, "bound.md");
+    let tenant_id = Uuid::new_v4();
+    let actor_id = Uuid::new_v4();
+    workspace
+        .replace_identity_source(
+            tenant_id,
+            Uuid::new_v4(),
+            "DMS group",
+            vec![EntraPerson::eligible(
+                actor_id,
+                "Ada Actor",
+                "ada@example.test",
+            )],
+        )
+        .expect("identity source");
+    workspace
+        .update_workflow_policy(
+            ".",
+            RoleUpdate::replace(actor_id),
+            RoleUpdate::replace(actor_id),
+        )
+        .expect("root workflow policy");
+
+    assert!(matches!(
+        workspace.update_control(
+            document.id,
+            ControlUpdate {
+                title: Some("Blocked local mutation".to_owned()),
+                ..ControlUpdate::default()
+            },
+            &local_principal(),
+        ),
+        Err(DmsError::EntraSessionRequired)
+    ));
+    assert_eq!(
+        workspace.document(document.id).unwrap().control.title,
+        "bound"
+    );
+
+    assert!(matches!(
+        workspace.update_control(
+            document.id,
+            ControlUpdate {
+                title: Some("Blocked tenant mutation".to_owned()),
+                ..ControlUpdate::default()
+            },
+            &MutationPrincipal::authenticated_entra(AuthenticatedActor {
+                tenant_id: Uuid::new_v4(),
+                object_id: actor_id,
+            }),
+        ),
+        Err(DmsError::EntraTenantMismatch { .. })
+    ));
+    assert_eq!(
+        workspace.document(document.id).unwrap().control.title,
+        "bound"
+    );
+
+    workspace
+        .update_control(
+            document.id,
+            ControlUpdate {
+                title: Some("Verified Entra mutation".to_owned()),
+                ..ControlUpdate::default()
+            },
+            &MutationPrincipal::authenticated_entra(AuthenticatedActor {
+                tenant_id,
+                object_id: actor_id,
+            }),
+        )
+        .expect("matching principal");
+    let event = workspace
+        .workflow_history(document.id)
+        .unwrap()
+        .pop()
+        .unwrap();
+    assert_eq!(
+        event.body.authenticated_actor.as_ref().unwrap().object_id,
+        actor_id
+    );
+    assert!(event.body.local_os_user.is_none());
+    workspace.save().expect("persist group-bound event");
+    assert!(Workspace::open(edit_root.path())
+        .expect("reopen group-bound workspace")
+        .verify_workflow(document.id)
+        .expect("verify event chain")
+        .is_valid());
+}
+
+#[test]
+fn schema_v17_group_binding_migrates_without_inferring_a_tenant() {
+    let (edit_root, _publish_root, mut workspace) = initialized_workspace();
+    let tenant_id = Uuid::new_v4();
+    let actor_id = Uuid::new_v4();
+    workspace
+        .replace_identity_source(
+            tenant_id,
+            Uuid::new_v4(),
+            "DMS group",
+            vec![EntraPerson::eligible(
+                actor_id,
+                "Ada Actor",
+                "ada@example.test",
+            )],
+        )
+        .expect("identity source");
+    workspace
+        .update_workflow_policy(
+            ".",
+            RoleUpdate::replace(actor_id),
+            RoleUpdate::replace(actor_id),
+        )
+        .expect("root workflow policy");
+    workspace.save().expect("current workspace");
+
+    let metadata_path = edit_root.path().join(".dms/workspace.json");
+    let mut metadata: serde_json::Value =
+        serde_json::from_slice(&fs::read(&metadata_path).expect("metadata")).expect("JSON");
+    metadata["schema_version"] = serde_json::Value::from(17);
+    metadata["identity_source"]
+        .as_object_mut()
+        .unwrap()
+        .remove("tenant_id");
+    fs::write(
+        &metadata_path,
+        serde_json::to_vec_pretty(&metadata).unwrap(),
+    )
+    .unwrap();
+
+    let migrated = Workspace::open(edit_root.path()).expect("v17 migration");
+    assert_eq!(migrated.schema_version, SCHEMA_VERSION);
+    assert!(migrated.identity_source().unwrap().tenant_id.is_none());
+    assert!(edit_root
+        .path()
+        .join(".dms/workspace.v17.json.bak")
+        .is_file());
+    assert!(matches!(
+        migrated.require_mutation_principal(&MutationPrincipal::authenticated_entra(
+            AuthenticatedActor {
+                tenant_id,
+                object_id: actor_id,
+            }
+        )),
+        Err(DmsError::UnverifiedEntraIdentitySource)
+    ));
 }
 
 #[test]
@@ -241,6 +397,7 @@ fn document_registration_rejects_out_of_root_temp_unsupported_and_duplicate_sour
                 document_number: Some(Some("POL-1".to_owned())),
                 ..ControlUpdate::default()
             },
+            &local_principal(),
         )
         .expect("first document number");
     assert!(matches!(
@@ -250,6 +407,7 @@ fn document_registration_rejects_out_of_root_temp_unsupported_and_duplicate_sour
                 document_number: Some(Some("pol-1".to_owned())),
                 ..ControlUpdate::default()
             },
+            &local_principal(),
         ),
         Err(DmsError::DuplicateDocumentNumber(_))
     ));
@@ -260,11 +418,21 @@ fn notes_are_newest_first_editable_removable_and_persistent() {
     let (edit_root, _publish_root, mut workspace) = initialized_workspace();
     let document = add_markdown_document(&mut workspace, &edit_root, "notes.md");
     let first = workspace
-        .add_note(document.id, "First note", Some("Raphael"))
+        .add_note(
+            document.id,
+            "First note",
+            Some("Raphael"),
+            &local_principal(),
+        )
         .expect("first note");
     thread::sleep(Duration::from_millis(2));
     let second = workspace
-        .add_note(document.id, "Second note", Some("Raphael"))
+        .add_note(
+            document.id,
+            "Second note",
+            Some("Raphael"),
+            &local_principal(),
+        )
         .expect("second note");
     let newest_first = workspace.notes(document.id).expect("list notes");
     assert_eq!(

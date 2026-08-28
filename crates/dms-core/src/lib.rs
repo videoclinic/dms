@@ -34,7 +34,7 @@ pub use policies::*;
 pub use source_history::*;
 pub use template::*;
 
-pub const SCHEMA_VERSION: u32 = 17;
+pub const SCHEMA_VERSION: u32 = 18;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 
@@ -114,6 +114,20 @@ pub enum DmsError {
     InvalidPolicyFolder(String),
     #[error("a Microsoft Entra identity source must be configured first")]
     IdentitySourceRequired,
+    #[error(
+        "a group-bound workspace requires an authenticated Microsoft Entra mutation principal"
+    )]
+    EntraSessionRequired,
+    #[error(
+        "the group-bound workspace has no verified tenant binding; reapply its identity source"
+    )]
+    UnverifiedEntraIdentitySource,
+    #[error(
+        "the authenticated Microsoft Entra tenant {actor} does not match workspace tenant {bound}"
+    )]
+    EntraTenantMismatch { bound: Uuid, actor: Uuid },
+    #[error("an unbound workspace requires a local OS mutation principal")]
+    LocalPrincipalRequired,
     #[error("Microsoft Entra person {0} is not an eligible cached group member")]
     IneligibleEntraPerson(Uuid),
     #[error("the edit-root workflow policy must assign both editor and approver")]
@@ -391,6 +405,10 @@ pub struct Note {
     pub id: Uuid,
     pub body: String,
     pub author: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authenticated_actor: Option<AuthenticatedActor>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_os_user: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -466,7 +484,7 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = matches!(found, 1..=16);
+        let migrated = matches!(found, 1..=17);
         if found == 1 {
             migrate_v1_catalogues(&mut value)?;
         }
@@ -487,6 +505,9 @@ impl Workspace {
         }
         if found <= 16 {
             migrate_v16_source_history(&mut value);
+        }
+        if found <= 17 {
+            migrate_v17_identity_source_tenant(&mut value);
         }
         if migrated {
             value["schema_version"] = serde_json::Value::from(SCHEMA_VERSION);
@@ -751,7 +772,13 @@ impl Workspace {
         Ok(document)
     }
 
-    pub fn update_control(&mut self, document_id: Uuid, update: ControlUpdate) -> Result<Document> {
+    pub fn update_control(
+        &mut self,
+        document_id: Uuid,
+        update: ControlUpdate,
+        principal: &MutationPrincipal,
+    ) -> Result<Document> {
+        self.require_mutation_principal(principal)?;
         if let Some(number) = update.document_number.as_ref() {
             self.ensure_document_number_available(document_id, number.as_deref())?;
         }
@@ -783,7 +810,7 @@ impl Workspace {
                 .get_mut(&document_id)
                 .expect("document checked above")
                 .control = after.clone();
-            self.append_control_change_event(document_id, before, after)?;
+            self.append_control_change_event(document_id, before, after, principal)?;
             self.invalidate_stale_candidates();
             self.sync_markdown_control_frontmatter(document_id)?;
         }
@@ -810,11 +837,19 @@ impl Workspace {
         document_id: Uuid,
         body: &str,
         author: Option<&str>,
+        principal: &MutationPrincipal,
     ) -> Result<Note> {
+        self.require_mutation_principal(principal)?;
+        let (authenticated_actor, local_os_user) = principal.event_fields();
         let note = Note {
             id: Uuid::new_v4(),
             body: normalized_required(body, "note body")?,
-            author: normalized_optional(author).unwrap_or_else(default_author),
+            author: authenticated_actor.as_ref().map_or_else(
+                || normalized_optional(author).unwrap_or_else(default_author),
+                |actor| format!("{}/{}", actor.tenant_id, actor.object_id),
+            ),
+            authenticated_actor,
+            local_os_user,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
@@ -1022,6 +1057,18 @@ fn migrate_v10_identity_source(value: &mut serde_json::Value) {
     };
     source.remove("tenant_id");
     source.remove("tenant_display");
+}
+
+fn migrate_v17_identity_source_tenant(value: &mut serde_json::Value) {
+    let Some(source) = value
+        .get_mut("identity_source")
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return;
+    };
+    source
+        .entry("tenant_id".to_owned())
+        .or_insert(serde_json::Value::Null);
 }
 
 fn migrate_v11_release_bound_control(value: &mut serde_json::Value) {

@@ -70,9 +70,11 @@ fn template_asset_is_stable_persisted_revalidated_and_excluded_from_documents() 
     let other = fixture.workspace.add_document(&other_path).unwrap();
     fixture.workspace.unregister_document(other.id).unwrap();
     assert!(matches!(
-        fixture
-            .workspace
-            .reassociate_document(other.id, &fixture.template_path),
+        fixture.workspace.reassociate_document(
+            other.id,
+            &fixture.template_path,
+            &dms_core::MutationPrincipal::local_os_user("test-operator")
+        ),
         Err(DmsError::TemplateLifecycleExcluded(_))
     ));
     let listing = fixture

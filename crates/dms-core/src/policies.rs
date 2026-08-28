@@ -48,6 +48,8 @@ pub struct PolicyFolder {
 #[serde(deny_unknown_fields)]
 pub struct EntraIdentitySource {
     pub binding_id: Uuid,
+    #[serde(default)]
+    pub tenant_id: Option<Uuid>,
     pub group_id: Uuid,
     pub group_label: String,
     #[serde(default)]
@@ -334,12 +336,14 @@ impl Workspace {
 
     pub fn replace_identity_source(
         &mut self,
+        tenant_id: Uuid,
         group_id: Uuid,
         group_label: &str,
         people: Vec<EntraPerson>,
     ) -> Result<EntraIdentitySource> {
         let source = EntraIdentitySource {
             binding_id: Uuid::new_v4(),
+            tenant_id: Some(tenant_id),
             group_id,
             group_label: configured_text(group_label, "group label")?,
             last_refreshed_at: Some(Utc::now()),

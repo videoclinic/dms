@@ -1,16 +1,23 @@
-use std::{error::Error, fs, io, path::PathBuf, process};
+use std::{env, error::Error, fs, io, path::PathBuf, process};
 
 use clap::{Parser, Subcommand, ValueEnum};
 use dms_core::{
     AuditReportFilter, AuditReportFormat, AuditReportRequest, AuthenticatedActor, ControlUpdate,
-    DeliveryReceipt, Document, EntraIdentitySource, EntraPerson, GraphClient, Note,
-    NotificationClient, NotificationMessage, NotificationSettings, OwnerReference,
+    DeliveryReceipt, Document, EntraIdentitySource, EntraPerson, GraphClient, MutationPrincipal,
+    Note, NotificationClient, NotificationMessage, NotificationSettings, OwnerReference,
     PeriodicReviewResult, RestoreRequest, RoleUpdate, Workspace,
 };
 use serde::Serialize;
 use uuid::Uuid;
 
 type CliResult<T> = Result<T, Box<dyn Error>>;
+
+fn local_mutation_principal() -> MutationPrincipal {
+    let user = env::var("USER")
+        .or_else(|_| env::var("USERNAME"))
+        .unwrap_or_else(|_| "unknown".to_owned());
+    MutationPrincipal::local_os_user(user)
+}
 
 #[derive(Debug, Parser)]
 #[command(name = "dms", version, about = "Headless local DMS core operations")]
@@ -394,6 +401,8 @@ enum PolicyCommand {
         #[arg(long)]
         edit_root: PathBuf,
         #[arg(long)]
+        tenant_id: Uuid,
+        #[arg(long)]
         group_id: Uuid,
         #[arg(long)]
         group_label: String,
@@ -502,17 +511,20 @@ fn run_report(command: ReportCommand, json: bool) -> CliResult<()> {
             through,
         } => {
             let mut workspace = Workspace::open(&edit_root)?;
-            let report = workspace.generate_audit_report(AuditReportRequest {
-                format: format.into(),
-                relative_path: output,
-                filter: AuditReportFilter {
-                    document_ids: document,
-                    approver_object_ids: approver,
-                    confidentiality_type_ids: confidentiality,
-                    from: parse_report_time(from.as_deref())?,
-                    through: parse_report_time(through.as_deref())?,
+            let report = workspace.generate_audit_report(
+                AuditReportRequest {
+                    format: format.into(),
+                    relative_path: output,
+                    filter: AuditReportFilter {
+                        document_ids: document,
+                        approver_object_ids: approver,
+                        confidentiality_type_ids: confidentiality,
+                        from: parse_report_time(from.as_deref())?,
+                        through: parse_report_time(through.as_deref())?,
+                    },
                 },
-            })?;
+                &local_mutation_principal(),
+            )?;
             let message = format!("generated audit report {}", report.relative_path);
             print_value(&report, json, message)
         }
@@ -554,7 +566,7 @@ fn run_periodic_review(command: PeriodicReviewCommand, json: bool) -> CliResult<
             document,
         } => {
             let mut workspace = Workspace::open(&edit_root)?;
-            let review = workspace.start_periodic_review(document)?;
+            let review = workspace.start_periodic_review(document, &local_mutation_principal())?;
             print_value(
                 &review,
                 json,
@@ -600,7 +612,12 @@ fn run_periodic_review(command: PeriodicReviewCommand, json: bool) -> CliResult<
                 ));
             }
             let mut workspace = Workspace::open(&edit_root)?;
-            let cancelled = workspace.cancel_periodic_review(document, review, &comment)?;
+            let cancelled = workspace.cancel_periodic_review(
+                document,
+                review,
+                &comment,
+                &local_mutation_principal(),
+            )?;
             print_value(
                 &cancelled,
                 json,
@@ -618,7 +635,12 @@ fn run_periodic_review(command: PeriodicReviewCommand, json: bool) -> CliResult<
             }
             let mut workspace = Workspace::open(&edit_root)?;
             let mut notifier = UnavailableNotificationClient;
-            let attempt = workspace.remind_periodic_review(document, review, &mut notifier)?;
+            let attempt = workspace.remind_periodic_review(
+                document,
+                review,
+                &mut notifier,
+                &local_mutation_principal(),
+            )?;
             print_value(
                 &attempt,
                 json,
@@ -846,6 +868,7 @@ fn run_policy(command: PolicyCommand, json: bool) -> CliResult<()> {
         }
         PolicyCommand::ReplaceIdentitySource {
             edit_root,
+            tenant_id,
             group_id,
             group_label,
             eligible_people,
@@ -854,7 +877,8 @@ fn run_policy(command: PolicyCommand, json: bool) -> CliResult<()> {
         } => {
             let people: Vec<EntraPerson> = read_marked_json(&eligible_people)?;
             let mut workspace = Workspace::open(&edit_root)?;
-            let source = workspace.replace_identity_source(group_id, &group_label, people)?;
+            let source =
+                workspace.replace_identity_source(tenant_id, group_id, &group_label, people)?;
             workspace.update_workflow_policy(
                 ".",
                 RoleUpdate::replace(root_editor),
@@ -963,6 +987,7 @@ fn run_document(command: DocumentCommand, json: bool) -> CliResult<()> {
                     owner: owner.map(Some),
                     ..ControlUpdate::default()
                 },
+                &local_mutation_principal(),
             )?;
             workspace.save()?;
             print_document(&updated, json, "updated")
@@ -982,7 +1007,8 @@ fn run_document(command: DocumentCommand, json: bool) -> CliResult<()> {
             path,
         } => {
             let mut workspace = Workspace::open(&edit_root)?;
-            let reassociated = workspace.reassociate_document(document, &path)?;
+            let reassociated =
+                workspace.reassociate_document(document, &path, &local_mutation_principal())?;
             workspace.save()?;
             print_document(&reassociated, json, "reassociated")
         }
@@ -1006,7 +1032,12 @@ fn run_note(command: NoteCommand, json: bool) -> CliResult<()> {
             author,
         } => {
             let mut workspace = Workspace::open(&edit_root)?;
-            let note = workspace.add_note(document, &body, author.as_deref())?;
+            let note = workspace.add_note(
+                document,
+                &body,
+                author.as_deref(),
+                &local_mutation_principal(),
+            )?;
             workspace.save()?;
             print_note(&note, json, "added")
         }

@@ -9,11 +9,11 @@ use chrono::NaiveDate;
 use dms_core::{
     AssistanceEvidence, AuditReportFilter, AuditReportFormat, AuthenticatedActor, CandidateRequest,
     CandidateStatus, ControlUpdate, DeliveryReceipt, DeliveryStatus, DmsError, EntraIdentitySource,
-    EntraPerson, GraphClient, Lifecycle, MarkerStatus, NotificationClient, NotificationKind,
-    NotificationMessage, NotificationSettings, NotificationTransport, OwnerReference, PdfExporter,
-    PeriodicReviewResult, PeriodicReviewStatus, PermalinkTarget, ReleaseOutcome,
-    ReleaseVerificationStatus, ReviewDecision, RoleUpdate, SmtpSettings, TargetSelection, Version,
-    WorkflowEventType, WorkflowVerification, Workspace, SCHEMA_VERSION,
+    EntraPerson, GraphClient, Lifecycle, MarkerStatus, MutationPrincipal, NotificationClient,
+    NotificationKind, NotificationMessage, NotificationSettings, NotificationTransport,
+    OwnerReference, PdfExporter, PeriodicReviewResult, PeriodicReviewStatus, PermalinkTarget,
+    ReleaseOutcome, ReleaseVerificationStatus, ReviewDecision, RoleUpdate, SmtpSettings,
+    TargetSelection, Version, WorkflowEventType, WorkflowVerification, Workspace, SCHEMA_VERSION,
 };
 use tempfile::TempDir;
 use uuid::Uuid;
@@ -66,7 +66,7 @@ impl Fixture {
             EntraPerson::eligible(requester_id, "Rita Requester", "requester@example.test"),
         ];
         workspace
-            .replace_identity_source(group_id, "DMS workflow", people.clone())
+            .replace_identity_source(tenant_id, group_id, "DMS workflow", people.clone())
             .expect("identity source");
         let binding_id = workspace.identity_source().unwrap().binding_id;
         workspace
@@ -103,6 +103,10 @@ impl Fixture {
                     })),
                     ..ControlUpdate::default()
                 },
+                &MutationPrincipal::authenticated_entra(AuthenticatedActor {
+                    tenant_id,
+                    object_id: editor_id,
+                }),
             )
             .expect("control data");
 
@@ -128,6 +132,20 @@ impl Fixture {
             },
             refresh_error: None,
         }
+    }
+
+    fn editor_principal(&self) -> MutationPrincipal {
+        MutationPrincipal::authenticated_entra(AuthenticatedActor {
+            tenant_id: self.tenant_id,
+            object_id: self.editor_id,
+        })
+    }
+
+    fn approver_principal(&self) -> MutationPrincipal {
+        MutationPrincipal::authenticated_entra(AuthenticatedActor {
+            tenant_id: self.tenant_id,
+            object_id: self.approver_id,
+        })
     }
 
     /// Edit the source so its digest no longer matches the current release and
@@ -295,6 +313,7 @@ fn approve_first_release(fixture: &mut Fixture) -> FakeGraph {
             fixture.candidate_request(TargetSelection::NextMajor),
             &mut graph,
             &mut review_notifier,
+            &fixture.editor_principal(),
         )
         .expect("review request");
     assert_eq!(submission.version, Version::V1_0);
@@ -309,6 +328,7 @@ fn approve_first_release(fixture: &mut Fixture) -> FakeGraph {
             Some("Ready for release"),
             &mut graph,
             &mut outcome_notifier,
+            &fixture.approver_principal(),
         )
         .expect("approval");
     graph
@@ -325,6 +345,7 @@ fn release_first(fixture: &mut Fixture) -> (FakeGraph, ReleaseOutcome) {
             &mut graph,
             &mut FakeNotifier::default(),
             &mut exporter,
+            &fixture.editor_principal(),
         )
         .expect("release");
     (graph, outcome)
@@ -340,6 +361,7 @@ fn assert_markdown_template_release_error(fixture: &mut Fixture, expected: &str)
             &mut graph,
             &mut FakeNotifier::default(),
             &mut UnexpectedExporter,
+            &fixture.editor_principal(),
         )
         .unwrap_err();
     assert!(
@@ -424,6 +446,7 @@ Vertraulichkeitsstufe: Internal
             fixture.candidate_request(TargetSelection::NextMajor),
             &mut graph,
             &mut FakeNotifier::accepted(),
+            &fixture.editor_principal(),
         )
         .expect("open review");
     assert!(
@@ -436,7 +459,11 @@ Vertraulichkeitsstufe: Internal
     );
     fixture
         .workspace
-        .cancel_review(fixture.document_id, "Requirements changed")
+        .cancel_review(
+            fixture.document_id,
+            "Requirements changed",
+            &fixture.editor_principal(),
+        )
         .expect("cancel review");
     let cancellation = fixture
         .workspace
@@ -461,7 +488,11 @@ Vertraulichkeitsstufe: Internal
 
     fixture
         .workspace
-        .mark_obsolete(fixture.document_id, "Superseded by global policy")
+        .mark_obsolete(
+            fixture.document_id,
+            "Superseded by global policy",
+            &fixture.editor_principal(),
+        )
         .expect("mark obsolete");
     let obsolescence = fixture
         .workspace
@@ -510,7 +541,12 @@ fn accepted_assistance_is_explicit_evidence_without_granting_lifecycle_authority
 
     fixture
         .workspace
-        .submit_candidate(request, &mut graph, &mut FakeNotifier::accepted())
+        .submit_candidate(
+            request,
+            &mut graph,
+            &mut FakeNotifier::accepted(),
+            &fixture.editor_principal(),
+        )
         .unwrap();
 
     let candidate = fixture.workspace.candidates(fixture.document_id).unwrap()[0];
@@ -563,7 +599,7 @@ fn major_review_requires_graph_refresh_transport_success_and_verified_actor() {
             invalid_request,
             &mut graph,
             &mut invalid_notifier,
-        ),
+        &fixture.editor_principal()),
         Err(DmsError::InvalidConfiguration(field)) if field == "release changelog"
     ));
     let mut notifier = FakeNotifier {
@@ -582,6 +618,7 @@ fn major_review_requires_graph_refresh_transport_success_and_verified_actor() {
             fixture.candidate_request(TargetSelection::NextMajor),
             &mut graph,
             &mut notifier,
+            &fixture.editor_principal(),
         )
         .expect("candidate remains retryable");
     assert_eq!(pending.version, Version::V1_0);
@@ -597,7 +634,11 @@ fn major_review_requires_graph_refresh_transport_success_and_verified_actor() {
 
     let retried = fixture
         .workspace
-        .retry_review_notification(fixture.document_id, &mut notifier)
+        .retry_review_notification(
+            fixture.document_id,
+            &mut notifier,
+            &fixture.editor_principal(),
+        )
         .expect("retry");
     assert_eq!(retried.status, CandidateStatus::InReview);
     assert_eq!(notifier.messages.len(), 2);
@@ -653,6 +694,7 @@ fn major_review_requires_graph_refresh_transport_success_and_verified_actor() {
             None,
             &mut graph,
             &mut outcome_notifier,
+            &fixture.approver_principal()
         ),
         Err(DmsError::DecisionActorMismatch)
     ));
@@ -666,6 +708,7 @@ fn major_review_requires_graph_refresh_transport_success_and_verified_actor() {
             None,
             &mut graph,
             &mut outcome_notifier,
+            &fixture.approver_principal(),
         )
         .expect("eligible approver");
     assert_eq!(outcome.status, CandidateStatus::Approved);
@@ -676,6 +719,7 @@ fn major_review_requires_graph_refresh_transport_success_and_verified_actor() {
             fixture.document_id,
             outcome.candidate_id,
             &mut outcome_notifier,
+            &fixture.editor_principal(),
         )
         .expect("retry decision outcome notification");
     assert_eq!(retry.status, DeliveryStatus::Accepted);
@@ -746,7 +790,7 @@ fn approved_release_is_atomic_mirrors_tree_persists_chain_and_refuses_overwrite(
             &mut graph,
             &mut no_notification,
             &mut failed_exporter,
-        ),
+        &fixture.editor_principal()),
         Err(DmsError::ExportFailed(message)) if message == "Office conversion failed"
     ));
     let candidate = fixture.workspace.candidates(fixture.document_id).unwrap()[0];
@@ -767,7 +811,7 @@ fn approved_release_is_atomic_mirrors_tree_persists_chain_and_refuses_overwrite(
             &mut graph,
             &mut no_notification,
             &mut exporter,
-        ),
+        &fixture.editor_principal()),
         Err(DmsError::ReleasePathExists(path)) if path == occupied_path
     ));
     fs::remove_file(&occupied_path).unwrap();
@@ -779,6 +823,7 @@ fn approved_release_is_atomic_mirrors_tree_persists_chain_and_refuses_overwrite(
             &mut graph,
             &mut no_notification,
             &mut exporter,
+            &fixture.editor_principal(),
         )
         .expect("release");
     assert_eq!(outcome.release.version, Version::V1_0);
@@ -834,6 +879,10 @@ fn approved_release_is_atomic_mirrors_tree_persists_chain_and_refuses_overwrite(
                 title: Some("Renamed current profile".to_owned()),
                 ..ControlUpdate::default()
             },
+            &MutationPrincipal::authenticated_entra(AuthenticatedActor {
+                tenant_id: fixture.tenant_id,
+                object_id: fixture.editor_id,
+            }),
         )
         .unwrap();
     let audit = fixture
@@ -852,7 +901,14 @@ fn approved_release_is_atomic_mirrors_tree_persists_chain_and_refuses_overwrite(
     fs::rename(&fixture.source_path, &renamed).expect("external rename");
     fixture
         .workspace
-        .reassociate_document(fixture.document_id, &renamed)
+        .reassociate_document(
+            fixture.document_id,
+            &renamed,
+            &MutationPrincipal::authenticated_entra(AuthenticatedActor {
+                tenant_id: fixture.tenant_id,
+                object_id: fixture.editor_id,
+            }),
+        )
         .expect("reassociate");
     assert_eq!(
         fixture
@@ -882,9 +938,12 @@ fn approved_release_is_atomic_mirrors_tree_persists_chain_and_refuses_overwrite(
     let manual = fixture.candidate_request(TargetSelection::Manual(Version::V1_0));
     let mut notifier = FakeNotifier::accepted();
     assert!(matches!(
-        fixture
-            .workspace
-            .submit_candidate(manual, &mut graph, &mut notifier),
+        fixture.workspace.submit_candidate(
+            manual,
+            &mut graph,
+            &mut notifier,
+            &fixture.editor_principal()
+        ),
         Err(DmsError::InvalidTargetVersion) | Err(DmsError::VersionAlreadyReleased(_))
     ));
 }
@@ -902,7 +961,12 @@ fn staged_owner_and_editor_apply_only_after_successful_release_commit() {
     let mut notifier = FakeNotifier::accepted();
     fixture
         .workspace
-        .submit_candidate(request, &mut graph, &mut notifier)
+        .submit_candidate(
+            request,
+            &mut graph,
+            &mut notifier,
+            &fixture.editor_principal(),
+        )
         .expect("staged handover candidate");
     fixture
         .workspace
@@ -912,6 +976,7 @@ fn staged_owner_and_editor_apply_only_after_successful_release_commit() {
             None,
             &mut graph,
             &mut notifier,
+            &fixture.approver_principal(),
         )
         .expect("approve staged handover");
 
@@ -925,6 +990,7 @@ fn staged_owner_and_editor_apply_only_after_successful_release_commit() {
             &mut graph,
             &mut notifier,
             &mut failed_exporter,
+            &fixture.editor_principal()
         ),
         Err(DmsError::ExportFailed(_))
     ));
@@ -958,6 +1024,7 @@ fn staged_owner_and_editor_apply_only_after_successful_release_commit() {
             &mut graph,
             &mut notifier,
             &mut exporter,
+            &fixture.editor_principal(),
         )
         .expect("commit staged handover");
     assert_eq!(
@@ -1003,6 +1070,7 @@ fn schema_v11_migration_maps_effective_date_to_current_release_and_open_candidat
             &mut graph,
             &mut notifier,
             &mut exporter,
+            &fixture.editor_principal(),
         )
         .expect("initial release");
     fixture
@@ -1013,6 +1081,7 @@ fn schema_v11_migration_maps_effective_date_to_current_release_and_open_candidat
             fixture.candidate_request(TargetSelection::NextMinor),
             &mut graph,
             &mut notifier,
+            &fixture.editor_principal(),
         )
         .expect("minor candidate");
     fixture
@@ -1023,6 +1092,7 @@ fn schema_v11_migration_maps_effective_date_to_current_release_and_open_candidat
             &mut graph,
             &mut notifier,
             &mut exporter,
+            &fixture.editor_principal(),
         )
         .expect("minor release");
     fixture
@@ -1033,6 +1103,7 @@ fn schema_v11_migration_maps_effective_date_to_current_release_and_open_candidat
             fixture.candidate_request(TargetSelection::NextMajor),
             &mut graph,
             &mut notifier,
+            &fixture.editor_principal(),
         )
         .expect("open candidate");
     let original_due_date = fixture
@@ -1138,6 +1209,7 @@ fn minor_release_skips_review_and_notification_failure_does_not_reverse_commit()
             &mut graph,
             &mut unused_notifier,
             &mut exporter,
+            &fixture.editor_principal(),
         )
         .expect("first release");
     fixture
@@ -1150,6 +1222,7 @@ fn minor_release_skips_review_and_notification_failure_does_not_reverse_commit()
             fixture.candidate_request(TargetSelection::NextMinor),
             &mut graph,
             &mut notifier,
+            &fixture.editor_principal(),
         )
         .expect("minor candidate");
     assert!(!candidate.approval_required);
@@ -1164,6 +1237,7 @@ fn minor_release_skips_review_and_notification_failure_does_not_reverse_commit()
             &mut graph,
             &mut notifier,
             &mut exporter,
+            &fixture.editor_principal(),
         )
         .expect("minor release remains committed");
     assert_eq!(outcome.release.version, Version { major: 1, minor: 1 });
@@ -1204,6 +1278,7 @@ fn minor_release_skips_review_and_notification_failure_does_not_reverse_commit()
             fixture.document_id,
             outcome.release.id,
             &mut retry_notifier,
+            &fixture.editor_principal(),
         )
         .expect("retry minor publication notification");
     assert_eq!(retry.status, DeliveryStatus::Accepted);
@@ -1236,6 +1311,7 @@ fn withdrawal_preserves_history_falls_back_to_prior_release_and_advances_version
             fixture.candidate_request(TargetSelection::NextMinor),
             &mut graph,
             &mut FakeNotifier::default(),
+            &fixture.editor_principal(),
         )
         .unwrap();
     let second = fixture
@@ -1246,12 +1322,18 @@ fn withdrawal_preserves_history_falls_back_to_prior_release_and_advances_version
             &mut graph,
             &mut FakeNotifier::accepted(),
             &mut FakeExporter::successful(),
+            &fixture.editor_principal(),
         )
         .unwrap();
 
     assert!(fixture
         .workspace
-        .withdraw_release(fixture.document_id, second.release.id, "   ")
+        .withdraw_release(
+            fixture.document_id,
+            second.release.id,
+            "   ",
+            &fixture.editor_principal()
+        )
         .is_err());
     let withdrawn = fixture
         .workspace
@@ -1259,6 +1341,7 @@ fn withdrawal_preserves_history_falls_back_to_prior_release_and_advances_version
             fixture.document_id,
             second.release.id,
             "Superseded by a corrected publication",
+            &fixture.editor_principal(),
         )
         .unwrap();
     assert!(withdrawn.withdrawn);
@@ -1334,6 +1417,7 @@ fn withdrawal_preserves_history_falls_back_to_prior_release_and_advances_version
             fixture.candidate_request(TargetSelection::NextMinor),
             &mut graph,
             &mut FakeNotifier::default(),
+            &fixture.editor_principal(),
         )
         .unwrap();
     assert_eq!(next.version, Version { major: 1, minor: 2 });
@@ -1353,6 +1437,7 @@ fn approver_policy_change_invalidates_open_review_and_target_remains_reusable() 
             fixture.candidate_request(TargetSelection::NextMajor),
             &mut graph,
             &mut notifier,
+            &fixture.editor_principal(),
         )
         .expect("review");
     fixture
@@ -1383,6 +1468,7 @@ fn approver_policy_change_invalidates_open_review_and_target_remains_reusable() 
             fixture.candidate_request(TargetSelection::NextMajor),
             &mut graph,
             &mut notifier,
+            &fixture.editor_principal(),
         )
         .expect("same uncommitted V1.0 target is reusable");
     assert_eq!(resubmitted.version, Version::V1_0);
@@ -1406,6 +1492,10 @@ fn approved_candidate_is_invalidated_by_control_or_source_changes() {
                 })),
                 ..ControlUpdate::default()
             },
+            &MutationPrincipal::authenticated_entra(AuthenticatedActor {
+                tenant_id: fixture.tenant_id,
+                object_id: fixture.editor_id,
+            }),
         )
         .expect("control change");
     assert_eq!(
@@ -1420,6 +1510,7 @@ fn approved_candidate_is_invalidated_by_control_or_source_changes() {
             fixture.candidate_request(TargetSelection::NextMajor),
             &mut graph,
             &mut notifier,
+            &fixture.editor_principal(),
         )
         .expect("replacement review");
     let mut outcome_notifier = FakeNotifier::accepted();
@@ -1431,6 +1522,7 @@ fn approved_candidate_is_invalidated_by_control_or_source_changes() {
             None,
             &mut graph,
             &mut outcome_notifier,
+            &fixture.approver_principal(),
         )
         .expect("replacement approval");
     fs::write(
@@ -1446,6 +1538,7 @@ fn approved_candidate_is_invalidated_by_control_or_source_changes() {
             &mut graph,
             &mut outcome_notifier,
             &mut exporter,
+            &fixture.editor_principal()
         ),
         Err(DmsError::CandidateInvalidated)
     ));
@@ -1589,6 +1682,7 @@ fn markdown_frontmatter_is_rewritten_from_dms_control_before_review() {
             fixture.candidate_request(TargetSelection::NextMajor),
             &mut graph,
             &mut FakeNotifier::accepted(),
+            &fixture.editor_principal(),
         )
         .expect("submit after DMS frontmatter resync");
     let source = fs::read_to_string(&fixture.source_path).unwrap();
@@ -1611,6 +1705,7 @@ fn confidentiality_type_migration_replaces_only_the_next_markdown_release() {
             fixture.candidate_request(TargetSelection::NextMajor),
             &mut graph,
             &mut FakeNotifier::accepted(),
+            &fixture.editor_principal(),
         )
         .expect("old-type candidate");
     assert!(fs::read_to_string(&fixture.source_path)
@@ -1639,6 +1734,7 @@ fn confidentiality_type_migration_replaces_only_the_next_markdown_release() {
             fixture.candidate_request(TargetSelection::NextMajor),
             &mut graph,
             &mut FakeNotifier::accepted(),
+            &fixture.editor_principal(),
         )
         .expect("replacement-type candidate");
     let candidate = fixture
@@ -1661,6 +1757,7 @@ fn confidentiality_type_migration_replaces_only_the_next_markdown_release() {
             None,
             &mut graph,
             &mut FakeNotifier::accepted(),
+            &fixture.approver_principal(),
         )
         .expect("approval");
     let outcome = fixture
@@ -1671,6 +1768,7 @@ fn confidentiality_type_migration_replaces_only_the_next_markdown_release() {
             &mut graph,
             &mut FakeNotifier::default(),
             &mut FakeExporter::successful(),
+            &fixture.editor_principal(),
         )
         .expect("release");
     assert_eq!(outcome.release.confidentiality.type_id, "restricted");
@@ -1709,6 +1807,7 @@ fn false_positive_override_is_revision_bound_and_hash_chained() {
             fixture.candidate_request(TargetSelection::NextMajor),
             &mut graph,
             &mut notifier,
+            &fixture.editor_principal(),
         )
         .expect("synced Markdown frontmatter passes without override");
     assert_eq!(submission.status, CandidateStatus::InReview);
@@ -1740,7 +1839,7 @@ fn graph_refresh_failure_blocks_candidate_without_using_stale_cache() {
             fixture.candidate_request(TargetSelection::NextMajor),
             &mut graph,
             &mut notifier,
-        ),
+        &fixture.editor_principal()),
         Err(DmsError::GraphRefreshFailed(message)) if message == "offline"
     ));
     assert!(fixture
@@ -1861,7 +1960,7 @@ fn periodic_review_binds_release_requires_integrity_and_records_result_transitio
 
     let review = fixture
         .workspace
-        .start_periodic_review(fixture.document_id)
+        .start_periodic_review(fixture.document_id, &fixture.editor_principal())
         .unwrap();
     assert_eq!(review.release_id, outcome.release.id);
     assert_eq!(review.pdf_digest, outcome.release.pdf_digest);
@@ -1910,7 +2009,7 @@ fn periodic_review_binds_release_requires_integrity_and_records_result_transitio
     let (mut graph, _) = release_first(&mut changed);
     let review = changed
         .workspace
-        .start_periodic_review(changed.document_id)
+        .start_periodic_review(changed.document_id, &changed.editor_principal())
         .unwrap();
     changed
         .workspace
@@ -1940,7 +2039,7 @@ fn periodic_review_binds_release_requires_integrity_and_records_result_transitio
     let (mut graph, _) = release_first(&mut obsolete);
     let review = obsolete
         .workspace
-        .start_periodic_review(obsolete.document_id)
+        .start_periodic_review(obsolete.document_id, &obsolete.editor_principal())
         .unwrap();
     obsolete
         .workspace
@@ -1979,12 +2078,17 @@ fn periodic_review_cancellation_requires_comment_and_preserves_release_schedule(
         .next_review_due;
     let review = fixture
         .workspace
-        .start_periodic_review(fixture.document_id)
+        .start_periodic_review(fixture.document_id, &fixture.editor_principal())
         .unwrap();
 
     assert!(fixture
         .workspace
-        .cancel_periodic_review(fixture.document_id, review.id, "  ")
+        .cancel_periodic_review(
+            fixture.document_id,
+            review.id,
+            "  ",
+            &fixture.editor_principal()
+        )
         .is_err());
     let cancelled = fixture
         .workspace
@@ -1992,6 +2096,7 @@ fn periodic_review_cancellation_requires_comment_and_preserves_release_schedule(
             fixture.document_id,
             review.id,
             "Review postponed while ownership is reassigned",
+            &fixture.editor_principal(),
         )
         .unwrap();
 
@@ -2043,7 +2148,7 @@ fn periodic_review_reminders_record_every_attempt_without_duplicate_or_lifecycle
     release_first(&mut fixture);
     let review = fixture
         .workspace
-        .start_periodic_review(fixture.document_id)
+        .start_periodic_review(fixture.document_id, &fixture.editor_principal())
         .unwrap();
     let permalink = fixture
         .workspace
@@ -2073,11 +2178,21 @@ fn periodic_review_reminders_record_every_attempt_without_duplicate_or_lifecycle
 
     let first = fixture
         .workspace
-        .remind_periodic_review(fixture.document_id, review.id, &mut notifier)
+        .remind_periodic_review(
+            fixture.document_id,
+            review.id,
+            &mut notifier,
+            &fixture.editor_principal(),
+        )
         .unwrap();
     let second = fixture
         .workspace
-        .remind_periodic_review(fixture.document_id, review.id, &mut notifier)
+        .remind_periodic_review(
+            fixture.document_id,
+            review.id,
+            &mut notifier,
+            &fixture.editor_principal(),
+        )
         .unwrap();
 
     assert_eq!(first.kind, NotificationKind::PeriodicReviewReminder);
@@ -2260,6 +2375,7 @@ fn unregister_leaves_open_content_and_periodic_reviews() {
             fixture.candidate_request(TargetSelection::NextMajor),
             &mut graph,
             &mut FakeNotifier::accepted(),
+            &fixture.editor_principal(),
         )
         .expect("open review");
     assert_eq!(
@@ -2330,7 +2446,7 @@ fn unregister_leaves_open_content_and_periodic_reviews() {
     release_first(&mut released);
     let review = released
         .workspace
-        .start_periodic_review(released.document_id)
+        .start_periodic_review(released.document_id, &released.editor_principal())
         .expect("open periodic review");
     released
         .workspace
@@ -2347,7 +2463,7 @@ fn unregister_leaves_open_content_and_periodic_reviews() {
     assert!(matches!(
         released
             .workspace
-            .start_periodic_review(released.document_id),
+            .start_periodic_review(released.document_id, &released.editor_principal()),
         Err(DmsError::PeriodicReviewAlreadyOpen)
     ));
     let restored_release = released
@@ -2358,7 +2474,7 @@ fn unregister_leaves_open_content_and_periodic_reviews() {
     assert!(matches!(
         released
             .workspace
-            .start_periodic_review(released.document_id),
+            .start_periodic_review(released.document_id, &released.editor_principal()),
         Err(DmsError::PeriodicReviewAlreadyOpen)
     ));
     assert_eq!(review.status, PeriodicReviewStatus::Open);

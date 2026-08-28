@@ -97,7 +97,11 @@ fn folder_counters_roll_up_descendants_and_classify_only_visible_files() {
         .add_document(&controlled_obsolete)
         .expect("register obsolete source");
     workspace
-        .mark_obsolete(obsolete.id, "Superseded")
+        .mark_obsolete(
+            obsolete.id,
+            "Superseded",
+            &dms_core::MutationPrincipal::local_os_user("test-operator"),
+        )
         .expect("mark obsolete");
 
     let (tree, policies) = workspace
@@ -243,10 +247,16 @@ fn batch_add_is_atomic_and_unregister_reassociate_preserve_document_identity() {
                 document_number: Some(Some("HR-001".into())),
                 ..ControlUpdate::default()
             },
+            &dms_core::MutationPrincipal::local_os_user("test-operator"),
         )
         .expect("control data");
     workspace
-        .add_note(document.id, "Keep this history", Some("Raphael"))
+        .add_note(
+            document.id,
+            "Keep this history",
+            Some("Raphael"),
+            &dms_core::MutationPrincipal::local_os_user("test-operator"),
+        )
         .expect("note");
     let permalink = workspace
         .document_permalink(document.id)
@@ -264,7 +274,11 @@ fn batch_add_is_atomic_and_unregister_reassociate_preserve_document_identity() {
     let renamed = workspace.edit_root.join("Policies/Staff-Handbook.md");
     fs::rename(&original, &renamed).expect("external rename");
     let reassociated = workspace
-        .reassociate_document(document.id, &renamed)
+        .reassociate_document(
+            document.id,
+            &renamed,
+            &dms_core::MutationPrincipal::local_os_user("test-operator"),
+        )
         .expect("reassociate");
     assert_eq!(reassociated.id, document.id);
     assert_eq!(
@@ -315,6 +329,7 @@ fn search_matches_file_identity_path_and_control_data_with_explicit_scope() {
                 document_number: Some(Some("HR-042".into())),
                 ..ControlUpdate::default()
             },
+            &dms_core::MutationPrincipal::local_os_user("test-operator"),
         )
         .expect("control data");
 
@@ -395,6 +410,7 @@ fn lost_source_rows_counters_reassociate_event_and_absorb_rules() {
                 title: Some("Lost handbook".into()),
                 ..ControlUpdate::default()
             },
+            &dms_core::MutationPrincipal::local_os_user("test-operator"),
         )
         .expect("lost audit");
 
@@ -426,7 +442,11 @@ fn lost_source_rows_counters_reassociate_event_and_absorb_rules() {
     );
 
     let restored = workspace
-        .reassociate_document(lost.id, &free)
+        .reassociate_document(
+            lost.id,
+            &free,
+            &dms_core::MutationPrincipal::local_os_user("test-operator"),
+        )
         .expect("reassociate free path");
     assert_eq!(restored.relative_path, Path::new("Policies/Relocated.md"));
     assert!(workspace
@@ -449,10 +469,15 @@ fn lost_source_rows_counters_reassociate_event_and_absorb_rules() {
                 title: Some("Occupied handbook".into()),
                 ..ControlUpdate::default()
             },
+            &dms_core::MutationPrincipal::local_os_user("test-operator"),
         )
         .expect("later target audit");
     let absorbed = workspace
-        .reassociate_document(lost.id, &occupied)
+        .reassociate_document(
+            lost.id,
+            &occupied,
+            &dms_core::MutationPrincipal::local_os_user("test-operator"),
+        )
         .expect("absorb registered target");
     assert_eq!(absorbed.relative_path, Path::new("Policies/Occupied.md"));
     assert_eq!(
@@ -480,7 +505,11 @@ fn unregister_leaves_obsolete_lifecycle_and_add_back_restores_same_id() {
     fs::write(&source, "# Handbook").expect("draft");
     let document = workspace.add_document(&source).expect("register");
     workspace
-        .mark_obsolete(document.id, "Superseded")
+        .mark_obsolete(
+            document.id,
+            "Superseded",
+            &dms_core::MutationPrincipal::local_os_user("test-operator"),
+        )
         .expect("mark obsolete");
     let events_before = workspace
         .workflow_history(document.id)

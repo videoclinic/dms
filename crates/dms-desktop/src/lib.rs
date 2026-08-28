@@ -13,13 +13,14 @@ use dms_core::{
     ConfidentialityPolicy, ConfidentialityType, ControlUpdate, DeliveryAttempt, DmsError, Document,
     DocumentControl, DocumentType, EffectiveConfidentiality, EffectiveWorkflowRoles,
     EntraIdentitySource, EntraPerson, GraphClient, LibraryEntry, LibraryFolder, LibraryFolderNode,
-    Lifecycle, LocalLifecycleActions, MarkdownTemplateAsset, MarkdownTemplateValidation, Note,
-    NotificationClient, NotificationKind, NotificationMessage, NotificationSettings,
-    NotificationTransport, OwnerReference, PdfExporter, PeriodicReview, PeriodicReviewMarker,
-    PeriodicReviewResult, PermalinkTarget, PersonSnapshot, PolicyFolder, ReleaseCandidate,
-    ReleaseVerificationStatus, RestoreOutcome, RestoreRequest, ReviewDecision, RoleUpdate,
-    SmtpSettings, SourceState, TargetSelection, Version, WorkflowEvent, WorkflowPolicyAssignment,
-    WorkflowVerification, Workspace, WorkspaceLock, WorkspaceLockStatus, METADATA_DIRECTORY,
+    Lifecycle, LocalLifecycleActions, MarkdownTemplateAsset, MarkdownTemplateValidation,
+    MutationPrincipal, Note, NotificationClient, NotificationKind, NotificationMessage,
+    NotificationSettings, NotificationTransport, OwnerReference, PdfExporter, PeriodicReview,
+    PeriodicReviewMarker, PeriodicReviewResult, PermalinkTarget, PersonSnapshot, PolicyFolder,
+    ReleaseCandidate, ReleaseVerificationStatus, RestoreOutcome, RestoreRequest, ReviewDecision,
+    RoleUpdate, SmtpSettings, SourceState, TargetSelection, Version, WorkflowEvent,
+    WorkflowPolicyAssignment, WorkflowVerification, Workspace, WorkspaceLock, WorkspaceLockStatus,
+    METADATA_DIRECTORY,
 };
 use lettre::message::Mailbox;
 use serde::{Deserialize, Serialize};
@@ -981,10 +982,11 @@ fn apply_identity_source(
         .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?
         .apply_identity_source_preview(
             preview_id,
-            |_tenant_id, _tenant_display, group_id, group_label, people| {
+            |tenant_id, _tenant_display, group_id, group_label, people| {
                 mutate_workspace_configuration(Path::new(&edit_root), |workspace| {
                     apply_identity_source_to_workspace(
                         workspace,
+                        tenant_id,
                         group_id,
                         &group_label,
                         people,
@@ -998,6 +1000,7 @@ fn apply_identity_source(
 
 fn apply_identity_source_to_workspace(
     workspace: &mut Workspace,
+    tenant_id: Uuid,
     group_id: Uuid,
     group_label: &str,
     people: Vec<EntraPerson>,
@@ -1016,7 +1019,7 @@ fn apply_identity_source_to_workspace(
         None
     };
 
-    workspace.replace_identity_source(group_id, group_label, people)?;
+    workspace.replace_identity_source(tenant_id, group_id, group_label, people)?;
     if let Some((editor_id, approver_id)) = initial_roles {
         workspace.update_workflow_policy(
             ".",
@@ -1236,7 +1239,11 @@ fn reassociate_library_document(
         return Err(format_desktop_reassociate_error(&failed));
     }
     let document = workspace
-        .reassociate_document(document_id, Path::new(&path))
+        .reassociate_document(
+            document_id,
+            Path::new(&path),
+            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
+        )
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
     Ok(document)
@@ -1312,6 +1319,7 @@ fn update_document_control_with<G: GraphClient + ?Sized>(
                 })),
                 ..ControlUpdate::default()
             },
+            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
         )
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
@@ -1372,7 +1380,11 @@ fn cancel_document_review(
     let mut workspace =
         Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
     workspace
-        .cancel_review(document_id, &reason)
+        .cancel_review(
+            document_id,
+            &reason,
+            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
+        )
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
     document_selection(Path::new(&edit_root), document_id)
@@ -1391,7 +1403,11 @@ fn mark_document_obsolete(
     let mut workspace =
         Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
     workspace
-        .mark_obsolete(document_id, &reason)
+        .mark_obsolete(
+            document_id,
+            &reason,
+            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
+        )
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
     document_selection(Path::new(&edit_root), document_id)
@@ -1517,6 +1533,7 @@ fn submit_document_candidate_with<G: GraphClient, N: NotificationClient>(
             },
             graph,
             notifier,
+            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
         )
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
@@ -1534,7 +1551,11 @@ fn retry_review_notification_with<N: NotificationClient>(
         .configure_notifications(settings.transport, settings.smtp.clone())
         .map_err(|error| error.to_string())?;
     workspace
-        .retry_review_notification(document_id, notifier)
+        .retry_review_notification(
+            document_id,
+            notifier,
+            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
+        )
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
     document_selection(Path::new(edit_root), document_id)
@@ -1553,6 +1574,7 @@ fn decide_document_review_with<G: GraphClient + ?Sized, N: NotificationClient>(
     workspace
         .configure_notifications(context.settings.transport, context.settings.smtp.clone())
         .map_err(|error| error.to_string())?;
+    let principal = MutationPrincipal::authenticated_entra(context.actor.clone());
     let mut signed_in_graph = SignedInActorGraph {
         graph,
         actor: context.actor,
@@ -1564,6 +1586,7 @@ fn decide_document_review_with<G: GraphClient + ?Sized, N: NotificationClient>(
             optional_text(&comment),
             &mut signed_in_graph,
             notifier,
+            &principal,
         )
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
@@ -1590,6 +1613,7 @@ fn release_document_candidate_with<G: GraphClient, N: NotificationClient, E: Pdf
             graph,
             notifier,
             exporter,
+            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
         )
         .map_err(|error| error.to_string())?;
     document_selection(Path::new(edit_root), document_id)
@@ -1607,7 +1631,12 @@ fn retry_decision_notification_with<N: NotificationClient>(
         .configure_notifications(settings.transport, settings.smtp.clone())
         .map_err(|error| error.to_string())?;
     workspace
-        .retry_decision_notification(document_id, candidate_id, notifier)
+        .retry_decision_notification(
+            document_id,
+            candidate_id,
+            notifier,
+            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
+        )
         .map_err(|error| error.to_string())?;
     document_selection(Path::new(edit_root), document_id)
 }
@@ -1624,7 +1653,12 @@ fn retry_minor_publication_notification_with<N: NotificationClient>(
         .configure_notifications(settings.transport, settings.smtp.clone())
         .map_err(|error| error.to_string())?;
     workspace
-        .retry_minor_publication_notification(document_id, release_id, notifier)
+        .retry_minor_publication_notification(
+            document_id,
+            release_id,
+            notifier,
+            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
+        )
         .map_err(|error| error.to_string())?;
     document_selection(Path::new(edit_root), document_id)
 }
@@ -1784,7 +1818,12 @@ fn withdraw_release(
     let mut workspace =
         Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
     workspace
-        .withdraw_release(document_id, release_id, &reason)
+        .withdraw_release(
+            document_id,
+            release_id,
+            &reason,
+            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
+        )
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
     release_maintenance(&workspace)
@@ -1859,7 +1898,10 @@ fn generate_audit_report(
     let mut workspace =
         Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
     workspace
-        .generate_audit_report(request)
+        .generate_audit_report(
+            request,
+            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
+        )
         .map_err(|error| error.to_string())?;
     audit_report_snapshot(&workspace)
 }
@@ -1892,7 +1934,10 @@ fn start_periodic_review(edit_root: String, document_id: Uuid) -> Result<Periodi
     let mut workspace =
         Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
     workspace
-        .start_periodic_review(document_id)
+        .start_periodic_review(
+            document_id,
+            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
+        )
         .map_err(|error| error.to_string())
 }
 
@@ -1953,7 +1998,12 @@ fn cancel_periodic_review(
     let mut workspace =
         Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
     workspace
-        .cancel_periodic_review(document_id, review_id, &comment)
+        .cancel_periodic_review(
+            document_id,
+            review_id,
+            &comment,
+            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
+        )
         .map_err(|error| error.to_string())
 }
 
@@ -1973,7 +2023,12 @@ fn remind_periodic_review_with<N: NotificationClient + ?Sized>(
         .configure_notifications(settings.transport, settings.smtp.clone())
         .map_err(|error| error.to_string())?;
     workspace
-        .remind_periodic_review(document_id, review_id, notifier)
+        .remind_periodic_review(
+            document_id,
+            review_id,
+            notifier,
+            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
+        )
         .map_err(|error| error.to_string())
 }
 
@@ -2172,7 +2227,12 @@ fn add_document_note(
     let mut workspace =
         Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
     workspace
-        .add_note(document_id, &body, author.as_deref())
+        .add_note(
+            document_id,
+            &body,
+            author.as_deref(),
+            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
+        )
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
     document_notes(&workspace, document_id)
@@ -3365,6 +3425,7 @@ mod tests {
             apply_identity_source_to_workspace(
                 &mut workspace,
                 Uuid::new_v4(),
+                Uuid::new_v4(),
                 "DMS workflow",
                 people.clone(),
                 None,
@@ -3376,6 +3437,7 @@ mod tests {
 
         apply_identity_source_to_workspace(
             &mut workspace,
+            Uuid::new_v4(),
             Uuid::new_v4(),
             "DMS workflow",
             people,
@@ -3403,6 +3465,7 @@ mod tests {
         apply_identity_source_to_workspace(
             &mut workspace,
             Uuid::new_v4(),
+            Uuid::new_v4(),
             "Empty DMS workflow group",
             Vec::new(),
             None,
@@ -3425,6 +3488,7 @@ mod tests {
         apply_identity_source_to_workspace(
             &mut workspace,
             Uuid::new_v4(),
+            Uuid::new_v4(),
             "Original group",
             vec![
                 EntraPerson::eligible(editor_id, "Eva Editor", "editor@example.test"),
@@ -3440,6 +3504,7 @@ mod tests {
         let replacement_approver_id = Uuid::new_v4();
         apply_identity_source_to_workspace(
             &mut workspace,
+            Uuid::new_v4(),
             Uuid::new_v4(),
             "Replacement group",
             vec![
@@ -3746,6 +3811,7 @@ mod tests {
         let approver_id = Uuid::new_v4();
         workspace
             .replace_identity_source(
+                Uuid::new_v4(),
                 Uuid::new_v4(),
                 "DMS workflow",
                 vec![
@@ -4295,7 +4361,7 @@ mod tests {
         let owner_object_id = Uuid::new_v4();
         let owner = EntraPerson::eligible(owner_object_id, "People team", "people@example.test");
         workspace
-            .replace_identity_source(Uuid::new_v4(), "DMS owners", vec![owner.clone()])
+            .replace_identity_source(tenant_id, Uuid::new_v4(), "DMS owners", vec![owner.clone()])
             .unwrap();
         workspace
             .update_workflow_policy(
@@ -4818,7 +4884,7 @@ mod tests {
             EntraPerson::eligible(requester_id, "Rita Requester", "requester@example.test"),
         ];
         workspace
-            .replace_identity_source(Uuid::new_v4(), "DMS workflow", people.clone())
+            .replace_identity_source(tenant_id, Uuid::new_v4(), "DMS workflow", people.clone())
             .unwrap();
         workspace
             .update_workflow_policy(
@@ -4867,6 +4933,10 @@ mod tests {
                     })),
                     ..ControlUpdate::default()
                 },
+                &MutationPrincipal::authenticated_entra(AuthenticatedActor {
+                    tenant_id,
+                    object_id: editor_id,
+                }),
             )
             .unwrap();
         workspace.save().unwrap();

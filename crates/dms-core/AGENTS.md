@@ -185,6 +185,10 @@ persistence.
 - Schema v17 adds optional first-import Office source-history records. Its v16
   migration writes `source_history: null` for every existing document and
   retains `v16.json.bak`.
+- Schema v18 adds the persisted Entra tenant binding. Its v17 migration retains
+  `v17.json.bak` and leaves a group-only binding explicitly unverified until an
+  operator reapplies the source; it never infers tenant identity from cache,
+  OS-user configuration, or historic evidence.
 
 ## Verification
 

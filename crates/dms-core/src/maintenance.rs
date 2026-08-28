@@ -13,10 +13,10 @@ use zip::{write::SimpleFileOptions, ZipWriter};
 
 use crate::lifecycle::{delivery_attempt, notification_message};
 use crate::{
-    configured_text, default_author, AuthenticatedActor, ConfidentialitySnapshot, DeliveryAttempt,
-    DmsError, GraphClient, Lifecycle, NotificationClient, NotificationKind,
-    PeriodicReviewEventDetails, PersonSnapshot, Result, Version, WorkflowEventBody,
-    WorkflowEventType, Workspace, METADATA_DIRECTORY,
+    configured_text, ConfidentialitySnapshot, DeliveryAttempt, DmsError, GraphClient, Lifecycle,
+    MutationPrincipal, NotificationClient, NotificationKind, PeriodicReviewEventDetails,
+    PersonSnapshot, Result, Version, WorkflowEventBody, WorkflowEventType, Workspace,
+    METADATA_DIRECTORY,
 };
 
 pub const DEFAULT_REVIEW_INTERVAL_MONTHS: u32 = 12;
@@ -105,7 +105,6 @@ pub struct PeriodicReviewMarker {
 
 #[derive(Default)]
 struct PeriodicEventContext {
-    actor: Option<AuthenticatedActor>,
     result: Option<PeriodicReviewResult>,
     comment: Option<String>,
     delivery: Option<DeliveryAttempt>,
@@ -301,7 +300,12 @@ impl Workspace {
         Ok(markers)
     }
 
-    pub fn start_periodic_review(&mut self, document_id: Uuid) -> Result<PeriodicReview> {
+    pub fn start_periodic_review(
+        &mut self,
+        document_id: Uuid,
+        principal: &MutationPrincipal,
+    ) -> Result<PeriodicReview> {
+        self.require_mutation_principal(principal)?;
         if self
             .document(document_id)?
             .review_exemption_reason
@@ -351,6 +355,7 @@ impl Workspace {
             document_id,
             WorkflowEventType::PeriodicReviewRequested,
             &review,
+            principal,
             PeriodicEventContext::default(),
         )?;
         self.save()?;
@@ -396,13 +401,15 @@ impl Workspace {
         {
             return Err(DmsError::DecisionActorMismatch);
         }
+        let principal = MutationPrincipal::authenticated_entra(actor);
+        self.require_mutation_principal(&principal)?;
         let completed_at = Utc::now();
         self.append_periodic_event(
             document_id,
             WorkflowEventType::PeriodicReviewCompleted,
             &review,
+            &principal,
             PeriodicEventContext {
-                actor: Some(actor),
                 result: Some(result),
                 comment: Some(comment.clone()),
                 delivery: None,
@@ -431,7 +438,7 @@ impl Workspace {
                 self.save()?;
             }
             PeriodicReviewResult::Obsolete => {
-                self.mark_obsolete(document_id, &comment)?;
+                self.mark_obsolete(document_id, &comment, &principal)?;
             }
         }
         Ok(self
@@ -448,7 +455,9 @@ impl Workspace {
         document_id: Uuid,
         review_id: Uuid,
         comment: &str,
+        principal: &MutationPrincipal,
     ) -> Result<PeriodicReview> {
+        self.require_mutation_principal(principal)?;
         let comment = configured_text(comment, "periodic review cancellation comment")?;
         let review = self
             .document(document_id)?
@@ -464,6 +473,7 @@ impl Workspace {
             document_id,
             WorkflowEventType::PeriodicReviewCancelled,
             &review,
+            principal,
             PeriodicEventContext {
                 comment: Some(comment.clone()),
                 ..PeriodicEventContext::default()
@@ -487,7 +497,9 @@ impl Workspace {
         document_id: Uuid,
         review_id: Uuid,
         notifier: &mut N,
+        principal: &MutationPrincipal,
     ) -> Result<DeliveryAttempt> {
+        self.require_mutation_principal(principal)?;
         let settings = self
             .notification_settings
             .clone()
@@ -533,6 +545,7 @@ impl Workspace {
             document_id,
             WorkflowEventType::PeriodicReviewReminder,
             &review,
+            principal,
             PeriodicEventContext {
                 delivery: Some(attempt.clone()),
                 ..PeriodicEventContext::default()
@@ -649,8 +662,10 @@ impl Workspace {
         document_id: Uuid,
         event_type: WorkflowEventType,
         review: &PeriodicReview,
+        principal: &MutationPrincipal,
         context: PeriodicEventContext,
     ) -> Result<()> {
+        let (authenticated_actor, local_os_user) = principal.event_fields();
         let body = WorkflowEventBody {
             event_id: Uuid::new_v4(),
             document_id,
@@ -664,8 +679,8 @@ impl Workspace {
             requester: None,
             editor: None,
             approver: Some(review.approver.clone()),
-            authenticated_actor: context.actor,
-            local_os_user: default_author(),
+            authenticated_actor,
+            local_os_user,
             revision_digest: None,
             confidentiality: Some(review.confidentiality.clone()),
             target_version: Some(review.version),

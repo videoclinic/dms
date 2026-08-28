@@ -10,9 +10,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{
-    default_author, is_metadata_path, is_supported_source, DmsError, Document, DocumentControl,
-    Lifecycle, Result, SourceReassociation, WorkflowEventBody, WorkflowEventType, Workspace,
-    METADATA_DIRECTORY,
+    is_metadata_path, is_supported_source, DmsError, Document, DocumentControl, Lifecycle,
+    MutationPrincipal, Result, SourceReassociation, WorkflowEventBody, WorkflowEventType,
+    Workspace, METADATA_DIRECTORY,
 };
 use crate::lifecycle::hash_event_body;
 
@@ -253,7 +253,9 @@ impl Workspace {
         &mut self,
         document_id: Uuid,
         source_path: &Path,
+        principal: &MutationPrincipal,
     ) -> Result<Document> {
+        self.require_mutation_principal(principal)?;
         let (absolute_path, relative_path) = self.resolve_source_path(source_path)?;
         if self.is_markdown_template_path(&relative_path) {
             return Err(DmsError::TemplateLifecycleExcluded(relative_path));
@@ -291,6 +293,7 @@ impl Workspace {
             &previous_path,
             &relative_path,
             absorbed_document_id,
+            principal,
         )?;
         self.sync_markdown_control_frontmatter(document_id)?;
         Ok(self.document(document_id)?.clone())
@@ -362,9 +365,11 @@ impl Workspace {
         previous_path: &Path,
         new_path: &Path,
         absorbed_document_id: Option<Uuid>,
+        principal: &MutationPrincipal,
     ) -> Result<()> {
         let previous = path_text(previous_path);
         let next = path_text(new_path);
+        let (authenticated_actor, local_os_user) = principal.event_fields();
         let body = WorkflowEventBody {
             event_id: Uuid::new_v4(),
             document_id,
@@ -378,8 +383,8 @@ impl Workspace {
             requester: None,
             editor: None,
             approver: None,
-            authenticated_actor: None,
-            local_os_user: default_author(),
+            authenticated_actor,
+            local_os_user,
             revision_digest: None,
             confidentiality: None,
             target_version: None,

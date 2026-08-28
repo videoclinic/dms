@@ -615,3 +615,29 @@ Capability-local rules stay in their CAP files.
   values, or PowerPoint client IDs. Word and Excel retain only attributable,
   date-bearing observations; PowerPoint client data is reported only through a
   sanitized unattributed outcome and is never stored or displayed.
+
+## ADR-0031 — Group-bound libraries require a verified Entra session
+
+- **Decision:** A new or replaced Entra identity source persists the effective
+  tenant ID with its group binding. Desktop activation and every bound-library
+  mutation require an explicit authenticated Entra principal whose tenant/object
+  ID comes from `/me` under a cached or refreshed delegated credential and whose
+  enabled direct-user membership is freshly returned by Microsoft Graph. The
+  group may be an Entra security group or a Microsoft 365 group. Session identity
+  is desktop-process authorization state only; `.dms` never retains a token,
+  active actor, or local-OS-to-Entra mapping. A schema-v17 group-only binding
+  migrates as unverified and fails closed until an operator explicitly reapplies
+  the identity source; DMS does not infer its tenant from OS-user configuration,
+  cached people, or historic evidence.
+- **Why:** A local OS account, cached display value, or group-only binding cannot
+  prove that a current desktop actor belongs to the configured tenant and group.
+  Inferring missing tenant metadata would convert mutable or historical data into
+  authorization truth.
+- **Consequences:** `dms-core` receives an explicit local or Entra mutation
+  principal without depending on Tauri or Graph. New unbound events retain their
+  local OS user; new bound events retain only the authenticated tenant/object ID.
+  Historical event JSON and hashes remain unchanged. Failed, expired,
+  tenant-mismatched, inaccessible-group, disabled-account, and non-member
+  sessions leave the library inactive; activation releases any newly acquired
+  advisory lock. The headless CLI supplies only a local principal and therefore
+  fails closed for bound-library mutations.

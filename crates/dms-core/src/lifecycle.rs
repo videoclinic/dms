@@ -353,6 +353,29 @@ pub struct AuthenticatedActor {
     pub object_id: Uuid,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MutationPrincipal {
+    LocalOsUser(String),
+    AuthenticatedEntra(AuthenticatedActor),
+}
+
+impl MutationPrincipal {
+    pub fn local_os_user(user: impl Into<String>) -> Self {
+        Self::LocalOsUser(user.into())
+    }
+
+    pub fn authenticated_entra(actor: AuthenticatedActor) -> Self {
+        Self::AuthenticatedEntra(actor)
+    }
+
+    pub(crate) fn event_fields(&self) -> (Option<AuthenticatedActor>, Option<String>) {
+        match self {
+            Self::LocalOsUser(user) => (None, Some(user.clone())),
+            Self::AuthenticatedEntra(actor) => (Some(actor.clone()), None),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WorkflowEventBody {
     pub event_id: Uuid,
@@ -364,7 +387,8 @@ pub struct WorkflowEventBody {
     pub editor: Option<PersonSnapshot>,
     pub approver: Option<PersonSnapshot>,
     pub authenticated_actor: Option<AuthenticatedActor>,
-    pub local_os_user: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_os_user: Option<String>,
     pub revision_digest: Option<String>,
     pub confidentiality: Option<ConfidentialitySnapshot>,
     pub target_version: Option<Version>,
@@ -515,7 +539,6 @@ pub enum PermalinkTarget {
 
 #[derive(Default)]
 struct CandidateEventDetails {
-    actor: Option<AuthenticatedActor>,
     decision_comment: Option<String>,
     delivery: Option<DeliveryAttempt>,
     operator_comment: Option<String>,
@@ -523,6 +546,26 @@ struct CandidateEventDetails {
 }
 
 impl Workspace {
+    pub fn require_mutation_principal(&self, principal: &MutationPrincipal) -> Result<()> {
+        match (self.identity_source(), principal) {
+            (None, MutationPrincipal::LocalOsUser(_)) => Ok(()),
+            (None, MutationPrincipal::AuthenticatedEntra(_)) => {
+                Err(DmsError::LocalPrincipalRequired)
+            }
+            (Some(_), MutationPrincipal::LocalOsUser(_)) => Err(DmsError::EntraSessionRequired),
+            (Some(source), MutationPrincipal::AuthenticatedEntra(actor)) => {
+                match source.tenant_id {
+                    Some(tenant_id) if tenant_id == actor.tenant_id => Ok(()),
+                    Some(tenant_id) => Err(DmsError::EntraTenantMismatch {
+                        bound: tenant_id,
+                        actor: actor.tenant_id,
+                    }),
+                    None => Err(DmsError::UnverifiedEntraIdentitySource),
+                }
+            }
+        }
+    }
+
     pub fn notification_settings(&self) -> Option<&NotificationSettings> {
         self.notification_settings.as_ref()
     }
@@ -591,7 +634,9 @@ impl Workspace {
         request: CandidateRequest,
         graph: &mut G,
         notifier: &mut N,
+        principal: &MutationPrincipal,
     ) -> Result<CandidateSubmission> {
+        self.require_mutation_principal(principal)?;
         let tenant_id = graph.tenant_id().map_err(DmsError::GraphRefreshFailed)?;
         self.refresh_eligible_people(graph)?;
         let settings = self
@@ -714,6 +759,7 @@ impl Workspace {
                 CheckPhase::Review,
                 check,
                 request.review_override_reason.as_deref(),
+                principal,
             )?;
         }
 
@@ -761,6 +807,7 @@ impl Workspace {
                 request.document_id,
                 WorkflowEventType::ReviewRequested,
                 &candidate,
+                principal,
                 CandidateEventDetails {
                     delivery: Some(attempt.clone()),
                     ..CandidateEventDetails::default()
@@ -781,7 +828,9 @@ impl Workspace {
         &mut self,
         document_id: Uuid,
         notifier: &mut N,
+        principal: &MutationPrincipal,
     ) -> Result<CandidateSubmission> {
+        self.require_mutation_principal(principal)?;
         let settings = self
             .notification_settings
             .clone()
@@ -813,6 +862,7 @@ impl Workspace {
                 document_id,
                 WorkflowEventType::ReviewRequested,
                 &candidate,
+                principal,
                 CandidateEventDetails {
                     delivery: Some(attempt.clone()),
                     ..CandidateEventDetails::default()
@@ -837,7 +887,9 @@ impl Workspace {
         comment: Option<&str>,
         graph: &mut G,
         notifier: &mut N,
+        principal: &MutationPrincipal,
     ) -> Result<DecisionOutcome> {
+        self.require_mutation_principal(principal)?;
         let candidate_id = self.active_candidate_id(document_id)?;
         let candidate = self.candidate(document_id, candidate_id)?.clone();
         let tenant_id = graph.tenant_id().map_err(DmsError::GraphRefreshFailed)?;
@@ -861,7 +913,12 @@ impl Workspace {
             .ensure_candidate_current(document_id, &candidate, tenant_id)
             .is_err()
         {
-            self.invalidate_candidate(document_id, candidate_id, "draft or metadata changed")?;
+            self.invalidate_candidate(
+                document_id,
+                candidate_id,
+                "draft or metadata changed",
+                principal,
+            )?;
             self.save()?;
             return Err(DmsError::CandidateInvalidated);
         }
@@ -875,6 +932,7 @@ impl Workspace {
         if actor.tenant_id != candidate.metadata.approver.tenant_id
             || actor.object_id != candidate.metadata.approver.object_id
             || !self.identity_cache.contains_key(&actor.object_id)
+            || !matches!(principal, MutationPrincipal::AuthenticatedEntra(value) if value == &actor)
         {
             return Err(DmsError::DecisionActorMismatch);
         }
@@ -902,8 +960,8 @@ impl Workspace {
             document_id,
             event_type,
             &candidate,
+            principal,
             CandidateEventDetails {
-                actor: Some(actor),
                 decision_comment: comment.clone(),
                 ..CandidateEventDetails::default()
             },
@@ -938,6 +996,7 @@ impl Workspace {
             document_id,
             WorkflowEventType::DecisionOutcomeNotified,
             &candidate,
+            principal,
             CandidateEventDetails {
                 delivery: Some(attempt.clone()),
                 ..CandidateEventDetails::default()
@@ -957,7 +1016,9 @@ impl Workspace {
         graph: &mut G,
         notifier: &mut N,
         exporter: &mut E,
+        principal: &MutationPrincipal,
     ) -> Result<ReleaseOutcome> {
+        self.require_mutation_principal(principal)?;
         let tenant_id = graph.tenant_id().map_err(DmsError::GraphRefreshFailed)?;
         let candidate_id = self.active_candidate_id(document_id)?;
         let mut candidate = self.candidate(document_id, candidate_id)?.clone();
@@ -983,7 +1044,12 @@ impl Workspace {
             .ensure_candidate_current(document_id, &candidate, tenant_id)
             .is_err()
         {
-            self.invalidate_candidate(document_id, candidate_id, "draft or metadata changed")?;
+            self.invalidate_candidate(
+                document_id,
+                candidate_id,
+                "draft or metadata changed",
+                principal,
+            )?;
             self.save()?;
             return Err(DmsError::CandidateInvalidated);
         }
@@ -1004,6 +1070,7 @@ impl Workspace {
             CheckPhase::Release,
             check,
             release_override_reason,
+            principal,
         )?;
         self.candidate_mut(document_id, candidate_id)?
             .content_overrides = candidate.content_overrides.clone();
@@ -1095,6 +1162,7 @@ impl Workspace {
                 document_id,
                 WorkflowEventType::Release,
                 &candidate,
+                principal,
                 CandidateEventDetails {
                     pdf_digest: Some(pdf_digest),
                     ..CandidateEventDetails::default()
@@ -1140,6 +1208,7 @@ impl Workspace {
                     document_id,
                     WorkflowEventType::MinorPublicationNotified,
                     &candidate,
+                    principal,
                     CandidateEventDetails {
                         delivery: Some(attempt.clone()),
                         ..CandidateEventDetails::default()
@@ -1165,7 +1234,9 @@ impl Workspace {
         document_id: Uuid,
         release_id: Uuid,
         notifier: &mut N,
+        principal: &MutationPrincipal,
     ) -> Result<DeliveryAttempt> {
+        self.require_mutation_principal(principal)?;
         let settings = self
             .notification_settings
             .clone()
@@ -1191,6 +1262,7 @@ impl Workspace {
             document_id,
             WorkflowEventType::MinorPublicationNotified,
             &candidate,
+            principal,
             CandidateEventDetails {
                 delivery: Some(attempt.clone()),
                 ..CandidateEventDetails::default()
@@ -1205,7 +1277,9 @@ impl Workspace {
         document_id: Uuid,
         candidate_id: Uuid,
         notifier: &mut N,
+        principal: &MutationPrincipal,
     ) -> Result<DeliveryAttempt> {
+        self.require_mutation_principal(principal)?;
         let settings = self
             .notification_settings
             .clone()
@@ -1237,6 +1311,7 @@ impl Workspace {
             document_id,
             WorkflowEventType::DecisionOutcomeNotified,
             &candidate,
+            principal,
             CandidateEventDetails {
                 delivery: Some(attempt.clone()),
                 ..CandidateEventDetails::default()
@@ -1353,7 +1428,9 @@ impl Workspace {
         document_id: Uuid,
         release_id: Uuid,
         reason: &str,
+        principal: &MutationPrincipal,
     ) -> Result<ReleaseRecord> {
+        self.require_mutation_principal(principal)?;
         let reason = validate_comment(reason, true)?;
         let release = self
             .document(document_id)?
@@ -1367,6 +1444,7 @@ impl Workspace {
                 "release is already withdrawn".to_owned(),
             ));
         }
+        let (authenticated_actor, local_os_user) = principal.event_fields();
         let body = WorkflowEventBody {
             event_id: Uuid::new_v4(),
             document_id,
@@ -1380,8 +1458,8 @@ impl Workspace {
             requester: None,
             editor: Some(release.editor.clone()),
             approver: Some(release.approver.clone()),
-            authenticated_actor: None,
-            local_os_user: default_author(),
+            authenticated_actor,
+            local_os_user,
             revision_digest: Some(release.source_digest.clone()),
             confidentiality: Some(release.confidentiality.clone()),
             target_version: Some(release.version),
@@ -1411,7 +1489,13 @@ impl Workspace {
         Ok(stored.clone())
     }
 
-    pub fn cancel_review(&mut self, document_id: Uuid, reason: &str) -> Result<()> {
+    pub fn cancel_review(
+        &mut self,
+        document_id: Uuid,
+        reason: &str,
+        principal: &MutationPrincipal,
+    ) -> Result<()> {
+        self.require_mutation_principal(principal)?;
         let reason = validate_comment(reason, true)?;
         let candidate_id = self.active_candidate_id(document_id)?;
         let candidate = self.candidate(document_id, candidate_id)?.clone();
@@ -1424,6 +1508,7 @@ impl Workspace {
             document_id,
             WorkflowEventType::ReviewCancelled,
             &candidate,
+            principal,
             CandidateEventDetails {
                 operator_comment: Some(reason),
                 ..CandidateEventDetails::default()
@@ -1440,7 +1525,13 @@ impl Workspace {
         Ok(())
     }
 
-    pub fn mark_obsolete(&mut self, document_id: Uuid, reason: &str) -> Result<()> {
+    pub fn mark_obsolete(
+        &mut self,
+        document_id: Uuid,
+        reason: &str,
+        principal: &MutationPrincipal,
+    ) -> Result<()> {
+        self.require_mutation_principal(principal)?;
         let reason = validate_comment(reason, true)?;
         if self.document(document_id)?.lifecycle == Lifecycle::Obsolete {
             return Err(DmsError::InvalidLifecycleTransition(
@@ -1451,6 +1542,7 @@ impl Workspace {
             document_id,
             WorkflowEventType::DocumentObsoleted,
             Some(reason),
+            principal,
         )?;
         let document = self
             .documents
@@ -1591,6 +1683,7 @@ impl Workspace {
     }
 
     pub(crate) fn invalidate_stale_candidates(&mut self) {
+        let principal = MutationPrincipal::local_os_user(default_author());
         let document_ids = self.documents.keys().copied().collect::<Vec<_>>();
         for document_id in document_ids {
             let Some(candidate_id) = self
@@ -1615,6 +1708,7 @@ impl Workspace {
                     document_id,
                     candidate_id,
                     "effective workflow metadata changed",
+                    &principal,
                 )
                 .expect("active candidate invalidation has serializable evidence");
             }
@@ -1626,12 +1720,14 @@ impl Workspace {
         document_id: Uuid,
         candidate_id: Uuid,
         reason: &str,
+        principal: &MutationPrincipal,
     ) -> Result<()> {
         let candidate = self.candidate(document_id, candidate_id)?.clone();
         self.append_candidate_event(
             document_id,
             WorkflowEventType::CandidateInvalidated,
             &candidate,
+            principal,
             CandidateEventDetails {
                 operator_comment: Some(reason.to_owned()),
                 ..CandidateEventDetails::default()
@@ -1921,6 +2017,7 @@ impl Workspace {
         phase: CheckPhase,
         check: ContentCheck,
         reason: Option<&str>,
+        principal: &MutationPrincipal,
     ) -> Result<()> {
         if check.passes() {
             return Ok(());
@@ -1942,6 +2039,7 @@ impl Workspace {
             document_id,
             WorkflowEventType::ContentConformanceOverridden,
             candidate,
+            principal,
             CandidateEventDetails::default(),
         )?;
         let event = self
@@ -1961,8 +2059,10 @@ impl Workspace {
         document_id: Uuid,
         event_type: WorkflowEventType,
         candidate: &ReleaseCandidate,
+        principal: &MutationPrincipal,
         details: CandidateEventDetails,
     ) -> Result<WorkflowEvent> {
+        let (authenticated_actor, local_os_user) = principal.event_fields();
         let body = WorkflowEventBody {
             event_id: Uuid::new_v4(),
             document_id,
@@ -1976,8 +2076,8 @@ impl Workspace {
             requester: Some(candidate.requester.clone()),
             editor: Some(candidate.metadata.editor.clone()),
             approver: Some(candidate.metadata.approver.clone()),
-            authenticated_actor: details.actor,
-            local_os_user: default_author(),
+            authenticated_actor,
+            local_os_user,
             revision_digest: Some(candidate.source_digest.clone()),
             confidentiality: Some(candidate.metadata.confidentiality.clone()),
             target_version: Some(candidate.version),
@@ -2002,7 +2102,9 @@ impl Workspace {
         document_id: Uuid,
         event_type: WorkflowEventType,
         operator_comment: Option<String>,
+        principal: &MutationPrincipal,
     ) -> Result<WorkflowEvent> {
+        let (authenticated_actor, local_os_user) = principal.event_fields();
         let body = WorkflowEventBody {
             event_id: Uuid::new_v4(),
             document_id,
@@ -2016,8 +2118,8 @@ impl Workspace {
             requester: None,
             editor: None,
             approver: None,
-            authenticated_actor: None,
-            local_os_user: default_author(),
+            authenticated_actor,
+            local_os_user,
             revision_digest: None,
             confidentiality: None,
             target_version: None,
@@ -2042,7 +2144,9 @@ impl Workspace {
         document_id: Uuid,
         before: DocumentControl,
         after: DocumentControl,
+        principal: &MutationPrincipal,
     ) -> Result<WorkflowEvent> {
+        let (authenticated_actor, local_os_user) = principal.event_fields();
         let body = WorkflowEventBody {
             event_id: Uuid::new_v4(),
             document_id,
@@ -2056,8 +2160,8 @@ impl Workspace {
             requester: None,
             editor: None,
             approver: None,
-            authenticated_actor: None,
-            local_os_user: default_author(),
+            authenticated_actor,
+            local_os_user,
             revision_digest: None,
             confidentiality: None,
             target_version: None,

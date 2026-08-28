@@ -66,18 +66,24 @@ fn audit_reports_are_deterministic_filtered_and_never_embed_source_bytes() {
     assert!(String::from_utf8_lossy(&future_filtered).contains("classification"));
 
     let csv_report = workspace
-        .generate_audit_report(AuditReportRequest {
-            format: AuditReportFormat::Csv,
-            relative_path: Some(PathBuf::from(".dms/exports/handbook.csv")),
-            filter: filter.clone(),
-        })
+        .generate_audit_report(
+            AuditReportRequest {
+                format: AuditReportFormat::Csv,
+                relative_path: Some(PathBuf::from(".dms/exports/handbook.csv")),
+                filter: filter.clone(),
+            },
+            &dms_core::MutationPrincipal::local_os_user("test-operator"),
+        )
         .expect("CSV report");
     let pdf_report = workspace
-        .generate_audit_report(AuditReportRequest {
-            format: AuditReportFormat::Pdf,
-            relative_path: Some(PathBuf::from(".dms/exports/handbook.pdf")),
-            filter: filter.clone(),
-        })
+        .generate_audit_report(
+            AuditReportRequest {
+                format: AuditReportFormat::Pdf,
+                relative_path: Some(PathBuf::from(".dms/exports/handbook.pdf")),
+                filter: filter.clone(),
+            },
+            &dms_core::MutationPrincipal::local_os_user("test-operator"),
+        )
         .expect("PDF report");
 
     assert_eq!(
@@ -155,19 +161,25 @@ fn audit_reports_are_deterministic_filtered_and_never_embed_source_bytes() {
     }
 
     assert!(matches!(
-        workspace.generate_audit_report(AuditReportRequest {
-            format: AuditReportFormat::Pdf,
-            relative_path: Some(PathBuf::from("../outside.pdf")),
-            filter,
-        }),
+        workspace.generate_audit_report(
+            AuditReportRequest {
+                format: AuditReportFormat::Pdf,
+                relative_path: Some(PathBuf::from("../outside.pdf")),
+                filter,
+            },
+            &dms_core::MutationPrincipal::local_os_user("test-operator")
+        ),
         Err(DmsError::InvalidReportPath(_))
     ));
     assert!(matches!(
-        workspace.generate_audit_report(AuditReportRequest {
-            format: AuditReportFormat::Pdf,
-            relative_path: Some(PathBuf::from(".dms/exports/handbook.pdf")),
-            filter: AuditReportFilter::default(),
-        }),
+        workspace.generate_audit_report(
+            AuditReportRequest {
+                format: AuditReportFormat::Pdf,
+                relative_path: Some(PathBuf::from(".dms/exports/handbook.pdf")),
+                filter: AuditReportFilter::default(),
+            },
+            &dms_core::MutationPrincipal::local_os_user("test-operator")
+        ),
         Err(DmsError::ReportPathExists(_))
     ));
 }

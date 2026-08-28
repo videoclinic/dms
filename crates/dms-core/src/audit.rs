@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::{
-    default_author, DmsError, ReleaseVerificationStatus, Result, SourceChangeKind,
+    DmsError, MutationPrincipal, ReleaseVerificationStatus, Result, SourceChangeKind,
     SourceHistoryFormat, SourceHistoryScanOutcome, WorkflowEvent, WorkflowEventBody,
     WorkflowEventType, WorkflowVerification, Workspace,
 };
@@ -137,7 +137,9 @@ impl Workspace {
     pub fn generate_audit_report(
         &mut self,
         request: AuditReportRequest,
+        principal: &MutationPrincipal,
     ) -> Result<AuditReportRecord> {
+        self.require_mutation_principal(principal)?;
         let filter = normalize_filter(&request.filter)?;
         let bytes = self.preview_audit_report(request.format, &filter)?;
         let event_id = Uuid::new_v4();
@@ -158,6 +160,7 @@ impl Workspace {
             sha256: digest_bytes(&bytes),
             size: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
         };
+        let (authenticated_actor, local_os_user) = principal.event_fields();
         let body = WorkflowEventBody {
             event_id,
             document_id: Uuid::nil(),
@@ -170,8 +173,8 @@ impl Workspace {
             requester: None,
             editor: None,
             approver: None,
-            authenticated_actor: None,
-            local_os_user: default_author(),
+            authenticated_actor,
+            local_os_user,
             revision_digest: None,
             confidentiality: None,
             target_version: None,
@@ -481,7 +484,7 @@ impl Workspace {
                     timestamp: Some(event.body.timestamp),
                     event_type: event_type_text(event.body.event_type).to_owned(),
                     actor: event.body.authenticated_actor.as_ref().map_or_else(
-                        || event.body.local_os_user.clone(),
+                        || event.body.local_os_user.clone().unwrap_or_default(),
                         |actor| actor.object_id.to_string(),
                     ),
                     approver: event
@@ -655,7 +658,7 @@ fn report_record(event: &WorkflowEvent) -> Option<AuditReportRecord> {
     Some(AuditReportRecord {
         event_id: event.body.event_id,
         generated_at: event.body.timestamp,
-        local_os_user: event.body.local_os_user.clone(),
+        local_os_user: event.body.local_os_user.clone().unwrap_or_default(),
         event_hash: event.event_hash.clone(),
         format: evidence.format,
         relative_path: evidence.relative_path,
