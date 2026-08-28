@@ -49,9 +49,10 @@ macOS.
   single-instance plugin remains the first Tauri plugin so an activation focuses
   the existing main window and reaches the deep-link listener.
 - Resolve inbound permalinks only through `dms-core` against accessible edit
-  roots in the recent-library registry. Switch through the normal advisory-lock
-  boundary, key activities by stable IDs, and load retained document details by
-  ID even when no current filesystem row can be selected.
+  roots in the recent-library registry. A workspace-only link focuses the singleton
+  root Library activity with no document selection; document links switch through
+  the normal advisory-lock boundary, key activities by stable IDs, and load retained
+  document details by ID even when no current filesystem row can be selected.
 - Change the persisted sidebar preference or current-session unfolded overlay
   only through an explicit sidebar control. Destination, saved-view, open-pane,
   and in-surface actions must preserve the current sidebar presentation.

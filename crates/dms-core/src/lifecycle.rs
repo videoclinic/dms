@@ -500,13 +500,14 @@ pub struct ReleaseOutcome {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ResolvedPermalink {
-    pub document_id: Uuid,
+    pub document_id: Option<Uuid>,
     pub target: PermalinkTarget,
     pub review_id: Option<Uuid>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PermalinkTarget {
+    Workspace,
     Document,
     Review,
     Notes,
@@ -1541,10 +1542,18 @@ impl Workspace {
         if workspace_id != self.workspace_id {
             return Err(DmsError::PermalinkWorkspaceMismatch(workspace_id));
         }
-        let document_id = values
-            .get("document")
-            .and_then(|value| Uuid::parse_str(value).ok())
-            .ok_or(DmsError::InvalidPermalink)?;
+        let Some(document_value) = values.get("document") else {
+            if values.contains_key("target") || values.contains_key("review") {
+                return Err(DmsError::InvalidPermalink);
+            }
+            return Ok(ResolvedPermalink {
+                document_id: None,
+                target: PermalinkTarget::Workspace,
+                review_id: None,
+            });
+        };
+        let document_id =
+            Uuid::parse_str(document_value).map_err(|_| DmsError::InvalidPermalink)?;
         let document = self.document(document_id)?;
         let target = match values.get("target").copied() {
             Some("review") => PermalinkTarget::Review,
@@ -1572,7 +1581,7 @@ impl Workspace {
             None
         };
         Ok(ResolvedPermalink {
-            document_id,
+            document_id: Some(document_id),
             target,
             review_id,
         })

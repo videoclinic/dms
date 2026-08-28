@@ -364,6 +364,15 @@ test("permalink targets create stable document, review, and notes activities", (
     target: "review",
     review_id: "5a6382c0-3078-4cf9-a64c-d194686bd1f6",
   });
+  const workspace = permalinkActivity({
+    workspace: resolution.workspace,
+    document_id: null,
+    title: null,
+    document_number: null,
+    folder: ".",
+    target: "workspace",
+    review_id: null,
+  });
 
   assert.equal(activityKey(document), `${workspaceId}:Library`);
   assert.equal(document.document_id, resolution.document_id);
@@ -372,6 +381,14 @@ test("permalink targets create stable document, review, and notes activities", (
   assert.deepEqual(notes.route_state, { folder: "Policies/HR" });
   assert.equal(activityKey(review), `${workspaceId}:Review:document:${resolution.document_id}`);
   assert.equal(review.route_state.review, "5a6382c0-3078-4cf9-a64c-d194686bd1f6");
+  assert.equal(activityKey(workspace), `${workspaceId}:Library`);
+  assert.equal(workspace.label, "Library · /");
+  assert.equal(workspace.document_id, null);
+  assert.deepEqual(workspace.route_state, { folder: "." });
+
+  const focused = openActivity(openActivity(createInitialState(), document), workspace);
+  assert.equal(focused.activities.length, 1);
+  assert.equal(focused.current_key, `${workspaceId}:Library`);
 });
 
 test("notes return focuses the unchanged Library selection without duplicating its activity", () => {

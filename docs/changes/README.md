@@ -20,7 +20,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
-| [CHG-0032](active/CHG-0032-windows-edit-root-library-shortcut.md) | Windows edit-root library shortcut | pending | CAP-0001, CAP-0006, CAP-0020 |
+| [CHG-0032](active/CHG-0032-windows-edit-root-library-shortcut.md) | Windows edit-root library shortcut | in-progress | CAP-0001, CAP-0006, CAP-0020 |
 | [CHG-0033](active/CHG-0033-bounded-office-source-history-import.md) | Bounded Office source-history import | pending | CAP-0006, CAP-0011, CAP-0012, CAP-0015 |
 | [CHG-0035](active/CHG-0035-entra-session-required-for-group-bound-library.md) | Entra session required for a group-bound library | pending | CAP-0011, CAP-0021 |
 | [CHG-0036](active/CHG-0036-pending-approval-status-and-review-request-resend.md) | Pending-approval status and review-request resend | pending | CAP-0002, CAP-0006, CAP-0010, CAP-0011 |

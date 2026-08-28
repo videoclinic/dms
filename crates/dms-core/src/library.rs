@@ -102,6 +102,10 @@ pub struct LibraryFolder {
     pub entries: Vec<LibraryEntry>,
 }
 
+fn is_dms_edit_root_helper_path(relative_path: &Path) -> bool {
+    relative_path == Path::new("Open in DMS.lnk")
+}
+
 impl Workspace {
     pub fn library_tree(&self) -> Result<Vec<LibraryFolderNode>> {
         self.library_inventory().map(|(tree, _)| tree)
@@ -155,7 +159,9 @@ impl Workspace {
                 source,
             })?;
             let relative_path = relative_join(&relative_folder, &name);
-            if self.is_markdown_template_path(&relative_path) {
+            if is_dms_edit_root_helper_path(&relative_path)
+                || self.is_markdown_template_path(&relative_path)
+            {
                 continue;
             }
             if file_type.is_dir() {
@@ -392,6 +398,10 @@ impl Workspace {
         Ok(())
     }
 
+    pub fn workspace_permalink(&self) -> String {
+        format!("dms://open?workspace={}", self.workspace_id)
+    }
+
     pub fn document_permalink(&self, document_id: Uuid) -> Result<String> {
         self.document(document_id)?;
         Ok(format!(
@@ -477,7 +487,9 @@ impl Workspace {
                 source,
             })?;
             let relative_path = relative_join(relative_folder, &name);
-            if self.is_markdown_template_path(&relative_path) {
+            if is_dms_edit_root_helper_path(&relative_path)
+                || self.is_markdown_template_path(&relative_path)
+            {
                 continue;
             }
             if file_type.is_dir() {

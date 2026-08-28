@@ -144,8 +144,8 @@ pub struct WorkspaceSummary {
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct DesktopPermalinkResolution {
     pub workspace: WorkspaceSummary,
-    pub document_id: Uuid,
-    pub title: String,
+    pub document_id: Option<Uuid>,
+    pub title: Option<String>,
     pub document_number: Option<String>,
     pub folder: String,
     pub target: String,
@@ -2503,25 +2503,37 @@ fn resolve_registered_permalink_from(
             Err(DmsError::PermalinkWorkspaceMismatch(_)) => continue,
             Err(error) => return Err(error.to_string()),
         };
-        let document = workspace
-            .document(resolved.document_id)
-            .map_err(|error| error.to_string())?;
-        let folder = document
-            .relative_path
-            .parent()
-            .filter(|parent| !parent.as_os_str().is_empty())
-            .map(path_text)
-            .unwrap_or_else(|| ".".to_owned());
+        let (document_id, title, document_number, folder) = match resolved.document_id {
+            Some(document_id) => {
+                let document = workspace
+                    .document(document_id)
+                    .map_err(|error| error.to_string())?;
+                let folder = document
+                    .relative_path
+                    .parent()
+                    .filter(|parent| !parent.as_os_str().is_empty())
+                    .map(path_text)
+                    .unwrap_or_else(|| ".".to_owned());
+                (
+                    Some(document_id),
+                    Some(document.control.title.clone()),
+                    document.control.document_number.clone(),
+                    folder,
+                )
+            }
+            None => (None, None, None, ".".to_owned()),
+        };
         let target = match resolved.target {
+            PermalinkTarget::Workspace => "workspace",
             PermalinkTarget::Document => "document",
             PermalinkTarget::Review => "review",
             PermalinkTarget::Notes => "notes",
         };
         return Ok(DesktopPermalinkResolution {
             workspace: workspace_summary_from(&workspace),
-            document_id: resolved.document_id,
-            title: document.control.title.clone(),
-            document_number: document.control.document_number.clone(),
+            document_id,
+            title,
+            document_number,
             folder,
             target: target.to_owned(),
             review_id: resolved.review_id,
@@ -4130,10 +4142,23 @@ mod tests {
             notes.workspace.workspace_id,
             workspace.workspace_id.to_string()
         );
-        assert_eq!(notes.document_id, document.id);
+        assert_eq!(notes.document_id, Some(document.id));
         assert_eq!(notes.folder, "Policies");
         assert_eq!(notes.target, "notes");
         assert_eq!(notes.review_id, None);
+        let workspace_target =
+            resolve_registered_permalink_from(&preferences, &workspace.workspace_permalink())
+                .unwrap();
+        assert_eq!(
+            workspace_target.workspace.workspace_id,
+            workspace.workspace_id.to_string()
+        );
+        assert_eq!(workspace_target.document_id, None);
+        assert_eq!(workspace_target.title, None);
+        assert_eq!(workspace_target.document_number, None);
+        assert_eq!(workspace_target.folder, ".");
+        assert_eq!(workspace_target.target, "workspace");
+        assert_eq!(workspace_target.review_id, None);
         assert!(
             resolve_registered_permalink_from(&Preferences::default(), &selection.permalink,)
                 .unwrap_err()

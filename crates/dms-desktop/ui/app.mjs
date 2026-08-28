@@ -211,6 +211,16 @@ export function openActivity(state, activity) {
 }
 
 export function permalinkActivity(resolution) {
+  if (resolution.target === "workspace") {
+    return {
+      workspace_id: resolution.workspace.workspace_id,
+      destination: "Library",
+      task: "Library",
+      label: "Library · /",
+      document_id: null,
+      route_state: { folder: "." },
+    };
+  }
   const suffix = resolution.document_number ? ` · ${resolution.document_number}` : "";
   const shared = {
     workspace_id: resolution.workspace.workspace_id,
@@ -755,6 +765,8 @@ async function openPermalink(uri) {
   render(appState);
   if (resolution.target === "notes") {
     await loadDocumentNotes(resolution.document_id);
+  } else if (resolution.target === "workspace") {
+    await loadLibraryFolder(".", "replace");
   } else if (resolution.target === "document") {
     await loadLibraryFolder(resolution.folder, "replace");
     try {

@@ -33,12 +33,13 @@ persistence.
   metadata domains. Each actual profile edit appends canonical before/after
   workflow evidence before invalidating stale candidates.
 - Folder discovery exposes only edit-root-relative regular files and directories,
-  excludes `.dms` and Office temporary sidecars, and never auto-registers or
-  auto-reassociates a source. Every discovered folder carries recursive counters
-  for draft registered documents, addable supported files, unsupported files,
-  and lost-source ((re-)moved) registered documents; each visible file contributes
-  to exactly one counter. Lost-source phantom rows appear in the folder of the
-  stored locator.
+  excludes `.dms`, Office temporary sidecars, and the exact root `Open in DMS.lnk`
+  helper, and never auto-registers or auto-reassociates a source. Nested or
+  differently named shortcuts remain ordinary unsupported files. Every discovered
+  folder carries recursive counters for draft registered documents, addable supported
+  files, unsupported files, and lost-source ((re-)moved) registered documents; each
+  visible file contributes to exactly one counter. Lost-source phantom rows appear in
+  the folder of the stored locator.
 - Unregister and reassociate preserve stable document identity and retained
   document metadata; batch mutations validate atomically before changing state.
   Unregister sets `source_state` only: it does not require an idle lifecycle,
@@ -121,9 +122,10 @@ persistence.
   change lifecycle state.
 - Review permalinks resolve both content-approval requests and periodic-review
   requests so notification links never point at an unresolvable review ID.
-- Canonical `dms://open` permalinks parse only stable workspace/document UUIDs.
-  The optional `review` and `notes` targets refine navigation without replacing
-  those identity keys; unknown extra parameters do not affect resolution.
+- Canonical `dms://open` permalinks resolve a stable workspace UUID alone to its
+  root Library target, or pair it with a stable document UUID. `review` and `notes`
+  refine only document targets; workspace-only links reject both. Unknown extra
+  parameters do not affect valid document-link resolution.
 - `Workspace::backup_workspace` refuses to overwrite an existing archive,
   refuses symlinks and non-regular files, and writes a Zip archive containing
   metadata, every registered draft, every recorded release PDF, and a

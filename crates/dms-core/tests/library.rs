@@ -140,6 +140,77 @@ fn folder_counters_roll_up_descendants_and_classify_only_visible_files() {
 }
 
 #[test]
+fn root_dms_helper_is_hidden_without_hiding_nested_shortcuts() {
+    let (_temp, workspace) = initialized_workspace();
+    fs::create_dir_all(workspace.edit_root.join("Policies")).expect("folder");
+    fs::write(workspace.edit_root.join("Open in DMS.lnk"), "DMS helper").expect("root helper");
+    fs::write(
+        workspace.edit_root.join("Policies/Open in DMS.lnk"),
+        "operator shortcut",
+    )
+    .expect("nested shortcut");
+
+    let (tree, root) = workspace
+        .library_snapshot(Path::new("."))
+        .expect("root library snapshot");
+    let root_counters = tree
+        .iter()
+        .find(|folder| folder.relative_path == Path::new("."))
+        .expect("root folder")
+        .counters;
+    assert_eq!(root_counters.unsupported_files, 1);
+    assert!(root
+        .entries
+        .iter()
+        .all(|entry| entry.name != "Open in DMS.lnk"));
+
+    let policies = workspace
+        .library_folder(Path::new("Policies"))
+        .expect("nested folder listing");
+    let nested = policies
+        .entries
+        .iter()
+        .find(|entry| entry.name == "Open in DMS.lnk")
+        .expect("nested shortcut entry");
+    assert_eq!(nested.membership, Some(LibraryMembership::Unsupported));
+}
+
+#[test]
+fn workspace_permalink_is_canonical_and_rejects_document_target_parameters() {
+    let (_temp, workspace) = initialized_workspace();
+    let permalink = workspace.workspace_permalink();
+
+    assert_eq!(
+        permalink,
+        format!("dms://open?workspace={}", workspace.workspace_id)
+    );
+    let target = workspace
+        .resolve_permalink(&permalink)
+        .expect("workspace target");
+    assert_eq!(target.document_id, None);
+    assert_eq!(target.target, PermalinkTarget::Workspace);
+    assert_eq!(target.review_id, None);
+
+    for invalid in [
+        format!("{permalink}&target=notes"),
+        format!("{permalink}&review={}", uuid::Uuid::new_v4()),
+        format!("{permalink}&document=not-a-uuid"),
+        "dms://open?workspace=not-a-uuid".to_owned(),
+    ] {
+        assert!(matches!(
+            workspace.resolve_permalink(&invalid),
+            Err(DmsError::InvalidPermalink)
+        ));
+    }
+
+    let other_workspace = uuid::Uuid::new_v4();
+    assert!(matches!(
+        workspace.resolve_permalink(&format!("dms://open?workspace={other_workspace}")),
+        Err(DmsError::PermalinkWorkspaceMismatch(id)) if id == other_workspace
+    ));
+}
+
+#[test]
 fn batch_add_is_atomic_and_unregister_reassociate_preserve_document_identity() {
     let (_temp, mut workspace) = initialized_workspace();
     fs::create_dir_all(workspace.edit_root.join("Policies")).expect("folder");
@@ -210,11 +281,12 @@ fn batch_add_is_atomic_and_unregister_reassociate_preserve_document_identity() {
         )
     );
     let document_target = workspace.resolve_permalink(&permalink).unwrap();
+    assert_eq!(document_target.document_id, Some(document.id));
     assert_eq!(document_target.target, PermalinkTarget::Document);
     let notes_target = workspace
         .resolve_permalink(&format!("{permalink}&target=notes&ignored=value"))
         .unwrap();
-    assert_eq!(notes_target.document_id, document.id);
+    assert_eq!(notes_target.document_id, Some(document.id));
     assert_eq!(notes_target.target, PermalinkTarget::Notes);
     assert_eq!(notes_target.review_id, None);
 }
