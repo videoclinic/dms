@@ -22,6 +22,14 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 | --- | --- | --- | --- |
 | [CHG-0032](active/CHG-0032-windows-edit-root-library-shortcut.md) | Windows edit-root library shortcut | pending | CAP-0001, CAP-0006, CAP-0020 |
 | [CHG-0033](active/CHG-0033-bounded-office-source-history-import.md) | Bounded Office source-history import | pending | CAP-0006, CAP-0011, CAP-0012, CAP-0015 |
+| [CHG-0035](active/CHG-0035-entra-session-required-for-group-bound-library.md) | Entra session required for a group-bound library | pending | CAP-0011, CAP-0021 |
+| [CHG-0036](active/CHG-0036-pending-approval-status-and-review-request-resend.md) | Pending-approval status and review-request resend | pending | CAP-0002, CAP-0006, CAP-0010, CAP-0011 |
+| [CHG-0037](active/CHG-0037-library-switcher-and-lock-owner-feedback.md) | Library switcher and lock-owner feedback | pending | CAP-0005, CAP-0014 |
+| [CHG-0038](active/CHG-0038-candidate-approval-outcome-clarity.md) | Candidate, release, and Entra identity clarity | pending | CAP-0002, CAP-0006, CAP-0011, CAP-0015, CAP-0021 |
+| [CHG-0039](active/CHG-0039-library-table-sort-and-user-layout.md) | Library table sort direction and user layout | pending | CAP-0005, CAP-0006 |
+| [CHG-0040](active/CHG-0040-document-type-id-migration.md) | Document type-ID migration | pending | CAP-0001, CAP-0002, CAP-0013, CAP-0015 |
+| [CHG-0041](active/CHG-0041-library-batch-execution-activity.md) | Library batch execution activity | pending | CAP-0005, CAP-0006 |
+| [CHG-0042](active/CHG-0042-publish-root-released-document-index.md) | Publish-root released-document index | pending | CAP-0005, CAP-0016 |
 | [CHG-0024](active/CHG-0024-windows-nsis-installer-release.md) | Windows NSIS installer and signed GitHub Release | in-progress | CAP-0005 |
 | [CHG-0025](active/CHG-0025-windows-entra-deployment-policy.md) | Windows Entra deployment policy | in-progress | CAP-0021 |
 
