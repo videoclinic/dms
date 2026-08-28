@@ -10,7 +10,8 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::{
-    default_author, DmsError, ReleaseVerificationStatus, Result, WorkflowEvent, WorkflowEventBody,
+    default_author, DmsError, ReleaseVerificationStatus, Result, SourceChangeKind,
+    SourceHistoryFormat, SourceHistoryScanOutcome, WorkflowEvent, WorkflowEventBody,
     WorkflowEventType, WorkflowVerification, Workspace,
 };
 
@@ -371,6 +372,56 @@ impl Workspace {
                     evidence_hash: String::new(),
                     verification: workflow_verification.clone(),
                 });
+                if let Some(source_history) = &document.source_history {
+                    rows.push(AuditRow {
+                        record_type: "source_history",
+                        document_id: document.id,
+                        title: document.control.title.clone(),
+                        relative_path: portable_path(&document.relative_path)?,
+                        timestamp: None,
+                        event_type: "first_import_scan".to_owned(),
+                        actor: String::new(),
+                        approver: String::new(),
+                        confidentiality: effective.type_id.clone(),
+                        version: String::new(),
+                        target_mode: String::new(),
+                        detail: format!(
+                            "source-derived/unverified format={} scan_outcome={}",
+                            source_history_format_text(source_history.source_format),
+                            source_history_outcome_text(source_history.scan_outcome),
+                        ),
+                        content_digest: source_history.imported_source_sha256.clone(),
+                        predecessor_hash: String::new(),
+                        evidence_hash: String::new(),
+                        verification: "source-derived/unverified".to_owned(),
+                    });
+                    for observation in &source_history.observations {
+                        rows.push(AuditRow {
+                            record_type: "source_history_observation",
+                            document_id: document.id,
+                            title: document.control.title.clone(),
+                            relative_path: portable_path(&document.relative_path)?,
+                            timestamp: Some(observation.occurred_at),
+                            event_type: source_change_kind_text(observation.kind).to_owned(),
+                            actor: format!(
+                                "source-derived/unverified: {}",
+                                observation.display_author
+                            ),
+                            approver: String::new(),
+                            confidentiality: effective.type_id.clone(),
+                            version: String::new(),
+                            target_mode: String::new(),
+                            detail: format!(
+                                "source-derived/unverified record_count={} timestamp_tied={}",
+                                observation.record_count, observation.timestamp_tied
+                            ),
+                            content_digest: String::new(),
+                            predecessor_hash: String::new(),
+                            evidence_hash: String::new(),
+                            verification: "source-derived/unverified".to_owned(),
+                        });
+                    }
+                }
             }
 
             for event in &document.workflow_events {
@@ -527,6 +578,36 @@ fn release_detail(release: &super::ReleaseRecord) -> String {
         "{} | effective_date={} | owner={}",
         release.changelog, effective_date, owner
     )
+}
+
+fn source_history_format_text(format: SourceHistoryFormat) -> &'static str {
+    match format {
+        SourceHistoryFormat::Docx => "docx",
+        SourceHistoryFormat::Xlsx => "xlsx",
+        SourceHistoryFormat::Pptx => "pptx",
+    }
+}
+
+fn source_history_outcome_text(outcome: SourceHistoryScanOutcome) -> &'static str {
+    match outcome {
+        SourceHistoryScanOutcome::AttributableRevisions => "attributable_revisions",
+        SourceHistoryScanOutcome::NoRevisionData => "no_revision_data",
+        SourceHistoryScanOutcome::UnattributedRevisionData => "unattributed_revision_data",
+        SourceHistoryScanOutcome::MalformedPackage => "malformed_package",
+    }
+}
+
+fn source_change_kind_text(kind: SourceChangeKind) -> &'static str {
+    match kind {
+        SourceChangeKind::WordInsertion => "word_insertion",
+        SourceChangeKind::WordDeletion => "word_deletion",
+        SourceChangeKind::WordMove => "word_move",
+        SourceChangeKind::WordRowPropertyChange => "word_row_property_change",
+        SourceChangeKind::WordParagraphPropertyChange => "word_paragraph_property_change",
+        SourceChangeKind::WordRunPropertyChange => "word_run_property_change",
+        SourceChangeKind::WordMixedRevision => "word_mixed_revision",
+        SourceChangeKind::SpreadsheetRevision => "spreadsheet_revision",
+    }
 }
 
 fn normalize_filter(filter: &AuditReportFilter) -> Result<AuditReportFilter> {

@@ -265,6 +265,7 @@ pub struct DocumentSelection {
     pub source_exists: bool,
     pub source_state: SourceState,
     pub lifecycle: Lifecycle,
+    pub source_history: Option<dms_core::SourceHistory>,
     pub control: DocumentControl,
     pub current_owner: serde_json::Value,
     pub requires_identity_handover: bool,
@@ -2816,6 +2817,7 @@ fn document_selection(edit_root: &Path, document_id: Uuid) -> Result<DocumentSel
         source_exists: workspace.edit_root.join(&document.relative_path).is_file(),
         source_state: document.source_state,
         lifecycle: document.lifecycle,
+        source_history: document.source_history.clone(),
         control: document.control.clone(),
         current_owner,
         requires_identity_handover,
@@ -4214,6 +4216,58 @@ mod tests {
             mailto.notification_settings.unwrap().transport,
             NotificationTransport::Mailto
         );
+    }
+
+    #[test]
+    fn desktop_adapter_add_exposes_the_persisted_first_import_source_history() {
+        use std::io::Write;
+
+        use zip::{write::SimpleFileOptions, ZipWriter};
+
+        let edit_root = tempfile::tempdir().unwrap();
+        let publish_root = tempfile::tempdir().unwrap();
+        Workspace::init(edit_root.path(), publish_root.path()).unwrap();
+        fs::create_dir_all(edit_root.path().join("Policies")).unwrap();
+        let source = edit_root.path().join("Policies/Imported.docx");
+        let file = fs::File::create(&source).unwrap();
+        let mut archive = ZipWriter::new(file);
+        archive
+            .start_file("word/document.xml", SimpleFileOptions::default())
+            .unwrap();
+        archive
+            .write_all(b"<w:document xmlns:w=\"urn:test\"><w:body><w:ins w:author=\"Alex\" w:date=\"2026-01-04T10:00:00Z\">TOP SECRET SOURCE BYTES</w:ins></w:body></w:document>")
+            .unwrap();
+        archive.finish().unwrap();
+
+        let edit_root_text = edit_root.path().to_string_lossy().into_owned();
+        let added = add_library_documents(
+            edit_root_text.clone(),
+            vec!["Policies/Imported.docx".to_owned()],
+        )
+        .unwrap();
+        let history = added[0]
+            .source_history
+            .clone()
+            .expect("first import history");
+        assert_eq!(history.observations.len(), 1);
+        assert!(serde_json::to_string(&history).unwrap().contains("Alex"));
+        assert!(!serde_json::to_string(&history)
+            .unwrap()
+            .contains("TOP SECRET SOURCE BYTES"));
+
+        let selection = document_selection(edit_root.path(), added[0].id).unwrap();
+        assert_eq!(selection.source_history.as_ref(), Some(&history));
+        assert!(selection.workflow_events.is_empty());
+
+        let mut workspace = Workspace::open(edit_root.path()).unwrap();
+        workspace.unregister_document(added[0].id).unwrap();
+        workspace.save().unwrap();
+        fs::write(&source, b"changed source bytes").unwrap();
+        let restored =
+            add_library_documents(edit_root_text, vec!["Policies/Imported.docx".to_owned()])
+                .unwrap();
+        assert_eq!(restored[0].id, added[0].id);
+        assert_eq!(restored[0].source_history.as_ref(), Some(&history));
     }
 
     #[test]

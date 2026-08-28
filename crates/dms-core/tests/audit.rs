@@ -1,5 +1,4 @@
-use std::fs;
-use std::path::PathBuf;
+use std::{fs, io::Write, path::PathBuf};
 
 use chrono::{Duration, Utc};
 use dms_core::{
@@ -9,6 +8,7 @@ use dms_core::{
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 use uuid::Uuid;
+use zip::{write::SimpleFileOptions, ZipWriter};
 
 fn fixture() -> (TempDir, Workspace, Uuid) {
     let temp = tempfile::tempdir().expect("temporary directory");
@@ -170,6 +170,57 @@ fn audit_reports_are_deterministic_filtered_and_never_embed_source_bytes() {
         }),
         Err(DmsError::ReportPathExists(_))
     ));
+}
+
+#[test]
+fn audit_reports_export_bounded_unverified_source_history_without_source_content() {
+    let (_temp, mut workspace, _document_id) = fixture();
+    let source = workspace.edit_root.join("Policies/Imported.docx");
+    let file = fs::File::create(&source).expect("source package");
+    let mut archive = ZipWriter::new(file);
+    archive
+        .start_file("word/document.xml", SimpleFileOptions::default())
+        .expect("source part");
+    archive
+        .write_all(b"<w:document xmlns:w=\"urn:test\"><w:body><w:ins w:author=\"Alex\" w:date=\"2026-01-04T10:00:00Z\">TOP SECRET SOURCE BYTES</w:ins></w:body></w:document>")
+        .expect("source content");
+    archive.finish().expect("complete source package");
+    let document = workspace
+        .add_document(&source)
+        .expect("first source import");
+
+    let csv = String::from_utf8(
+        workspace
+            .preview_audit_report(
+                AuditReportFormat::Csv,
+                &AuditReportFilter {
+                    document_ids: vec![document.id],
+                    ..AuditReportFilter::default()
+                },
+            )
+            .expect("CSV preview"),
+    )
+    .expect("CSV text");
+    assert_eq!(csv.matches("source_history,").count(), 1);
+    assert_eq!(csv.matches("source_history_observation,").count(), 1);
+    assert!(csv.contains("source-derived/unverified"));
+    assert!(csv.contains("scan_outcome=attributable_revisions"));
+    assert!(csv.contains("source-derived/unverified: Alex"));
+    assert!(!csv.contains("TOP SECRET SOURCE BYTES"));
+
+    let pdf = workspace
+        .preview_audit_report(
+            AuditReportFormat::Pdf,
+            &AuditReportFilter {
+                document_ids: vec![document.id],
+                ..AuditReportFilter::default()
+            },
+        )
+        .expect("PDF preview");
+    let pdf_text = pdf_extract::extract_text_from_mem(&pdf).expect("PDF text");
+    assert!(pdf_text.contains("source-derived/unverified"));
+    assert!(!pdf_text.contains("TOP SECRET SOURCE BYTES"));
+    assert!(workspace.workflow_history(document.id).unwrap().is_empty());
 }
 
 #[test]

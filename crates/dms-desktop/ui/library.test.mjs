@@ -469,6 +469,17 @@ test("library markup separates source Name from DMS Title and keeps actions in t
         cancel_review: { available: false, reason: "Available only while a review is open." },
         mark_obsolete: { available: true, reason: null },
       },
+      source_history: {
+        imported_source_sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        source_format: "docx",
+        scan_outcome: "attributable_revisions",
+        client_id: "opaque-client-id",
+        observations: [
+          { display_author: "Beth", occurred_at: "2026-01-05T10:00:00Z", kind: "word_paragraph_property_change", record_count: 1, timestamp_tied: false },
+          { display_author: "Alex", occurred_at: "2026-01-04T10:00:00Z", kind: "word_mixed_revision", record_count: 2, timestamp_tied: true },
+          { display_author: "Casey", occurred_at: "2026-01-03T10:00:00Z", kind: "word_run_property_change", record_count: 1, timestamp_tied: false },
+        ],
+      },
       workflow_events: [
         {
           event_hash: "abc123",
@@ -596,6 +607,12 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /name="manualMajor"[^>]* disabled/);
   assert.doesNotMatch(markup, /View workflow evidence|Canonical workflow evidence/);
   assert.match(markup, /Version history &amp; changes · valid/);
+  assert.match(markup, /Imported source changes \(unverified\)/);
+  assert.match(markup, /Captured once from the imported Word bytes/);
+  assert.match(markup, /SHA-256 a{64}/);
+  assert.equal((markup.match(/source-derived\/unverified/g) || []).length, 3);
+  assert.match(markup, /Alex.*Word mixed revision.*2 source records.*equal-timestamp group/);
+  assert.doesNotMatch(markup, /opaque-client-id|TOP SECRET SOURCE BYTES/);
   assert.match(markup, /Current draft work/);
   assert.match(markup, /V1\.3/);
   assert.equal((markup.match(/class="workflow-actor-block"/g) || []).length, 5);

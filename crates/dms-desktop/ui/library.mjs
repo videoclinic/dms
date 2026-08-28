@@ -1012,7 +1012,51 @@ function versionHistoryMarkup(detail) {
     : detail.workflow_verification?.tampered_at
       ? `tampered at ${detail.workflow_verification.tampered_at}`
       : "invalid";
-  return `<div class="workflow-evidence version-history"><p class="source-path">Versions and related workflow changes are grouped by the recorded actor. Expand a person to inspect individual events.</p><strong>Version history &amp; changes · ${escapeHtml(verification)}</strong>${workflowEvidenceMarkup(detail.workflow_events ?? [])}</div>`;
+  return `<div class="workflow-evidence version-history"><p class="source-path">Versions and related workflow changes are grouped by the recorded actor. Expand a person to inspect individual events.</p><strong>Version history &amp; changes · ${escapeHtml(verification)}</strong>${sourceHistoryMarkup(detail.source_history)}${workflowEvidenceMarkup(detail.workflow_events ?? [])}</div>`;
+}
+
+function sourceHistoryFormatLabel(format) {
+  return ({ docx: "Word", xlsx: "Excel", pptx: "PowerPoint" })[format] ?? "Office";
+}
+
+function sourceHistoryKindLabel(kind) {
+  return ({
+    word_insertion: "Word insertion",
+    word_deletion: "Word deletion",
+    word_move: "Word move",
+    word_row_property_change: "Word row property change",
+    word_paragraph_property_change: "Word paragraph property change",
+    word_run_property_change: "Word run property change",
+    word_mixed_revision: "Word mixed revision",
+    spreadsheet_revision: "Spreadsheet revision",
+  })[kind] ?? "Source revision";
+}
+
+function sourceHistoryOutcomeText(history) {
+  switch (history.scan_outcome) {
+    case "attributable_revisions":
+      return "DMS retained only these attributable, date-bearing source claims from the first import.";
+    case "no_revision_data":
+      return "No attributable, date-bearing source revisions were available at first import.";
+    case "unattributed_revision_data":
+      return "Revision data was present at first import, but DMS could not reliably map it to a person. No identity was retained.";
+    case "malformed_package":
+      return "DMS could not read revision data at first import. No source-change observations were retained.";
+    default:
+      return "No source-change observations were retained.";
+  }
+}
+
+function sourceHistoryMarkup(history) {
+  if (!history) {
+    return '<section class="imported-source-history"><h5>Imported source changes (unverified)</h5><p class="source-path">No Office source-change capture is retained for this document.</p></section>';
+  }
+  const observations = (history.observations ?? []).map((observation) => {
+    const count = observation.record_count === 1 ? "1 source record" : `${observation.record_count} source records`;
+    const tie = observation.timestamp_tied ? " · equal-timestamp group" : "";
+    return `<li><strong>source-derived/unverified</strong> · ${escapeHtml(observation.display_author)} · ${escapeHtml(observation.occurred_at)} · ${escapeHtml(sourceHistoryKindLabel(observation.kind))} · ${escapeHtml(count)}${tie}</li>`;
+  }).join("");
+  return `<section class="imported-source-history"><h5>Imported source changes (unverified)</h5><p class="source-path">${escapeHtml(sourceHistoryOutcomeText(history))} DMS did not verify the actor or reconstruct earlier versions.</p><p class="source-path">Captured once from the imported ${escapeHtml(sourceHistoryFormatLabel(history.source_format))} bytes · SHA-256 ${escapeHtml(history.imported_source_sha256)} · never re-scanned.</p>${observations ? `<ol>${observations}</ol>` : ""}</section>`;
 }
 
 function externalLifecycleMarkup(library, detail) {
