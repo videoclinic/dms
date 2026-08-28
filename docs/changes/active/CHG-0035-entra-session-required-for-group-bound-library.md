@@ -9,7 +9,7 @@ A DMS Desktop user activating a library with a Microsoft Entra ID group binding 
 **Entry checkpoint:** none
 **Context sources:** `AGENTS.md` (Architectural decisions, Application records); `docs/AGENTS.md` (Local Contracts, Work Guidance); `docs/changes/AGENTS.md`; `docs/product/AGENTS.md`; `docs/architecture.md` (Runtime shape, Trust and control boundary); `docs/privacy.md` (Data classes, Processing principles); `docs/design-decisions.md` (ADR-0013, ADR-0021, ADR-0024, ADR-0028, ADR-0029); `docs/product/capabilities/CAP-0011-approval-evidence.md` (Outcomes 1, 3); `docs/product/capabilities/CAP-0021-microsoft-entra-workflow-identity.md` (Operational details, Outcomes 5, 6, 8, 9); `crates/AGENTS.md`; `crates/dms-core/AGENTS.md`; `crates/dms-desktop/AGENTS.md`; `crates/dms-core/src/lib.rs` (`default_author`, `Workspace::update_control`); `crates/dms-core/src/lifecycle.rs` (`AuthenticatedActor`, `WorkflowEventBody`, `GraphClient`, event appenders); `crates/dms-core/src/library.rs`; `crates/dms-core/src/maintenance.rs`; `crates/dms-core/src/audit.rs`; `crates/dms-desktop/src/graph.rs` (`MicrosoftGraphClient::authenticated_actor`, `direct_user_members_with_token`, token/device-flow primitives); `crates/dms-desktop/src/lib.rs` (`open_workspace`, `WorkspaceSummary`, `update_document_control_with`, startup authorization); `crates/dms-desktop/ui/app.mjs` (`switchWorkspaceSession`, startup-authorization card); `crates/dms-desktop/ui/configuration.mjs`; `crates/dms-desktop/ui/library.mjs`; `docs/product/wireframes/AGENTS.md`; `docs/product/wireframes/generate.mjs`
 **Produces:** A group-bound desktop workspace cannot activate until its signed-in Entra actor is freshly confirmed as an enabled direct member of its bound group. New metadata, note, lifecycle, report, and workflow evidence records that actor's tenant/object ID without a local-OS-user principal; unbound libraries retain the existing local-operator behavior.
-**Status:** in-progress — Phase 1 is verified; Phase 2 starts after this checkpoint.
+**Status:** in-progress — Phase 2 gates desktop activation and bound mutations.
 
 | Field | Value |
 | --- | --- |
@@ -39,8 +39,10 @@ The event body is hash-chained evidence. Changing `local_os_user` from required 
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
 | 1 | Define the group-bound session and evidence principal | done (`cargo fmt --all -- --check`; `cargo test -p dms-core`; `cargo test -p dms-desktop --lib group_bound_session`; `cargo check --workspace`; `git diff --check`) | `cargo test -p dms-core --test lifecycle --test workspace` and `cargo test -p dms-desktop --lib group_bound_session` exit 0, proving legacy hash verification plus actor/tenant/member validation cases |
-| 2 | Gate desktop activation and route every bound mutation through the Entra actor | pending | `cargo test -p dms-desktop` and `node --test crates/dms-desktop/ui/app.test.mjs crates/dms-desktop/ui/configuration.test.mjs crates/dms-desktop/ui/library.test.mjs` exit 0, including no-session, non-member, sign-in, switch, and event-principal cases |
-| 3 | Publish current-state contracts and the session-required screen | pending | `node docs/product/wireframes/generate.mjs`, the CAP-0021 PNG render command, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `node --test crates/dms-desktop/ui/*.test.mjs` exit 0; CAP/ADR/CHG indexes agree |
+| 2 | Cache a verified actor before bound-library activation | in-progress | `cargo test -p dms-desktop --lib group_bound_session` and `cargo check -p dms-desktop` exit 0, proving unbound activation preservation plus cached-token member, non-member, disabled, tenant-mismatch, and unavailable-session outcomes |
+| 3 | Route bound adapter mutations through the cached actor | pending | `cargo test -p dms-desktop --lib` exits 0, proving every principal-aware command records the cached Entra actor and rejects a missing, replaced, or tenant-mismatched session before mutation |
+| 4 | Add the library-session device-flow challenge and blocking shell | pending | `cargo test -p dms-desktop` and `node --test crates/dms-desktop/ui/app.test.mjs crates/dms-desktop/ui/configuration.test.mjs crates/dms-desktop/ui/library.test.mjs` exit 0, including pending, expiry, reissue, sign-in, switch, no-session, non-member, and direct-IPC cases |
+| 5 | Publish current-state contracts and the session-required screen | pending | `node docs/product/wireframes/generate.mjs`, the CAP-0021 PNG render command, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `node --test crates/dms-desktop/ui/*.test.mjs` exit 0; CAP/ADR/CHG indexes agree |
 
 Mark a phase `in-progress` while running it, `done (<evidence>)` once its gate passes, and `pending` otherwise.
 
@@ -70,22 +72,46 @@ with an incorrect principal.
 
 Verification gate: `cargo test -p dms-core --test lifecycle --test workspace` and `cargo test -p dms-desktop --lib group_bound_session` exit 0, including unchanged historic-hash verification and all actor/tenant/member validation cases.
 
-## Phase 2 — Gate desktop activation and route every bound mutation through the Entra actor
+## Phase 2 — Cache a verified actor before bound-library activation
 
-**Goal:** DMS Desktop exposes no active group-bound library session until the user signs in and is verified as an enabled direct member, and all adapter mutations use that verified actor instead of the local OS username.
+**Goal:** Opening, recent-library switching, permalink resolution, and refresh preserve unbound behaviour but validate a bound library's effective tenant, cached or refreshed delegated credential, `/me`, and fresh enabled direct-member response before its advisory lock is acquired or its shell activates.
 
 Steps:
 
-1. Add a desktop-only group-bound session state keyed to the active workspace/binding. On an open, recent-library switch, or permalink resolution, inspect only enough workspace metadata to determine whether a binding exists. If unbound, retain the existing lock and activation behavior. If bound, validate the effective configuration, token, `/me`, and fresh direct-member list before acquiring/finalizing the workspace lock or loading Library/Configuration data.
-2. Reuse the existing device-flow primitives for a missing or refresh-rejected credential, but create a library-session challenge rather than widening the environment-only startup trigger. The blocking shell state must name the selected library/group, show the user code, expiry, and explicit **Open sign-in page** action, poll only at the provider interval, and offer **Reissue code** only after a terminal result. It must not auto-open a browser, leak `device_code`/tokens, or fall back to the startup card's tenant-only `valid` state.
-3. Keep the verified actor only in desktop process session state. Revalidate on every bound-library activation and after a binding replacement; invalidate it when the token, effective tenant configuration, or binding changes. A successful membership refresh may update the existing display cache, but the cache itself must not authorize the session.
-4. Centralize the adapter's workspace-opening/mutation boundary so every workspace-scoped IPC command either receives the current verified group-bound principal or fails before opening/mutating the workspace. Cover Library, Configuration, Notes, Maintenance, audit/report, source-open/reassociate, lifecycle, notification confirmation, and permalink paths; do not rely on hiding frontend controls. The CLI supplies only a local principal and therefore rejects mutations against a group-bound library rather than bypassing the requirement.
-5. Replace `WorkspaceSummary.change_author` and any affected selection/history presentation with the active actor's Entra display snapshot plus immutable tenant/object identity when the workspace is bound. Do not expose tokens or local usernames as the bound-library acting principal. Preserve historical local-user evidence and the existing review-decision actor presentation.
-6. Add focused Rust and frontend tests: unbound activation remains unchanged; a bound library stays inactive while sign-in is pending, expired, unavailable, mismatched, disabled, or non-member; valid membership activates exactly once; switching releases/acquires locks safely; every mutation logs the Entra actor and no local principal; and direct IPC calls cannot bypass the gate.
+1. Add process-only session state keyed by canonical edit root and identity binding. A successful validation stores only the actor, binding ID, tenant ID, and token-generation marker; it never persists to `.dms`.
+2. Reuse `authenticated_actor`, `direct_user_members`, and `verify_group_bound_actor` for cached-token validation. Missing, expired, refresh-rejected, tenant-mismatched, inaccessible-group, disabled-account, and non-member outcomes leave the workspace inactive and do not acquire a destination lock.
+3. Revalidate each bound activation and clear the cached session after global-tenant reconfiguration or identity-source replacement. A display cache is never authorization truth.
+4. Keep unbound open, recent switch, refresh, and permalink behaviour unchanged. Exercise cached-token valid-member, tenant mismatch, disabled, non-member, and unavailable outcomes with fake Graph clients.
 
-Verification gate: `cargo test -p dms-desktop` and `node --test crates/dms-desktop/ui/app.test.mjs crates/dms-desktop/ui/configuration.test.mjs crates/dms-desktop/ui/library.test.mjs` exit 0, including no-session, non-member, sign-in, switch, and event-principal cases.
+Verification gate: `cargo test -p dms-desktop --lib group_bound_session` and `cargo check -p dms-desktop` exit 0.
 
-## Phase 3 — Publish current-state contracts and the session-required screen
+## Phase 3 — Route bound adapter mutations through the cached actor
+
+**Goal:** Every bound workspace-scoped desktop mutation obtains the current verified session principal or fails before changing metadata; every new event records that actor and no local OS user.
+
+Steps:
+
+1. Centralize principal lookup on the canonical workspace/binding session and pass it to reassociation, document control, notes, candidate/review/release, local lifecycle, periodic-review, report, maintenance, configuration, notification-confirmation, and source-open mutation boundaries.
+2. Preserve read-only queries and the separate one-time approver-decision actor. The CLI remains local-principal-only and fails closed through `dms-core`.
+3. Replace bound `WorkspaceSummary.change_author` presentation with the cached display snapshot plus immutable tenant/object ID; preserve historical local-user evidence.
+4. Test missing, replaced, and tenant-mismatched sessions reject before mutation; test every covered bound event serializes `authenticated_actor` and omits `local_os_user`.
+
+Verification gate: `cargo test -p dms-desktop --lib` exits 0.
+
+## Phase 4 — Add the library-session device-flow challenge and blocking shell
+
+**Goal:** A missing or refresh-rejected bound-library credential produces an explicit per-library device-flow challenge, never an automatic browser launch or a startup-authorization fallback.
+
+Steps:
+
+1. Add a distinct library-session device-login purpose and challenge/status/reissue IPC. Expose user code, expiry, verification URI, and sanitized terminal states only; never expose tokens or `device_code`.
+2. Add a blocking shell state naming the selected library/group with **Open sign-in page** and terminal-only **Reissue code**. Poll only at the provider interval and do not load workspace destinations while pending or failed.
+3. Revalidate and activate exactly once after successful sign-in; safely release/acquire locks across recent-library switches and permalink activation.
+4. Add Rust and frontend coverage for pending, expiry, reissue, valid member, non-member, disabled, mismatch, unavailable service, direct IPC bypass, and actor presentation.
+
+Verification gate: `cargo test -p dms-desktop` and `node --test crates/dms-desktop/ui/app.test.mjs crates/dms-desktop/ui/configuration.test.mjs crates/dms-desktop/ui/library.test.mjs` exit 0.
+
+## Phase 5 — Publish current-state contracts and the session-required screen
 
 **Goal:** The product records and CAP-0021 wireframe explain that a bound library requires a verified Entra session and that new events use the verified Entra actor, not a local OS principal.
 
