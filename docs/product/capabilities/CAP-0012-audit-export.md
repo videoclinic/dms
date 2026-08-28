@@ -20,8 +20,11 @@ The following hold:
    (events, hashes, timestamps, comments), the release history (version,
    relative path, confidentiality, checksum, workflow-chain head, and
    approval-chain head when approval was required, recorded effective date, and
-   immutable release-time title/number/type/owner snapshot when captured), and the
-   current classification summary. Every review request is included regardless
+   immutable release-time title/number/type/owner snapshot when captured), the
+   current classification summary, and each document's bounded imported-source
+   history when retained: original-source SHA-256, sanitized scan outcome, and
+   at most three source-derived/unverified author/date/kind/count observations.
+   Every review request is included regardless
    of its outcome, with its changelog, requested target version, target-version
    mode, decision outcome, and any decision comment. Direct minor releases and
    their approver-notification delivery attempts are included. Periodic-review
@@ -29,8 +32,10 @@ The following hold:
    mutable-profile rename or Entra display-name/email change does not relabel
    historical candidate or release rows. Legacy releases that predate a captured
    field report it as unrecorded rather than substituting current data.
-3. Reports do not embed source-draft content or released PDF bytes. They
-   carry identifying metadata and SHA-256 digests so a separate copy of the
+3. Reports do not embed source-draft content or released PDF bytes. Imported
+   source history excludes changed text, comments, raw OOXML, Office properties,
+   PowerPoint client IDs, and workflow hashes. Reports carry identifying metadata
+   and SHA-256 digests so a separate copy of the
    document can be matched against a recorded checksum.
 4. Generating a report is itself a workflow event of type `report_generated`
    recorded with the same canonical event body, including the report path,

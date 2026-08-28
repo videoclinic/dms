@@ -155,6 +155,14 @@
    drag restores its starting width. Width is not persisted in workspace
    metadata, preferences, or saved views. Action labels do **not** repeat the
    document title or number — the selection header already identifies it.
+   **Version history & changes** also contains a read-only **Imported source
+   changes (unverified)** subsection when first Office import retained source
+   observations. It shows at most three newest source person/date/kind/count
+   rows and the original-source SHA-256 relationship, explicitly states that
+   DMS did not verify the person or reconstruct prior versions, and remains
+   visually separate from hash-chained workflow blocks. Empty, malformed, and
+   PowerPoint-unattributed scans show a bounded explanatory state only. The
+   subsection provides no edit, delete, approval, release, or version control.
 7. **Multi-select** of two or more file rows uses the **same selection pane**.
    It provides a batch summary (count, short identity list, clear) and
    **multi-applicable actions only**. A homogeneous selection of **Not in

@@ -594,3 +594,24 @@ Capability-local rules stay in their CAP files.
   Re-adding an unregistered path restores the same document ID and whatever
   lifecycle that record still has. Operator comparison:
   [`library-membership-and-obsolescence.md`](library-membership-and-obsolescence.md).
+
+## ADR-0030 — Bounded unverified Office source-history observations
+
+- **Decision:** On first registration of a `.docx`, `.xlsx`, or `.pptx` draft,
+  DMS may retain the original source SHA-256, a normalized scan outcome, and at
+  most three newest attributable source-change observations. Each observation
+  contains only an untrusted display author, validated UTC timestamp,
+  format-specific change category, and compact coalesced-record count. It is
+  captured once and remains unchanged on re-registration.
+- **Why:** Operators requested limited context from an imported Office file, but
+  local Office revision data cannot prove identity or reconstruct prior source
+  versions. Treating it as DMS workflow or release evidence would claim
+  application observation and authority that did not occur.
+- **Consequences:** Source observations are visibly and exportably labelled
+  unverified and remain outside the canonical workflow hash chain, candidates,
+  releases, and version allocation. DMS neither rescans a later source file nor
+  matches author strings or Office identifiers to Entra identities. It retains
+  no changed text, comments, raw XML, Office core/custom properties, Excel cell
+  values, or PowerPoint client IDs. Word and Excel retain only attributable,
+  date-bearing observations; PowerPoint client data is reported only through a
+  sanitized unattributed outcome and is never stored or displayed.

@@ -7,27 +7,27 @@
 **Entry checkpoint:** Phase 1 commit `1590e05`.
 **Context sources:** `AGENTS.md` (Architectural decisions, Application records); `docs/AGENTS.md` (Local Contracts, Work Guidance); `docs/changes/AGENTS.md`; `docs/product/AGENTS.md`; `docs/architecture.md` (Dual-root path model, Document data domains); `docs/privacy.md` (Data classes, Processing principles); `docs/design-decisions.md` (ADR-0003, ADR-0004, ADR-0013, ADR-0017); `docs/product/capabilities/CAP-0006-library-explorer.md` (Outcomes 3, 6); `docs/product/capabilities/CAP-0011-approval-evidence.md` (Outcomes 1, 4, 8); `docs/product/capabilities/CAP-0012-audit-export.md` (Outcomes 2, 3); `docs/product/capabilities/CAP-0015-document-control-data.md` (Outcomes 1, 13; Non-goals); `crates/AGENTS.md`; `crates/dms-core/AGENTS.md`; `crates/dms-desktop/AGENTS.md`; `crates/dms-core/src/lib.rs` (`Workspace::add_document_inner`, schema migration); `crates/dms-core/src/library.rs` (`Workspace::add_documents`); `crates/dms-core/src/audit.rs`; `crates/dms-desktop/src/lib.rs` (`add_library_documents`); `crates/dms-desktop/ui/app.mjs` (library add action); `crates/dms-desktop/ui/library.mjs` (selection detail); `docs/product/wireframes/AGENTS.md`; `docs/product/wireframes/generate.mjs`
 **Produces:** The first registration of an Office draft retains at most three newest source-derived, person-and-date observations tied to that imported draft's SHA-256. They are visibly and exportably labelled unverified, never become DMS workflow/release history, and are never re-scanned or overwritten on re-registration.
-**Status:** in-progress — Phase 1 committed (`1590e05`); Phase 2 verified, checkpoint pending.
+**Status:** done — Phase 1 committed (`1590e05`); Phase 2 committed (`4a580f0`); Phase 3 gates passed.
 
 First-time Library import of a `.docx`, `.xlsx`, or `.pptx` scans the local OOXML package and stores no more than the three newest attributable source-change observations; the document remains a new DMS `draft` and source-derived data stays separate from DMS workflow and release evidence.
 
 | Field | Value |
 | --- | --- |
 | ID | CHG-0033 |
-| Status | in-progress |
+| Status | done |
 | External request | Direct operator request: "Recover only the last 3 changes from a file that is imported first time to the Library, not the whole history." |
 | Affected CAPs | CAP-0006, CAP-0011, CAP-0012, CAP-0015 |
-| Decision records | Add ADR-0030. ADR-0003, ADR-0004, ADR-0013, and ADR-0017 remain applicable. |
+| Decision records | ADR-0030. ADR-0003, ADR-0004, ADR-0013, and ADR-0017 remain applicable. |
 
 ## Current state
 
-- Library add calls `Workspace::add_documents`, then persists immediately through the desktop adapter; there is no preview or source-metadata scan (`crates/dms-desktop/src/lib.rs:1178-1187`).
-- A newly added document receives a fresh ID, `draft` lifecycle, empty releases, and empty canonical `workflow_events`; the source title is its only imported default (`crates/dms-core/src/lib.rs:621-682`).
-- The core store is schema v16, has `zip`, `quick-xml`, `chrono`, and `sha2` dependencies already, and retains a versioned JSON backup during migrations (`Cargo.toml:12-32`, `crates/dms-core/src/lib.rs:35, 473-476, 860-919`).
-- CAP-0015 currently forbids importing source-file metadata and automatic source-draft version history (`docs/product/capabilities/CAP-0015-document-control-data.md:122-167`).
-- Canonical workflow events are Entra/local-user evidence with a predecessor hash; adding Office-derived author strings to that chain would falsely claim DMS witnessed and authenticated those actions (`docs/product/capabilities/CAP-0011-approval-evidence.md:12-31, 59-100`).
-- Microsoft Office documents can expose mutable core properties, but only embedded revision records can support a source-change observation. Word tracked revisions carry `author` and `date`; Excel's legacy revision parts can carry revision records; PowerPoint Revision Information records collaborative application client IDs and dates, not a person-name mapping. Microsoft 365 version history remains a OneDrive/SharePoint service, not a sequence of local-file snapshots.
-- The current Library pane already owns the exact first-add action and the document detail surface, while audit reports must not embed source-draft content (`docs/product/capabilities/CAP-0006-library-explorer.md:98-105, 123-154`; `docs/product/capabilities/CAP-0012-audit-export.md:14-45`).
+- Library add calls `Workspace::add_documents`; only a newly created Office document record captures a bounded source-history record before the desktop adapter persists it.
+- A newly added document remains a `draft` with empty releases and canonical `workflow_events`; source history is a separate unverified record with no workflow-event, candidate, or release fields.
+- The core store is schema v17. Its v16 migration writes `source_history: null` for existing documents and retains `v16.json.bak`.
+- CAP-0015 keeps DMS ownership of document control data while allowing bounded, first-import-only Office source provenance that never supplies control fields or source-version history.
+- Canonical workflow events remain Entra/local-user evidence with predecessor hashes. Source-derived author strings have no event IDs/hashes or identity authority.
+- Word and Excel retain only attributable date-bearing revision groups; PowerPoint retains a sanitized unattributed outcome without client IDs. Microsoft 365 version history remains a OneDrive/SharePoint service, not a sequence of local-file snapshots.
+- The Library selection pane and audit reports present at most three `source-derived/unverified` observations without source content, raw metadata, client IDs, or workflow hashes.
 
 ## Risk call-out
 
@@ -41,7 +41,7 @@ The three recovered observations are source claims, not DMS actions. They must n
 | --- | --- | --- | --- |
 | 1 | Add bounded, format-aware source-history recovery to `dms-core` | done (`2026-08-28`: `source_history_import` and `workspace` passed) | `cargo test -p dms-core --test source_history_import` and `cargo test -p dms-core --test workspace` exit 0, including v16 migration, cap, attribution, and re-registration cases |
 | 2 | Apply recovery only on first Library add and render/export it distinctly | done (`2026-08-28`: `cargo test -p dms-desktop`, `node --test crates/dms-desktop/ui/library.test.mjs`, and `cargo test -p dms-core --test audit` passed) | `cargo test -p dms-desktop`, `node --test crates/dms-desktop/ui/library.test.mjs`, and `cargo test -p dms-core --test audit` exit 0, including the three-row imported-source section and no workflow-chain mutation |
-| 3 | Publish contracts, wireframe, and completed records | pending — begins after the Phase 2 checkpoint | `node docs/product/wireframes/generate.mjs`, `(cd docs/product/wireframes && google-chrome --headless=new --hide-scrollbars --window-size=1600,1600 --screenshot=exports/CAP-0006-library-explorer.png "file://$PWD/html/CAP-0006-library-explorer.html" && test -s exports/CAP-0006-library-explorer.png)`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `node --test crates/dms-desktop/ui/*.test.mjs` exit 0; CAP/ADR/CHG indexes agree |
+| 3 | Publish contracts, wireframe, and completed records | done (`2026-08-28`: generated and rendered CAP-0006/CAP-0015 wireframes; `cargo fmt`, Clippy, workspace tests, and 112 frontend tests passed) | `node docs/product/wireframes/generate.mjs`, `(cd docs/product/wireframes && google-chrome --headless=new --hide-scrollbars --window-size=1600,1600 --screenshot=exports/CAP-0006-library-explorer.png "file://$PWD/html/CAP-0006-library-explorer.html" && test -s exports/CAP-0006-library-explorer.png && google-chrome --headless=new --hide-scrollbars --window-size=1600,1600 --screenshot=exports/CAP-0015-document-control-data.png "file://$PWD/html/CAP-0015-document-control-data.html" && test -s exports/CAP-0015-document-control-data.png)`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `node --test crates/dms-desktop/ui/*.test.mjs` exit 0; CAP/ADR/CHG indexes agree |
 
 Mark a phase `in-progress` while running it, `done (<evidence>)` once its gate passes, and `pending` otherwise.
 
@@ -89,10 +89,13 @@ Steps:
 1. Add ADR-0030 to `docs/design-decisions.md`: DMS preserves at most three attributable Office source-change observations from first import, tied to the original bytes, separate from canonical workflow/release evidence. Record the format boundaries, the no-rescan rule, and the explicit rejection of Entra identity inference and version/release reconstruction.
 2. Amend CAP-0015 to replace its source-metadata import non-goal with this bounded provenance outcome while preserving DMS ownership of document control data. Amend CAP-0011 to state that source-derived observations are outside the canonical hash chain. Amend CAP-0012 to specify the bounded, no-content audit representation. Amend CAP-0006 with the selection-pane location and non-interactive states.
 3. Amend `docs/architecture.md` and `docs/privacy.md` to classify source-history observations and their SHA-256 binding as local personal-data metadata. State the strict content/raw-XML/client-ID exclusions and the fact that PowerPoint's client IDs are neither retained nor displayed.
-4. Update the existing CAP-0006 screen definition in `docs/product/wireframes/generate.mjs` with a synthetic three-row Imported source changes (unverified) section plus an empty/unattributed state. Regenerate its HTML, index, and manifest with `node docs/product/wireframes/generate.mjs`; render the matching PNG into `docs/product/wireframes/exports/`; retain the CAP's existing HTML/PNG links. Do not create a pending-only wireframe artifact.
-5. Run the complete workspace gates. Once every gate passes, mark phases with concrete evidence, move this CHG to `docs/changes/archive/`, and update `docs/changes/README.md` from Active to Archive. Report the pre-existing CHG-0024/0025/0032 work unchanged.
+4. Update the existing CAP-0006 screen definition in `docs/product/wireframes/generate.mjs` with a synthetic three-row Imported source changes (unverified) section plus an empty/unattributed state. Regenerate its HTML, index, and manifest with `node docs/product/wireframes/generate.mjs`; render the CAP-0006 PNG and the CAP-0015 PNG that shares its generated selection-pane definition into `docs/product/wireframes/exports/`; retain the CAPs' existing HTML/PNG links. Do not create a pending-only wireframe artifact.
+5. Factor the existing source-history package-preflight result into a named
+   core type so the full workspace Clippy gate accepts the Phase 1 parser
+   without suppressing `type_complexity`.
+6. Run the complete workspace gates. Once every gate passes, mark phases with concrete evidence, move this CHG to `docs/changes/archive/`, and update `docs/changes/README.md` from Active to Archive. Report the pre-existing CHG-0024/0025/0032 work unchanged.
 
-Verification gate: `node docs/product/wireframes/generate.mjs`, `(cd docs/product/wireframes && google-chrome --headless=new --hide-scrollbars --window-size=1600,1600 --screenshot=exports/CAP-0006-library-explorer.png "file://$PWD/html/CAP-0006-library-explorer.html" && test -s exports/CAP-0006-library-explorer.png)`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `node --test crates/dms-desktop/ui/*.test.mjs` exit 0; CAP/ADR/CHG indexes agree.
+Verification gate: `node docs/product/wireframes/generate.mjs`, `(cd docs/product/wireframes && google-chrome --headless=new --hide-scrollbars --window-size=1600,1600 --screenshot=exports/CAP-0006-library-explorer.png "file://$PWD/html/CAP-0006-library-explorer.html" && test -s exports/CAP-0006-library-explorer.png && google-chrome --headless=new --hide-scrollbars --window-size=1600,1600 --screenshot=exports/CAP-0015-document-control-data.png "file://$PWD/html/CAP-0015-document-control-data.html" && test -s exports/CAP-0015-document-control-data.png)`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `node --test crates/dms-desktop/ui/*.test.mjs` exit 0; CAP/ADR/CHG indexes agree.
 
 ## Out of scope
 

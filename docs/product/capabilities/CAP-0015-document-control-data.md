@@ -29,6 +29,12 @@
    display label). Frontmatter never mutates `.dms`
    control data. The draft filename stem supplies the title's one-time default only
    when the document is added; it is not a continuing metadata source.
+   First Office registration may separately retain bounded unverified source
+   provenance: original-source SHA-256, scan outcome, and at most three
+   attributable source person/date/kind/count observations. This never supplies
+   or updates document-control data, Entra identity, workflow evidence,
+   candidates, releases, or source-version history, and re-registration never
+   rescans or rewrites it.
 2. Document control data for the **currently selected library document** is
    shown on the **same CAP-0006 library page** in the selection pane (right
    column), together with document actions for that selection. The pane keeps
@@ -162,7 +168,8 @@
 - Automatic calendar reminders outside the app
 - Enforcing legal retention deletion of PDFs
 - Cross-document dependency graphs
-- Automatic source-draft version history or source-document diff/revert
+- Automatic source-draft version history beyond the bounded first-import
+  unverified source observations, or source-document diff/revert
 - Importing or synchronizing document control data from source-file metadata
 - A separate primary app section whose only job is document control data
   outside the library navigator (detail may still expand full-width for editing)

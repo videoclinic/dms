@@ -17,6 +17,9 @@
    applicable), requested target version, target-version mode, review changelog,
    optional decision comment, and operator comment text. The chain head is the
    SHA-256 of the canonical body.
+   First-import Office source-history observations are not workflow events and
+   have no event ID, predecessor hash, chain position, candidate, or release
+   version; they remain separately labelled unverified source claims.
 2. Two comment types are first-class:
    - **Changelog** — required at review-request time; explains what the editor
      changed since the last release and remains recorded for every outcome.

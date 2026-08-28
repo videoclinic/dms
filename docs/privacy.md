@@ -7,6 +7,7 @@
 | Draft source documents (Office and Markdown) | Edit root (operator-controlled) | Content is business documentation; app does not upload it |
 | Released versioned PDFs | Publish root (operator-controlled) | Final released artifacts (`*_VMAJOR.MINOR_<confidentiality-type-id>.pdf`); the path exposes the classification ID |
 | DMS metadata, library membership, notes, approval state, checksums | `<edit-root>/.dms/` | Local only; may contain personal names in notes or approver fields |
+| First-import Office source history | `<edit-root>/.dms/` | Original-source SHA-256, sanitized scan outcome, and at most three unverified source author/date/kind/count observations. No source content, comments, raw OOXML, Office properties, PowerPoint client IDs, or inferred Entra identity is retained or displayed |
 | Microsoft Entra workflow group binding and display cache | `<edit-root>/.dms/` | Group object ID, referenced user object IDs, and cached display name/email for routing; no app-managed user accounts, tenant/client ID, or OAuth tokens |
 | App-global Entra configuration | Windows machine policy at `HKLM\SOFTWARE\Policies\Videoclinic\DMS` when present; otherwise OS-user app-config `global-settings.json` | Non-secret public-client ID and tenant ID shared by local libraries. A complete machine-policy pair is read-only and is never copied to `global-settings.json` or `.dms`; otherwise non-empty `DMS_ENTRA_CLIENT_ID` / `DMS_ENTRA_TENANT_ID` process overrides are not persisted |
 | Mutable document profile and workflow-role policies (title, owner reference, number, type, assigned editor/approver) | `<edit-root>/.dms/` | Local control metadata; not Office properties, Markdown front matter, or document body content. Owner/editor/approver references are tenant-scoped Entra object IDs; display name/email is refreshable and never participates in identity equality. Free-text pre-v12 owners remain display-only `legacy_owner_label` values and are never resolved by name or email. Literal `<owner>` / `<editor>` placeholders represent only a successful empty eligible-people result and carry no identity or authority |
@@ -53,6 +54,11 @@
   filesystem access remains the operator's responsibility.
 - Audit/export reports contain approver display names, comments, and revision
   digests; they do not embed draft or released document bytes.
+- A first Office registration may retain at most three attributable source-change
+  observations bound to the imported source SHA-256. Re-registration never
+  rescans or overwrites that record. The observations are local unverified
+  provenance, not DMS workflow/release evidence; PowerPoint client IDs are never
+  retained or displayed.
 - Claude Desktop assistance is disabled by default and allowed only for
   operator-selected confidentiality types. Every handoff previews the exact
   payload and requires confirmation; the desktop client is not represented as

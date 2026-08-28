@@ -23,6 +23,8 @@ const MAX_XML_PART_BYTES: usize = 2 * 1024 * 1024;
 const MAX_DISPLAY_AUTHOR_CHARS: usize = 256;
 const MAX_OBSERVATIONS: usize = 3;
 
+type InspectedPackage<'a> = (ZipArchive<Cursor<&'a [u8]>>, BTreeSet<String>);
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SourceHistoryFormat {
@@ -182,9 +184,7 @@ fn scan_package(
     }
 }
 
-fn inspect_package(
-    bytes: &[u8],
-) -> std::result::Result<(ZipArchive<Cursor<&[u8]>>, BTreeSet<String>), ()> {
+fn inspect_package(bytes: &[u8]) -> std::result::Result<InspectedPackage<'_>, ()> {
     let mut archive = ZipArchive::new(Cursor::new(bytes)).map_err(|_| ())?;
     if archive.len() > MAX_PACKAGE_PARTS {
         return Err(());

@@ -1350,6 +1350,19 @@ function documentControlDataSelectionPane() {
         <p class="hint" style="margin:0">Versions and related workflow changes are grouped by the recorded actor. Expand a person to inspect individual events.</p>
         <section><h4 class="card-title" style="margin-bottom:0.35rem">Current draft work</h4><details class="event" open><summary><strong>Changes by Lukas Roth</strong> · 1 event · 2025-08-04 10:20 UTC</summary>${event("review requested", "2025-08-04 10:20 UTC", "Lukas Roth", "Changelog: clarified the retention exception. Target: V1.5 (minor version change).")}</details></section>
         <section><h4 class="card-title" style="margin-bottom:0.35rem">V1.3</h4><details class="event"><summary><strong>Changes by Lukas Roth</strong> · 2 events · 2025-08-01 09:44 UTC — 09:14 UTC</summary>${event("release", "2025-08-01 09:44 UTC", "Lukas Roth", "Atomic export committed V1.3.")}${event("review requested", "2025-08-01 09:14 UTC", "Lukas Roth", "Changelog: restructured control scope.")}</details><details class="event"><summary><strong>Changes by Anna Berg</strong> · 1 event · 2025-08-01 09:42 UTC</summary></details></section>
+        <section style="border-top:1px solid var(--border);padding-top:0.75rem">
+          <div class="row between gap-2"><h4 class="card-title" style="margin:0">Imported source changes</h4>${badge("unverified", "warn")}</div>
+          <p class="hint">Captured only when <code>Handbook.docx</code> first entered the Library, bound to source SHA-256 <code>82c1…6f4a</code>. DMS did not verify these people or reconstruct earlier versions; they are not workflow or release evidence.</p>
+          ${table(
+            ["Source person", "Source time (UTC)", "Observed change"],
+            [
+              ["A. Novak", "2025-07-31 14:20", "Word insertion · 4 grouped records"],
+              ["L. Tan", "2025-07-29 09:10", "Word property change · 2 grouped records"],
+              ["A. Novak", "2025-07-28 16:45", "Word deletion · 1 record"],
+            ],
+          )}
+          <details class="event"><summary><strong>Empty or unattributed source state</strong></summary><p class="hint">No attributable person-and-date observation was retained when the Office package had no usable revision data, was malformed, or PowerPoint exposed only an unattributed client record. Parser details and client IDs are neither stored nor shown.</p></details>
+        </section>
       </div>
     </details>
     <details class="selection-section" open>

@@ -55,8 +55,12 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
   exports that DOCX through installed Word → writes
   `<stem>_VMAJOR.MINOR_<confidentiality-type-id>.pdf` → checksums the result.
 - Application-managed version history consists of immutable release PDFs and
-  their evidence. Source drafts remain mutable working copies; draft recovery
-  comes from workspace backups rather than an embedded source-version store.
+  their evidence. First Office import may separately retain at most three
+  source-derived person-and-date observations bound to the exact imported draft
+  SHA-256; this is unverified provenance, not version/release/workflow history
+  or a source-version store. Source drafts remain mutable working copies; draft
+  recovery comes from workspace backups rather than an embedded source-version
+  store.
 - The publish root is a storage location, not an additional lifecycle stage:
   successful release creates the released PDF. Its location is a pure function
   of configured roots + relative path + version label, preventing “edited here,
@@ -137,7 +141,7 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
 
 ## Document data domains
 
-Each library document persists data across three durable domains. Mixing them
+Each library document persists data across four durable domains. Mixing them
 would either let a later profile edit silently rewrite a recorded release or
 treat a refreshable display string as workflow authority, so the boundaries
 below are part of the contract every adapter honours.
@@ -147,6 +151,7 @@ below are part of the contract every adapter honours.
 | Mutable document profile | Title, document number, document type, current owner reference, review interval/exemption inputs | Editable in **Edit document control data**; profile edits append canonical before/after evidence and invalidate stale candidates | The owner reference is a tenant-scoped Entra object ID under the current group binding; the cached display name/email is refreshable, never authoritative. Free-text owner labels from earlier schema versions are kept in `legacy_owner_label` as display-only unresolved state and are never converted into workflow authority by label or email matching |
 | Immutable candidate/release snapshot | Profile (title, optional number/type, owner tenant/object ID + display snapshot), required effective date, confidentiality snapshot, workflow people (editor, approver, requester), and approval/review chain head | Snapshotted at candidate creation; never rewritten by later profile edits, lifecycle moves, or display-cache refreshes | New releases schedule the next review from the snapshot's effective date. Pre-v12 releases without a stored effective date render an explicit **unrecorded** state rather than substituting the current mutable profile |
 | Mutable review schedule | Per-document review interval, exemption reason, next-review-due date | Editable through CAP-0015/CAP-0017; changes append evidence but do not invalidate open candidates unless the interval, exemption, or its reason actually changes | The next-review-due date is derived from the current release's stored effective date plus the resolved interval; an exemption suppresses the due date and is auditable |
+| First-import Office source history | Original source SHA-256, format, sanitized scan outcome, and at most three normalized source person/date/kind/count observations | Captured only while a new Office document record is created; never rescanned or rewritten on re-registration | Unverified source provenance only: no source content, raw XML, Office properties, PowerPoint client IDs, inferred Entra identity, canonical workflow event, candidate, or release data |
 
 ## Out of scope (current architecture)
 
