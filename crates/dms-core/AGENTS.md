@@ -18,6 +18,7 @@ persistence.
 | `src/lifecycle.rs` | Version candidates, Entra/notification/export ports, content conformance, review decisions, release commits, and hash-chained evidence |
 | `src/maintenance.rs` | Release checksum verification, workspace review defaults, periodic-review scheduling and transitions, and full-workspace ZIP backup with SHA-256 manifest |
 | `src/policies.rs` | Folder-policy tree, retained confidentiality type-ID migrations, Entra display binding, and workflow-role resolution |
+| `src/source_history.rs` | Bounded first-import OOXML source-history capture and schema validation |
 | `src/frontmatter.rs` | Strict flat Markdown parsing, controlled-key rewrite from DMS, optional template-variable map, and expected/detected comparison |
 | `src/template.rs` | Reusable workspace Word-template identity, validation, CommonMark-to-OOXML assembly, and frontmatter variable fill |
 | `tests/` | Domain, migration-fixture, and persistence behaviour tests |
@@ -32,6 +33,12 @@ persistence.
   candidate/release snapshots, and mutable review schedules are separate
   metadata domains. Each actual profile edit appends canonical before/after
   workflow evidence before invalidating stale candidates.
+- First registration of an Office draft may retain a source-history record bound
+  to the imported bytes: at most three normalized, attributable observations or
+  a sanitized no-data/malformed/unattributed outcome. It contains no source
+  content, raw OOXML, Office properties, client IDs, inferred Entra identity,
+  workflow evidence, candidate, or release data, and re-registration never
+  rescans or rewrites it.
 - Folder discovery exposes only edit-root-relative regular files and directories,
   excludes `.dms`, Office temporary sidecars, and the exact root `Open in DMS.lnk`
   helper, and never auto-registers or auto-reassociates a source. Nested or
@@ -175,6 +182,9 @@ persistence.
 - Schema v16 removes notification transport and SMTP relay fields from portable
   workspace metadata. Desktop injects the current OS user's validated settings
   only for a lifecycle operation; the v15 migration retains `v15.json.bak`.
+- Schema v17 adds optional first-import Office source-history records. Its v16
+  migration writes `source_history: null` for every existing document and
+  retains `v16.json.bak`.
 
 ## Verification
 

@@ -214,10 +214,14 @@ impl Workspace {
     }
 
     pub fn add_documents(&mut self, source_paths: &[PathBuf]) -> Result<Vec<Document>> {
+        let prepared = source_paths
+            .iter()
+            .map(|source_path| self.prepare_document_add(source_path))
+            .collect::<Result<Vec<_>>>()?;
         let mut candidate = self.clone();
-        let mut added = Vec::with_capacity(source_paths.len());
-        for source_path in source_paths {
-            added.push(candidate.add_document_inner(source_path, false)?);
+        let mut added = Vec::with_capacity(prepared.len());
+        for prepared_document in prepared {
+            added.push(candidate.add_prepared_document(prepared_document, false)?);
         }
         *self = candidate;
         for document in &added {

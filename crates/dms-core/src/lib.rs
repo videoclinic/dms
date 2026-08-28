@@ -19,6 +19,7 @@ mod library;
 mod lifecycle;
 mod maintenance;
 mod policies;
+mod source_history;
 mod template;
 
 pub use assistance::*;
@@ -30,9 +31,10 @@ pub use library::*;
 pub use lifecycle::*;
 pub use maintenance::*;
 pub use policies::*;
+pub use source_history::*;
 pub use template::*;
 
-pub const SCHEMA_VERSION: u32 = 16;
+pub const SCHEMA_VERSION: u32 = 17;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 
@@ -60,6 +62,8 @@ pub enum DmsError {
     ExpectedDirectory(String),
     #[error("workspace schema version {found} is unsupported; expected {expected}")]
     UnsupportedSchema { expected: u32, found: u32 },
+    #[error("source-history metadata is invalid: {0}")]
+    InvalidSourceHistory(String),
     #[error("stored edit root {stored} does not match requested edit root {requested}")]
     EditRootMismatch { stored: PathBuf, requested: PathBuf },
     #[error("source path {0} resolves outside the edit root")]
@@ -319,6 +323,8 @@ pub struct Document {
     pub lifecycle: Lifecycle,
     #[serde(default)]
     pub source_state: SourceState,
+    #[serde(default)]
+    pub source_history: Option<SourceHistory>,
     pub control: DocumentControl,
     #[serde(default)]
     pub(crate) confidentiality_override: Option<String>,
@@ -370,6 +376,13 @@ pub struct DocumentControl {
     pub owner: Option<OwnerReference>,
     #[serde(default)]
     pub legacy_owner_label: Option<String>,
+}
+
+pub(crate) struct PreparedDocumentAdd {
+    relative_path: PathBuf,
+    existing_id: Option<Uuid>,
+    title: Option<String>,
+    source_history: Option<SourceHistory>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -453,7 +466,7 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = matches!(found, 1..=15);
+        let migrated = matches!(found, 1..=16);
         if found == 1 {
             migrate_v1_catalogues(&mut value)?;
         }
@@ -471,6 +484,9 @@ impl Workspace {
         }
         if found <= 15 {
             migrate_v15_remove_notification_settings(&mut value);
+        }
+        if found <= 16 {
+            migrate_v16_source_history(&mut value);
         }
         if migrated {
             value["schema_version"] = serde_json::Value::from(SCHEMA_VERSION);
@@ -579,6 +595,9 @@ impl Workspace {
                     return Err(DmsError::EmptyNote);
                 }
             }
+            if let Some(source_history) = &document.source_history {
+                source_history.validate()?;
+            }
             if matches!(document.review_interval_months, Some(0)) {
                 return Err(DmsError::InvalidReviewInterval);
             }
@@ -626,6 +645,11 @@ impl Workspace {
         source_path: &Path,
         sync_frontmatter: bool,
     ) -> Result<Document> {
+        let prepared = self.prepare_document_add(source_path)?;
+        self.add_prepared_document(prepared, sync_frontmatter)
+    }
+
+    pub(crate) fn prepare_document_add(&self, source_path: &Path) -> Result<PreparedDocumentAdd> {
         let (absolute_path, relative_path) = self.resolve_source_path(source_path)?;
         if self.is_markdown_template_path(&relative_path) {
             return Err(DmsError::TemplateLifecycleExcluded(relative_path));
@@ -633,11 +657,47 @@ impl Workspace {
         if !is_supported_source(&absolute_path) {
             return Err(DmsError::UnsupportedSource(absolute_path));
         }
-        if let Some(existing_id) = self
+        let existing_id = self
             .documents
             .values()
-            .find_map(|document| (document.relative_path == relative_path).then_some(document.id))
-        {
+            .find_map(|document| (document.relative_path == relative_path).then_some(document.id));
+        if let Some(existing_id) = existing_id {
+            if self
+                .documents
+                .get(&existing_id)
+                .expect("document ID came from the same map")
+                .source_state
+                == SourceState::Registered
+            {
+                return Err(DmsError::DocumentAlreadyRegistered(relative_path));
+            }
+            return Ok(PreparedDocumentAdd {
+                relative_path,
+                existing_id: Some(existing_id),
+                title: None,
+                source_history: None,
+            });
+        }
+        Ok(PreparedDocumentAdd {
+            title: Some(source_title(&absolute_path)?),
+            source_history: capture_source_history(&absolute_path)?,
+            relative_path,
+            existing_id: None,
+        })
+    }
+
+    pub(crate) fn add_prepared_document(
+        &mut self,
+        prepared: PreparedDocumentAdd,
+        sync_frontmatter: bool,
+    ) -> Result<Document> {
+        let PreparedDocumentAdd {
+            relative_path,
+            existing_id,
+            title,
+            source_history,
+        } = prepared;
+        if let Some(existing_id) = existing_id {
             let existing = self
                 .documents
                 .get_mut(&existing_id)
@@ -652,19 +712,26 @@ impl Workspace {
             }
             return Ok(document);
         }
-        let title = source_title(&absolute_path)?;
+        if self
+            .documents
+            .values()
+            .any(|document| document.relative_path == relative_path)
+        {
+            return Err(DmsError::DocumentAlreadyRegistered(relative_path));
+        }
         let document = Document {
             id: Uuid::new_v4(),
             relative_path,
             lifecycle: Lifecycle::Draft,
             source_state: SourceState::Registered,
             control: DocumentControl {
-                title,
+                title: title.expect("new document preparation provides a title"),
                 document_number: None,
                 document_type: None,
                 owner: None,
                 legacy_owner_label: None,
             },
+            source_history,
             confidentiality_override: None,
             workflow_overrides: DocumentWorkflowOverrides::default(),
             notes: Vec::new(),
@@ -1077,6 +1144,21 @@ fn migrate_v15_remove_notification_settings(value: &mut serde_json::Value) {
         return;
     };
     workspace.remove("notification_settings");
+}
+
+fn migrate_v16_source_history(value: &mut serde_json::Value) {
+    let Some(documents) = value
+        .get_mut("documents")
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return;
+    };
+    for document in documents.values_mut() {
+        let Some(document) = document.as_object_mut() else {
+            continue;
+        };
+        document.insert("source_history".to_owned(), serde_json::Value::Null);
+    }
 }
 
 fn canonical_existing_directory(path: &Path, label: &str) -> Result<PathBuf> {
