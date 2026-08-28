@@ -44,8 +44,9 @@
      present at the recorded edit-root-relative path (**Lost source** /
      (re-)moved). Counts include descendants, omit zero buckets, and exclude
      `.dms`, Office `~$` sidecars, directories, the configured Markdown
-     export-template asset, and controlled non-draft files that still resolve on
-     disk. Lost-source documents never contribute to `~`. Each badge has an
+     export-template asset, the exact edit-root `Open in DMS.lnk` helper, and
+     controlled non-draft files that still resolve on disk. Lost-source
+     documents never contribute to `~`. Each badge has an
      accessible text equivalent; visibility controls never change these
      unfiltered values.
    - A current-folder toolbar exposes **Back**, **Forward**, and **Up** controls
@@ -70,8 +71,10 @@
      document's membership.
    - The centre pane lists the current folder's immediate child folders followed
      by its immediate child files. Every regular file is represented, except
-     internal `.dms` content, Office lock/temp sidecars defined by CAP-0013, and
-     the configured Markdown export-template asset.
+     internal `.dms` content, Office lock/temp sidecars defined by CAP-0013,
+     the configured Markdown export-template asset, and the exact edit-root
+     `Open in DMS.lnk` helper. Nested or differently named `.lnk` files remain
+     ordinary unsupported files.
      A file row's **Name** is always the exact filesystem file name, including
      its extension (for a Lost source row, the last stored source file name).
      Each file row states whether it is **In library**, **Lost source**
@@ -254,7 +257,8 @@
 15. A CAP-0020 document permalink that resolves successfully lands here: the
     library navigator selects that document (revealing its folder as needed)
     and shows the selection pane. Resolution never keys off file name or
-    version label.
+    version label. A workspace-only permalink lands at `Library · /` with no
+    document selected.
 
 ## Non-goals
 
@@ -288,3 +292,4 @@
 - Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)
 - Foldable side panes: [`../../changes/archive/CHG-0020-foldable-library-panes.md`](../../changes/archive/CHG-0020-foldable-library-panes.md)
 - Workflow metadata columns and resizable table columns: [`../../changes/archive/CHG-0022-library-table-workflow-columns.md`](../../changes/archive/CHG-0022-library-table-workflow-columns.md)
+- Windows edit-root shortcut: [`../../changes/archive/CHG-0032-windows-edit-root-library-shortcut.md`](../../changes/archive/CHG-0032-windows-edit-root-library-shortcut.md)

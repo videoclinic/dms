@@ -12,6 +12,7 @@ macOS.
 | `src/` | Tauri startup, IPC commands, `dms-core` adapter, OS user preferences |
 | `src/assistance.rs` | Supported-location detection and process launch for Claude Desktop on Windows and macOS |
 | `src/export.rs` | `.docx`/Markdown PDF adapters, temporary OOXML assembly/fill, installed-Office automation, and format-specific tests |
+| `ui/index.html` | Static shell |
 | `ui/app.mjs` | Workspace setup, static shell, session activities, saved-view persistence, and IPC orchestration |
 | `ui/library.mjs` | Folder-first explorer state, markup, selection rules, search, and sorting |
 | `ui/notes.mjs` | Per-document note activity state, create/edit/delete markup, and confirmation flow |
@@ -229,6 +230,12 @@ macOS.
   changelog draft cannot select a target, approve, release, or mutate lifecycle
   metadata.
 - Load only app-local frontend assets; do not add remote runtime dependencies.
+  Do not import a classic deep-link IIFE into `app.mjs`. Required Windows
+  activation reads `dms://` process arguments from app-owned
+  `startup_deep_links` state (any argv position, quoted or not). Live
+  single-instance URLs are stored the same way and emitted as
+  `deep-link://new-url` for core `event.listen`. First paint must not wait on
+  deep-link or Entra IPC.
 - PDF adapters write only to the temporary path supplied by `dms-core`; core
   owns the classified final path, digest, atomic rename, and release evidence.
 - Office placeholder fill always operates on a temporary OOXML copy and fills

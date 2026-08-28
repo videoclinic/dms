@@ -56,6 +56,16 @@ The following hold:
     and, where helpful, a read-only field). Parsing accepts only the registered
     scheme and required identity query/path parts; unknown extra parameters are
     ignored without changing resolution of workspace and document IDs.
+12. A **workspace permalink** identifies a registered accessible workspace by
+    **stable workspace ID** only. Activating it on a host where the app is
+    installed brings the app to the foreground (or starts it) and opens that
+    workspace at `Library · /` with no document selected. It does not embed
+    edit-root or publish-root paths. Resolution scans only accessible edit
+    roots in the per-user recent-library registry. An unknown, unregistered, or
+    inaccessible workspace ID is reported and does not open a filesystem path.
+13. On Windows, `<edit-root>/Open in DMS.lnk` carries the workspace permalink
+    and activates the registered `dms://` handler. Parsing accepts both
+    `dms://open?workspace=` and URL-serialized `dms://open/?workspace=`.
 
 ## Canonical form (contract)
 
@@ -63,6 +73,7 @@ Illustrative shape (exact scheme name fixed at implementation; must match the
 registered handler):
 
 ```
+dms://open?workspace=<workspace-id>
 dms://open?workspace=<workspace-id>&document=<document-id>
 dms://open?workspace=<workspace-id>&document=<document-id>&target=review&review=<review-request-id>
 dms://open?workspace=<workspace-id>&document=<document-id>&target=notes
@@ -91,3 +102,5 @@ required parameters.
 - Privacy: [`../../privacy.md`](../../privacy.md)
 - ADR-0009, ADR-0015, ADR-0020: [`../../design-decisions.md`](../../design-decisions.md)
 - Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)
+- OS URI registration: [`../../changes/archive/CHG-0023-os-level-dms-uri-registration.md`](../../changes/archive/CHG-0023-os-level-dms-uri-registration.md)
+- Windows edit-root shortcut: [`../../changes/archive/CHG-0032-windows-edit-root-library-shortcut.md`](../../changes/archive/CHG-0032-windows-edit-root-library-shortcut.md)

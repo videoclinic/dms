@@ -568,7 +568,7 @@ function recentLibrariesMarkup(recentLibraries) {
 export function setupMarkup(error, recentLibraries = [], openEditRoot = "") {
   const recent = normalizedRecentLibraries(recentLibraries);
   const status = error ? `<p class="status" role="alert">${escapeHtml(error)}</p>` : "";
-  return `<section class="setup-workspace"><header><span class="badge">Local workspace</span><h2>Set up DMS Desktop</h2><p>Open existing metadata or initialize explicit edit and publish roots. No documents are moved or copied during setup.</p></header><section class="recent-libraries card" aria-labelledby="recent-libraries-heading"><h3 id="recent-libraries-heading">Recent libraries</h3><div class="recent-libraries-list">${recentLibrariesMarkup(recent)}</div>${status}</section><div class="setup-grid"><section class="card"><h3>Open an existing workspace</h3><p>Choose an edit root that already contains <code>.dms/workspace.json</code>. A current advisory lock blocks opening.</p><form id="open-workspace-form" class="setup-form">${directoryFieldMarkup("open-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit", openEditRoot)}<label class="confirm-field"><input type="checkbox" name="takeOverStale"> Take over the lock only if it is stale.</label><label class="confirm-field lock-override"><input type="checkbox" name="overrideExisting"><span><strong>Override any existing lock.</strong> Another DMS instance may still be writing workspace metadata.</span></label><button class="button" type="submit">Open workspace</button></form></section><section class="card"><h3>Initialize a workspace</h3><p>The desktop creates <code>.dms</code> under the edit root and creates the publish root if it does not exist.</p><form id="initialize-workspace-form" class="setup-form">${directoryFieldMarkup("initialize-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit")}${directoryFieldMarkup("publish-root", "publishRoot", "Publish root", "C:\\DMS\\Publish or /Users/name/DMS/Publish")}<label class="confirm-field"><input type="checkbox" name="confirmed" required> Initialize these roots and create workspace metadata.</label><button class="button" type="submit">Initialize workspace</button></form></section></div></section>`;
+  return `<section class="setup-workspace"><header><span class="badge">Local workspace</span><h2>Set up DMS Desktop</h2><p>Open existing metadata or initialize explicit edit and publish roots. No documents are moved or copied during setup.</p></header>${status}<section class="recent-libraries card" aria-labelledby="recent-libraries-heading"><h3 id="recent-libraries-heading">Recent libraries</h3><div class="recent-libraries-list">${recentLibrariesMarkup(recent)}</div></section><div class="setup-grid"><section class="card"><h3>Open an existing workspace</h3><p>Choose an edit root that already contains <code>.dms/workspace.json</code>. A current advisory lock blocks opening.</p><form id="open-workspace-form" class="setup-form">${directoryFieldMarkup("open-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit", openEditRoot)}<label class="confirm-field"><input type="checkbox" name="takeOverStale"> Take over the lock only if it is stale.</label><label class="confirm-field lock-override"><input type="checkbox" name="overrideExisting"><span><strong>Override any existing lock.</strong> Another DMS instance may still be writing workspace metadata.</span></label><button class="button" type="submit">Open workspace</button></form></section><section class="card"><h3>Initialize a workspace</h3><p>The desktop creates <code>.dms</code> under the edit root and creates the publish root if it does not exist.</p><form id="initialize-workspace-form" class="setup-form">${directoryFieldMarkup("initialize-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit")}${directoryFieldMarkup("publish-root", "publishRoot", "Publish root", "C:\\DMS\\Publish or /Users/name/DMS/Publish")}<label class="confirm-field"><input type="checkbox" name="confirmed" required> Initialize these roots and create workspace metadata.</label><button class="button" type="submit">Initialize workspace</button></form></section></div></section>`;
 }
 
 function activityMarkup(state, activity) {
@@ -2774,11 +2774,25 @@ function queuePermalinks(urls) {
   }
 }
 
+export async function currentDeepLinks(invoke = invokeCommand) {
+  try {
+    const urls = await invoke("startup_deep_links", {});
+    return Array.isArray(urls) ? urls : [];
+  } catch {
+    return [];
+  }
+}
+
 async function registerDeepLinkHandler() {
-  const deepLink = globalThis.__TAURI__?.deepLink;
-  if (!deepLink?.onOpenUrl || !deepLink?.getCurrent) return;
-  await deepLink.onOpenUrl(queuePermalinks);
-  queuePermalinks(await deepLink.getCurrent());
+  try {
+    const listen = globalThis.__TAURI__?.event?.listen;
+    if (typeof listen === "function") {
+      await listen("deep-link://new-url", (event) => queuePermalinks(event.payload));
+    }
+    queuePermalinks(await currentDeepLinks());
+  } catch (error) {
+    console.warn("Could not register deep-link handler", error);
+  }
 }
 
 async function start() {
@@ -2799,8 +2813,6 @@ async function start() {
   document.addEventListener("pointerup", finishLibraryResize);
   document.addEventListener("pointercancel", finishLibraryResize);
   await registerWindowCloseHandler();
-  await registerDeepLinkHandler();
-  await loadStartupAuthorization();
   document.querySelector("#collapse-sidebar").addEventListener("click", () => {
     appState = {
       ...appState,
@@ -2825,8 +2837,13 @@ async function start() {
     render(appState);
   });
   render(appState);
+  loadStartupAuthorization();
+  registerDeepLinkHandler();
 }
 
 if (typeof document !== "undefined") {
-  start();
+  start().catch((error) => {
+    console.error("Desktop shell failed to start", error);
+    render(appState);
+  });
 }

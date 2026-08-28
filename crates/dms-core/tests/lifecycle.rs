@@ -2050,7 +2050,7 @@ fn periodic_review_reminders_record_every_attempt_without_duplicate_or_lifecycle
         .review_permalink(fixture.document_id, review.id)
         .unwrap();
     let resolved = fixture.workspace.resolve_permalink(&permalink).unwrap();
-    assert_eq!(resolved.document_id, fixture.document_id);
+    assert_eq!(resolved.document_id, Some(fixture.document_id));
     assert_eq!(resolved.target, PermalinkTarget::Review);
     assert_eq!(resolved.review_id, Some(review.id));
     let due = fixture

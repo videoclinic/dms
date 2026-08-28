@@ -191,6 +191,12 @@ fn workspace_permalink_is_canonical_and_rejects_document_target_parameters() {
     assert_eq!(target.target, PermalinkTarget::Workspace);
     assert_eq!(target.review_id, None);
 
+    let serialized = format!("dms://open/?workspace={}", workspace.workspace_id);
+    let serialized_target = workspace
+        .resolve_permalink(&serialized)
+        .expect("url-serialized workspace target");
+    assert_eq!(serialized_target.target, PermalinkTarget::Workspace);
+
     for invalid in [
         format!("{permalink}&target=notes"),
         format!("{permalink}&review={}", uuid::Uuid::new_v4()),

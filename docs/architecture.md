@@ -14,7 +14,7 @@ PDFs under a **publish root**, with integrity checksums.
 | --- | --- |
 | `dms-core` Rust library | Tauri-independent workspace metadata, library registry, document control data, notes, path validation, and future lifecycle rules shared by every application surface |
 | `dms` CLI (Rust) | Headless operator and automation access to the implemented `dms-core` workspace features; no WebView, Tauri runtime, Office automation, Entra flow, or mail transport |
-| Tauri 2 shell (Rust) | Windowing, WebView IPC, format-specific PDF export orchestration, OS integration, registered local-app URI handler (document permalinks), and an adapter over `dms-core` |
+| Tauri 2 shell (Rust) | Windowing, WebView IPC, format-specific PDF export orchestration, OS integration, registered local-app URI handler (workspace and document permalinks), Windows edit-root `Open in DMS.lnk` helper, and an adapter over `dms-core` |
 | Frontend (web UI in WebView) | Foldable left menu with hamburger when collapsed; open-activity panes/tabs as quicklinks; one Configuration workspace with persistent Workspace, Document defaults, Workflow, and Notifications routes plus contextual secondary setup; folder-dominant Library workspace with a persistent edit-root-relative tree, Windows Explorer-like Back/Forward/Up and breadcrumb navigation, current-folder child folders + exact source-file names + controlled-document data, and a selection pane that separates filesystem-derived Source file identity from CAP-0015 DMS-managed document control data and single/batch actions; add/remove control, lifecycle, change commentary, approval, release/verify, confidentiality and workflow-role policies, audit export, publish history, copy/resolve document permalinks |
 | Microsoft Office (host-installed) | PDF export engine for Office drafts and temporary Word documents assembled from Markdown plus the workspace export template |
 | Workspace Word template | One reusable `.docx` asset under the edit root supplies styles, page setup, headers, footers, media, and controlled-field locations for every Markdown release; it is configuration, not a controlled document |
@@ -23,7 +23,7 @@ PDFs under a **publish root**, with integrity checksums.
 | App-global Entra configuration | Windows machine policy at `HKLM\SOFTWARE\Policies\Videoclinic\DMS` when present, otherwise OS-user `global-settings.json`; both hold only the non-secret public-client ID and tenant ID shared by local libraries |
 | `<edit-root>/.dms/` | Roots config, library registry, active Markdown export-template identity/relative locator/validation digest, DMS-managed document control data, Entra group binding + read-only display cache, folder confidentiality and workflow-role policies, notes, approval/release history, evidence hashes, checksums, advisory lock |
 | OS-user `global-settings.json` | Non-secret public-client/tenant IDs plus notification transport/SMTP relay settings shared by every local library opened by that DMS user |
-| Edit root tree | Operator-edited Microsoft Office and Markdown source drafts (library members are a subset) |
+| Edit root tree | Operator-edited Microsoft Office and Markdown source drafts (library members are a subset); on Windows, `<edit-root>/Open in DMS.lnk` is a DMS helper that carries only the workspace permalink |
 | Publish root tree | Versioned released PDFs in a directory tree mirrored from edit-relative paths |
 
 No application database server and no mandatory git repository.
@@ -81,7 +81,10 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
   CAP-0020 permalink deep link (workspace ID + document ID + review target) to
   that local workspace; it is not a web approval portal. The same permalink
   scheme opens a document selection without a review target and remains valid
-  across draft renames and version bumps.
+  across draft renames and version bumps. A workspace-only permalink opens
+  `Library · /` with no document selected. On Windows, `<edit-root>/Open in
+  DMS.lnk` holds that workspace URI and never a filesystem root. Resolution
+  uses only registered accessible recent libraries.
 - Workflow roles select individual, direct user members of the workspace's
   configured Microsoft Entra group. `.dms` records only the group object ID,
   group label, display cache, and role references to immutable Entra user

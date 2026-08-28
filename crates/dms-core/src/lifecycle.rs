@@ -1527,10 +1527,13 @@ impl Workspace {
         ))
     }
 
+    fn permalink_query(uri: &str) -> Option<&str> {
+        uri.strip_prefix("dms://open?")
+            .or_else(|| uri.strip_prefix("dms://open/?"))
+    }
+
     pub fn resolve_permalink(&self, uri: &str) -> Result<ResolvedPermalink> {
-        let query = uri
-            .strip_prefix("dms://open?")
-            .ok_or(DmsError::InvalidPermalink)?;
+        let query = Self::permalink_query(uri).ok_or(DmsError::InvalidPermalink)?;
         let values = query
             .split('&')
             .filter_map(|pair| pair.split_once('='))

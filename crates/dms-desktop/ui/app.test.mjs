@@ -10,6 +10,7 @@ import {
   closeActivity,
   closeWorkspaceSession,
   createInitialState,
+  currentDeepLinks,
   defaultPreferences,
   finishFormSubmission,
   lifecycleFailureLibraryState,
@@ -35,6 +36,48 @@ import {
 } from "./app.mjs";
 
 const workspaceId = "5ef3db10-8f6d-4ae4-9d68-ecb1eaac8235";
+
+test("application module does not import a classic deep-link IIFE", () => {
+  const shell = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  const application = readFileSync(new URL("./app.mjs", import.meta.url), "utf8");
+
+  assert.doesNotMatch(shell, /tauri-plugin-deep-link-api-iife/);
+  assert.doesNotMatch(application, /tauri-plugin-deep-link-api-iife/);
+});
+
+test("startup deep links use the app-owned command through core IPC", async () => {
+  const calls = [];
+  const urls = await currentDeepLinks(async (command, arguments_) => {
+    calls.push({ command, arguments_ });
+    return ["dms://open?workspace=5ef3db10-8f6d-4ae4-9d68-ecb1eaac8235"];
+  });
+
+  assert.deepEqual(calls, [{ command: "startup_deep_links", arguments_: {} }]);
+  assert.deepEqual(urls, ["dms://open?workspace=5ef3db10-8f6d-4ae4-9d68-ecb1eaac8235"]);
+});
+
+test("startup deep-link failures leave an empty list instead of throwing", async () => {
+  await assert.doesNotReject(async () => {
+    const urls = await currentDeepLinks(async () => {
+      throw new Error("plugin unavailable");
+    });
+    assert.deepEqual(urls, []);
+  });
+});
+
+test("first paint is not gated on deep-link registration", () => {
+  const application = readFileSync(new URL("./app.mjs", import.meta.url), "utf8");
+  const start = application.slice(application.indexOf("async function start()"));
+  const renderIndex = start.indexOf("\n  render(appState);");
+  const registerIndex = start.indexOf("registerDeepLinkHandler();");
+  assert.ok(renderIndex > 0 && registerIndex > renderIndex);
+});
+
+test("live deep-link events use the core event listener", () => {
+  const application = readFileSync(new URL("./app.mjs", import.meta.url), "utf8");
+  assert.match(application, /__TAURI__\?\.event\?\.listen/);
+  assert.match(application, /deep-link:\/\/new-url/);
+});
 
 test("Library Refresh opens the workspace and replaces one current-folder snapshot", async () => {
   const calls = [];
@@ -149,6 +192,7 @@ test("recent-library open failures stay visible and retain the path for lock rec
     editRoot,
   );
 
+  assert.ok(markup.indexOf('role="alert"') < markup.indexOf('id="recent-libraries-heading"'));
   assert.ok(markup.indexOf('role="alert"') < markup.indexOf('class="setup-grid"'));
   assert.match(markup, /id="open-edit-root"[^>]*value="\/Users\/name\/DMS\/Edit"/);
 });

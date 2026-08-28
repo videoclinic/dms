@@ -23,7 +23,7 @@ use dms_core::{
 };
 use lettre::message::Mailbox;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
@@ -50,6 +50,7 @@ const DESKTOP_REASSOCIATE_RULE_UNREGISTERED: &str =
 struct DesktopIntegrations {
     graph: Mutex<graph::MicrosoftGraphClient>,
     approver_actor: Mutex<Option<AuthenticatedActor>>,
+    startup_deep_links: Mutex<Vec<String>>,
     startup_authorization: Mutex<StartupAuthorization>,
 }
 
@@ -58,6 +59,7 @@ impl Default for DesktopIntegrations {
         Self {
             graph: Mutex::new(graph::MicrosoftGraphClient::production(None)),
             approver_actor: Mutex::new(None),
+            startup_deep_links: Mutex::new(Vec::new()),
             startup_authorization: Mutex::new(StartupAuthorization::Inactive),
         }
     }
@@ -426,6 +428,28 @@ fn resolve_registered_permalink(
         .join(PREFERENCES_FILENAME);
     let preferences = load_preferences_at(&path)?;
     resolve_registered_permalink_from(&preferences, &uri)
+}
+
+#[tauri::command]
+fn startup_deep_links(app: AppHandle) -> Result<Vec<String>, String> {
+    let stored = app
+        .state::<DesktopIntegrations>()
+        .startup_deep_links
+        .lock()
+        .map_err(|_| "startup deep link state is unavailable".to_owned())?
+        .clone();
+    if !stored.is_empty() {
+        return Ok(stored);
+    }
+    Ok(app
+        .deep_link()
+        .get_current()
+        .ok()
+        .flatten()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|url| url.to_string())
+        .collect())
 }
 
 #[tauri::command]
@@ -2505,7 +2529,7 @@ fn resolve_registered_permalink_from(
         let resolved = match workspace.resolve_permalink(uri) {
             Ok(resolved) => resolved,
             Err(DmsError::PermalinkWorkspaceMismatch(_)) => continue,
-            Err(error) => return Err(error.to_string()),
+            Err(error) => return Err(format!("{error} ({uri})")),
         };
         let (document_id, title, document_number, folder) = match resolved.document_id {
             Some(document_id) => {
@@ -2543,7 +2567,9 @@ fn resolve_registered_permalink_from(
             review_id: resolved.review_id,
         });
     }
-    Err("permalink workspace is not registered or accessible".to_owned())
+    Err(format!(
+        "permalink workspace is not registered or accessible ({uri})"
+    ))
 }
 
 fn configuration_role_update(value: &str) -> Result<RoleUpdate, String> {
@@ -3055,10 +3081,39 @@ fn focus_main_window(app: &AppHandle) {
     }
 }
 
+fn dms_scheme_urls_from_args<I, S>(args: I) -> Vec<String>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    args.into_iter()
+        .filter_map(|argument| {
+            let argument = argument.as_ref().trim().trim_matches('"');
+            let url = argument.parse::<url::Url>().ok()?;
+            (url.scheme() == "dms").then(|| argument.to_owned())
+        })
+        .collect()
+}
+
+fn remember_startup_deep_links(app: &AppHandle, urls: Vec<String>) {
+    if urls.is_empty() {
+        return;
+    }
+    if let Ok(mut stored) = app.state::<DesktopIntegrations>().startup_deep_links.lock() {
+        for url in &urls {
+            if !stored.iter().any(|existing| existing == url) {
+                stored.push(url.clone());
+            }
+        }
+    }
+    let _ = app.emit("deep-link://new-url", urls);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default().plugin(tauri_plugin_single_instance::init(
-        |app, _arguments, _working_directory| {
+        |app, arguments, _working_directory| {
+            remember_startup_deep_links(app, dms_scheme_urls_from_args(arguments.iter()));
             focus_main_window(app);
         },
     ));
@@ -3086,6 +3141,11 @@ pub fn run() {
                     startup;
             }
             drop(graph);
+            *integrations
+                .startup_deep_links
+                .lock()
+                .map_err(|_| "startup deep link state is unavailable")? =
+                dms_scheme_urls_from_args(std::env::args());
             let handle = app.handle().clone();
             app.deep_link()
                 .on_open_url(move |_event| focus_main_window(&handle));
@@ -3106,6 +3166,7 @@ pub fn run() {
             initialize_workspace,
             open_workspace,
             resolve_registered_permalink,
+            startup_deep_links,
             load_workspace_configuration,
             choose_markdown_template,
             remove_markdown_template,
@@ -3234,6 +3295,45 @@ mod tests {
             .as_array()
             .unwrap()
             .contains(&serde_json::json!("deep-link:default")));
+    }
+
+    #[test]
+    fn desktop_command_set_exposes_the_startup_deep_link_reader() {
+        let source = include_str!("lib.rs");
+
+        assert!(source.contains("fn startup_deep_links(app: AppHandle)"));
+        assert!(source.contains("startup_deep_links,"));
+        assert!(source.contains("dms_scheme_urls_from_args(std::env::args())"));
+        assert!(source.contains(
+            "remember_startup_deep_links(app, dms_scheme_urls_from_args(arguments.iter()))"
+        ));
+    }
+
+    #[test]
+    fn dms_scheme_urls_from_args_accepts_workspace_uri_among_extra_cli_args() {
+        let urls = dms_scheme_urls_from_args([
+            r"C:\Users\Raphael_Bossek\AppData\Local\DMS Desktop\dms-desktop.exe",
+            "--flag",
+            "dms://open?workspace=87479198-57d6-469b-b5c0-2372d15fc8b9",
+            "other",
+        ]);
+        assert_eq!(
+            urls,
+            vec!["dms://open?workspace=87479198-57d6-469b-b5c0-2372d15fc8b9".to_owned()]
+        );
+    }
+
+    #[test]
+    fn dms_scheme_urls_from_args_strips_quotes_and_ignores_non_dms_urls() {
+        let urls = dms_scheme_urls_from_args([
+            "dms-desktop.exe",
+            "\"dms://open?workspace=87479198-57d6-469b-b5c0-2372d15fc8b9\"",
+            "https://example.com",
+        ]);
+        assert_eq!(
+            urls,
+            vec!["dms://open?workspace=87479198-57d6-469b-b5c0-2372d15fc8b9".to_owned()]
+        );
     }
 
     #[test]
@@ -4209,10 +4309,19 @@ mod tests {
         assert_eq!(workspace_target.folder, ".");
         assert_eq!(workspace_target.target, "workspace");
         assert_eq!(workspace_target.review_id, None);
+        let serialized = format!("dms://open/?workspace={}", workspace.workspace_id);
+        let serialized_target =
+            resolve_registered_permalink_from(&preferences, &serialized).unwrap();
+        assert_eq!(serialized_target.target, "workspace");
         assert!(
             resolve_registered_permalink_from(&Preferences::default(), &selection.permalink,)
                 .unwrap_err()
                 .contains("not registered or accessible")
+        );
+        assert!(
+            resolve_registered_permalink_from(&Preferences::default(), &selection.permalink,)
+                .unwrap_err()
+                .contains(&selection.permalink)
         );
 
         let root = edit_root.path().to_string_lossy().into_owned();

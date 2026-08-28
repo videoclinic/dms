@@ -23,6 +23,7 @@
 | Workspace backup archive | Operator-chosen path | Contains `.dms`, controlled source drafts, and released PDFs; not encrypted by the app |
 | Optional Claude Desktop handoff | Clipboard and Claude Desktop conversation | Operator-previewed plain-text change excerpts and selected metadata; processing may leave the machine for Anthropic |
 | App preferences | OS user config directory (when implemented) | Sidebar preference and saved-view targets (workspace/document IDs plus route state); no document content or workflow evidence |
+| Windows `Open in DMS.lnk` helper | Edit-root filesystem | Local Shell Link whose only DMS identity is the workspace ID URI; no edit-root, publish-root, or document path |
 
 ## Processing principles
 
@@ -37,7 +38,8 @@
   requester display name, candidate target version, configured confidentiality
   label, and CAP-0020 review permalink (workspace ID + document ID + review
   target). It never attaches or uploads draft or released document content.
-  Permalinks never put draft or PDF bytes in the URI.
+  Permalinks never put draft or PDF bytes in the URI. A workspace permalink
+  carries only the stable workspace ID.
 - A decision-outcome email contains only the document display/relative path,
   decision outcome, configured confidentiality label, and local-app CAP-0020
   permalink to the review detail; it does not include document content or the

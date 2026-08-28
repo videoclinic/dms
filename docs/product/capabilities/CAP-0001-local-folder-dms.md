@@ -6,7 +6,7 @@
 | Status | implemented |
 | Primary platform | Windows and macOS (Tauri) |
 | Storage | Hidden `.dms/` under the edit root |
-| Tests | Phases 9a–9l and CHG-0004 Phase 2 evidence: [`dms-core` workspace tests](../../../crates/dms-core/tests/workspace.rs), [schema-v14 and workspace-template tests](../../../crates/dms-core/tests/markdown_template.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [setup frontend tests](../../../crates/dms-desktop/ui/app.test.mjs), [Configuration frontend tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
+| Tests | Phases 9a–9l and CHG-0004 Phase 2 plus CHG-0032 evidence: [`dms-core` workspace tests](../../../crates/dms-core/tests/workspace.rs), [schema-v14 and workspace-template tests](../../../crates/dms-core/tests/markdown_template.rs), [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [setup frontend tests](../../../crates/dms-desktop/ui/app.test.mjs), [Configuration frontend tests](../../../crates/dms-desktop/ui/configuration.test.mjs) |
 
 ## Outcomes
 
@@ -55,6 +55,13 @@
 11. Every field that selects a directory has a native **Browse…** action. The
     picker starts at the OS user's home directory and writes the selected local
     filesystem path into the field; cancelling it leaves the field unchanged.
+12. On Windows, a successful workspace initialization or explicit open writes
+    `<edit-root>/Open in DMS.lnk`. Activating it sends
+    `dms://open?workspace=<workspace-id>` through the registered handler and
+    opens that registered accessible workspace at `Library · /` with no
+    document selected. The link contains no edit-root or publish-root path.
+    A shortcut-write failure leaves valid `.dms` metadata intact for a later
+    open retry. Non-Windows targets create no shortcut.
 
 ## Non-goals
 
@@ -71,3 +78,4 @@
 - Workflow identity: [`CAP-0021-microsoft-entra-workflow-identity.md`](CAP-0021-microsoft-entra-workflow-identity.md)
 - ADR-0001, ADR-0006, ADR-0009, ADR-0010, ADR-0015, ADR-0021: [`../../design-decisions.md`](../../design-decisions.md)
 - Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)
+- Windows edit-root shortcut: [`../../changes/archive/CHG-0032-windows-edit-root-library-shortcut.md`](../../changes/archive/CHG-0032-windows-edit-root-library-shortcut.md)
