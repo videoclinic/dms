@@ -115,7 +115,8 @@
    ID and leaves the retained lifecycle unchanged.
 5. **In library** document rows keep the exact source file name in **Name** and
    surface enough DMS-managed data to scan the current folder without leaving
-   the explorer: lifecycle state, latest released version label, document title,
+   the explorer: lifecycle state (**Pending approval** for persisted
+   `in_review`; the raw `in_review` token is never shown), latest released version label, document title,
    document number (when set), document type, current owner, effective
    confidentiality, current release effective date when recorded, next review
    due with overdue highlight, and a **draft newer than last
@@ -144,7 +145,8 @@
    expanded by default, using the same chevron and Expand/Collapse cue. Its
    summary stays fully visible at heading height. Unfolding it shows every
    action; the main details scroller shrinks first. The
-   selection header (including lifecycle badge) and Source file identity remain
+   selection header (including the lifecycle badge, which uses **Pending
+   approval** for `in_review`) and Source file identity remain
    visible. A fresh Library activity expands **Releases** and folds **Document
    control data**, **Document review schedule**, **Revision cycle**, and
    **Version history & changes**; **Actions** remains expanded. Section fold

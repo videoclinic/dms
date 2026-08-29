@@ -32,6 +32,9 @@
    `<review-permalink>` as a clickable link (see the HTML alternative part
    contract below). Successful relay acceptance is recorded in the workflow
    event chain; failure leaves the document in `draft` and offers a retry.
+   An already delivered active review may be resent through the same SMTP path
+   to the snapshotted recipient; each attempt is recorded without leaving
+   `in_review`.
 3. The local-app deep link is a CAP-0020 permalink URI. It identifies the
    workspace and stable document ID, plus the review-request target ID, without
    embedding document content, draft file name, version label, or an absolute
@@ -45,7 +48,8 @@
    pre-filled `mailto:` URI (the compose window carries the plain-text subject
    and body only; `mailto:` cannot carry HTML). The lifecycle state does not
    advance to `in_review` until the operator explicitly confirms in the app
-   that the message was sent.
+   that the message was sent. Resending an active review through `mailto:`
+   also requires that confirmation before the attempt is recorded as confirmed.
 5. After an `approved`, `rejected`, or `changed_requested` decision is recorded,
    the app notifies the requester's snapshotted email address. The notification
    contains the relative path, decision outcome, confidentiality label, and a
@@ -63,7 +67,8 @@
    `smtp` requires that user's relay configuration; switching from `smtp` to
    `mailto` clears that user's relay settings and credential without changing
    any library's Microsoft Entra workflow-role bindings.
-8. The workflow history records each review-request, decision-outcome, and
+8. The workflow history records each review-request, review-request-resend,
+   decision-outcome, and
    minor-publication notification with its recipient, transport, delivery status,
    SMTP response code (or `mailto`-sent confirmation), and timestamp. An
    operator-visible report can filter by transport and delivery status.

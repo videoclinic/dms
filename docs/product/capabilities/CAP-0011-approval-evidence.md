@@ -65,6 +65,8 @@
    characters per line, configurable per workspace).
 8. The canonical event types are:
    - `review_requested` — review-notification sent; document is `in_review`
+   - `review_request_resent` — attempted or confirmed resend of an active
+     review request; document remains `in_review`
    - `review_decision_approved` — approver approved the current draft
    - `review_decision_rejected` — approver rejected; document returns to `draft`
    - `review_decision_changed_requested` — approver asked for changes; document returns to `draft`

@@ -21,7 +21,9 @@
    password and Microsoft Entra delegated-token cache are resolved from the OS
    credential store, not `.dms`.
 3. Each library document has explicit `draft`, `in_review`, `approved`,
-   `released`, and `obsolete` lifecycle states. `rejected`, `changed_requested`
+   `released`, and `obsolete` lifecycle states. The Library represents
+   `in_review` to operators as **Pending approval**; the persisted and API
+   value remains `in_review`. `rejected`, `changed_requested`
    (decision), `withdrawn` (release), and `cancelled` (review) are workflow
    outcomes recorded on the event chain; they are not separate long-lived
    primary states except where CAP-0015 defines `obsolete`. The **publish root**
@@ -70,7 +72,12 @@
    (workspace ID + document ID + review-request target) and uses the workspace
    transport (CAP-0010). The document enters `in_review` only after SMTP
    acceptance or operator-confirmed `mailto:` send; a failed send leaves it in
-   `draft` and offers a retryable redelivery. A minor candidate does not create a
+   `draft` and offers a retryable redelivery. While that candidate remains
+   `in_review`, **Resend approval request** repeats the snapshotted request to
+   the same approver, review ID, digest, and permalink without allocating a new
+   candidate or leaving `in_review`. SMTP sends immediately; `mailto:` records
+   confirmed delivery only after explicit operator confirmation. A failed resend
+   stays pending and remains retryable. A minor candidate does not create a
    review request or enter `in_review`; it remains in `draft` until direct release.
 5. For an approval-required candidate, the effective approver records `approved`, `rejected`, or
    `changed_requested` in the application. A decision comment is optional. On a

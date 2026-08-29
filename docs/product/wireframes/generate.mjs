@@ -138,6 +138,28 @@ const CAPS = [
           <div class="callout warn">A rejected, cancelled, invalidated, or failed-export major review does not consume its candidate. A failed minor export does not consume V1.4 or apply staged Owner/Editor changes.</div>
           <p class="hint">Chain head 5b3a…ffe2 — verify recomputes from canonical body (CAP-0011).</p>
         </section>
+      </div>
+      <div class="grid-2">
+        <section class="card">
+          <h3 class="card-title">Pending approval</h3>
+          <div class="row gap-2">${badge("Pending approval", "info")}${badge("In library", "muted")}</div>
+          <p class="hint">Persisted state remains <code>in_review</code>. The Library table and selection badge never show that token.</p>
+          <p class="muted" style="font-size:0.85rem">Target V2.0 · snapshotted approver Anna Berg · review ID 9c4e…</p>
+          <strong>Record review decision</strong>
+          <label class="label">Decision <select><option>Choose decision</option><option>Approve</option><option>Reject</option><option>Request changes</option></select></label>
+          <button class="btn">Record decision</button>
+          <strong style="display:block;margin-top:0.75rem">Resend approval request</strong>
+          <p class="hint">Repeats the existing request to the snapshotted approver. It does not reset approval or start a new review.</p>
+          <div class="callout">SMTP accepted 250 — <code>review_request_resent</code> recorded. Candidate, review ID, digest, and approver unchanged.</div>
+          <button class="btn outline">Resend approval request</button>
+        </section>
+        <section class="card">
+          <h3 class="card-title">Resend failure and mailto confirmation</h3>
+          <div class="callout warn">relay refused — document stays Pending approval and another resend remains available.</div>
+          <label class="label"><input type="checkbox"> I confirm the host mail message for the approval request was sent.</label>
+          <button class="btn outline">Resend approval request</button>
+          <p class="hint"><code>mailto:</code> records confirmed delivery only after this control. Failed and queued attempts stay on the active review.</p>
+        </section>
       </div>`,
   },
   {
@@ -395,7 +417,7 @@ const CAPS = [
                 <td>${wireframeIcon("file")} Handbook.docx</td>
                 <td>${badge("In library", "ok")}</td>
                 <td>HR Data Privacy Policy · DOC-014</td>
-                <td>${badge("in_review", "info")}</td>
+                <td>${badge("Pending approval", "info")}</td>
                 <td>V1.3 ${badge("newer", "warn")}</td>
               </tr>
               <tr>
@@ -850,7 +872,7 @@ const CAPS = [
                 <td><span class="check on">☑</span></td>
                 <td>Handbook.docx</td>
                 <td>HR Data Privacy Policy · DOC-014</td>
-                <td>${badge("in_review", "info")}</td>
+                <td>${badge("Pending approval", "info")}</td>
                 <td>V1.3 ${badge("draft newer", "warn")}</td>
               </tr>
               <tr>
@@ -1298,7 +1320,7 @@ function documentControlDataSelectionPane() {
   return `<aside class="card detail-pane selection-pane-layout" aria-label="Document selection details">
     <div class="selection-scroll">
     <div class="row between mb">
-      <div class="row gap-2">${badge("In library", "muted")}${badge("in_review", "info")}</div>
+      <div class="row gap-2">${badge("In library", "muted")}${badge("Pending approval", "info")}</div>
       <button class="btn outline">Clear</button>
     </div>
     <h3 class="card-title" style="margin:0">HR Data Privacy Policy</h3>

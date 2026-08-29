@@ -330,6 +330,28 @@ tr:last-child td { border-bottom: 0; }
           <p class="hint">Chain head 5b3a…ffe2 — verify recomputes from canonical body (CAP-0011).</p>
         </section>
       </div>
+      <div class="grid-2">
+        <section class="card">
+          <h3 class="card-title">Pending approval</h3>
+          <div class="row gap-2"><span class="badge info">Pending approval</span><span class="badge muted">In library</span></div>
+          <p class="hint">Persisted state remains <code>in_review</code>. The Library table and selection badge never show that token.</p>
+          <p class="muted" style="font-size:0.85rem">Target V2.0 · snapshotted approver Anna Berg · review ID 9c4e…</p>
+          <strong>Record review decision</strong>
+          <label class="label">Decision <select><option>Choose decision</option><option>Approve</option><option>Reject</option><option>Request changes</option></select></label>
+          <button class="btn">Record decision</button>
+          <strong style="display:block;margin-top:0.75rem">Resend approval request</strong>
+          <p class="hint">Repeats the existing request to the snapshotted approver. It does not reset approval or start a new review.</p>
+          <div class="callout">SMTP accepted 250 — <code>review_request_resent</code> recorded. Candidate, review ID, digest, and approver unchanged.</div>
+          <button class="btn outline">Resend approval request</button>
+        </section>
+        <section class="card">
+          <h3 class="card-title">Resend failure and mailto confirmation</h3>
+          <div class="callout warn">relay refused — document stays Pending approval and another resend remains available.</div>
+          <label class="label"><input type="checkbox"> I confirm the host mail message for the approval request was sent.</label>
+          <button class="btn outline">Resend approval request</button>
+          <p class="hint"><code>mailto:</code> records confirmed delivery only after this control. Failed and queued attempts stay on the active review.</p>
+        </section>
+      </div>
     </main>
   </div>
 </div>
