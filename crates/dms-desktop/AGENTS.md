@@ -37,11 +37,19 @@ macOS.
   URI through the system `rundll32.exe` handler. A shortcut-write failure leaves
   valid `.dms` metadata intact for a later open retry; non-Windows targets create
   no shortcut artifact.
-- Opening or switching workspace sessions acquires the destination advisory
-  lock before activation, offers explicit stale takeover and a separately
-  warned override-any-lock option from setup, releases the previous lock only
-  after acquisition succeeds, and removes the active lock on a clean window
-  close only when its recorded owner still matches.
+- Opening or switching workspace sessions validates a group-bound Entra
+  session before acquiring the destination advisory lock, offers explicit
+  stale takeover and a separately warned override-any-lock option from setup,
+  releases the previous lock only after acquisition succeeds, and removes the
+  active lock on a clean window close only when its recorded owner still
+  matches. Bound workspace-scoped mutations (reassociation, document control,
+  notes, candidate/review/release, local lifecycle, periodic-review, reports)
+  use that cached Entra actor or fail before changing metadata; new events
+  record `authenticated_actor` and omit `local_os_user`. Unbound libraries keep
+  the local OS user. Review decisions still use their one-time interactive
+  approver actor. The CLI stays local-principal-only and fails closed through
+  `dms-core`. Bound `WorkspaceSummary.change_author` presents the cached
+  display snapshot plus immutable tenant/object ID.
 - Store sidebar, saved-view, and recent-library preferences in the OS user
   app-config directory, never under `<edit-root>/.dms`. Recent libraries are at
   most ten unique edit roots in most-recent-first order; removing one never

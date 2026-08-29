@@ -483,7 +483,7 @@ fn initialize_workspace(
     let workspace = Workspace::init(Path::new(&edit_root), Path::new(&publish_root))
         .map_err(|error| error.to_string())?;
     shortcut::ensure_workspace_shortcut(&workspace)?;
-    Ok(workspace_summary_from(&workspace))
+    Ok(workspace_summary_from(&workspace, &BTreeMap::new()))
 }
 
 #[tauri::command]
@@ -1251,19 +1251,26 @@ fn reassociate_library_document(
     edit_root: String,
     document_id: Uuid,
     path: String,
+    state: State<'_, DesktopIntegrations>,
 ) -> Result<Document, String> {
-    let mut workspace =
-        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
-    let failed = desktop_reassociate_rule_errors(&workspace, document_id, Path::new(&path));
+    let sessions = locked_group_bound_sessions(&state)?;
+    reassociate_library_document_with(&edit_root, document_id, &path, &sessions)
+}
+
+fn reassociate_library_document_with(
+    edit_root: &str,
+    document_id: Uuid,
+    path: &str,
+    sessions: &BTreeMap<String, GroupBoundSession>,
+) -> Result<Document, String> {
+    let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    let failed = desktop_reassociate_rule_errors(&workspace, document_id, Path::new(path));
     if !failed.is_empty() {
         return Err(format_desktop_reassociate_error(&failed));
     }
+    let principal = mutation_principal_for(&workspace, sessions)?;
     let document = workspace
-        .reassociate_document(
-            document_id,
-            Path::new(&path),
-            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
-        )
+        .reassociate_document(document_id, Path::new(path), &principal)
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
     Ok(document)
@@ -1291,6 +1298,7 @@ fn update_document_control(
         .graph
         .lock()
         .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
+    let sessions = locked_group_bound_sessions(&state)?;
     update_document_control_with(
         &edit_root,
         document_id,
@@ -1299,6 +1307,7 @@ fn update_document_control(
         document_type,
         owner_object_id,
         &mut *graph,
+        &sessions,
     )
 }
 
@@ -1310,6 +1319,7 @@ fn update_document_control_with<G: GraphClient + ?Sized>(
     document_type: String,
     owner_object_id: Uuid,
     graph: &mut G,
+    sessions: &BTreeMap<String, GroupBoundSession>,
 ) -> Result<DocumentSelection, String> {
     let optional_text = |value: String| {
         if value.trim().is_empty() {
@@ -1326,6 +1336,7 @@ fn update_document_control_with<G: GraphClient + ?Sized>(
         .identity_source()
         .ok_or_else(|| "owner assignment requires an identity source".to_owned())?
         .binding_id;
+    let principal = mutation_principal_for(&workspace, sessions)?;
     workspace
         .update_control(
             document_id,
@@ -1339,7 +1350,7 @@ fn update_document_control_with<G: GraphClient + ?Sized>(
                 })),
                 ..ControlUpdate::default()
             },
-            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
+            &principal,
         )
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
@@ -1393,21 +1404,32 @@ fn cancel_document_review(
     document_id: Uuid,
     reason: String,
     confirmed: bool,
+    state: State<'_, DesktopIntegrations>,
 ) -> Result<DocumentSelection, String> {
     if !confirmed {
         return Err("review cancellation requires explicit confirmation".to_owned());
     }
-    let mut workspace =
-        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let sessions = locked_group_bound_sessions(&state)?;
+    cancel_document_review_with(&edit_root, document_id, &reason, confirmed, &sessions)
+}
+
+fn cancel_document_review_with(
+    edit_root: &str,
+    document_id: Uuid,
+    reason: &str,
+    confirmed: bool,
+    sessions: &BTreeMap<String, GroupBoundSession>,
+) -> Result<DocumentSelection, String> {
+    if !confirmed {
+        return Err("review cancellation requires explicit confirmation".to_owned());
+    }
+    let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    let principal = mutation_principal_for(&workspace, sessions)?;
     workspace
-        .cancel_review(
-            document_id,
-            &reason,
-            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
-        )
+        .cancel_review(document_id, reason, &principal)
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
-    document_selection(Path::new(&edit_root), document_id)
+    document_selection(Path::new(edit_root), document_id)
 }
 
 #[tauri::command]
@@ -1416,21 +1438,32 @@ fn mark_document_obsolete(
     document_id: Uuid,
     reason: String,
     confirmed: bool,
+    state: State<'_, DesktopIntegrations>,
 ) -> Result<DocumentSelection, String> {
     if !confirmed {
         return Err("mark obsolete requires explicit confirmation".to_owned());
     }
-    let mut workspace =
-        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let sessions = locked_group_bound_sessions(&state)?;
+    mark_document_obsolete_with(&edit_root, document_id, &reason, confirmed, &sessions)
+}
+
+fn mark_document_obsolete_with(
+    edit_root: &str,
+    document_id: Uuid,
+    reason: &str,
+    confirmed: bool,
+    sessions: &BTreeMap<String, GroupBoundSession>,
+) -> Result<DocumentSelection, String> {
+    if !confirmed {
+        return Err("mark obsolete requires explicit confirmation".to_owned());
+    }
+    let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    let principal = mutation_principal_for(&workspace, sessions)?;
     workspace
-        .mark_obsolete(
-            document_id,
-            &reason,
-            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
-        )
+        .mark_obsolete(document_id, reason, &principal)
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
-    document_selection(Path::new(&edit_root), document_id)
+    document_selection(Path::new(edit_root), document_id)
 }
 
 struct SignedInActorGraph<'a, G: GraphClient + ?Sized> {
@@ -1528,12 +1561,14 @@ fn submit_document_candidate_with<G: GraphClient, N: NotificationClient>(
     settings: &NotificationSettings,
     graph: &mut G,
     notifier: &mut N,
+    sessions: &BTreeMap<String, GroupBoundSession>,
 ) -> Result<DocumentSelection, String> {
     let selection = target_selection(&input.target_mode, input.manual_major, input.manual_minor)?;
     let effective_date = NaiveDate::parse_from_str(input.effective_date.trim(), "%Y-%m-%d")
         .map_err(|_| "effective date must use YYYY-MM-DD".to_owned())?;
     let document_id = input.document_id;
     let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    let principal = mutation_principal_for(&workspace, sessions)?;
     workspace
         .configure_notifications(settings.transport, settings.smtp.clone())
         .map_err(|error| error.to_string())?;
@@ -1553,7 +1588,7 @@ fn submit_document_candidate_with<G: GraphClient, N: NotificationClient>(
             },
             graph,
             notifier,
-            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
+            &principal,
         )
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
@@ -1565,17 +1600,15 @@ fn retry_review_notification_with<N: NotificationClient>(
     document_id: Uuid,
     settings: &NotificationSettings,
     notifier: &mut N,
+    sessions: &BTreeMap<String, GroupBoundSession>,
 ) -> Result<DocumentSelection, String> {
     let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    let principal = mutation_principal_for(&workspace, sessions)?;
     workspace
         .configure_notifications(settings.transport, settings.smtp.clone())
         .map_err(|error| error.to_string())?;
     workspace
-        .retry_review_notification(
-            document_id,
-            notifier,
-            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
-        )
+        .retry_review_notification(document_id, notifier, &principal)
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
     document_selection(Path::new(edit_root), document_id)
@@ -1621,8 +1654,10 @@ fn release_document_candidate_with<G: GraphClient, N: NotificationClient, E: Pdf
     graph: &mut G,
     notifier: &mut N,
     exporter: &mut E,
+    sessions: &BTreeMap<String, GroupBoundSession>,
 ) -> Result<DocumentSelection, String> {
     let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    let principal = mutation_principal_for(&workspace, sessions)?;
     workspace
         .configure_notifications(settings.transport, settings.smtp.clone())
         .map_err(|error| error.to_string())?;
@@ -1633,7 +1668,7 @@ fn release_document_candidate_with<G: GraphClient, N: NotificationClient, E: Pdf
             graph,
             notifier,
             exporter,
-            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
+            &principal,
         )
         .map_err(|error| error.to_string())?;
     document_selection(Path::new(edit_root), document_id)
@@ -1645,18 +1680,15 @@ fn retry_decision_notification_with<N: NotificationClient>(
     candidate_id: Uuid,
     settings: &NotificationSettings,
     notifier: &mut N,
+    sessions: &BTreeMap<String, GroupBoundSession>,
 ) -> Result<DocumentSelection, String> {
     let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    let principal = mutation_principal_for(&workspace, sessions)?;
     workspace
         .configure_notifications(settings.transport, settings.smtp.clone())
         .map_err(|error| error.to_string())?;
     workspace
-        .retry_decision_notification(
-            document_id,
-            candidate_id,
-            notifier,
-            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
-        )
+        .retry_decision_notification(document_id, candidate_id, notifier, &principal)
         .map_err(|error| error.to_string())?;
     document_selection(Path::new(edit_root), document_id)
 }
@@ -1667,18 +1699,15 @@ fn retry_minor_publication_notification_with<N: NotificationClient>(
     release_id: Uuid,
     settings: &NotificationSettings,
     notifier: &mut N,
+    sessions: &BTreeMap<String, GroupBoundSession>,
 ) -> Result<DocumentSelection, String> {
     let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    let principal = mutation_principal_for(&workspace, sessions)?;
     workspace
         .configure_notifications(settings.transport, settings.smtp.clone())
         .map_err(|error| error.to_string())?;
     workspace
-        .retry_minor_publication_notification(
-            document_id,
-            release_id,
-            notifier,
-            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
-        )
+        .retry_minor_publication_notification(document_id, release_id, notifier, &principal)
         .map_err(|error| error.to_string())?;
     document_selection(Path::new(edit_root), document_id)
 }
@@ -1696,7 +1725,15 @@ fn submit_document_candidate(
         .graph
         .lock()
         .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
-    submit_document_candidate_with(&edit_root, input, &settings, &mut *graph, &mut notifier)
+    let sessions = locked_group_bound_sessions(&state)?;
+    submit_document_candidate_with(
+        &edit_root,
+        input,
+        &settings,
+        &mut *graph,
+        &mut notifier,
+        &sessions,
+    )
 }
 
 #[tauri::command]
@@ -1705,10 +1742,12 @@ fn retry_review_notification(
     edit_root: String,
     document_id: Uuid,
     mailto_confirmed: bool,
+    state: State<'_, DesktopIntegrations>,
 ) -> Result<DocumentSelection, String> {
     let settings = user_notification_settings(&app)?;
     let mut notifier = production_notifier(mailto_confirmed);
-    retry_review_notification_with(&edit_root, document_id, &settings, &mut notifier)
+    let sessions = locked_group_bound_sessions(&state)?;
+    retry_review_notification_with(&edit_root, document_id, &settings, &mut notifier, &sessions)
 }
 
 #[tauri::command]
@@ -1763,6 +1802,7 @@ fn release_document_candidate(
         .lock()
         .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
     let mut exporter = export::LocalPdfExporter::new(export::InstalledOfficeAutomation);
+    let sessions = locked_group_bound_sessions(&state)?;
     release_document_candidate_with(
         &edit_root,
         document_id,
@@ -1771,6 +1811,7 @@ fn release_document_candidate(
         &mut *graph,
         &mut notifier,
         &mut exporter,
+        &sessions,
     )
 }
 
@@ -1781,15 +1822,18 @@ fn retry_decision_notification(
     document_id: Uuid,
     candidate_id: Uuid,
     mailto_confirmed: bool,
+    state: State<'_, DesktopIntegrations>,
 ) -> Result<DocumentSelection, String> {
     let settings = user_notification_settings(&app)?;
     let mut notifier = production_notifier(mailto_confirmed);
+    let sessions = locked_group_bound_sessions(&state)?;
     retry_decision_notification_with(
         &edit_root,
         document_id,
         candidate_id,
         &settings,
         &mut notifier,
+        &sessions,
     )
 }
 
@@ -1800,15 +1844,18 @@ fn retry_minor_publication_notification(
     document_id: Uuid,
     release_id: Uuid,
     mailto_confirmed: bool,
+    state: State<'_, DesktopIntegrations>,
 ) -> Result<DocumentSelection, String> {
     let settings = user_notification_settings(&app)?;
     let mut notifier = production_notifier(mailto_confirmed);
+    let sessions = locked_group_bound_sessions(&state)?;
     retry_minor_publication_notification_with(
         &edit_root,
         document_id,
         release_id,
         &settings,
         &mut notifier,
+        &sessions,
     )
 }
 
@@ -1831,19 +1878,37 @@ fn withdraw_release(
     release_id: Uuid,
     reason: String,
     confirmed: bool,
+    state: State<'_, DesktopIntegrations>,
 ) -> Result<ReleaseMaintenance, String> {
     if !confirmed {
         return Err("release withdrawal requires explicit confirmation".to_owned());
     }
-    let mut workspace =
-        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let sessions = locked_group_bound_sessions(&state)?;
+    withdraw_release_with(
+        &edit_root,
+        document_id,
+        release_id,
+        &reason,
+        confirmed,
+        &sessions,
+    )
+}
+
+fn withdraw_release_with(
+    edit_root: &str,
+    document_id: Uuid,
+    release_id: Uuid,
+    reason: &str,
+    confirmed: bool,
+    sessions: &BTreeMap<String, GroupBoundSession>,
+) -> Result<ReleaseMaintenance, String> {
+    if !confirmed {
+        return Err("release withdrawal requires explicit confirmation".to_owned());
+    }
+    let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    let principal = mutation_principal_for(&workspace, sessions)?;
     workspace
-        .withdraw_release(
-            document_id,
-            release_id,
-            &reason,
-            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
-        )
+        .withdraw_release(document_id, release_id, reason, &principal)
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
     release_maintenance(&workspace)
@@ -1914,14 +1979,21 @@ fn load_audit_reports(edit_root: String) -> Result<AuditReportSnapshot, String> 
 fn generate_audit_report(
     edit_root: String,
     request: AuditReportRequest,
+    state: State<'_, DesktopIntegrations>,
 ) -> Result<AuditReportSnapshot, String> {
-    let mut workspace =
-        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let sessions = locked_group_bound_sessions(&state)?;
+    generate_audit_report_with(&edit_root, request, &sessions)
+}
+
+fn generate_audit_report_with(
+    edit_root: &str,
+    request: AuditReportRequest,
+    sessions: &BTreeMap<String, GroupBoundSession>,
+) -> Result<AuditReportSnapshot, String> {
+    let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    let principal = mutation_principal_for(&workspace, sessions)?;
     workspace
-        .generate_audit_report(
-            request,
-            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
-        )
+        .generate_audit_report(request, &principal)
         .map_err(|error| error.to_string())?;
     audit_report_snapshot(&workspace)
 }
@@ -1950,14 +2022,24 @@ fn load_periodic_reviews(edit_root: String) -> Result<Vec<PeriodicReviewMarker>,
 }
 
 #[tauri::command]
-fn start_periodic_review(edit_root: String, document_id: Uuid) -> Result<PeriodicReview, String> {
-    let mut workspace =
-        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+fn start_periodic_review(
+    edit_root: String,
+    document_id: Uuid,
+    state: State<'_, DesktopIntegrations>,
+) -> Result<PeriodicReview, String> {
+    let sessions = locked_group_bound_sessions(&state)?;
+    start_periodic_review_with(&edit_root, document_id, &sessions)
+}
+
+fn start_periodic_review_with(
+    edit_root: &str,
+    document_id: Uuid,
+    sessions: &BTreeMap<String, GroupBoundSession>,
+) -> Result<PeriodicReview, String> {
+    let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    let principal = mutation_principal_for(&workspace, sessions)?;
     workspace
-        .start_periodic_review(
-            document_id,
-            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
-        )
+        .start_periodic_review(document_id, &principal)
         .map_err(|error| error.to_string())
 }
 
@@ -2011,19 +2093,37 @@ fn cancel_periodic_review(
     review_id: Uuid,
     comment: String,
     confirmed: bool,
+    state: State<'_, DesktopIntegrations>,
 ) -> Result<PeriodicReview, String> {
     if !confirmed {
         return Err("periodic-review cancellation requires explicit confirmation".to_owned());
     }
-    let mut workspace =
-        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let sessions = locked_group_bound_sessions(&state)?;
+    cancel_periodic_review_with(
+        &edit_root,
+        document_id,
+        review_id,
+        &comment,
+        confirmed,
+        &sessions,
+    )
+}
+
+fn cancel_periodic_review_with(
+    edit_root: &str,
+    document_id: Uuid,
+    review_id: Uuid,
+    comment: &str,
+    confirmed: bool,
+    sessions: &BTreeMap<String, GroupBoundSession>,
+) -> Result<PeriodicReview, String> {
+    if !confirmed {
+        return Err("periodic-review cancellation requires explicit confirmation".to_owned());
+    }
+    let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    let principal = mutation_principal_for(&workspace, sessions)?;
     workspace
-        .cancel_periodic_review(
-            document_id,
-            review_id,
-            &comment,
-            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
-        )
+        .cancel_periodic_review(document_id, review_id, comment, &principal)
         .map_err(|error| error.to_string())
 }
 
@@ -2034,21 +2134,18 @@ fn remind_periodic_review_with<N: NotificationClient + ?Sized>(
     confirmed: bool,
     settings: &NotificationSettings,
     notifier: &mut N,
+    sessions: &BTreeMap<String, GroupBoundSession>,
 ) -> Result<DeliveryAttempt, String> {
     if !confirmed {
         return Err("periodic-review reminder requires explicit confirmation".to_owned());
     }
     let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    let principal = mutation_principal_for(&workspace, sessions)?;
     workspace
         .configure_notifications(settings.transport, settings.smtp.clone())
         .map_err(|error| error.to_string())?;
     workspace
-        .remind_periodic_review(
-            document_id,
-            review_id,
-            notifier,
-            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
-        )
+        .remind_periodic_review(document_id, review_id, notifier, &principal)
         .map_err(|error| error.to_string())
 }
 
@@ -2059,9 +2156,11 @@ fn remind_periodic_review(
     document_id: Uuid,
     review_id: Uuid,
     confirmed: bool,
+    state: State<'_, DesktopIntegrations>,
 ) -> Result<DeliveryAttempt, String> {
     let settings = user_notification_settings(&app)?;
     let mut notifier = production_notifier(false);
+    let sessions = locked_group_bound_sessions(&state)?;
     remind_periodic_review_with(
         &edit_root,
         document_id,
@@ -2069,6 +2168,7 @@ fn remind_periodic_review(
         confirmed,
         &settings,
         &mut notifier,
+        &sessions,
     )
 }
 
@@ -2243,16 +2343,23 @@ fn add_document_note(
     document_id: Uuid,
     body: String,
     author: Option<String>,
+    state: State<'_, DesktopIntegrations>,
 ) -> Result<DocumentNotes, String> {
-    let mut workspace =
-        Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let sessions = locked_group_bound_sessions(&state)?;
+    add_document_note_with(&edit_root, document_id, &body, author.as_deref(), &sessions)
+}
+
+fn add_document_note_with(
+    edit_root: &str,
+    document_id: Uuid,
+    body: &str,
+    author: Option<&str>,
+    sessions: &BTreeMap<String, GroupBoundSession>,
+) -> Result<DocumentNotes, String> {
+    let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    let principal = mutation_principal_for(&workspace, sessions)?;
     workspace
-        .add_note(
-            document_id,
-            &body,
-            author.as_deref(),
-            &MutationPrincipal::local_os_user(WorkspaceLock::current().os_user),
-        )
+        .add_note(document_id, body, author, &principal)
         .map_err(|error| error.to_string())?;
     workspace.save().map_err(|error| error.to_string())?;
     document_notes(&workspace, document_id)
@@ -2639,7 +2746,7 @@ fn resolve_registered_permalink_from(
             PermalinkTarget::Notes => "notes",
         };
         return Ok(DesktopPermalinkResolution {
-            workspace: workspace_summary_from(&workspace),
+            workspace: workspace_summary_from(&workspace, &BTreeMap::new()),
             document_id,
             title,
             document_number,
@@ -2663,13 +2770,16 @@ fn configuration_role_update(value: &str) -> Result<RoleUpdate, String> {
     }
 }
 
-fn workspace_summary_from(workspace: &Workspace) -> WorkspaceSummary {
+fn workspace_summary_from(
+    workspace: &Workspace,
+    sessions: &BTreeMap<String, GroupBoundSession>,
+) -> WorkspaceSummary {
     WorkspaceSummary {
         workspace_id: workspace.workspace_id.to_string(),
         edit_root: workspace.edit_root.to_string_lossy().into_owned(),
         publish_root: workspace.publish_root.to_string_lossy().into_owned(),
         document_count: workspace.documents().len(),
-        change_author: WorkspaceLock::current().os_user,
+        change_author: change_author_for(workspace, sessions),
     }
 }
 
@@ -2690,7 +2800,7 @@ fn open_workspace_with<G: GraphClient + ?Sized>(
     let workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
     activate_group_bound_session(&workspace, graph, sessions)?;
     shortcut::ensure_workspace_shortcut(&workspace)?;
-    Ok(workspace_summary_from(&workspace))
+    Ok(workspace_summary_from(&workspace, sessions))
 }
 
 fn activate_group_bound_session<G: GraphClient + ?Sized>(
@@ -2720,6 +2830,74 @@ fn activate_group_bound_session<G: GraphClient + ?Sized>(
         },
     );
     Ok(())
+}
+
+fn locked_group_bound_sessions(
+    state: &DesktopIntegrations,
+) -> Result<std::sync::MutexGuard<'_, BTreeMap<String, GroupBoundSession>>, String> {
+    state
+        .group_bound_sessions
+        .lock()
+        .map_err(|_| "group-bound session state is unavailable".to_owned())
+}
+
+fn mutation_principal_for(
+    workspace: &Workspace,
+    sessions: &BTreeMap<String, GroupBoundSession>,
+) -> Result<MutationPrincipal, String> {
+    let Some(source) = workspace.identity_source() else {
+        return Ok(MutationPrincipal::local_os_user(
+            WorkspaceLock::current().os_user,
+        ));
+    };
+    let Some(session) = sessions.get(&path_key(&workspace.edit_root)) else {
+        return Err(DmsError::EntraSessionRequired.to_string());
+    };
+    if session.binding_id != source.binding_id {
+        return Err(
+            "the cached Microsoft Entra session does not match this library's identity binding"
+                .to_owned(),
+        );
+    }
+    match source.tenant_id {
+        Some(tenant_id) if tenant_id == session.actor.tenant_id => Ok(
+            MutationPrincipal::authenticated_entra(session.actor.clone()),
+        ),
+        Some(tenant_id) => Err(DmsError::EntraTenantMismatch {
+            bound: tenant_id,
+            actor: session.actor.tenant_id,
+        }
+        .to_string()),
+        None => Err(DmsError::UnverifiedEntraIdentitySource.to_string()),
+    }
+}
+
+fn change_author_for(
+    workspace: &Workspace,
+    sessions: &BTreeMap<String, GroupBoundSession>,
+) -> String {
+    let Some(source) = workspace.identity_source() else {
+        return WorkspaceLock::current().os_user;
+    };
+    let Some(session) = sessions.get(&path_key(&workspace.edit_root)) else {
+        return WorkspaceLock::current().os_user;
+    };
+    if session.binding_id != source.binding_id {
+        return WorkspaceLock::current().os_user;
+    }
+    let display = workspace
+        .eligible_people()
+        .into_iter()
+        .find(|person| person.object_id == session.actor.object_id)
+        .map(|person| person.display_name.as_str())
+        .filter(|name| !name.is_empty());
+    match display {
+        Some(name) => format!(
+            "{name} ({}/{})",
+            session.actor.tenant_id, session.actor.object_id
+        ),
+        None => format!("{}/{}", session.actor.tenant_id, session.actor.object_id),
+    }
 }
 
 fn workspace_configuration(
@@ -2752,7 +2930,7 @@ fn workspace_configuration_from_with_global_and_credentials<C: notify::Credentia
     credentials: &C,
 ) -> Result<WorkspaceConfiguration, String> {
     Ok(WorkspaceConfiguration {
-        workspace: workspace_summary_from(workspace),
+        workspace: workspace_summary_from(workspace, &BTreeMap::new()),
         markdown_template: workspace.markdown_template().cloned(),
         markdown_template_validation: workspace.markdown_template_validation(),
         default_review_interval_months: workspace.default_review_interval_months(),
@@ -3471,6 +3649,27 @@ mod tests {
         }
     }
 
+    fn empty_sessions() -> BTreeMap<String, GroupBoundSession> {
+        BTreeMap::new()
+    }
+
+    fn sessions_for_workspace(
+        workspace: &Workspace,
+        tenant_id: Uuid,
+        actor_id: Uuid,
+    ) -> BTreeMap<String, GroupBoundSession> {
+        let mut sessions = BTreeMap::new();
+        sessions.insert(
+            path_key(&workspace.edit_root),
+            cached_session(
+                workspace.identity_source().unwrap().binding_id,
+                tenant_id,
+                actor_id,
+            ),
+        );
+        sessions
+    }
+
     fn member_graph(tenant_id: Uuid, actor_id: Uuid) -> SessionGraph {
         SessionGraph {
             tenant_id: Ok(tenant_id),
@@ -3618,6 +3817,102 @@ mod tests {
         let source = include_str!("lib.rs");
         assert!(source.contains("clear_group_bound_sessions(&state)?;\n    Ok(effective)"));
         assert!(source.contains("clear_group_bound_sessions(&state)?;\n    Ok(configuration)"));
+    }
+
+    #[test]
+    fn bound_mutation_principal_rejects_missing_replaced_and_tenant_mismatched_sessions() {
+        let (_directory, workspace, tenant_id, actor_id) = bound_workspace();
+        let binding_id = workspace.identity_source().unwrap().binding_id;
+
+        let missing = mutation_principal_for(&workspace, &empty_sessions()).unwrap_err();
+        assert!(missing.contains("authenticated Microsoft Entra mutation principal"));
+
+        let mut replaced = BTreeMap::new();
+        replaced.insert(
+            path_key(&workspace.edit_root),
+            cached_session(Uuid::new_v4(), tenant_id, actor_id),
+        );
+        let replaced = mutation_principal_for(&workspace, &replaced).unwrap_err();
+        assert!(replaced.contains("does not match this library's identity binding"));
+
+        let mut mismatched = BTreeMap::new();
+        mismatched.insert(
+            path_key(&workspace.edit_root),
+            cached_session(binding_id, Uuid::new_v4(), actor_id),
+        );
+        let mismatched = mutation_principal_for(&workspace, &mismatched).unwrap_err();
+        assert!(mismatched.contains("does not match workspace tenant"));
+
+        assert_eq!(
+            mutation_principal_for(
+                &workspace,
+                &sessions_for_workspace(&workspace, tenant_id, actor_id),
+            )
+            .unwrap(),
+            MutationPrincipal::authenticated_entra(AuthenticatedActor {
+                tenant_id,
+                object_id: actor_id,
+            })
+        );
+    }
+
+    #[test]
+    fn bound_mutations_record_cached_actor_and_omit_local_os_user() {
+        let (_directory, mut workspace, tenant_id, actor_id) = bound_workspace();
+        workspace
+            .configure_confidentiality_type("internal", "Internal", true)
+            .unwrap();
+        workspace
+            .set_confidentiality_policy(".", "internal")
+            .unwrap();
+        let source = workspace.edit_root.join("Notes.md");
+        fs::write(&source, "# Notes").unwrap();
+        let document = workspace.add_document(&source).unwrap();
+        workspace.save().unwrap();
+        let sessions = sessions_for_workspace(&workspace, tenant_id, actor_id);
+        let root = workspace.edit_root.to_string_lossy().into_owned();
+        let actor = AuthenticatedActor {
+            tenant_id,
+            object_id: actor_id,
+        };
+
+        let missing =
+            add_document_note_with(&root, document.id, "Bound note", None, &empty_sessions())
+                .unwrap_err();
+        assert!(missing.contains("authenticated Microsoft Entra mutation principal"));
+
+        let notes =
+            add_document_note_with(&root, document.id, "Bound note", None, &sessions).unwrap();
+        assert_eq!(notes.notes[0].authenticated_actor.as_ref(), Some(&actor));
+        assert!(notes.notes[0].local_os_user.is_none());
+
+        let snapshot = generate_audit_report_with(
+            &root,
+            AuditReportRequest {
+                format: dms_core::AuditReportFormat::Csv,
+                relative_path: Some(PathBuf::from(".dms/exports/bound.csv")),
+                filter: Default::default(),
+            },
+            &sessions,
+        )
+        .unwrap();
+        assert_eq!(snapshot.rows.len(), 1);
+        assert!(snapshot.rows[0].report.local_os_user.is_empty());
+    }
+
+    #[test]
+    fn bound_workspace_summary_presents_cached_display_and_immutable_ids() {
+        let (_directory, workspace, tenant_id, actor_id) = bound_workspace();
+        let sessions = sessions_for_workspace(&workspace, tenant_id, actor_id);
+        let summary = workspace_summary_from(&workspace, &sessions);
+        assert_eq!(
+            summary.change_author,
+            format!("Ada Actor ({tenant_id}/{actor_id})")
+        );
+        assert_eq!(
+            workspace_summary_from(&workspace, &empty_sessions()).change_author,
+            WorkspaceLock::current().os_user
+        );
     }
 
     #[test]
@@ -3906,7 +4201,7 @@ mod tests {
         .unwrap();
         let workspace = Workspace::open(Path::new(&root)).unwrap();
         shortcut::ensure_workspace_shortcut(&workspace).unwrap();
-        let reopened = workspace_summary_from(&workspace);
+        let reopened = workspace_summary_from(&workspace, &BTreeMap::new());
 
         assert_eq!(reopened, initialized);
         assert!(edit_root.join(".dms/workspace.json").is_file());
@@ -3971,7 +4266,7 @@ mod tests {
         let publish_root = tempfile::tempdir().unwrap();
         let workspace = Workspace::init(edit_root.path(), publish_root.path()).unwrap();
 
-        let summary = workspace_summary_from(&workspace);
+        let summary = workspace_summary_from(&workspace, &BTreeMap::new());
 
         assert_eq!(summary.workspace_id, workspace.workspace_id.to_string());
         assert_eq!(summary.document_count, 0);
@@ -4733,6 +5028,7 @@ mod tests {
         );
 
         let root = edit_root.path().to_string_lossy().into_owned();
+        let sessions = sessions_for_workspace(&workspace, tenant_id, owner_object_id);
         let mut graph = TestGraph {
             tenant_id,
             people: vec![owner],
@@ -4745,6 +5041,7 @@ mod tests {
             "procedure".into(),
             owner_object_id,
             &mut graph,
+            &sessions,
         )
         .unwrap();
         assert_eq!(updated.control.title, "Employee handbook");
@@ -4759,6 +5056,14 @@ mod tests {
             updated.workflow_events[0].body.event_type,
             dms_core::WorkflowEventType::DocumentControlDataChanged
         );
+        assert_eq!(
+            updated.workflow_events[0].body.authenticated_actor,
+            Some(AuthenticatedActor {
+                tenant_id,
+                object_id: owner_object_id,
+            })
+        );
+        assert!(updated.workflow_events[0].body.local_os_user.is_none());
 
         let overridden =
             set_document_confidentiality(root.clone(), document.id, "restricted".into()).unwrap();
@@ -4780,24 +5085,26 @@ mod tests {
             "internal"
         );
 
-        assert!(cancel_document_review(
-            root.clone(),
+        assert!(cancel_document_review_with(
+            &root,
             document.id,
-            "Requirements changed".into(),
+            "Requirements changed",
             false,
+            &sessions,
         )
         .unwrap_err()
         .contains("explicit confirmation"));
         assert!(
-            mark_document_obsolete(root.clone(), document.id, "Superseded".into(), false,)
+            mark_document_obsolete_with(&root, document.id, "Superseded", false, &sessions,)
                 .unwrap_err()
                 .contains("explicit confirmation")
         );
-        let obsolete = mark_document_obsolete(
-            root,
+        let obsolete = mark_document_obsolete_with(
+            &root,
             document.id,
-            "Superseded by global policy".into(),
+            "Superseded by global policy",
             true,
+            &sessions,
         )
         .unwrap();
         assert_eq!(obsolete.lifecycle, Lifecycle::Obsolete);
@@ -4806,6 +5113,14 @@ mod tests {
             obsolete.workflow_events[0].body.event_type,
             dms_core::WorkflowEventType::DocumentObsoleted
         );
+        assert_eq!(
+            obsolete.workflow_events[0].body.authenticated_actor,
+            Some(AuthenticatedActor {
+                tenant_id,
+                object_id: owner_object_id,
+            })
+        );
+        assert!(obsolete.workflow_events[0].body.local_os_user.is_none());
         assert_eq!(obsolete.workflow_verification, WorkflowVerification::Valid);
     }
 
@@ -4871,12 +5186,13 @@ mod tests {
             &mut graph,
         )
         .unwrap_err();
-        let cancellation = cancel_periodic_review(
-            "missing".to_owned(),
+        let cancellation = cancel_periodic_review_with(
+            "missing",
             Uuid::nil(),
             Uuid::nil(),
-            "Cancelled".to_owned(),
+            "Cancelled",
             false,
+            &empty_sessions(),
         )
         .unwrap_err();
         let reminder = remind_periodic_review_with(
@@ -4889,6 +5205,7 @@ mod tests {
                 smtp: None,
             },
             &mut notifier,
+            &empty_sessions(),
         )
         .unwrap_err();
 
@@ -4908,17 +5225,19 @@ mod tests {
         workspace.save().unwrap();
         let root = edit_root.path().to_string_lossy().into_owned();
 
-        let first = add_document_note(
-            root.clone(),
+        let first = add_document_note_with(
+            &root,
             document.id,
-            "First note".into(),
-            Some("Raphael".into()),
+            "First note",
+            Some("Raphael"),
+            &empty_sessions(),
         )
         .unwrap();
         let first_id = first.notes[0].id;
         std::thread::sleep(std::time::Duration::from_millis(2));
         let second =
-            add_document_note(root.clone(), document.id, "Second note".into(), None).unwrap();
+            add_document_note_with(&root, document.id, "Second note", None, &empty_sessions())
+                .unwrap();
         let second_id = second.notes[0].id;
         assert_eq!(
             second.notes.iter().map(|note| note.id).collect::<Vec<_>>(),
@@ -4961,12 +5280,13 @@ mod tests {
         let root = edit_root.to_string_lossy().into_owned();
 
         assert!(load_releases(root.clone()).unwrap().rows.is_empty());
-        assert!(withdraw_release(
-            root.clone(),
+        assert!(withdraw_release_with(
+            &root,
             Uuid::nil(),
             Uuid::nil(),
-            "Correction".to_owned(),
+            "Correction",
             false,
+            &empty_sessions(),
         )
         .unwrap_err()
         .contains("explicit confirmation"));
@@ -5060,8 +5380,8 @@ mod tests {
         workspace.save().unwrap();
         let root = edit_root.to_string_lossy().into_owned();
 
-        let snapshot = generate_audit_report(
-            root.clone(),
+        let snapshot = generate_audit_report_with(
+            &root,
             dms_core::AuditReportRequest {
                 format: dms_core::AuditReportFormat::Csv,
                 relative_path: Some(PathBuf::from(".dms/exports/policy.csv")),
@@ -5071,6 +5391,7 @@ mod tests {
                     ..Default::default()
                 },
             },
+            &empty_sessions(),
         )
         .unwrap();
 
@@ -5229,6 +5550,7 @@ mod tests {
             .unwrap();
         workspace.save().unwrap();
         let root = edit_root.path().to_string_lossy().into_owned();
+        let sessions = sessions_for_workspace(&workspace, tenant_id, editor_id);
         let mut graph = TestGraph { tenant_id, people };
         let mut notifier = TestNotifier;
 
@@ -5250,12 +5572,21 @@ mod tests {
             &settings,
             &mut graph,
             &mut notifier,
+            &sessions,
         )
         .unwrap();
         assert_eq!(
             submitted.active_candidate.as_ref().unwrap().status,
             dms_core::CandidateStatus::InReview
         );
+        assert_eq!(
+            submitted.workflow_events[0].body.authenticated_actor,
+            Some(AuthenticatedActor {
+                tenant_id,
+                object_id: editor_id,
+            })
+        );
+        assert!(submitted.workflow_events[0].body.local_os_user.is_none());
 
         let approved = decide_document_review_with(
             &root,
@@ -5286,6 +5617,7 @@ mod tests {
             &mut graph,
             &mut notifier,
             &mut TestExporter,
+            &sessions,
         )
         .unwrap();
         assert!(released.current_release.unwrap().pdf_exists);
@@ -5443,6 +5775,7 @@ mod tests {
         workspace.save().unwrap();
 
         let root = edit_root.to_string_lossy().into_owned();
+        let sessions = sessions_for_workspace(&workspace, tenant_id, editor_id);
         let mut graph = TestGraph { tenant_id, people };
         let mut notifier = TestNotifier;
         let submitted = submit_document_candidate_with(
@@ -5463,6 +5796,7 @@ mod tests {
             &settings,
             &mut graph,
             &mut notifier,
+            &sessions,
         )
         .unwrap();
         assert_eq!(
@@ -5494,6 +5828,7 @@ mod tests {
             &mut graph,
             &mut notifier,
             &mut exporter,
+            &sessions,
         )
         .unwrap();
 
@@ -5568,10 +5903,11 @@ mod tests {
 
         let outside = tempfile::NamedTempFile::with_suffix(".md").unwrap();
         fs::write(outside.path(), "# Outside").unwrap();
-        let outside_error = reassociate_library_document(
-            root.clone(),
+        let outside_error = reassociate_library_document_with(
+            &root,
             document_id,
-            outside.path().to_string_lossy().into_owned(),
+            &outside.path().to_string_lossy(),
+            &empty_sessions(),
         )
         .expect_err("outside path");
         assert!(outside_error.contains(DESKTOP_REASSOCIATE_RULE_LOCATION));
@@ -5579,18 +5915,20 @@ mod tests {
             "The selected file must be a supported unregistered source file inside the edit root."
         ));
 
-        let unsupported = reassociate_library_document(
-            root.clone(),
+        let unsupported = reassociate_library_document_with(
+            &root,
             document_id,
-            "Policies/notes.txt".to_owned(),
+            "Policies/notes.txt",
+            &empty_sessions(),
         )
         .expect_err("unsupported path");
         assert!(unsupported.contains(DESKTOP_REASSOCIATE_RULE_FORMAT));
 
-        let registered = reassociate_library_document(
-            root.clone(),
+        let registered = reassociate_library_document_with(
+            &root,
             document_id,
-            "Policies/Occupied.md".to_owned(),
+            "Policies/Occupied.md",
+            &empty_sessions(),
         )
         .expect_err("registered path");
         assert!(registered.contains(DESKTOP_REASSOCIATE_RULE_UNREGISTERED));
@@ -5619,9 +5957,13 @@ mod tests {
             "# Relocated",
         )
         .unwrap();
-        let restored =
-            reassociate_library_document(root, document_id, "Policies/Relocated.md".to_owned())
-                .unwrap();
+        let restored = reassociate_library_document_with(
+            &root,
+            document_id,
+            "Policies/Relocated.md",
+            &empty_sessions(),
+        )
+        .unwrap();
         assert_eq!(restored.relative_path, Path::new("Policies/Relocated.md"));
         assert_eq!(restored.source_state, SourceState::Registered);
         let workspace = Workspace::open(edit_root.path()).unwrap();
