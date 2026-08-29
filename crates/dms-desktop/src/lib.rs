@@ -2110,6 +2110,39 @@ fn retry_review_notification(
     retry_review_notification_with(&edit_root, document_id, &settings, &mut notifier, &sessions)
 }
 
+fn resend_review_notification_with<N: NotificationClient>(
+    edit_root: &str,
+    document_id: Uuid,
+    settings: &NotificationSettings,
+    notifier: &mut N,
+    sessions: &BTreeMap<String, GroupBoundSession>,
+) -> Result<DocumentSelection, String> {
+    let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
+    let principal = mutation_principal_for(&workspace, sessions)?;
+    workspace
+        .configure_notifications(settings.transport, settings.smtp.clone())
+        .map_err(|error| error.to_string())?;
+    workspace
+        .resend_review_notification(document_id, notifier, &principal)
+        .map_err(|error| error.to_string())?;
+    workspace.save().map_err(|error| error.to_string())?;
+    document_selection(Path::new(edit_root), document_id)
+}
+
+#[tauri::command]
+fn resend_review_notification(
+    app: AppHandle,
+    edit_root: String,
+    document_id: Uuid,
+    mailto_confirmed: bool,
+    state: State<'_, DesktopIntegrations>,
+) -> Result<DocumentSelection, String> {
+    let settings = user_notification_settings(&app)?;
+    let mut notifier = production_notifier(mailto_confirmed);
+    let sessions = locked_group_bound_sessions(&state)?;
+    resend_review_notification_with(&edit_root, document_id, &settings, &mut notifier, &sessions)
+}
+
 #[tauri::command]
 fn decide_document_review(
     app: AppHandle,
@@ -4168,6 +4201,7 @@ pub fn run() {
             mark_document_obsolete,
             submit_document_candidate,
             retry_review_notification,
+            resend_review_notification,
             decide_document_review,
             release_document_candidate,
             retry_decision_notification,
@@ -6260,6 +6294,128 @@ mod tests {
             })
         );
         assert!(submitted.workflow_events[0].body.local_os_user.is_none());
+
+        let resent = resend_review_notification_with(
+            &root,
+            document.id,
+            &settings,
+            &mut notifier,
+            &sessions,
+        )
+        .unwrap();
+        assert_eq!(resent.lifecycle, dms_core::Lifecycle::InReview);
+        assert_eq!(
+            resent.active_candidate.as_ref().unwrap().status,
+            dms_core::CandidateStatus::InReview
+        );
+        assert_eq!(
+            resent.active_candidate.as_ref().unwrap().id,
+            submitted.active_candidate.as_ref().unwrap().id
+        );
+        assert!(resent.workflow_events.iter().any(|event| {
+            event.body.event_type == dms_core::WorkflowEventType::ReviewRequestResent
+        }));
+
+        struct FailingNotifier;
+        impl NotificationClient for FailingNotifier {
+            fn send(
+                &mut self,
+                _settings: &NotificationSettings,
+                _message: &dms_core::NotificationMessage,
+            ) -> std::result::Result<dms_core::DeliveryReceipt, String> {
+                Err("relay refused".to_owned())
+            }
+        }
+        let failed = resend_review_notification_with(
+            &root,
+            document.id,
+            &settings,
+            &mut FailingNotifier,
+            &sessions,
+        )
+        .unwrap();
+        assert_eq!(failed.lifecycle, dms_core::Lifecycle::InReview);
+        assert_eq!(
+            failed
+                .active_candidate
+                .as_ref()
+                .unwrap()
+                .delivery_attempts
+                .last()
+                .unwrap()
+                .status,
+            dms_core::DeliveryStatus::Failed
+        );
+
+        let mailto_settings = NotificationSettings {
+            transport: NotificationTransport::Mailto,
+            smtp: None,
+        };
+        struct QueuedNotifier;
+        impl NotificationClient for QueuedNotifier {
+            fn send(
+                &mut self,
+                _settings: &NotificationSettings,
+                _message: &dms_core::NotificationMessage,
+            ) -> std::result::Result<dms_core::DeliveryReceipt, String> {
+                Ok(dms_core::DeliveryReceipt {
+                    status: dms_core::DeliveryStatus::Queued,
+                    response_code: None,
+                    detail: "opened the host mail handler".to_owned(),
+                })
+            }
+        }
+        let queued = resend_review_notification_with(
+            &root,
+            document.id,
+            &mailto_settings,
+            &mut QueuedNotifier,
+            &sessions,
+        )
+        .unwrap();
+        assert_eq!(
+            queued
+                .active_candidate
+                .as_ref()
+                .unwrap()
+                .delivery_attempts
+                .last()
+                .unwrap()
+                .status,
+            dms_core::DeliveryStatus::Queued
+        );
+        struct ConfirmedNotifier;
+        impl NotificationClient for ConfirmedNotifier {
+            fn send(
+                &mut self,
+                _settings: &NotificationSettings,
+                _message: &dms_core::NotificationMessage,
+            ) -> std::result::Result<dms_core::DeliveryReceipt, String> {
+                Ok(dms_core::DeliveryReceipt::confirmed(
+                    "operator confirmed send",
+                ))
+            }
+        }
+        let confirmed = resend_review_notification_with(
+            &root,
+            document.id,
+            &mailto_settings,
+            &mut ConfirmedNotifier,
+            &sessions,
+        )
+        .unwrap();
+        assert_eq!(confirmed.lifecycle, dms_core::Lifecycle::InReview);
+        assert_eq!(
+            confirmed
+                .active_candidate
+                .as_ref()
+                .unwrap()
+                .delivery_attempts
+                .last()
+                .unwrap()
+                .status,
+            dms_core::DeliveryStatus::Confirmed
+        );
 
         let approved = decide_document_review_with(
             &root,

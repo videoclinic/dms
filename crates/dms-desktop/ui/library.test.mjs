@@ -424,7 +424,9 @@ test("in-review documents still expose Unregister in Actions", () => {
     { route_state: { folder: "Policies" } },
     library,
   );
-  assert.match(markup, /class="badge muted">in_review</);
+  assert.match(markup, /class="badge muted">Pending approval</);
+  assert.match(markup, /<td>Pending approval<\/td>/);
+  assert.doesNotMatch(markup, />in_review</);
   assert.match(markup, /data-library-unregister/);
 });
 
@@ -1164,6 +1166,100 @@ test("external lifecycle forms map candidates, decisions, releases, and mail con
     command: "retry_minor_publication_notification",
     arguments: { documentId: "doc-1", releaseId: "release-1", mailtoConfirmed: true },
   });
+  assert.deepEqual(lifecycleActionRequest("resend_review_notification", new FormData(), detail), {
+    command: "resend_review_notification",
+    arguments: { documentId: "doc-1", mailtoConfirmed: false },
+  });
+  assert.deepEqual(lifecycleActionRequest("resend_review_notification", confirmation, detail), {
+    command: "resend_review_notification",
+    arguments: { documentId: "doc-1", mailtoConfirmed: true },
+  });
+});
+
+test("pending approval exposes resend only for an active in-review approval candidate", () => {
+  const registered = file("Handbook.md", { in_library: { document_id: "doc-1" } }, {
+    id: "doc-1",
+    lifecycle: "in_review",
+    control: { title: "Employee handbook", document_number: null },
+  });
+  const baseDetail = {
+    document_id: "doc-1",
+    source_name: "Handbook.md",
+    relative_path: "Policies/Handbook.md",
+    source_exists: true,
+    source_state: "registered",
+    lifecycle: "in_review",
+    control: { title: "Employee handbook", document_number: null },
+    eligible_people: [],
+    lifecycle_actions: {},
+    workflow_events: [],
+    workflow_verification: "valid",
+    document_types: [],
+    confidentiality_types: [],
+  };
+  const libraryFor = (detail) => ({
+    ...createLibraryState(),
+    tree: snapshot("Policies").tree,
+    folder: snapshot("Policies", [registered]).folder,
+    selection: ["Policies/Handbook.md"],
+    detail,
+  });
+  const render = (detail, workspace = { edit_root: "/srv/Edit", workspace_id: "ws-1" }) =>
+    libraryMarkup(workspace, { route_state: { folder: "Policies" } }, libraryFor(detail));
+
+  const pending = render({
+    ...baseDetail,
+    active_candidate: { status: "in_review", approval_required: true },
+  });
+  assert.match(pending, /Resend approval request/);
+  assert.match(pending, /does not reset approval or start a new review/);
+  assert.match(pending, /data-library-lifecycle-form="resend_review_notification"/);
+  assert.match(pending, /Record review decision/);
+  assert.doesNotMatch(pending, /name="mailtoConfirmed"/);
+  assert.doesNotMatch(pending, />in_review</);
+
+  const mailto = render(
+    {
+      ...baseDetail,
+      active_candidate: {
+        status: "in_review",
+        approval_required: true,
+        delivery_attempts: [{ status: "failed", detail: "relay refused" }],
+      },
+    },
+    {
+      edit_root: "/srv/Edit",
+      workspace_id: "ws-1",
+      notification_settings: { transport: "mailto" },
+    },
+  );
+  assert.match(mailto, /name="mailtoConfirmed"/);
+  assert.match(mailto, /relay refused/);
+  assert.match(mailto, /Resend approval request/);
+
+  assert.doesNotMatch(
+    render({
+      ...baseDetail,
+      active_candidate: { status: "review_delivery_failed", approval_required: true },
+    }),
+    /Resend approval request/,
+  );
+  assert.doesNotMatch(
+    render({
+      ...baseDetail,
+      lifecycle: "draft",
+      active_candidate: { status: "draft", approval_required: false, version: { major: 1, minor: 1 } },
+    }),
+    /Resend approval request/,
+  );
+  assert.doesNotMatch(
+    render({
+      ...baseDetail,
+      lifecycle: "approved",
+      active_candidate: { status: "approved", approval_required: true, version: { major: 2, minor: 0 } },
+    }),
+    /Resend approval request/,
+  );
 });
 
 test("successful empty identity state renders literal placeholders and blocks lifecycle transitions", () => {

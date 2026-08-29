@@ -163,10 +163,14 @@ macOS.
   starts expanded, while older actor blocks start folded. It is separate from
   Revision cycle. There is no **Begin revision** control: library
   load and document selection reconcile Draft/Released from the draft digest
-  versus the latest release. The adapter supplies lifecycle availability and precondition explanations
-  rather than duplicating core transitions in the frontend. `mailto:` delivery
-  opens the host handler first and advances only through its explicit confirmation
-  retry; review decisions require a fresh interactive Entra sign-in. Cancel review
+  versus the latest release. The adapter supplies lifecycle availability and
+  precondition explanations rather than duplicating core transitions in the
+  frontend. The Library table and selection badge show **Pending approval** for
+  persisted `in_review`. An active approval-required `in_review` candidate
+  exposes **Resend approval request**; SMTP sends immediately and `mailto:`
+  keeps its explicit sent-confirmation control. `mailto:` delivery opens the
+  host handler first and advances only through its explicit confirmation retry;
+  review decisions require a fresh interactive Entra sign-in. Cancel review
   and mark obsolete retain failed reason drafts and require explicit confirmation.
   Validation failures stay in that selected-document context. Its notes action
   opens a document-scoped activity keyed by stable document ID. Document Notes

@@ -660,6 +660,15 @@ export function lifecycleActionRequest(action, values, detail) {
       arguments: { documentId: detail.document_id, mailtoConfirmed: true },
     };
   }
+  if (action === "resend_review_notification") {
+    return {
+      command: "resend_review_notification",
+      arguments: {
+        documentId: detail.document_id,
+        mailtoConfirmed: values?.get("mailtoConfirmed") === "yes",
+      },
+    };
+  }
   if (action === "decide_review") {
     const decision = String(values?.get("decision") ?? "").trim();
     if (!["approved", "rejected", "changes_requested"].includes(decision)) {
@@ -812,9 +821,14 @@ function membershipLabel(entry) {
   return "Folder";
 }
 
+function operatorLifecycleLabel(lifecycle) {
+  if (lifecycle === "in_review") return "Pending approval";
+  return lifecycle ?? "—";
+}
+
 function lifecycleLabel(entry) {
   if (membershipKind(entry) === "lost_source") return "Lost source";
-  return entry.document?.lifecycle ?? "—";
+  return operatorLifecycleLabel(entry.document?.lifecycle);
 }
 
 function counterChipsMarkup(counters) {
@@ -992,7 +1006,7 @@ function workflowEvidenceMarkup(events) {
   }).join("");
 }
 
-function lifecyclePanelMarkup(library, detail) {
+function lifecyclePanelMarkup(library, detail, workspace) {
   const actions = detail.lifecycle_actions ?? {};
   const availability = (name, fallback) => actions[name] ?? { available: false, reason: fallback };
   const cancel = availability("cancel_review", "Lifecycle state is unavailable.");
@@ -1002,7 +1016,7 @@ function lifecyclePanelMarkup(library, detail) {
     const disabled = available ? "" : "disabled";
     return `<form class="lifecycle-action" data-library-lifecycle-form="${action}"><strong>${title}</strong>${reason ? `<small>${escapeHtml(reason)}</small>` : ""}<label>Reason<textarea name="reason" required ${disabled}>${escapeHtml(draft.reason ?? "")}</textarea></label><label class="confirmation"><input type="checkbox" name="confirmed" value="yes" ${draft.confirmed ? "checked" : ""} ${disabled}> I confirm this lifecycle change.</label><button class="button ${action === "mark_obsolete" ? "danger" : "secondary"}" type="submit" ${disabled}>${title}</button></form>`;
   };
-  const external = externalLifecycleMarkup(library, detail);
+  const external = externalLifecycleMarkup(library, detail, workspace);
   return `<div class="lifecycle-panel" aria-label="Revision cycle actions"><div class="lifecycle-actions">${external}${form("cancel_review", "Cancel review", cancel.available, cancel.reason)}${form("mark_obsolete", "Mark obsolete", obsolete.available, obsolete.reason)}</div></div>`;
 }
 
@@ -1059,7 +1073,7 @@ function sourceHistoryMarkup(history) {
   return `<section class="imported-source-history"><h5>Imported source changes (unverified)</h5><p class="source-path">${escapeHtml(sourceHistoryOutcomeText(history))} DMS did not verify the actor or reconstruct earlier versions.</p><p class="source-path">Captured once from the imported ${escapeHtml(sourceHistoryFormatLabel(history.source_format))} bytes · SHA-256 ${escapeHtml(history.imported_source_sha256)} · never re-scanned.</p>${observations ? `<ol>${observations}</ol>` : ""}</section>`;
 }
 
-function externalLifecycleMarkup(library, detail) {
+function externalLifecycleMarkup(library, detail, workspace) {
   const candidate = detail.active_candidate;
   const mailConfirmation = (label) => `<label class="confirmation"><input type="checkbox" name="mailtoConfirmed" value="yes"> I confirm the host mail message for ${escapeHtml(label)} was sent.</label>`;
   const peopleOptions = (detail.eligible_people ?? [])
@@ -1102,6 +1116,14 @@ function externalLifecycleMarkup(library, detail) {
   const reviewRetry = candidate?.status === "review_delivery_failed"
     ? `<form class="lifecycle-action" data-library-lifecycle-form="retry_review_notification"><strong>Confirm review request delivery</strong><small>The host mail handler opened without advancing the review.</small>${mailConfirmation("the review request")}<button class="button" type="submit">Confirm review message sent</button></form>`
     : "";
+  const lastDelivery = candidate?.delivery_attempts?.at(-1);
+  const resendFailure = lastDelivery?.status === "failed"
+    ? `<p class="library-detail-error" role="alert">${escapeHtml(lastDelivery.detail || "The approval request could not be delivered.")}</p>`
+    : "";
+  const mailtoResend = workspace?.notification_settings?.transport === "mailto";
+  const resend = candidate?.status === "in_review" && candidate?.approval_required && detail.lifecycle === "in_review"
+    ? `<form class="lifecycle-action" data-library-lifecycle-form="resend_review_notification"><strong>Resend approval request</strong><small>Repeats the existing request to the snapshotted approver. It does not reset approval or start a new review.</small>${resendFailure}${mailtoResend ? mailConfirmation("the approval request") : ""}<button class="button secondary" type="submit">Resend approval request</button></form>`
+    : "";
   const decision = candidate?.status === "in_review"
     ? `<form class="lifecycle-action" data-library-lifecycle-form="decide_review"><strong>Record review decision</strong>${signIn}<label>Decision<select name="decision" required><option value="">Choose decision</option><option value="approved">Approve</option><option value="rejected">Reject</option><option value="changes_requested">Request changes</option></select></label><label>Comment<textarea name="comment"></textarea></label><button class="button" type="submit">Record decision</button></form>`
     : "";
@@ -1114,14 +1136,14 @@ function externalLifecycleMarkup(library, detail) {
   const minorRetry = detail.retryable_minor_publication
     ? `<form class="lifecycle-action" data-library-lifecycle-form="retry_minor_publication_notification"><strong>Confirm minor-publication delivery</strong>${mailConfirmation("the minor publication")}<button class="button secondary" type="submit">Confirm publication message sent</button></form>`
     : "";
-  return `${submit}${reviewRetry}${decision}${release}${decisionRetry}${minorRetry}`;
+  return `${submit}${reviewRetry}${resend}${decision}${release}${decisionRetry}${minorRetry}`;
 }
 
 function selectionScroll(body, footer = "") {
   return `<div class="selection-scroll">${body}</div>${footer}`;
 }
 
-function selectionMarkup(library) {
+function selectionMarkup(library, workspace) {
   const selected = selectedEntries(library);
   if (selected.length === 0) {
     return selectionScroll('<div class="selection-empty"><h3>Selection</h3><p>Select a folder or file to see its identity and available actions.</p></div>');
@@ -1207,12 +1229,12 @@ function selectionMarkup(library) {
     : '<span class="badge">In library</span>';
   const lifecycleBadge = sourceLost
     ? '<span class="badge muted">Lost source</span>'
-    : `<span class="badge muted">${escapeHtml(detail.lifecycle)}</span>`;
+    : `<span class="badge muted">${escapeHtml(operatorLifecycleLabel(detail.lifecycle))}</span>`;
   const lostBanner = sourceLost
     ? '<p class="library-detail-error" role="status">The draft file is not at the stored path. Most actions stay disabled until you reassociate the source.</p>'
     : "";
   return selectionScroll(
-    `<div class="selection-header"><div class="selection-header-badges">${membershipBadge}${lifecycleBadge}</div><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><h3>${escapeHtml(detail.control.title)}</h3>${detail.control.document_number ? `<p class="document-number">${escapeHtml(detail.control.document_number)}</p>` : ""}${lostBanner}<div class="source-identity"><strong>Source file</strong><span>${escapeHtml(detail.source_name)}</span><small>${escapeHtml(detail.relative_path)}</small></div>${section("control", "Document control data", controlBody)}${section("schedule", "Document review schedule", scheduleMarkup)}${section("revision", "Revision cycle", sourceLost ? '<p class="source-path">Revision cycle actions are unavailable while the source is Lost source.</p>' : lifecyclePanelMarkup(library, detail))}${section("history", "Version history &amp; changes", versionHistoryMarkup(detail))}${section("releases", "Releases", releasesBody)}`,
+    `<div class="selection-header"><div class="selection-header-badges">${membershipBadge}${lifecycleBadge}</div><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><h3>${escapeHtml(detail.control.title)}</h3>${detail.control.document_number ? `<p class="document-number">${escapeHtml(detail.control.document_number)}</p>` : ""}${lostBanner}<div class="source-identity"><strong>Source file</strong><span>${escapeHtml(detail.source_name)}</span><small>${escapeHtml(detail.relative_path)}</small></div>${section("control", "Document control data", controlBody)}${section("schedule", "Document review schedule", scheduleMarkup)}${section("revision", "Revision cycle", sourceLost ? '<p class="source-path">Revision cycle actions are unavailable while the source is Lost source.</p>' : lifecyclePanelMarkup(library, detail, workspace))}${section("history", "Version history &amp; changes", versionHistoryMarkup(detail))}${section("releases", "Releases", releasesBody)}`,
     actionsFooter,
   );
 }
@@ -1252,7 +1274,7 @@ export function libraryMarkup(workspace, activity, library, error = "") {
     : `<div class="library-splitter" role="separator" aria-orientation="vertical" aria-label="Resize document details" aria-valuemin="280" aria-valuemax="640" aria-valuenow="${library.detail_width}" tabindex="0" data-library-splitter></div>`;
   const detailAside = detailFolded
     ? ""
-    : `<aside class="selection-pane" aria-live="polite" style="width:${library.detail_width}px">${selectionMarkup(library)}</aside>`;
+    : `<aside class="selection-pane" aria-live="polite" style="width:${library.detail_width}px">${selectionMarkup(library, workspace)}</aside>`;
   return `<section class="library-workspace">
     <div class="library-toolbar">
       <button class="icon-button" type="button" data-library-history="back" ${library.back.length ? "" : "disabled"} aria-label="Back" title="Back">${libraryIcon("back")}</button>
