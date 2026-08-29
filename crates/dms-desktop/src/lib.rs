@@ -6568,7 +6568,7 @@ mod tests {
             ),
         ];
         workspace
-            .replace_identity_source(Uuid::new_v4(), "Windows smoke", people.clone())
+            .replace_identity_source(tenant_id, Uuid::new_v4(), "Windows smoke", people.clone())
             .unwrap();
         workspace
             .update_workflow_policy(
@@ -6602,6 +6602,10 @@ mod tests {
                     })),
                     ..ControlUpdate::default()
                 },
+                &MutationPrincipal::authenticated_entra(AuthenticatedActor {
+                    tenant_id,
+                    object_id: editor_id,
+                }),
             )
             .unwrap();
         let settings = workspace.notification_settings().unwrap().clone();
