@@ -145,7 +145,14 @@ When implemented, the following must hold:
 17. Before a workspace is open, the shell shows the ten most recently opened
     libraries from per-user preferences. Each entry opens that edit root and
     has a separate removal control; removal never modifies workspace metadata
-    or files.
+    or files. With a workspace already open, **Open library…** presents those
+    same recent libraries plus the startup existing/open and initialize
+    controls. The current library, its lock, and its activities stay intact
+    until a different destination lock succeeds; success then silently ends
+    the former session, retains recent-library preferences, and opens the
+    destination Library. Opening the same workspace focuses its singleton
+    Library activity and performs no lock handoff. Only one workspace session
+    is active.
 18. When a selected destination cannot be entered, the blocking surface names
     that destination, explains the cause in operator language, and always
     offers an explicit return to the previous recoverable surface (Set up

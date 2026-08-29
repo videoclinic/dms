@@ -15,14 +15,18 @@ When implemented, the following must hold:
    containing the OS user, hostname, process id, and ISO-8601 UTC timestamp
    while it has the workspace open. The lock is advisory only; the
    application never blocks read-only filesystem access by other tools and
-   does not coordinate with non-app writers.
+   does not coordinate with non-app writers. A blocked open or switch names
+   the recorded OS user and hostname plus whether the lock is current or
+   stale; it does not display the process id and does not treat that label
+   as Entra identity or access-control authority.
 2. **Lock staleness.** On open, if the lock is older than the staleness
    threshold (default 24 hours, configurable per workspace), the application
    warns the operator and offers to take over. A take-over rewrites the
-   lock with the current operator's data. Setup also permits an explicit
-   override of any existing lock after warning that another application
-   instance may still be writing; ordinary open and stale-only takeover never
-   overwrite a current lock.
+   lock with the current operator's data. Setup and **Open library…** also
+   permit an explicit override of any existing lock after warning that another
+   application instance may still be writing; ordinary open and stale-only
+   takeover never overwrite a current lock. A blocked destination leaves the
+   current library active.
 3. **Atomic metadata write.** Every authoritative `.dms` metadata file is
    written to a sibling temporary file and atomically replaced. A crash before
    replacement leaves the previous valid file intact. Temporary artifacts are

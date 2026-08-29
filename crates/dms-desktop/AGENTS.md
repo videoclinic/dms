@@ -39,10 +39,13 @@ macOS.
   no shortcut artifact.
 - Opening or switching workspace sessions validates a group-bound Entra
   session before acquiring the destination advisory lock, offers explicit
-  stale takeover and a separately warned override-any-lock option from setup,
+  stale takeover and a separately warned override-any-lock option from setup
+  and **Open library…**,
   releases the previous lock only after acquisition succeeds, and removes the
   active lock on a clean window close only when its recorded owner still
-  matches. Bound workspace-scoped mutations (reassociation, document control,
+  matches. A blocked destination names the recorded OS user and hostname
+  without showing the process id, and leaves the current library unchanged.
+  Bound workspace-scoped mutations (reassociation, document control,
   notes, candidate/review/release, local lifecycle, periodic-review, reports)
   use that cached Entra actor or fail before changing metadata; new events
   record `authenticated_actor` and omit `local_os_user`. Unbound libraries keep
@@ -71,6 +74,11 @@ macOS.
   most ten unique edit roots in most-recent-first order; removing one never
   touches workspace metadata or files. A failed recent-library open reports the
   error beside that list and retains the edit root in the explicit open form.
+  With a workspace open, **Open library…** presents the same recent-library,
+  existing/open, and initialize controls. The current session stays intact
+  until a different destination lock succeeds; success silently ends the
+  former activities and opens the destination Library. Opening the same
+  workspace focuses Library without a lock handoff.
 - Register the configured `dms://` scheme in Windows and macOS bundles and, on
   Linux, at app start through the deep-link plugin's `register_all` (which
   writes `~/.local/share/applications/dms-desktop-handler.desktop` and makes it

@@ -240,8 +240,34 @@ const CAPS = [
           ${layer("Viewport-contained scrolling", "The sidebar and activity header stay available. Normal activities scroll inside main content; multi-pane workspaces give navigation, lists, and exhaustive details separate scroll regions.")}
           ${layer("Configuration → Document defaults", "One reusable Markdown Word template is chosen with the native .docx picker. Its exact edit-root-relative path and validation state stay visible with distinct Replace and confirmed Remove actions.")}
           ${layer("Permalink handler", "OS-registered dms:// URI resolves workspace + document IDs (CAP-0020); opens/focuses matching activity tab.")}
+          ${layer("Open library…", "Header control while a library is active. Same recent/open/initialize forms as startup. The current library stays locked until a different destination lock succeeds; success silently ends the former session.")}
         </div>
       </section>
+      <div class="grid-2">
+        <section class="card">
+          <h3 class="card-title">Open library while HR is active</h3>
+          <div class="mini-shell">
+            <div class="mini-main" style="width:100%">
+              <div class="mini-header">Library · policies/HR <span class="mini-bookmark">Open library…</span></div>
+              <div style="padding:0.75rem">
+                <p class="muted" style="margin:0 0 0.5rem;font-size:0.75rem">Current library stays open. Cancel restores this activity.</p>
+                <div class="callout warn">workspace has a current advisory lock. Held by anna on desk-1 (current, acquired 2026-08-29T10:00:00Z).</div>
+                <p class="hint">OS user and host only. Process id is not shown. Stale takeover and override remain explicit.</p>
+                <div class="row gap-2"><button class="btn">Open workspace</button><button class="btn outline">Cancel</button></div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="card">
+          <h3 class="card-title">Successful switch</h3>
+          <ul class="timeline">
+            <li><strong>Acquire destination lock</strong> — HR stays locked until this succeeds</li>
+            <li><strong>Release former lock</strong> — owner-matched only; failure rolls the destination lock back</li>
+            <li><strong>Silent close</strong> — former activities discarded, recent-library list retained</li>
+            <li><strong>Open Library</strong> — one active workspace session</li>
+          </ul>
+        </section>
+      </div>
       <div class="grid-2">
         <section class="card">
           <h3 class="card-title">Expanded left menu</h3>
