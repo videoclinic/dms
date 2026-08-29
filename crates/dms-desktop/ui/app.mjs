@@ -55,6 +55,7 @@ import {
   configurationMarkup,
   configurationMutationRequest,
   createConfigurationState,
+  identitySourceMarkup,
   openConfigurationSecondary,
   selectConfigurationFolder,
   setConfigurationRoute,
@@ -395,20 +396,117 @@ export function librarySessionAuthorizationPollDelayMs(status) {
   return Number.isFinite(delay) ? Math.max(0, delay) : 0;
 }
 
-export function librarySessionAuthorizationMarkup(status) {
+export function shouldPollIdentitySource(setup) {
+  return Boolean(setup?.challenge && setup.next_poll_delay_ms != null && !setup.preview && !setup.terminal);
+}
+
+export function identitySourcePollDelayMs(setup) {
+  if (!shouldPollIdentitySource(setup)) return null;
+  const delay = Number(setup.next_poll_delay_ms);
+  return Number.isFinite(delay) ? Math.max(0, delay) : 0;
+}
+
+export function shouldPollApproverSignIn(signIn) {
+  return Boolean(signIn?.challenge && signIn.next_poll_delay_ms != null && !signIn.actor && !signIn.terminal);
+}
+
+export function approverSignInPollDelayMs(signIn) {
+  if (!shouldPollApproverSignIn(signIn)) return null;
+  const delay = Number(signIn.next_poll_delay_ms);
+  return Number.isFinite(delay) ? Math.max(0, delay) : 0;
+}
+
+function quotedLibraryName(label, html = false) {
+  if (!label) return "this library";
+  const value = html ? escapeHtml(label) : label;
+  return `"${value}"`;
+}
+
+export function librarySessionBlocksShell(status) {
+  return Boolean(status && status.kind !== "inactive" && status.kind !== "valid");
+}
+
+export function librarySessionAuthorizationMarkup(status, configuration = null) {
   if (!status || status.kind === "inactive" || status.kind === "valid") return "";
-  const library = escapeHtml(status.library_label ?? "selected library");
+  const library = quotedLibraryName(status.library_label, true);
   const group = escapeHtml(status.group_label ?? "configured Microsoft Entra group");
+  const dismiss = '<button class="button secondary" type="button" data-library-session-dismiss>Choose another library</button>';
+  if (status.recovery_surface === "applied") {
+    return `<section class="card library-session-authorization" data-library-session-authorization="applied"><span class="badge">Identity source applied</span><h2>Open ${library}</h2><p>The verified tenant is recorded for <strong>${group}</strong>. Open this library to continue.</p><button class="button" type="button" data-library-session-open>Open ${library}</button>${dismiss}</section>`;
+  }
+  if (status.recovery_surface === "identity-source" && configuration?.snapshot) {
+    const preview = configuration.identity_setup?.preview;
+    const heading = preview
+      ? `Confirm identity source for ${library}`
+      : `Reapply identity source for ${library}`;
+    const copy = preview
+      ? `<p>Microsoft Entra sign-in succeeded for <strong>${group}</strong>. Confirm and apply to record the verified tenant, then Open ${library}.</p>`
+      : `<p>This library’s group binding for <strong>${group}</strong> has no verified tenant, so it cannot open yet. Sign in with the code below; DMS previews the group when sign-in completes. After you apply, Open ${library}.</p>`;
+    return `<section class="library-session-authorization" data-library-session-authorization="recovery"><span class="badge">${preview ? "Preview ready" : "Reapply identity source"}</span><h2>${heading}</h2>${copy}${identitySourceMarkup(configuration, { back: { label: "Choose another library", attrs: "data-library-session-dismiss" } })}</section>`;
+  }
   if (status.kind === "pending") {
     const expiry = status.expires_in_seconds != null
       ? `<dt>Expires in</dt><dd>${escapeHtml(String(status.expires_in_seconds))} seconds</dd>`
       : "";
-    return `<section class="card library-session-authorization" data-library-session-authorization="pending"><span class="badge">Library sign-in required</span><h2>Sign in to open ${library}</h2><p>This library requires a verified Microsoft Entra member of <strong>${group}</strong>. ${escapeHtml(status.message ?? "")}</p><dl class="details-grid"><dt>Code</dt><dd><code>${escapeHtml(status.user_code ?? "")}</code></dd><dt>Sign-in page</dt><dd><button class="button secondary" type="button" data-open-external="${escapeHtml(status.verification_uri ?? "")}">Open sign-in page</button></dd>${expiry}</dl></section>`;
+    return `<section class="card library-session-authorization" data-library-session-authorization="pending"><span class="badge">Library sign-in required</span><h2>Sign in to open ${library}</h2><p>This library requires a verified Microsoft Entra member of <strong>${group}</strong>. ${escapeHtml(status.message ?? "")}</p><dl class="details-grid"><dt>Code</dt><dd><code>${escapeHtml(status.user_code ?? "")}</code></dd><dt>Sign-in page</dt><dd><button class="button secondary" type="button" data-open-external="${escapeHtml(status.verification_uri ?? "")}">Open sign-in page</button></dd>${expiry}</dl>${dismiss}</section>`;
   }
   if (status.kind === "unavailable") {
-    return `<section class="card library-session-authorization" data-library-session-authorization="unavailable" role="alert"><span class="badge">Library sign-in unavailable</span><h2>Cannot open ${library}</h2><p>${escapeHtml(status.message ?? "")}</p></section>`;
+    const reapply = status.recovery === "reapply_identity_source";
+    const body = reapply
+      ? unverifiedIdentitySourceCopy(group)
+      : `<p>${escapeHtml(status.message ?? "")}</p>`;
+    const fix = reapply
+      ? '<button class="button" type="button" data-library-session-reapply>Reapply identity source</button>'
+      : "";
+    return `<section class="card library-session-authorization" data-library-session-authorization="unavailable" role="alert"><span class="badge">Library sign-in unavailable</span><h2>Cannot open ${library}</h2>${body}${fix}${dismiss}</section>`;
   }
-  return `<section class="card library-session-authorization" data-library-session-authorization="${escapeHtml(status.kind)}" role="alert"><span class="badge">Library sign-in needs attention</span><h2>Cannot open ${library}</h2><p>The verified member check for <strong>${group}</strong> did not complete. ${escapeHtml(status.message ?? "")}</p><button class="button" type="button" data-library-session-reissue>Reissue code</button></section>`;
+  return `<section class="card library-session-authorization" data-library-session-authorization="${escapeHtml(status.kind)}" role="alert"><span class="badge">Library sign-in needs attention</span><h2>Cannot open ${library}</h2><p>The verified member check for <strong>${group}</strong> did not complete. ${escapeHtml(status.message ?? "")}</p><button class="button" type="button" data-library-session-reissue>Reissue code</button>${dismiss}</section>`;
+}
+
+function unverifiedIdentitySourceCopy(group) {
+  return `<p>This library already has a Microsoft Entra group binding for <strong>${group}</strong>, but DMS has not recorded a verified tenant ID for that binding. Sign-in cannot start until the identity source is reapplied.</p><p><strong>Reapply identity source</strong> signs you in to Microsoft Entra, previews this library’s group, and writes the verified tenant with that group. The library stays closed until apply succeeds. After that, DMS asks you to sign in as an enabled group member to open it.</p>`;
+}
+
+export function librarySessionHeading(status, configuration = null) {
+  if (!status || status.kind === "inactive" || status.kind === "valid") return null;
+  const library = quotedLibraryName(status.library_label);
+  if (status.recovery_surface === "applied") return `Open ${library}`;
+  if (status.recovery_surface === "identity-source") {
+    return configuration?.identity_setup?.preview
+      ? `Confirm identity source for ${library}`
+      : `Reapply identity source for ${library}`;
+  }
+  if (status.kind === "pending") return `Sign in to open ${library}`;
+  return `Cannot open ${library}`;
+}
+
+export function dismissLibrarySessionAuthorization(state) {
+  const editRoot = state.library_session_authorization?.edit_root ?? "";
+  return {
+    ...state,
+    library_session_authorization: { kind: "inactive" },
+    configuration: createConfigurationState(),
+    setup_edit_root: editRoot || state.setup_edit_root,
+    current_key: null,
+  };
+}
+
+export function applyLibrarySessionIdentityRecovery(state, snapshot) {
+  return {
+    ...state,
+    configuration: applyConfigurationSnapshot(
+      { ...createConfigurationState(), secondary: "identity-source" },
+      snapshot,
+    ),
+    library_session_authorization: {
+      ...state.library_session_authorization,
+      recovery_surface: "identity-source",
+    },
+  };
+}
+
+function configurationEditRoot(state) {
+  return state.workspace?.edit_root ?? state.library_session_authorization?.edit_root ?? "";
 }
 
 export function workspaceFootMarkup(workspace) {
@@ -589,6 +687,184 @@ async function reissueLibrarySessionAuthorization() {
   render(appState);
 }
 
+async function pollIdentitySourceSignIn() {
+  const setup = appState.configuration.identity_setup;
+  if (!shouldPollIdentitySource(setup)) return;
+  try {
+    const status = await invokeCommand("poll_identity_source_sign_in", {});
+    if (status.kind === "preview") {
+      appState = {
+        ...appState,
+        configuration: {
+          ...appState.configuration,
+          identity_setup: { preview: status.preview, last_group_id: setup.last_group_id },
+          notice: "",
+          error: "",
+        },
+      };
+    } else if (status.kind === "pending") {
+      appState = {
+        ...appState,
+        configuration: {
+          ...appState.configuration,
+          identity_setup: { ...setup, next_poll_delay_ms: status.next_poll_delay_ms, terminal: null },
+        },
+      };
+    } else {
+      appState = {
+        ...appState,
+        configuration: {
+          ...appState.configuration,
+          identity_setup: {
+            ...setup,
+            terminal: status.kind,
+            message: status.message,
+            next_poll_delay_ms: null,
+          },
+        },
+      };
+    }
+  } catch (error) {
+    appState = {
+      ...appState,
+      configuration: {
+        ...appState.configuration,
+        identity_setup: {
+          ...setup,
+          terminal: "failed",
+          message: String(error),
+          next_poll_delay_ms: null,
+        },
+      },
+    };
+  }
+  render(appState);
+}
+
+async function reissueIdentitySourceSignIn() {
+  const setup = appState.configuration.identity_setup;
+  const groupId = setup?.last_group_id;
+  if (!groupId) return;
+  try {
+    const challenge = await invokeCommand("reissue_identity_source_sign_in", { groupId });
+    appState = {
+      ...appState,
+      configuration: {
+        ...appState.configuration,
+        identity_setup: {
+          challenge,
+          last_group_id: groupId,
+          next_poll_delay_ms: Number(challenge.poll_interval_seconds ?? 5) * 1000,
+          terminal: null,
+          preview: null,
+        },
+        notice: "",
+        error: "",
+      },
+    };
+  } catch (error) {
+    appState = {
+      ...appState,
+      configuration: {
+        ...appState.configuration,
+        identity_setup: {
+          ...setup,
+          terminal: "failed",
+          message: String(error),
+          next_poll_delay_ms: null,
+        },
+      },
+    };
+  }
+  render(appState);
+}
+
+async function pollApproverSignIn() {
+  const signIn = appState.library.approver_sign_in;
+  if (!shouldPollApproverSignIn(signIn)) return;
+  try {
+    const status = await invokeCommand("poll_approver_sign_in", {});
+    if (status.kind === "authorized") {
+      appState = {
+        ...appState,
+        library: { ...appState.library, approver_sign_in: { actor: status.actor } },
+        error: "",
+      };
+    } else if (status.kind === "pending") {
+      appState = {
+        ...appState,
+        library: {
+          ...appState.library,
+          approver_sign_in: { ...signIn, next_poll_delay_ms: status.next_poll_delay_ms, terminal: null },
+        },
+      };
+    } else {
+      appState = {
+        ...appState,
+        library: {
+          ...appState.library,
+          approver_sign_in: {
+            ...signIn,
+            terminal: status.kind,
+            message: status.message,
+            next_poll_delay_ms: null,
+          },
+        },
+      };
+    }
+  } catch (error) {
+    appState = {
+      ...appState,
+      library: {
+        ...appState.library,
+        approver_sign_in: {
+          ...signIn,
+          terminal: "failed",
+          message: String(error),
+          next_poll_delay_ms: null,
+        },
+      },
+    };
+  }
+  render(appState);
+}
+
+async function reissueApproverSignIn() {
+  if (!appState.workspace?.edit_root) return;
+  try {
+    const challenge = await invokeCommand("reissue_approver_sign_in", {
+      editRoot: appState.workspace.edit_root,
+    });
+    appState = {
+      ...appState,
+      library: {
+        ...appState.library,
+        approver_sign_in: {
+          challenge,
+          next_poll_delay_ms: Number(challenge.poll_interval_seconds ?? 5) * 1000,
+          terminal: null,
+        },
+        detail_error: "",
+      },
+      error: "",
+    };
+  } catch (error) {
+    appState = {
+      ...appState,
+      library: {
+        ...appState.library,
+        approver_sign_in: {
+          ...appState.library.approver_sign_in,
+          terminal: "failed",
+          message: String(error),
+          next_poll_delay_ms: null,
+        },
+      },
+    };
+  }
+  render(appState);
+}
+
 function groupMarkup(title, items, kind) {
   const rows = items.length === 0
     ? '<p class="empty-group">None</p>'
@@ -603,8 +879,13 @@ function groupMarkup(title, items, kind) {
 
 function renderNavigation(state) {
   const navigation = document.querySelector("#primary-navigation");
-  const destinations = state.workspace ? DESTINATIONS : [["Set up workspace", "+"]];
-  const selected = currentActivity(state)?.destination ?? (state.workspace ? "Library" : "Set up workspace");
+  const blocked = librarySessionBlocksShell(state.library_session_authorization);
+  const destinations = state.workspace && !blocked
+    ? DESTINATIONS
+    : [["Set up workspace", "+"]];
+  const selected = blocked || !state.workspace
+    ? "Set up workspace"
+    : (currentActivity(state)?.destination ?? "Library");
   navigation.innerHTML = destinations.map(([label, icon]) => {
     const current = selected === label ? " current" : "";
     return `<button class="nav-button${current}" type="button" data-destination="${escapeHtml(label)}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}"><span class="nav-icon" aria-hidden="true">${icon}</span><span class="item-label">${escapeHtml(label)}</span></button>`;
@@ -724,6 +1005,8 @@ function activityMarkup(state, activity) {
 
 let startupPollTimer = null;
 let librarySessionPollTimer = null;
+let identitySourcePollTimer = null;
+let approverPollTimer = null;
 
 function render(state) {
   const root = document.querySelector("#app");
@@ -732,10 +1015,18 @@ function render(state) {
   renderGroups(state);
 
   const activity = currentActivity(state);
-  document.querySelector("#activity-heading").textContent = activity?.label ?? "Set up workspace";
+  const librarySessionMarkup = librarySessionAuthorizationMarkup(
+    state.library_session_authorization,
+    state.configuration,
+  );
+  document.querySelector("#activity-heading").textContent = librarySessionHeading(
+    state.library_session_authorization,
+    state.configuration,
+  )
+    ?? activity?.label
+    ?? "Set up workspace";
   const mainContent = document.querySelector("#main-content");
   mainContent.classList.toggle("library-active", activity?.task === "Library");
-  const librarySessionMarkup = librarySessionAuthorizationMarkup(state.library_session_authorization);
   mainContent.innerHTML = librarySessionMarkup || (state.workspace
     ? activityMarkup(state, activity)
     : setupMarkup(state.error, state.preferences.recent_libraries, state.setup_edit_root));
@@ -754,6 +1045,16 @@ function render(state) {
   librarySessionPollTimer = librarySessionDelay == null
     ? null
     : setTimeout(() => { void pollLibrarySessionAuthorization(); }, librarySessionDelay);
+  cancelStartupAuthorizationPoll(identitySourcePollTimer);
+  const identitySourceDelay = identitySourcePollDelayMs(state.configuration.identity_setup);
+  identitySourcePollTimer = identitySourceDelay == null
+    ? null
+    : setTimeout(() => { void pollIdentitySourceSignIn(); }, identitySourceDelay);
+  cancelStartupAuthorizationPoll(approverPollTimer);
+  const approverDelay = approverSignInPollDelayMs(state.library.approver_sign_in);
+  approverPollTimer = approverDelay == null
+    ? null
+    : setTimeout(() => { void pollApproverSignIn(); }, approverDelay);
 
   const bookmark = document.querySelector("#bookmark-view");
   const bookmarkTarget = bookmarkActivity(state);
@@ -765,7 +1066,9 @@ function render(state) {
   bookmark.setAttribute("aria-pressed", String(Boolean(bookmarked)));
 
   const foot = document.querySelector("#workspace-foot");
-  foot.innerHTML = workspaceFootMarkup(state.workspace);
+  foot.innerHTML = librarySessionBlocksShell(state.library_session_authorization)
+    ? workspaceFootMarkup(null)
+    : workspaceFootMarkup(state.workspace);
   bindReviewScheduleForm(document.querySelector("#library-review-schedule-form"));
   bindCandidateTargetForm(document.querySelector('[data-library-lifecycle-form="submit_candidate"]'));
 }
@@ -1588,7 +1891,15 @@ async function handleLibraryClick(event) {
       });
       appState = {
         ...appState,
-        library: { ...appState.library, approver_sign_in: { challenge }, detail_error: "" },
+        library: {
+          ...appState.library,
+          approver_sign_in: {
+            challenge,
+            next_poll_delay_ms: Number(challenge.poll_interval_seconds ?? 5) * 1000,
+            terminal: null,
+          },
+          detail_error: "",
+        },
         error: "",
       };
     } catch (error) {
@@ -1600,25 +1911,8 @@ async function handleLibraryClick(event) {
     render(appState);
     return true;
   }
-  const approverSignInCompletion = event.target.closest("[data-library-approver-sign-in-complete]")
-    ?.dataset.libraryApproverSignInComplete;
-  if (approverSignInCompletion) {
-    try {
-      const actor = await invokeCommand("complete_approver_sign_in", {
-        challengeId: approverSignInCompletion,
-      });
-      appState = {
-        ...appState,
-        library: { ...appState.library, approver_sign_in: { actor } },
-        error: "",
-      };
-    } catch (error) {
-      appState = {
-        ...appState,
-        library: { ...appState.library, detail_error: String(error) },
-      };
-    }
-    render(appState);
+  if (event.target.closest("[data-library-approver-reissue]")) {
+    await reissueApproverSignIn();
     return true;
   }
   const lifecycleAction = event.target.closest("[data-library-lifecycle-action]")
@@ -1819,6 +2113,41 @@ async function handleClick(event) {
 
   if (event.target.closest("[data-library-session-reissue]")) {
     await reissueLibrarySessionAuthorization();
+    return;
+  }
+
+  if (event.target.closest("[data-identity-source-reissue]")) {
+    await reissueIdentitySourceSignIn();
+    return;
+  }
+
+  if (event.target.closest("[data-library-session-open]")) {
+    const editRoot = appState.library_session_authorization?.edit_root;
+    if (!editRoot) return;
+    await activateWorkspace({ edit_root: editRoot }, appState.library_session_authorization.lock_options ?? {});
+    return;
+  }
+
+  if (event.target.closest("[data-library-session-dismiss]")) {
+    appState = dismissLibrarySessionAuthorization(appState);
+    render(appState);
+    return;
+  }
+
+  if (event.target.closest("[data-library-session-reapply]")) {
+    const editRoot = appState.library_session_authorization?.edit_root;
+    if (!editRoot) return;
+    try {
+      const snapshot = await invokeCommand("load_workspace_configuration", { editRoot });
+      appState = applyLibrarySessionIdentityRecovery(appState, snapshot);
+    } catch (error) {
+      appState = applyLibrarySessionAuthorization(appState, {
+        ...appState.library_session_authorization,
+        kind: "unavailable",
+        message: String(error),
+      }, appState.library_session_authorization.lock_options);
+    }
+    render(appState);
     return;
   }
 
@@ -2172,7 +2501,7 @@ async function handleSubmit(event) {
         appState.configuration.selected_folder,
       );
       const result = await invokeCommand(request.command, {
-        editRoot: appState.workspace.edit_root,
+        editRoot: configurationEditRoot(appState),
         ...request.arguments,
       });
       if (configurationMutation === "identity-source-start") {
@@ -2180,18 +2509,16 @@ async function handleSubmit(event) {
           ...appState,
           configuration: {
             ...appState.configuration,
-            identity_setup: { challenge: result, last_group_id: request.arguments.groupId },
+            identity_setup: {
+              challenge: result,
+              last_group_id: request.arguments.groupId,
+              next_poll_delay_ms: Number(result.poll_interval_seconds ?? 5) * 1000,
+              terminal: null,
+              preview: null,
+            },
             notice: "",
             error: "",
           },
-        };
-        render(appState);
-        return;
-      }
-      if (configurationMutation === "identity-source-complete") {
-        appState = {
-          ...appState,
-          configuration: { ...appState.configuration, identity_setup: { preview: result }, notice: "", error: "" },
         };
         render(appState);
         return;
@@ -2229,6 +2556,26 @@ async function handleSubmit(event) {
         render(appState);
         return;
       }
+      if (
+        configurationMutation === "identity-source-apply"
+        && librarySessionBlocksShell(appState.library_session_authorization)
+      ) {
+        const editRoot = configurationEditRoot(appState);
+        const lockOptions = appState.library_session_authorization.lock_options ?? {};
+        appState = {
+          ...appState,
+          workspace: null,
+          configuration: createConfigurationState(),
+          library_session_authorization: {
+            ...appState.library_session_authorization,
+            kind: "unavailable",
+            recovery_surface: "applied",
+            next_poll_delay_ms: null,
+          },
+        };
+        render(appState);
+        return;
+      }
       const notices = {
         "markdown-template-select": "Word template selected and validated.",
         "markdown-template-remove": "Word template configuration removed.",
@@ -2243,12 +2590,13 @@ async function handleSubmit(event) {
         notifications: "Notification transport saved.",
       };
       const notice = notices[configurationMutation] ?? "Configuration saved.";
+      const recoveringIdentitySource = appState.library_session_authorization?.recovery_surface === "identity-source";
       appState = {
         ...appState,
-        workspace: result.workspace,
+        workspace: recoveringIdentitySource ? appState.workspace : result.workspace,
         configuration: {
           ...applyConfigurationSnapshot(appState.configuration, result, notice),
-          identity_setup: null,
+          identity_setup: recoveringIdentitySource ? appState.configuration.identity_setup : null,
         },
       };
     } catch (error) {

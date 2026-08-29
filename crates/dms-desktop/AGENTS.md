@@ -57,7 +57,15 @@ macOS.
   successful sign-in revalidates membership and acquires its destination lock.
   It never opens a browser automatically; only the explicit host-mediated
   **Open sign-in page** control does. The direct advisory-lock command rejects
-  group-bound libraries so IPC cannot bypass verified activation.
+  group-bound libraries so IPC cannot bypass verified activation. A blocking
+  library-session surface always offers **Choose another library** back to Set
+  up workspace. An unverified identity source offers **Reapply identity source**
+  against the selected edit root without acquiring the destination lock or
+  activating Library/Configuration destinations. Identity-source and approver
+  device-flow poll at the provider interval, continue without a complete-click,
+  and offer **Reissue code** after expiry, decline, or failure. After a
+  successful reapply, the shell offers **Open "{library}"** instead of opening
+  automatically. Descriptive copy quotes the library name.
 - Store sidebar, saved-view, and recent-library preferences in the OS user
   app-config directory, never under `<edit-root>/.dms`. Recent libraries are at
   most ten unique edit roots in most-recent-first order; removing one never

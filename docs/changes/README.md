@@ -35,6 +35,8 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
+| [CHG-0044](archive/CHG-0044-entra-device-flow-poll-and-open.md) | Entra device-flow poll, reissue, and Open library | done | CAP-0005, CAP-0021 |
+| [CHG-0043](archive/CHG-0043-blocked-library-recovery-navigation.md) | Blocked-library recovery navigation | done | CAP-0005, CAP-0021 |
 | [CHG-0035](archive/CHG-0035-entra-session-required-for-group-bound-library.md) | Entra session required for a group-bound library | done | CAP-0011, CAP-0021 |
 | [CHG-0033](archive/CHG-0033-bounded-office-source-history-import.md) | Bounded Office source-history import | done | CAP-0006, CAP-0011, CAP-0012, CAP-0015 |
 | [CHG-0032](archive/CHG-0032-windows-edit-root-library-shortcut.md) | Windows edit-root library shortcut | done | CAP-0001, CAP-0006, CAP-0020 |

@@ -847,6 +847,7 @@ test("approver sign-in challenge opens the host browser without WebView navigati
   assert.match(markup, /data-open-external="https:\/\/microsoft\.com\/devicelogin"/);
   assert.match(markup, /Open sign-in page/);
   assert.doesNotMatch(markup, /target="_blank"/);
+  assert.doesNotMatch(markup, /Complete approver sign-in/);
 });
 
 test("failed approver challenge offers a same-surface restart", () => {
@@ -860,13 +861,15 @@ test("failed approver challenge offers a same-surface restart", () => {
     tree: snapshot("Policies").tree,
     folder: snapshot("Policies", [registered]).folder,
     selection: ["Policies/Handbook.md"],
-    detail_error: "Microsoft Entra sign-in challenge is no longer available; start again",
+    detail_error: "Microsoft Entra sign-in expired.",
     approver_sign_in: {
       challenge: {
         challenge_id: "challenge-1",
         user_code: "ABCD-EFGH",
         verification_uri: "https://microsoft.com/devicelogin",
       },
+      terminal: "expired",
+      message: "Microsoft Entra sign-in expired.",
     },
     detail: {
       document_id: "doc-1",
@@ -887,9 +890,9 @@ test("failed approver challenge offers a same-surface restart", () => {
     { route_state: { folder: "Policies" } },
     library,
   );
-  assert.match(failedMarkup, /Previous sign-in failed/);
-  assert.match(failedMarkup, /data-library-approver-sign-in/);
-  assert.match(failedMarkup, /Sign in again/);
+  assert.match(failedMarkup, /Microsoft Entra sign-in expired/);
+  assert.match(failedMarkup, /data-library-approver-reissue/);
+  assert.match(failedMarkup, /Reissue code/);
   assert.doesNotMatch(failedMarkup, /Complete approver sign-in/);
   assert.doesNotMatch(failedMarkup, /data-library-approver-sign-in-complete/);
   assert.doesNotMatch(failedMarkup, /ABCD-EFGH/);
@@ -897,10 +900,10 @@ test("failed approver challenge offers a same-surface restart", () => {
   const activeMarkup = libraryMarkup(
     { edit_root: "/srv/Edit", workspace_id: "ws-1" },
     { route_state: { folder: "Policies" } },
-    { ...library, detail_error: "" },
+    { ...library, approver_sign_in: { ...library.approver_sign_in, terminal: null, message: null } },
   );
-  assert.doesNotMatch(activeMarkup, /Sign in again/);
-  assert.doesNotMatch(activeMarkup, /Previous sign-in failed/);
+  assert.doesNotMatch(activeMarkup, /Reissue code/);
+  assert.match(activeMarkup, /ABCD-EFGH/);
 });
 
 test("authenticated approver readiness does not claim an unavailable display name", () => {

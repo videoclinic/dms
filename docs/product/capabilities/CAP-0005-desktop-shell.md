@@ -146,6 +146,16 @@ When implemented, the following must hold:
     libraries from per-user preferences. Each entry opens that edit root and
     has a separate removal control; removal never modifies workspace metadata
     or files.
+18. When a selected destination cannot be entered, the blocking surface names
+    that destination, explains the cause in operator language, and always
+    offers an explicit return to the previous recoverable surface (Set up
+    workspace, including recent libraries and the open/initialize forms). When
+    the failure is remediable without activating the blocked destination, it
+    also offers a named action that opens that remediating surface. After a
+    remediating apply that still requires a later destination open, the blocking
+    surface offers **Open "{library}"** instead of opening automatically. When a
+    library name appears in descriptive copy, wrap it in ASCII double quotes so
+    it is distinct from UI chrome. The activity header matches the blocking task.
 
 ## Non-goals
 

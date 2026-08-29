@@ -6,7 +6,7 @@
 | Status | implemented |
 | Authority | Microsoft Entra ID group |
 | Storage | `<edit-root>/.dms/` group binding and display cache; OS-user app-global Entra settings; OS credential store token cache |
-| Tests | [Core policy and schema migration tests](../../../crates/dms-core/tests/policies.rs), [desktop Graph, approver-identity, startup device authorization, and configuration tests](../../../crates/dms-desktop/src/graph.rs), [lifecycle decision tests](../../../crates/dms-core/tests/lifecycle.rs), [Library approver frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [configuration UI tests](../../../crates/dms-desktop/ui/configuration.test.mjs), [app-shell startup authorization tests](../../../crates/dms-desktop/ui/app.test.mjs), and [Phase 9l configured Windows evidence](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md) |
+| Tests | [Core policy and schema migration tests](../../../crates/dms-core/tests/policies.rs), [desktop Graph, approver-identity, startup device authorization, and configuration tests](../../../crates/dms-desktop/src/graph.rs), [lifecycle decision tests](../../../crates/dms-core/tests/lifecycle.rs), [Library approver frontend tests](../../../crates/dms-desktop/ui/library.test.mjs), [configuration UI tests](../../../crates/dms-desktop/ui/configuration.test.mjs), [app-shell startup and blocked-library authorization tests](../../../crates/dms-desktop/ui/app.test.mjs), and [Phase 9l configured Windows evidence](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md) |
 
 ## Operational details
 
@@ -34,10 +34,15 @@
   Credential Manager per-password limit, DMS writes UTF-16-safe fragments
   under a versioned manifest and continues to read the previous single-entry
   cache format.
-- An expired or failed Microsoft Entra device-flow challenge surfaces an
-  explicit **Sign in again** control on the same surface. It reissues a fresh
-  challenge with the operator's transient last group ID, and the Graph adapter
-  discards expired pending challenges.
+- An expired or failed Microsoft Entra device-flow challenge surfaces
+  **Reissue code** on the same surface. It reissues a fresh challenge with the
+  operator's transient last group ID, and the Graph adapter discards expired
+  pending challenges.
+- Identity-source sign-in shares the same poll/reissue/apply pattern as the
+  startup and library-session device flows: it polls at the provider interval,
+  exposes host-mediated **Open sign-in page** with the device code and expiry,
+  accepts the Microsoft Entra sign-in without an extra **I have signed in**
+  click, and on terminal expiry, decline, or failure offers **Reissue code**.
 - Saving app-global Entra settings clears any rendered challenge or preview
   invalidated when the Graph client adopts that configuration.
 - When both effective identifiers are process-environment values, desktop
@@ -61,6 +66,18 @@
   Successful sign-in re-resolves `/me` and fresh enabled direct membership before
   acquiring the destination advisory lock; disabled, non-member, tenant-mismatch,
   inaccessible-group, and unavailable-service outcomes leave the library inactive.
+  Every blocking library-session surface offers **Choose another library**, which
+  returns to Set up workspace and keeps the failed edit root in the open form.
+  When the identity source has no verified tenant ID, the shell explains that the
+  library already has a group binding, DMS has not recorded a verified tenant, and
+  sign-in cannot start until the identity source is reapplied. **Reapply identity
+  source** loads the identity-source surface for that edit root without acquiring
+  the advisory lock or opening Library/Configuration destinations. While that
+  recovery is in progress the shell shows the reapply task, not the blocked-open
+  error; a ready preview asks the operator to confirm and apply. Reapply means:
+  sign in to Microsoft Entra, preview the library group, and apply so DMS records
+  the verified tenant with that group. After a successful apply, the shell offers
+  **Open "{library}"**; it does not open the library automatically.
 2. Replacing a binding retains historical evidence, invalidates stale workflow
    candidates, and leaves existing role references unresolved rather than mapping
    them to the replacement group.
@@ -70,9 +87,11 @@
    A successful direct-member response with zero eligible users is represented
    separately from refresh, permission, tenant, inaccessible-group, and
    disabled-only failures.
-4. An approver sign-in command uses delegated device authorization, resolves
-   `/me` to an immutable tenant/object-ID actor, and leaves the actor available
-   for one lifecycle decision.
+4. An approver sign-in uses the same delegated device-flow as identity-source
+   setup: poll at the provider interval, **Open sign-in page**, continue when
+   sign-in succeeds without a complete-click, and **Reissue code** after expiry,
+   decline, or failure. It resolves `/me` to an immutable tenant/object-ID actor
+   and leaves that actor available for one lifecycle decision.
 5. The public-client and tenant IDs are app-global configuration. On Windows,
    a complete non-secret `HKLM\SOFTWARE\Policies\Videoclinic\DMS` policy pair
    (`EntraClientId`, `EntraTenantId`) takes precedence over non-empty
@@ -172,7 +191,9 @@
     process-session-only authorization state: it authorizes the active library's
     mutations and evidence without entering `.dms`. A direct advisory-lock IPC
     call cannot bypass this activation boundary. Unbound libraries retain local
-    operator activation.
+    operator activation. A blocking library-session surface always returns to
+    Set up workspace. An unverified tenant binding is remediable from that
+    surface by reapplying the identity source without activating the library.
 
 ## Non-goals
 
@@ -199,4 +220,8 @@
   archived [`CHG-0002`](../../changes/archive/CHG-0002-entra-configuration-ux-fixes.md)
   records the completed Entra configuration UX corrections; archived
   [`CHG-0003`](../../changes/archive/CHG-0003-retry-safe-entra-identity-application.md)
-  records reliable identity-source application.
+  records reliable identity-source application; archived
+  [`CHG-0043`](../../changes/archive/CHG-0043-blocked-library-recovery-navigation.md)
+  records blocked-library return navigation and unverified-source recovery;
+  archived [`CHG-0044`](../../changes/archive/CHG-0044-entra-device-flow-poll-and-open.md)
+  records shared device-flow poll/reissue and Open-library after apply.

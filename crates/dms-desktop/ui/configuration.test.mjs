@@ -48,6 +48,7 @@ const snapshot = {
   ],
   identity_source: {
     binding_id: "binding-1",
+    tenant_id: "tenant-1",
     group_id: "group-1",
     group_label: "DMS workflow",
     last_refreshed_at: "2026-08-11T12:00:00Z",
@@ -285,12 +286,47 @@ test("identity-source overview shows effective global IDs and opens the encoded 
   assert.match(markup, /data-open-external="https:\/\/myaccount\.microsoft\.com\/groups\/group%2F1%3Fscope%3Ddirect%20user"/);
   assert.match(markup, /Open Microsoft 365 group page for Group ID group\/1\?scope=direct user/);
   assert.doesNotMatch(markup, /target="_blank"/);
+  assert.match(markup, /Library tenant/);
+  assert.match(markup, /value="group\/1\?scope=direct user"/);
 
   const noSourceMarkup = configurationMarkup({
     ...state,
     snapshot: { ...state.snapshot, identity_source: null },
   }, assistancePolicy);
   assert.doesNotMatch(noSourceMarkup, /myaccount\.microsoft\.com\/groups/);
+});
+
+test("unverified identity source prefills the group and names reapply", () => {
+  let state = applyConfigurationSnapshot(createConfigurationState(), {
+    ...snapshot,
+    identity_source: {
+      ...snapshot.identity_source,
+      tenant_id: null,
+    },
+  });
+  state = openConfigurationSecondary(state, "identity-source");
+  const markup = configurationMarkup(state, assistancePolicy);
+
+  assert.match(markup, /Unverified — reapply this identity source/);
+  assert.match(markup, /<h3>Reapply identity source<\/h3>/);
+  assert.match(markup, /record its verified tenant/);
+  assert.match(markup, /value="group-1"/);
+  assert.doesNotMatch(markup, /Replace identity source/);
+
+  state = {
+    ...state,
+    identity_setup: {
+      preview: {
+        preview_id: "preview-reapply",
+        tenant_display: "Example tenant",
+        group_label: "DMS workflow",
+        eligible_people: snapshot.eligible_people,
+      },
+    },
+  };
+  const preview = configurationMarkup(state, assistancePolicy);
+  assert.match(preview, /records the verified tenant for this library/);
+  assert.doesNotMatch(preview, /replaces the current people source/);
 });
 
 test("identity-source challenge opens the host browser without WebView navigation", () => {
@@ -312,14 +348,15 @@ test("identity-source challenge opens the host browser without WebView navigatio
   assert.match(markup, /data-open-external="https:\/\/microsoft\.com\/devicelogin"/);
   assert.match(markup, /Open sign-in page/);
   assert.doesNotMatch(markup, /target="_blank"/);
+  assert.doesNotMatch(markup, /I have signed in — preview group/);
+  assert.doesNotMatch(markup, /data-configuration-form="identity-source-complete"/);
 });
 
-test("failed identity-source challenge offers a same-surface restart with the last group", () => {
+test("failed identity-source challenge offers a same-surface reissue with the last group", () => {
   let state = applyConfigurationSnapshot(createConfigurationState(), snapshot);
   state = openConfigurationSecondary(state, "identity-source");
   state = {
     ...state,
-    error: "Microsoft Entra sign-in challenge is no longer available; start again",
     identity_setup: {
       challenge: {
         challenge_id: "challenge-1",
@@ -328,21 +365,25 @@ test("failed identity-source challenge offers a same-surface restart with the la
         verification_uri: "https://microsoft.com/devicelogin",
       },
       last_group_id: "00000000-0000-0000-0000-000000000000",
+      terminal: "expired",
+      message: "Microsoft Entra sign-in expired.",
     },
   };
 
   const failedMarkup = configurationMarkup(state, assistancePolicy);
-  assert.match(failedMarkup, /Previous sign-in failed/);
-  assert.match(failedMarkup, /data-configuration-form="identity-source-start"/);
-  assert.match(failedMarkup, /name="groupId" value="00000000-0000-0000-0000-000000000000"/);
-  assert.match(failedMarkup, /Sign in again/);
+  assert.match(failedMarkup, /Microsoft Entra sign-in needs attention/);
+  assert.match(failedMarkup, /data-identity-source-reissue/);
+  assert.match(failedMarkup, /Reissue code/);
   assert.doesNotMatch(failedMarkup, /I have signed in — preview group/);
   assert.doesNotMatch(failedMarkup, /data-configuration-form="identity-source-complete"/);
   assert.doesNotMatch(failedMarkup, /ABCD-EFGH/);
 
-  const activeMarkup = configurationMarkup({ ...state, error: "" }, assistancePolicy);
-  assert.doesNotMatch(activeMarkup, /Sign in again/);
-  assert.doesNotMatch(activeMarkup, /Previous sign-in failed/);
+  const activeMarkup = configurationMarkup({
+    ...state,
+    identity_setup: { ...state.identity_setup, terminal: null, message: null },
+  }, assistancePolicy);
+  assert.doesNotMatch(activeMarkup, /Reissue code/);
+  assert.doesNotMatch(activeMarkup, /Microsoft Entra sign-in needs attention/);
 });
 
 test("identity-source setup does not own the app-shell startup authorization card", () => {

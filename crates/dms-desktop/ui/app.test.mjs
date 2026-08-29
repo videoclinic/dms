@@ -28,11 +28,16 @@ import {
   workspaceSetupRequest,
   applyStartupAuthorization,
   applyLibrarySessionAuthorization,
+  applyLibrarySessionIdentityRecovery,
   cancelStartupAuthorizationPoll,
+  dismissLibrarySessionAuthorization,
+  identitySourcePollDelayMs,
   librarySessionAuthorizationMarkup,
   librarySessionAuthorizationPollDelayMs,
+  librarySessionHeading,
   scheduleStartupAuthorizationPoll,
   shouldPollLibrarySessionAuthorization,
+  shouldPollIdentitySource,
   shouldPollStartupAuthorization,
   startupAuthorizationMarkup,
   startupAuthorizationPollDelayMs,
@@ -876,14 +881,17 @@ test("bound-library authorization blocks destinations without exposing credentia
   const markup = librarySessionAuthorizationMarkup(state.library_session_authorization);
 
   assert.match(markup, /data-library-session-authorization="pending"/);
-  assert.match(markup, /Sign in to open Quality/);
+  assert.match(markup, /Sign in to open "Quality"/);
   assert.match(markup, /Quality workflow/);
   assert.match(markup, /ABCD-EFGH/);
   assert.match(markup, /Open sign-in page/);
+  assert.match(markup, /Choose another library/);
+  assert.match(markup, /data-library-session-dismiss/);
   assert.doesNotMatch(markup, /device_code|access_token|refresh_token/);
   assert.equal(shouldPollLibrarySessionAuthorization(state.library_session_authorization), true);
   assert.equal(librarySessionAuthorizationPollDelayMs(state.library_session_authorization), 5000);
   assert.equal(state.library_session_authorization.lock_options.takeOverStale, true);
+  assert.equal(librarySessionHeading(state.library_session_authorization), 'Sign in to open "Quality"');
 });
 
 test("terminal bound-library authorization reissues only when the service is reachable", () => {
@@ -901,5 +909,156 @@ test("terminal bound-library authorization reissues only when the service is rea
 
   assert.match(expired, /data-library-session-reissue/);
   assert.match(expired, /Reissue code/);
+  assert.match(expired, /Choose another library/);
   assert.doesNotMatch(unavailable, /data-library-session-reissue/);
+  assert.match(unavailable, /Choose another library/);
+  assert.doesNotMatch(unavailable, /Reapply identity source/);
+});
+
+test("unverified identity source explains reapply and returns to setup", () => {
+  const unavailable = librarySessionAuthorizationMarkup({
+    kind: "unavailable",
+    edit_root: "/DMS/edit",
+    library_label: "edit",
+    group_label: "DMS Workflow Users",
+    message: "this library's Microsoft Entra identity source has no verified tenant; reapply the identity source before signing in",
+    recovery: "reapply_identity_source",
+  });
+
+  assert.match(unavailable, /Cannot open "edit"/);
+  assert.match(unavailable, /has not recorded a verified tenant ID/);
+  assert.match(unavailable, /writes the verified tenant with that group/);
+  assert.match(unavailable, /data-library-session-reapply/);
+  assert.match(unavailable, /Reapply identity source/);
+  assert.match(unavailable, /Choose another library/);
+  assert.doesNotMatch(unavailable, /reapply it before signing in/);
+  assert.equal(librarySessionHeading({
+    kind: "unavailable",
+    library_label: "edit",
+    recovery: "reapply_identity_source",
+  }), 'Cannot open "edit"');
+
+  const dismissed = dismissLibrarySessionAuthorization(applyLibrarySessionAuthorization(createInitialState(), {
+    kind: "unavailable",
+    edit_root: "/DMS/edit",
+    library_label: "edit",
+    recovery: "reapply_identity_source",
+  }));
+  assert.equal(dismissed.library_session_authorization.kind, "inactive");
+  assert.equal(dismissed.setup_edit_root, "/DMS/edit");
+  assert.equal(dismissed.current_key, null);
+  assert.equal(dismissed.workspace, null);
+});
+
+test("identity-source recovery does not activate the blocked library", () => {
+  const blocked = applyLibrarySessionAuthorization(createInitialState(), {
+    kind: "unavailable",
+    edit_root: "/DMS/edit",
+    library_label: "edit",
+    group_label: "DMS Workflow Users",
+    recovery: "reapply_identity_source",
+  });
+  const recovered = applyLibrarySessionIdentityRecovery(blocked, {
+    workspace: {
+      workspace_id: workspaceId,
+      edit_root: "/DMS/edit",
+      publish_root: "/DMS/publish",
+      document_count: 0,
+    },
+    identity_source: {
+      binding_id: "binding-1",
+      group_id: "group-1",
+      group_label: "DMS Workflow Users",
+    },
+    eligible_people: [],
+    global_entra_configuration: {
+      client_id: "client-1",
+      tenant_id: "tenant-1",
+      client_id_source: "saved",
+      tenant_id_source: "saved",
+    },
+    policy_folders: [{ relative_path: "." }],
+    workflow_policies: [],
+    document_types: [],
+    confidentiality_types: [],
+    confidentiality_policies: [],
+  });
+  const markup = librarySessionAuthorizationMarkup(
+    recovered.library_session_authorization,
+    recovered.configuration,
+  );
+
+  assert.equal(recovered.workspace, null);
+  assert.equal(recovered.library_session_authorization.recovery_surface, "identity-source");
+  assert.match(markup, /data-library-session-authorization="recovery"/);
+  assert.match(markup, /Reapply identity source for "edit"/);
+  assert.doesNotMatch(markup, /Cannot open edit/);
+  assert.match(markup, /Unverified — reapply this identity source/);
+  assert.match(markup, /value="group-1"/);
+  assert.match(markup, /Choose another library/);
+  assert.doesNotMatch(markup, /Back to Workflow/);
+  assert.equal(librarySessionHeading(recovered.library_session_authorization, recovered.configuration), 'Reapply identity source for "edit"');
+
+  const withPreview = {
+    ...recovered,
+    configuration: {
+      ...recovered.configuration,
+      identity_setup: {
+        preview: {
+          preview_id: "preview-1",
+          tenant_display: "Example Healthcare GmbH",
+          group_label: "DMS Workflow Users",
+          eligible_people: [],
+        },
+      },
+    },
+  };
+  const previewMarkup = librarySessionAuthorizationMarkup(
+    withPreview.library_session_authorization,
+    withPreview.configuration,
+  );
+  assert.match(previewMarkup, /Preview ready/);
+  assert.match(previewMarkup, /Confirm identity source for "edit"/);
+  assert.match(previewMarkup, /then Open "edit"/);
+  assert.doesNotMatch(previewMarkup, /Cannot open edit/);
+  assert.doesNotMatch(previewMarkup, /has not recorded a verified tenant ID/);
+  assert.doesNotMatch(previewMarkup, /DMS will then try to open/);
+  assert.equal(
+    librarySessionHeading(withPreview.library_session_authorization, withPreview.configuration),
+    'Confirm identity source for "edit"',
+  );
+
+  const applied = {
+    ...recovered,
+    library_session_authorization: {
+      ...recovered.library_session_authorization,
+      recovery_surface: "applied",
+    },
+  };
+  const appliedMarkup = librarySessionAuthorizationMarkup(
+    applied.library_session_authorization,
+    applied.configuration,
+  );
+  assert.match(appliedMarkup, /Identity source applied/);
+  assert.match(appliedMarkup, /data-library-session-open/);
+  assert.match(appliedMarkup, />Open "edit"</);
+  assert.doesNotMatch(appliedMarkup, /DMS will then try to open/);
+  assert.equal(librarySessionHeading(applied.library_session_authorization), 'Open "edit"');
+});
+
+test("identity-source device-flow polls until preview and stops after a terminal result", () => {
+  const pending = {
+    challenge: {
+      challenge_id: "challenge-1",
+      user_code: "ABCD-EFGH",
+      verification_uri: "https://microsoft.com/devicelogin",
+      poll_interval_seconds: 5,
+    },
+    last_group_id: "group-1",
+    next_poll_delay_ms: 1500,
+  };
+  assert.equal(shouldPollIdentitySource(pending), true);
+  assert.equal(identitySourcePollDelayMs(pending), 1500);
+  assert.equal(shouldPollIdentitySource({ ...pending, preview: { preview_id: "p1" } }), false);
+  assert.equal(shouldPollIdentitySource({ ...pending, terminal: "expired", next_poll_delay_ms: null }), false);
 });

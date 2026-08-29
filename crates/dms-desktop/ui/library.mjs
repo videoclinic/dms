@@ -1075,11 +1075,11 @@ function externalLifecycleMarkup(library, detail) {
   const placeholderBlock = detail.requires_identity_handover && !peopleAvailable
     ? '<p class="library-detail-error" role="status">Candidate submission and release are blocked while &lt;owner&gt; and &lt;editor&gt; remain unresolved. Refresh the identity source after real people are available.</p>'
     : "";
-  const failedSignIn = Boolean(library.approver_sign_in?.challenge && library.detail_error);
-  const signIn = library.approver_sign_in?.challenge
+  const failedSignIn = Boolean(library.approver_sign_in?.terminal);
+  const signIn = library.approver_sign_in?.challenge && !library.approver_sign_in?.actor
     ? failedSignIn
-      ? '<p class="source-path"><strong>Previous sign-in failed.</strong> Generate a new Microsoft Entra device code before continuing.</p><button class="button secondary" type="button" data-library-approver-sign-in>Sign in again</button>'
-      : `<p class="source-path">Complete Microsoft sign-in with code ${escapeHtml(library.approver_sign_in.challenge.user_code)}.</p><button class="button secondary" type="button" data-open-external="${escapeHtml(library.approver_sign_in.challenge.verification_uri)}">Open sign-in page</button><button class="button secondary" type="button" data-library-approver-sign-in-complete="${escapeHtml(library.approver_sign_in.challenge.challenge_id)}">Complete approver sign-in</button>`
+      ? `<p class="source-path">${escapeHtml(library.approver_sign_in.message ?? "Generate a new Microsoft Entra device code before continuing.")}</p><button class="button" type="button" data-library-approver-reissue>Reissue code</button>`
+      : `<p class="source-path">Complete Microsoft sign-in with code ${escapeHtml(library.approver_sign_in.challenge.user_code)}.</p><button class="button secondary" type="button" data-open-external="${escapeHtml(library.approver_sign_in.challenge.verification_uri)}">Open sign-in page</button>`
     : library.approver_sign_in?.actor
       ? '<p class="source-path">Approver sign-in ready. Recording a decision will verify this actor against the assigned approver.</p>'
       : '<button class="button secondary" type="button" data-library-approver-sign-in>Sign in as approver</button>';

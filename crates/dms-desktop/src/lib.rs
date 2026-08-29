@@ -337,6 +337,14 @@ pub struct LibrarySessionAuthorizationStatus {
     pub expires_in_seconds: Option<u64>,
     pub next_poll_delay_ms: Option<u64>,
     pub activation: Option<WorkspaceActivation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recovery: Option<LibrarySessionRecovery>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LibrarySessionRecovery {
+    ReapplyIdentitySource,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -1081,6 +1089,80 @@ fn complete_identity_source_sign_in(
         .complete_identity_source_setup(challenge_id)
 }
 
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum IdentitySourceSignInKind {
+    Pending,
+    Preview,
+    Declined,
+    Expired,
+    Failed,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct IdentitySourceSignInStatus {
+    pub kind: IdentitySourceSignInKind,
+    pub preview: Option<graph::IdentitySourcePreview>,
+    pub message: Option<String>,
+    pub next_poll_delay_ms: Option<u64>,
+}
+
+#[tauri::command]
+fn poll_identity_source_sign_in(
+    state: State<'_, DesktopIntegrations>,
+) -> Result<IdentitySourceSignInStatus, String> {
+    let mut graph = state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
+    Ok(match graph.poll_identity_source_setup()? {
+        graph::IdentitySourcePoll::Pending { next_poll_after } => IdentitySourceSignInStatus {
+            kind: IdentitySourceSignInKind::Pending,
+            preview: None,
+            message: None,
+            next_poll_delay_ms: Some(next_poll_delay_ms(next_poll_after)),
+        },
+        graph::IdentitySourcePoll::Preview(preview) => IdentitySourceSignInStatus {
+            kind: IdentitySourceSignInKind::Preview,
+            preview: Some(preview),
+            message: None,
+            next_poll_delay_ms: None,
+        },
+        graph::IdentitySourcePoll::Declined => IdentitySourceSignInStatus {
+            kind: IdentitySourceSignInKind::Declined,
+            preview: None,
+            message: Some("Microsoft Entra sign-in was declined.".to_owned()),
+            next_poll_delay_ms: None,
+        },
+        graph::IdentitySourcePoll::Expired => IdentitySourceSignInStatus {
+            kind: IdentitySourceSignInKind::Expired,
+            preview: None,
+            message: Some("Microsoft Entra sign-in expired.".to_owned()),
+            next_poll_delay_ms: None,
+        },
+        graph::IdentitySourcePoll::Failed(message) => IdentitySourceSignInStatus {
+            kind: IdentitySourceSignInKind::Failed,
+            preview: None,
+            message: Some(message),
+            next_poll_delay_ms: None,
+        },
+    })
+}
+
+#[tauri::command]
+fn reissue_identity_source_sign_in(
+    group_id: String,
+    state: State<'_, DesktopIntegrations>,
+) -> Result<graph::DeviceLoginChallenge, String> {
+    let group_id = Uuid::parse_str(&group_id)
+        .map_err(|_| "group ID must be a Microsoft Entra group UUID".to_owned())?;
+    state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?
+        .reissue_identity_source_setup(group_id)
+}
+
 #[tauri::command]
 fn begin_approver_sign_in(
     edit_root: String,
@@ -1096,6 +1178,90 @@ fn begin_approver_sign_in(
         .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
     let tenant_id = graph.tenant_id()?;
     graph.begin_approver_sign_in(tenant_id)
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ApproverSignInKind {
+    Pending,
+    Authorized,
+    Declined,
+    Expired,
+    Failed,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ApproverSignInStatus {
+    pub kind: ApproverSignInKind,
+    pub actor: Option<dms_core::AuthenticatedActor>,
+    pub message: Option<String>,
+    pub next_poll_delay_ms: Option<u64>,
+}
+
+#[tauri::command]
+fn poll_approver_sign_in(
+    state: State<'_, DesktopIntegrations>,
+) -> Result<ApproverSignInStatus, String> {
+    let mut graph = state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
+    Ok(match graph.poll_approver_sign_in()? {
+        graph::ApproverPoll::Pending { next_poll_after } => ApproverSignInStatus {
+            kind: ApproverSignInKind::Pending,
+            actor: None,
+            message: None,
+            next_poll_delay_ms: Some(next_poll_delay_ms(next_poll_after)),
+        },
+        graph::ApproverPoll::Actor(actor) => {
+            *state
+                .approver_actor
+                .lock()
+                .map_err(|_| "interactive approver sign-in state is unavailable".to_owned())? =
+                Some(actor.clone());
+            ApproverSignInStatus {
+                kind: ApproverSignInKind::Authorized,
+                actor: Some(actor),
+                message: None,
+                next_poll_delay_ms: None,
+            }
+        }
+        graph::ApproverPoll::Declined => ApproverSignInStatus {
+            kind: ApproverSignInKind::Declined,
+            actor: None,
+            message: Some("Microsoft Entra sign-in was declined.".to_owned()),
+            next_poll_delay_ms: None,
+        },
+        graph::ApproverPoll::Expired => ApproverSignInStatus {
+            kind: ApproverSignInKind::Expired,
+            actor: None,
+            message: Some("Microsoft Entra sign-in expired.".to_owned()),
+            next_poll_delay_ms: None,
+        },
+        graph::ApproverPoll::Failed(message) => ApproverSignInStatus {
+            kind: ApproverSignInKind::Failed,
+            actor: None,
+            message: Some(message),
+            next_poll_delay_ms: None,
+        },
+    })
+}
+
+#[tauri::command]
+fn reissue_approver_sign_in(
+    edit_root: String,
+    state: State<'_, DesktopIntegrations>,
+) -> Result<graph::DeviceLoginChallenge, String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace.identity_source().ok_or_else(|| {
+        "configure a Microsoft Entra identity source before signing in for approval".to_owned()
+    })?;
+    let mut graph = state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
+    let tenant_id = graph.tenant_id()?;
+    graph.reissue_approver_sign_in(tenant_id)
 }
 
 #[tauri::command]
@@ -3143,6 +3309,7 @@ fn serialize_library_session_authorization(
             expires_in_seconds: None,
             next_poll_delay_ms: None,
             activation: None,
+            recovery: None,
         };
     };
     let target = library_session_target_from_authorization(authorization);
@@ -3157,6 +3324,7 @@ fn serialize_library_session_authorization(
         expires_in_seconds: None,
         next_poll_delay_ms: None,
         activation: None,
+        recovery: None,
     };
     match authorization {
         LibrarySessionAuthorization::Pending {
@@ -3191,6 +3359,13 @@ fn serialize_library_session_authorization(
             status.kind = LibrarySessionAuthorizationKind::Unavailable;
             status.message = Some(message.clone());
         }
+    }
+    if status
+        .message
+        .as_deref()
+        .is_some_and(|message| message.contains(graph::UNVERIFIED_IDENTITY_SOURCE))
+    {
+        status.recovery = Some(LibrarySessionRecovery::ReapplyIdentitySource);
     }
     status
 }
@@ -3966,8 +4141,12 @@ pub fn run() {
             set_workflow_policy,
             begin_identity_source_sign_in,
             complete_identity_source_sign_in,
+            poll_identity_source_sign_in,
+            reissue_identity_source_sign_in,
             begin_approver_sign_in,
             complete_approver_sign_in,
+            poll_approver_sign_in,
+            reissue_approver_sign_in,
             startup_authorization_status,
             poll_startup_authorization,
             reissue_startup_authorization,

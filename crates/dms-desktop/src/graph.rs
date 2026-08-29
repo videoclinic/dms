@@ -27,6 +27,8 @@ const REFRESH_REJECTED_ERROR: &str =
     "Microsoft Entra rejected the delegated refresh token; sign in again";
 const STARTUP_PENDING_ALREADY_ERROR: &str =
     "a Microsoft Entra device-authorization code is already pending";
+pub(crate) const UNVERIFIED_IDENTITY_SOURCE: &str =
+    "this library's Microsoft Entra identity source has no verified tenant; reapply the identity source before signing in";
 const ACCESS_TOKEN_VALIDITY_SKEW: ChronoDuration = ChronoDuration::seconds(60);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -95,6 +97,24 @@ struct PendingDeviceLogin {
 pub(crate) enum DeviceTokenPoll {
     Pending { next_poll_after: Instant },
     Authorized(DelegatedToken),
+    Declined,
+    Expired,
+    Failed(String),
+}
+
+#[derive(Debug)]
+pub(crate) enum IdentitySourcePoll {
+    Pending { next_poll_after: Instant },
+    Preview(IdentitySourcePreview),
+    Declined,
+    Expired,
+    Failed(String),
+}
+
+#[derive(Debug)]
+pub(crate) enum ApproverPoll {
+    Pending { next_poll_after: Instant },
+    Actor(AuthenticatedActor),
     Declined,
     Expired,
     Failed(String),
@@ -704,10 +724,9 @@ where
     }
 
     fn bound_tenant_id(&self, source: &EntraIdentitySource) -> Result<Uuid, String> {
-        let bound = source.tenant_id.ok_or_else(|| {
-            "this library's Microsoft Entra identity source is unverified; reapply it before signing in"
-                .to_owned()
-        })?;
+        let bound = source
+            .tenant_id
+            .ok_or_else(|| UNVERIFIED_IDENTITY_SOURCE.to_owned())?;
         let configured = self.configured_tenant_id()?;
         if configured != bound {
             return Err(
@@ -836,6 +855,92 @@ where
         Ok(poll)
     }
 
+    pub fn reissue_identity_source_setup(
+        &mut self,
+        group_id: Uuid,
+    ) -> Result<DeviceLoginChallenge, String> {
+        if self.active_identity_source_pending().is_some() {
+            return Err(
+                "a Microsoft Entra identity-source sign-in code is already pending".to_owned(),
+            );
+        }
+        self.pending.retain(|_, pending| {
+            !matches!(pending.purpose, DeviceLoginPurpose::IdentitySource { .. })
+        });
+        self.begin_identity_source_setup(group_id)
+    }
+
+    pub fn poll_identity_source_setup(&mut self) -> Result<IdentitySourcePoll, String> {
+        let Some((challenge_id, pending)) = self.active_identity_source_pending() else {
+            return Ok(IdentitySourcePoll::Failed(
+                "Microsoft Entra sign-in challenge is no longer available; start again".to_owned(),
+            ));
+        };
+        let DeviceLoginPurpose::IdentitySource { group_id } = pending.purpose else {
+            return Ok(IdentitySourcePoll::Failed(
+                "this sign-in is not an identity-source preview".to_owned(),
+            ));
+        };
+        let tenant_id = pending.tenant_id;
+        match self.poll_device_token(challenge_id)? {
+            DeviceTokenPoll::Pending { next_poll_after } => {
+                Ok(IdentitySourcePoll::Pending { next_poll_after })
+            }
+            DeviceTokenPoll::Authorized(token) => {
+                self.tokens.save(tenant_id, &token)?;
+                let preview = self.prepare_preview(tenant_id, group_id, &token.access_token)?;
+                let preview_id = Uuid::new_v4();
+                let result = IdentitySourcePreview {
+                    preview_id,
+                    tenant_id: preview.tenant_id,
+                    tenant_display: preview.tenant_display.clone(),
+                    group_id: preview.group_id,
+                    group_label: preview.group_label.clone(),
+                    eligible_people: preview.people.clone(),
+                };
+                self.previews.insert(preview_id, preview);
+                Ok(IdentitySourcePoll::Preview(result))
+            }
+            DeviceTokenPoll::Declined => Ok(IdentitySourcePoll::Declined),
+            DeviceTokenPoll::Expired => Ok(IdentitySourcePoll::Expired),
+            DeviceTokenPoll::Failed(error) => Ok(IdentitySourcePoll::Failed(error)),
+        }
+    }
+
+    pub fn reissue_approver_sign_in(
+        &mut self,
+        tenant_id: Uuid,
+    ) -> Result<DeviceLoginChallenge, String> {
+        if self.active_approver_pending().is_some() {
+            return Err("a Microsoft Entra approver sign-in code is already pending".to_owned());
+        }
+        self.pending
+            .retain(|_, pending| !matches!(pending.purpose, DeviceLoginPurpose::Approver));
+        self.begin_approver_sign_in(tenant_id)
+    }
+
+    pub fn poll_approver_sign_in(&mut self) -> Result<ApproverPoll, String> {
+        let Some((challenge_id, pending)) = self.active_approver_pending() else {
+            return Ok(ApproverPoll::Failed(
+                "Microsoft Entra sign-in challenge is no longer available; start again".to_owned(),
+            ));
+        };
+        let tenant_id = pending.tenant_id;
+        match self.poll_device_token(challenge_id)? {
+            DeviceTokenPoll::Pending { next_poll_after } => {
+                Ok(ApproverPoll::Pending { next_poll_after })
+            }
+            DeviceTokenPoll::Authorized(token) => {
+                self.tokens.save(tenant_id, &token)?;
+                let actor = self.authenticated_actor_with_token(tenant_id, &token.access_token)?;
+                Ok(ApproverPoll::Actor(actor))
+            }
+            DeviceTokenPoll::Declined => Ok(ApproverPoll::Declined),
+            DeviceTokenPoll::Expired => Ok(ApproverPoll::Expired),
+            DeviceTokenPoll::Failed(error) => Ok(ApproverPoll::Failed(error)),
+        }
+    }
+
     pub fn evaluate_startup_credential(&mut self) -> StartupCredentialEvaluation {
         let tenant_id = match self.configured_tenant_id() {
             Ok(tenant_id) => tenant_id,
@@ -899,6 +1004,23 @@ where
                     binding_id: pending_binding_id
                 } if pending_binding_id == binding_id
             ) && pending.expires_at > now)
+                .then_some((*challenge_id, pending))
+        })
+    }
+
+    fn active_identity_source_pending(&self) -> Option<(Uuid, &PendingDeviceLogin)> {
+        let now = Instant::now();
+        self.pending.iter().find_map(|(challenge_id, pending)| {
+            (matches!(pending.purpose, DeviceLoginPurpose::IdentitySource { .. })
+                && pending.expires_at > now)
+                .then_some((*challenge_id, pending))
+        })
+    }
+
+    fn active_approver_pending(&self) -> Option<(Uuid, &PendingDeviceLogin)> {
+        let now = Instant::now();
+        self.pending.iter().find_map(|(challenge_id, pending)| {
+            (matches!(pending.purpose, DeviceLoginPurpose::Approver) && pending.expires_at > now)
                 .then_some((*challenge_id, pending))
         })
     }
@@ -1113,10 +1235,9 @@ pub(crate) fn verify_group_bound_actor(
     actor: AuthenticatedActor,
     people: &[EntraPerson],
 ) -> Result<AuthenticatedActor, String> {
-    let bound_tenant_id = source.tenant_id.ok_or_else(|| {
-        "the library's Entra identity source is unverified; reapply it before opening the library"
-            .to_owned()
-    })?;
+    let bound_tenant_id = source
+        .tenant_id
+        .ok_or_else(|| UNVERIFIED_IDENTITY_SOURCE.to_owned())?;
     if bound_tenant_id != configured_tenant_id || actor.tenant_id != bound_tenant_id {
         return Err("the signed-in Microsoft Entra tenant does not match this library".to_owned());
     }
@@ -2099,6 +2220,29 @@ mod tests {
                 StartupCredentialEvaluation::Unavailable(message)
                     if message.contains("does not match this library's identity source")
             ));
+            assert!(graph.pending.is_empty());
+        }
+
+        #[test]
+        fn unverified_identity_source_is_unavailable_without_a_code() {
+            let mut source = source(Uuid::new_v4());
+            source.tenant_id = None;
+            let mut graph = MicrosoftGraphClient::with_parts(
+                "client",
+                Uuid::new_v4(),
+                FakeHttp::with_responses(Vec::new()),
+                ScriptedTokenStore::missing(),
+            );
+
+            assert!(matches!(
+                graph.evaluate_library_session_credential(&source),
+                StartupCredentialEvaluation::Unavailable(message)
+                    if message == UNVERIFIED_IDENTITY_SOURCE
+            ));
+            assert_eq!(
+                graph.begin_library_session_sign_in(&source).unwrap_err(),
+                UNVERIFIED_IDENTITY_SOURCE
+            );
             assert!(graph.pending.is_empty());
         }
     }
