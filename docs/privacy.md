@@ -8,7 +8,7 @@
 | Released versioned PDFs | Publish root (operator-controlled) | Final released artifacts (`*_VMAJOR.MINOR_<confidentiality-type-id>.pdf`); the path exposes the classification ID |
 | DMS metadata, library membership, notes, approval state, checksums | `<edit-root>/.dms/` | Local only; may contain personal names in notes or approver fields |
 | First-import Office source history | `<edit-root>/.dms/` | Original-source SHA-256, sanitized scan outcome, and at most three unverified source author/date/kind/count observations. No source content, comments, raw OOXML, Office properties, PowerPoint client IDs, or inferred Entra identity is retained or displayed |
-| Microsoft Entra workflow group binding and display cache | `<edit-root>/.dms/` | Group object ID, referenced user object IDs, and cached display name/email for routing; no app-managed user accounts, tenant/client ID, or OAuth tokens |
+| Microsoft Entra workflow group binding and display cache | `<edit-root>/.dms/` | Bound tenant/group object IDs, referenced user object IDs, and cached display name/email for routing; no app-managed user accounts, public-client ID, OAuth token, active actor, or local-OS-to-Entra mapping |
 | App-global Entra configuration | Windows machine policy at `HKLM\SOFTWARE\Policies\Videoclinic\DMS` when present; otherwise OS-user app-config `global-settings.json` | Non-secret public-client ID and tenant ID shared by local libraries. A complete machine-policy pair is read-only and is never copied to `global-settings.json` or `.dms`; otherwise non-empty `DMS_ENTRA_CLIENT_ID` / `DMS_ENTRA_TENANT_ID` process overrides are not persisted |
 | Mutable document profile and workflow-role policies (title, owner reference, number, type, assigned editor/approver) | `<edit-root>/.dms/` | Local control metadata; not Office properties, Markdown front matter, or document body content. Owner/editor/approver references are tenant-scoped Entra object IDs; display name/email is refreshable and never participates in identity equality. Free-text pre-v12 owners remain display-only `legacy_owner_label` values and are never resolved by name or email. Literal `<owner>` / `<editor>` placeholders represent only a successful empty eligible-people result and carry no identity or authority |
 | Candidate and release snapshots | `<edit-root>/.dms/` | Immutable requested/accepted profile, effective date, confidentiality, requester/editor/approver/owner display snapshots, and object IDs where recorded. Later profile or display-cache changes do not rewrite this evidence; pre-v12 omissions remain explicitly unrecorded |
@@ -18,7 +18,7 @@
 | Workspace root paths | Inside `.dms` | Absolute edit/publish paths on the operator machine |
 | User notification transport and SMTP relay settings | OS-user app-config `global-settings.json` | Non-secret relay host/port/login/From and selected transport shared by libraries opened by that DMS user; never stored in `.dms` |
 | SMTP relay app password | OS credential store | Write-only OS-user Configuration input; never stored in `.dms`, app preferences, frontend state, IPC results, or errors |
-| Microsoft Entra delegated-token cache | OS credential store | Interactive sign-in tokens for Microsoft Graph; never stored in `.dms`. Process-environment startup may validate or refresh this cache, or start one device-authorization challenge, without exposing tokens to the WebView |
+| Microsoft Entra delegated-token cache | OS credential store | Interactive sign-in tokens for Microsoft Graph; never stored in `.dms`. Process-environment startup and a group-bound library activation may validate or refresh this cache, or start one device-authorization challenge, without exposing tokens or `device_code` to the WebView |
 | Workspace advisory lock | `<edit-root>/.dms/lock` | Process id, hostname, timestamp; advisory only, never contains document content |
 | Export/audit reports | `<edit-root>/.dms/exports/` (operator-chosen) | Aggregated lifecycle, approval, periodic-review, and release evidence; produced on demand. Pre-v12 release rows carry an explicit **unrecorded** date and **unresolved** owner rather than substituting the current mutable profile |
 | Workspace backup archive | Operator-chosen path | Contains `.dms`, controlled source drafts, and released PDFs; not encrypted by the app |
@@ -30,8 +30,9 @@
 
 - No remote document store in the current architecture.
 - Microsoft Graph calls resolve the workspace group's direct user members and
-  verify a review-decision actor. They send no document bytes, source or publish
-  paths, `.dms` metadata, or approval comments to Microsoft Graph.
+  verify a library-session or review-decision actor. They send no document bytes,
+  source or publish paths, `.dms` metadata, or approval comments to Microsoft
+  Graph.
 - No telemetry that includes document content or paths unless a future ADR
   explicitly enables opt-in diagnostics.
 - A review-request email contains only the DMS-managed document title,

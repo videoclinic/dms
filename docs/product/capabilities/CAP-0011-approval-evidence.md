@@ -12,11 +12,12 @@
 1. Every workflow event follows the canonical event body defined in ADR-0013:
    stable document ID, event type, predecessor event hash, ISO-8601 UTC
    timestamp, requester, effective editor and approver IDs (when applicable),
-   local OS user, authenticated Microsoft Entra tenant/object IDs for a review
-   decision, revision digest (when applicable), confidentiality snapshot (when
-   applicable), requested target version, target-version mode, review changelog,
-   optional decision comment, and operator comment text. The chain head is the
-   SHA-256 of the canonical body.
+   exactly one event principal, revision digest (when applicable), confidentiality
+   snapshot (when applicable), requested target version, target-version mode,
+   review changelog, optional decision comment, and operator comment text. New
+   unbound-library events carry the local OS user; new group-bound-library events
+   carry the authenticated Microsoft Entra tenant/object ID. The chain head is
+   the SHA-256 of the canonical body.
    First-import Office source-history observations are not workflow events and
    have no event ID, predecessor hash, chain position, candidate, or release
    version; they remain separately labelled unverified source claims.
@@ -28,10 +29,13 @@
      was not granted, but permit no comment.
    Any supplied text is part of the canonical event body and is not editable
    later.
-3. Every workflow event records a single local OS user. A review-decision event
-   additionally records the interactive Microsoft Entra tenant/object ID and is
-   rejected unless it matches the snapshotted effective approver (CAP-0019 /
-   CAP-0021). Other workflow events do not claim Entra actor verification.
+3. Every new workflow event records one verified principal: the local OS user
+   for an unbound library, or the active authenticated Microsoft Entra
+   tenant/object identity for a group-bound library. Historic event JSON and
+   hashes remain unchanged. A review-decision event additionally requires its
+   one-time interactive Entra actor to match the snapshotted effective approver
+   (CAP-0019 / CAP-0021); that decision actor does not replace the active
+   library-session principal for other mutations.
 4. The selected document's Library pane exposes the session-only **Version
    history & changes** topic. It is folded in a fresh Library activity, remains
    available through its named disclosure, and is not replaced with a link to
@@ -116,5 +120,5 @@
 - Document control data: [`CAP-0015-document-control-data.md`](CAP-0015-document-control-data.md)
 - Privacy: [`../../privacy.md`](../../privacy.md)
 - Identity source: [`CAP-0021-microsoft-entra-workflow-identity.md`](CAP-0021-microsoft-entra-workflow-identity.md)
-- ADR-0004, ADR-0013, ADR-0021: [`../../design-decisions.md`](../../design-decisions.md)
+- ADR-0004, ADR-0013, ADR-0021, ADR-0031: [`../../design-decisions.md`](../../design-decisions.md)
 - Implementation receipt: [`../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)

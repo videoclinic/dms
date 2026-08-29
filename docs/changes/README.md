@@ -20,7 +20,6 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
-| [CHG-0035](active/CHG-0035-entra-session-required-for-group-bound-library.md) | Entra session required for a group-bound library | in-progress | CAP-0011, CAP-0021 |
 | [CHG-0036](active/CHG-0036-pending-approval-status-and-review-request-resend.md) | Pending-approval status and review-request resend | pending | CAP-0002, CAP-0006, CAP-0010, CAP-0011 |
 | [CHG-0037](active/CHG-0037-library-switcher-and-lock-owner-feedback.md) | Library switcher and lock-owner feedback | pending | CAP-0005, CAP-0014 |
 | [CHG-0038](active/CHG-0038-candidate-approval-outcome-clarity.md) | Candidate, release, and Entra identity clarity | pending | CAP-0002, CAP-0006, CAP-0011, CAP-0015, CAP-0021 |
@@ -36,6 +35,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
+| [CHG-0035](archive/CHG-0035-entra-session-required-for-group-bound-library.md) | Entra session required for a group-bound library | done | CAP-0011, CAP-0021 |
 | [CHG-0033](archive/CHG-0033-bounded-office-source-history-import.md) | Bounded Office source-history import | done | CAP-0006, CAP-0011, CAP-0012, CAP-0015 |
 | [CHG-0032](archive/CHG-0032-windows-edit-root-library-shortcut.md) | Windows edit-root library shortcut | done | CAP-0001, CAP-0006, CAP-0020 |
 | [CHG-0031](archive/CHG-0031-library-change-author-identity.md) | Library change-author identity | done | CAP-0005 |

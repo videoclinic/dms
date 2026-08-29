@@ -63,6 +63,18 @@ struct GroupBoundSession {
     actor: AuthenticatedActor,
 }
 
+struct WorkspaceMutationContext<'a, G: GraphClient + ?Sized> {
+    graph: &'a mut G,
+    sessions: &'a BTreeMap<String, GroupBoundSession>,
+}
+
+struct ReleaseCandidateContext<'a, G: GraphClient, N: NotificationClient, E: PdfExporter> {
+    graph: &'a mut G,
+    notifier: &'a mut N,
+    exporter: &'a mut E,
+    sessions: &'a BTreeMap<String, GroupBoundSession>,
+}
+
 #[derive(Clone, Debug)]
 struct LibrarySessionTarget {
     edit_root: String,
@@ -1482,6 +1494,10 @@ fn update_document_control(
         .lock()
         .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
     let sessions = locked_group_bound_sessions(&state)?;
+    let mut context = WorkspaceMutationContext {
+        graph: &mut *graph,
+        sessions: &sessions,
+    };
     update_document_control_with(
         &edit_root,
         document_id,
@@ -1489,8 +1505,7 @@ fn update_document_control(
         document_number,
         document_type,
         owner_object_id,
-        &mut *graph,
-        &sessions,
+        &mut context,
     )
 }
 
@@ -1501,8 +1516,7 @@ fn update_document_control_with<G: GraphClient + ?Sized>(
     document_number: String,
     document_type: String,
     owner_object_id: Uuid,
-    graph: &mut G,
-    sessions: &BTreeMap<String, GroupBoundSession>,
+    context: &mut WorkspaceMutationContext<'_, G>,
 ) -> Result<DocumentSelection, String> {
     let optional_text = |value: String| {
         if value.trim().is_empty() {
@@ -1513,13 +1527,13 @@ fn update_document_control_with<G: GraphClient + ?Sized>(
     };
     let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
     workspace
-        .refresh_eligible_people(graph)
+        .refresh_eligible_people(context.graph)
         .map_err(|error| error.to_string())?;
     let binding_id = workspace
         .identity_source()
         .ok_or_else(|| "owner assignment requires an identity source".to_owned())?
         .binding_id;
-    let principal = mutation_principal_for(&workspace, sessions)?;
+    let principal = mutation_principal_for(&workspace, context.sessions)?;
     workspace
         .update_control(
             document_id,
@@ -1834,13 +1848,10 @@ fn release_document_candidate_with<G: GraphClient, N: NotificationClient, E: Pdf
     document_id: Uuid,
     release_override_reason: String,
     settings: &NotificationSettings,
-    graph: &mut G,
-    notifier: &mut N,
-    exporter: &mut E,
-    sessions: &BTreeMap<String, GroupBoundSession>,
+    context: &mut ReleaseCandidateContext<'_, G, N, E>,
 ) -> Result<DocumentSelection, String> {
     let mut workspace = Workspace::open(Path::new(edit_root)).map_err(|error| error.to_string())?;
-    let principal = mutation_principal_for(&workspace, sessions)?;
+    let principal = mutation_principal_for(&workspace, context.sessions)?;
     workspace
         .configure_notifications(settings.transport, settings.smtp.clone())
         .map_err(|error| error.to_string())?;
@@ -1848,9 +1859,9 @@ fn release_document_candidate_with<G: GraphClient, N: NotificationClient, E: Pdf
         .release_candidate(
             document_id,
             optional_text(&release_override_reason),
-            graph,
-            notifier,
-            exporter,
+            context.graph,
+            context.notifier,
+            context.exporter,
             &principal,
         )
         .map_err(|error| error.to_string())?;
@@ -1986,15 +1997,18 @@ fn release_document_candidate(
         .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
     let mut exporter = export::LocalPdfExporter::new(export::InstalledOfficeAutomation);
     let sessions = locked_group_bound_sessions(&state)?;
+    let mut context = ReleaseCandidateContext {
+        graph: &mut *graph,
+        notifier: &mut notifier,
+        exporter: &mut exporter,
+        sessions: &sessions,
+    };
     release_document_candidate_with(
         &edit_root,
         document_id,
         release_override_reason,
         &settings,
-        &mut *graph,
-        &mut notifier,
-        &mut exporter,
-        &sessions,
+        &mut context,
     )
 }
 
@@ -5510,6 +5524,10 @@ mod tests {
             tenant_id,
             people: vec![owner],
         };
+        let mut context = WorkspaceMutationContext {
+            graph: &mut graph,
+            sessions: &sessions,
+        };
         let updated = update_document_control_with(
             &root,
             document.id,
@@ -5517,8 +5535,7 @@ mod tests {
             "HR-001".into(),
             "procedure".into(),
             owner_object_id,
-            &mut graph,
-            &sessions,
+            &mut context,
         )
         .unwrap();
         assert_eq!(updated.control.title, "Employee handbook");
@@ -6085,16 +6102,20 @@ mod tests {
             approved.active_candidate.as_ref().unwrap().status,
             dms_core::CandidateStatus::Approved
         );
+        let mut exporter = TestExporter;
+        let mut release_context = ReleaseCandidateContext {
+            graph: &mut graph,
+            notifier: &mut notifier,
+            exporter: &mut exporter,
+            sessions: &sessions,
+        };
 
         let released = release_document_candidate_with(
             &root,
             document.id,
             String::new(),
             &settings,
-            &mut graph,
-            &mut notifier,
-            &mut TestExporter,
-            &sessions,
+            &mut release_context,
         )
         .unwrap();
         assert!(released.current_release.unwrap().pdf_exists);
@@ -6297,15 +6318,18 @@ mod tests {
         )
         .unwrap();
         let mut exporter = export::LocalPdfExporter::new(export::InstalledOfficeAutomation);
+        let mut release_context = ReleaseCandidateContext {
+            graph: &mut graph,
+            notifier: &mut notifier,
+            exporter: &mut exporter,
+            sessions: &sessions,
+        };
         release_document_candidate_with(
             &root,
             document.id,
             String::new(),
             &settings,
-            &mut graph,
-            &mut notifier,
-            &mut exporter,
-            &sessions,
+            &mut release_context,
         )
         .unwrap();
 

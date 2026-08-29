@@ -51,6 +51,16 @@
   Windows policy and saved-settings-only configuration do not start this
   launch challenge. The WebView never receives `device_code`, access tokens, or
   refresh tokens.
+- Opening a group-bound library requires a current delegated credential for its
+  persisted tenant binding. A missing or refresh-rejected credential creates one
+  process-only library-session device-flow challenge for that library. Its blocking
+  shell names the library and group, shows only user code, expiry, verification
+  URI, and sanitized terminal state, and exposes host-mediated **Open sign-in
+  page** plus terminal-only **Reissue code**. It never opens a browser
+  automatically and never exposes a token or `device_code` to the WebView.
+  Successful sign-in re-resolves `/me` and fresh enabled direct membership before
+  acquiring the destination advisory lock; disabled, non-member, tenant-mismatch,
+  inaccessible-group, and unavailable-service outcomes leave the library inactive.
 2. Replacing a binding retains historical evidence, invalidates stale workflow
    candidates, and leaves existing role references unresolved rather than mapping
    them to the replacement group.
@@ -156,6 +166,13 @@
 11. The read-only eligible-people table follows CAP-0005's growing-table
     interaction; its text filter case-insensitively matches person display name,
     email address, object ID, and account state before pagination.
+12. A group-bound library activates only after the desktop process verifies its
+    cached or refreshed delegated credential, `/me` tenant/object ID, and fresh
+    enabled direct membership in the bound group. The resulting actor is
+    process-session-only authorization state: it authorizes the active library's
+    mutations and evidence without entering `.dms`. A direct advisory-lock IPC
+    call cannot bypass this activation boundary. Unbound libraries retain local
+    operator activation.
 
 ## Non-goals
 
@@ -176,7 +193,7 @@
 - Local store: [`CAP-0001-local-folder-dms.md`](CAP-0001-local-folder-dms.md)
 - Architecture: [`../../architecture.md`](../../architecture.md)
 - Privacy: [`../../privacy.md`](../../privacy.md)
-- ADR-0021, ADR-0024, ADR-0028, ADR-0029: [`../../design-decisions.md`](../../design-decisions.md)
+- ADR-0021, ADR-0024, ADR-0028, ADR-0029, ADR-0031: [`../../design-decisions.md`](../../design-decisions.md)
 - Implementation receipt: [`CHG-0001`](../../changes/archive/CHG-0001-tauri-local-dms-bootstrap.md)
   records the broader Tauri bootstrap and Phase 9l integration evidence;
   archived [`CHG-0002`](../../changes/archive/CHG-0002-entra-configuration-ux-fixes.md)

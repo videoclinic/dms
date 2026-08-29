@@ -90,10 +90,10 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
   DMS.lnk` holds that workspace URI and never a filesystem root. Resolution
   uses only registered accessible recent libraries.
 - Workflow roles select individual, direct user members of the workspace's
-  configured Microsoft Entra group. `.dms` records only the group object ID,
-  group label, display cache, and role references to immutable Entra user
-  object IDs. The public-client and tenant IDs are app-global configuration,
-  not workspace metadata. On Windows, a complete machine policy pair takes
+  configured Microsoft Entra group. `.dms` records the binding tenant and group
+  object IDs, group label, display cache, and role references to immutable Entra
+  user object IDs. The public-client ID and app-global tenant configuration are
+  outside workspace metadata. On Windows, a complete machine policy pair takes
   precedence over process environment overrides and OS-user settings; policy
   values remain read-only and are never copied to either persisted store. It does not keep an
   application-managed user roster. A group may be a Microsoft 365 group when
@@ -114,8 +114,16 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
   `DMS_ENTRA_TENANT_ID`, when non-empty, override the corresponding stored
   app-global value for that process and are read-only in Configuration. Invalid
   non-empty overrides fail closed. Graph access and refresh tokens live only in
-  the OS credential store; the workspace persists no token, client ID, tenant
-  ID, or client secret.
+  the OS credential store; the workspace persists no token, client ID, active
+  actor, or client secret, and retains its tenant ID only as part of the
+  group-binding authorization boundary.
+- A group-bound library activation requires a cached or refreshed delegated
+  credential, `/me`, and a fresh enabled direct-member result for its persisted
+  tenant/group binding before its advisory lock is acquired. Missing or
+  refresh-rejected credentials produce one process-only library-session device
+  challenge; it exposes no token or `device_code`, does not open a browser
+  automatically, and leaves the library inactive on expiry, decline, tenant
+  mismatch, disabled/non-member, inaccessible-group, or service failure.
 - Recording an approval decision requires interactive Microsoft Entra sign-in.
   The signed-in tenant/object ID must match the review's snapshotted effective
   approver and still be eligible in the bound group. This verifies the decision

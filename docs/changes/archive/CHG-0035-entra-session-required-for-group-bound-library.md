@@ -9,12 +9,12 @@ A DMS Desktop user activating a library with a Microsoft Entra ID group binding 
 **Entry checkpoint:** none
 **Context sources:** `AGENTS.md` (Architectural decisions, Application records); `docs/AGENTS.md` (Local Contracts, Work Guidance); `docs/changes/AGENTS.md`; `docs/product/AGENTS.md`; `docs/architecture.md` (Runtime shape, Trust and control boundary); `docs/privacy.md` (Data classes, Processing principles); `docs/design-decisions.md` (ADR-0013, ADR-0021, ADR-0024, ADR-0028, ADR-0029); `docs/product/capabilities/CAP-0011-approval-evidence.md` (Outcomes 1, 3); `docs/product/capabilities/CAP-0021-microsoft-entra-workflow-identity.md` (Operational details, Outcomes 5, 6, 8, 9); `crates/AGENTS.md`; `crates/dms-core/AGENTS.md`; `crates/dms-desktop/AGENTS.md`; `crates/dms-core/src/lib.rs` (`default_author`, `Workspace::update_control`); `crates/dms-core/src/lifecycle.rs` (`AuthenticatedActor`, `WorkflowEventBody`, `GraphClient`, event appenders); `crates/dms-core/src/library.rs`; `crates/dms-core/src/maintenance.rs`; `crates/dms-core/src/audit.rs`; `crates/dms-desktop/src/graph.rs` (`MicrosoftGraphClient::authenticated_actor`, `direct_user_members_with_token`, token/device-flow primitives); `crates/dms-desktop/src/lib.rs` (`open_workspace`, `WorkspaceSummary`, `update_document_control_with`, startup authorization); `crates/dms-desktop/ui/app.mjs` (`switchWorkspaceSession`, startup-authorization card); `crates/dms-desktop/ui/configuration.mjs`; `crates/dms-desktop/ui/library.mjs`; `docs/product/wireframes/AGENTS.md`; `docs/product/wireframes/generate.mjs`
 **Produces:** A group-bound desktop workspace cannot activate until its signed-in Entra actor is freshly confirmed as an enabled direct member of its bound group. New metadata, note, lifecycle, report, and workflow evidence records that actor's tenant/object ID without a local-OS-user principal; unbound libraries retain the existing local-operator behavior.
-**Status:** in-progress — Phase 5 publishes the current-state contracts and session-required screen.
+**Status:** done — Phase 5 published the current-state contracts and session-required screen.
 
 | Field | Value |
 | --- | --- |
 | ID | CHG-0035 |
-| Status | in-progress |
+| Status | done |
 | External request | Direct operator request: "If an library is connected to a Entry ID Microsoft 365 Group, the user using DMS need a valid Entra ID login/session in order to be identified as the Entra ID user (not the local user)" |
 | Affected CAPs | CAP-0011, CAP-0021 |
 | Decision records | Add ADR-0031. ADR-0013, ADR-0021, ADR-0024, ADR-0028, and ADR-0029 remain applicable. |
@@ -25,7 +25,7 @@ A DMS Desktop user activating a library with a Microsoft Entra ID group binding 
 - Phase 2 caches a process-only `group_bound_sessions` map keyed by canonical edit root. Bound `open_workspace` revalidates tenant, `/me`, and fresh enabled direct membership before returning a summary; `switchWorkspaceSession` re-enters that gate before `acquire_workspace_lock`. Failed validation does not insert a session and does not acquire a destination lock. `configure_global_entra` and a successful `apply_identity_source` clear the cache.
 - Phase 3 routes bound desktop mutations through that cached actor. Missing, replaced, and tenant-mismatched sessions reject before metadata changes. Bound `WorkspaceSummary.change_author` presents the cached display snapshot plus tenant/object ID. Review decisions keep the one-time interactive approver actor. The CLI remains local-principal-only and fails closed through `dms-core`. `crates/dms-desktop/AGENTS.md` records the session-before-lock and mutation-routing contract.
 - Phase 4 adds one process-only per-library device-flow challenge. Missing or refresh-rejected credentials block the selected library with a sanitized code, expiry, host-mediated sign-in page, and terminal-only reissue control. Successful polling revalidates the actor/member and atomically acquires the destination lock before the shell activates; the direct lock IPC rejects group-bound libraries.
-- CAP-0011 and CAP-0021 still describe the pre-session contract. That closeout is Phase 5.
+- CAP-0011 and CAP-0021 describe the verified active principal and the group-bound activation boundary. Architecture, privacy, and the CAP-0021 wireframe show the process-only session, blocking challenge, and fail-closed outcomes.
 
 ## Risk call-out
 
@@ -41,7 +41,7 @@ The event body is hash-chained evidence. Changing `local_os_user` from required 
 | 2 | Cache a verified actor before bound-library activation | done (`cargo test -p dms-desktop --lib group_bound_session`; `cargo check -p dms-desktop`) | `cargo test -p dms-desktop --lib group_bound_session` and `cargo check -p dms-desktop` exit 0, proving unbound activation preservation plus cached-token member, non-member, disabled, tenant-mismatch, and unavailable-session outcomes |
 | 3 | Route bound adapter mutations through the cached actor | done (`cargo test -p dms-desktop --lib`) | `cargo test -p dms-desktop --lib` exits 0, proving every principal-aware command records the cached Entra actor and rejects a missing, replaced, or tenant-mismatched session before mutation |
 | 4 | Add the library-session device-flow challenge and blocking shell | done (`cargo fmt --all -- --check`; `cargo test -p dms-desktop`; `node --test crates/dms-desktop/ui/app.test.mjs crates/dms-desktop/ui/configuration.test.mjs crates/dms-desktop/ui/library.test.mjs`; `git diff --check`) | `cargo test -p dms-desktop` and `node --test crates/dms-desktop/ui/app.test.mjs crates/dms-desktop/ui/configuration.test.mjs crates/dms-desktop/ui/library.test.mjs` exit 0, including pending, expiry, reissue, sign-in, switch, no-session, non-member, and direct-IPC cases |
-| 5 | Publish current-state contracts and the session-required screen | pending | `node docs/product/wireframes/generate.mjs`, the CAP-0021 PNG render command, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `node --test crates/dms-desktop/ui/*.test.mjs` exit 0; CAP/ADR/CHG indexes agree |
+| 5 | Publish current-state contracts and the session-required screen | done (`node docs/product/wireframes/generate.mjs`; CAP-0021 PNG render; `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets -- -D warnings`; `cargo test --workspace`; `node --test crates/dms-desktop/ui/*.test.mjs`; `git diff --check`) | `node docs/product/wireframes/generate.mjs`, the CAP-0021 PNG render command, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `node --test crates/dms-desktop/ui/*.test.mjs` exit 0; CAP/ADR/CHG indexes agree |
 
 Mark a phase `in-progress` while running it, `done (<evidence>)` once its gate passes, and `pending` otherwise.
 
@@ -126,6 +126,10 @@ Steps:
 5. Run the full workspace gates. After every gate passes, record evidence, move this CHG to `docs/changes/archive/`, and update `docs/changes/README.md` from Active to Archive without changing the unrelated active records.
 
 Verification gate: `node docs/product/wireframes/generate.mjs`, `(cd docs/product/wireframes && google-chrome --headless=new --hide-scrollbars --window-size=1600,1600 --screenshot=exports/CAP-0021-microsoft-entra-workflow-identity.png "file://$PWD/html/CAP-0021-microsoft-entra-workflow-identity.html" && test -s exports/CAP-0021-microsoft-entra-workflow-identity.png)`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `node --test crates/dms-desktop/ui/*.test.mjs` exit 0; CAP/ADR/CHG indexes agree.
+
+Implementation finding: the Phase 3 cached-session parameter made two desktop mutation helpers exceed the workspace clippy argument limit. Phase 5 must package their adapter-only dependencies before closeout so the required full clippy gate proves this CHG rather than carrying a known lint failure into the archive.
+
+Implementation finding: the full workspace gate exposed a stale CLI integration invocation that omitted the tenant required by the Phase 1 identity-source contract. Update that fixture in this phase so the executable workspace proof exercises the current fail-closed CLI boundary instead of an obsolete command shape.
 
 ## Out of scope
 

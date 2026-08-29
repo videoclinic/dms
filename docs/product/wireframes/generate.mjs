@@ -1065,10 +1065,11 @@ const CAPS = [
     id: "CAP-0021",
     file: "CAP-0021-microsoft-entra-workflow-identity",
     title: "Microsoft Entra workflow identity",
+    status: "implemented",
     nav: "config",
     configSection: "workflow",
     configSecondary: "Identity source",
-    subtitle: "Windows machine policy can manage the Entra public client and tenant; Configuration shows each identifier's source and disables the application form when policy owns both. Process-environment launches show a persistent shell device-authorization card.",
+    subtitle: "Windows machine policy can manage the Entra public client and tenant; Configuration shows each identifier's source and disables the application form when policy owns both. Process-environment launches show a persistent shell device-authorization card, while each group-bound library can require its own blocking session challenge.",
     body: `${defaultsFirstStyles()}
       <section class="card">
         <div class="row between"><h3 class="card-title" style="margin:0">Microsoft Entra sign-in</h3>${badge("process environment", "info")}</div>
@@ -1079,6 +1080,16 @@ const CAPS = [
           ["Sign-in page", '<button class="btn outline">Open sign-in page</button>'],
         ])}
         <p class="hint">DMS polls at the provider interval without blocking the UI and does not open a browser until this control is used. A valid cached session shows no code. Expired or declined challenges offer Reissue code.</p>
+      </section>
+      <section class="card">
+        <div class="row between"><h3 class="card-title" style="margin:0">Group-bound library activation</h3>${badge("session required", "warn")}</div>
+        <p class="muted">Library activation is separate from the optional process-environment startup card. DMS validates the bound tenant, <code>/me</code>, and fresh enabled direct membership before acquiring this library's advisory lock.</p>
+        <div class="grid-2" style="margin-top:0.75rem">
+          <section class="card"><div class="row between"><strong>Normal</strong>${badge("verified", "ok")}</div><p class="hint">Quality library · DMS Workflow Users. Cached or refreshed credential is valid; no code is shown and Library opens normally.</p></section>
+          <section class="card"><div class="row between"><strong>Sign-in required / pending</strong>${badge("pending", "warn")}</div>${kv([["Code", "<code>ABCD-EFGH</code>"], ["Expires in", "15 minutes"], ["Sign-in page", '<button class="btn outline">Open sign-in page</button>']])}<p class="hint">The blocking shell polls only at the provider interval. It never opens the browser automatically and exposes no token or device code.</p></section>
+          <section class="card"><div class="row between"><strong>Not eligible</strong>${badge("blocked", "danger")}</div><p class="hint">The signed-in actor is disabled, a non-member, or belongs to a different tenant. DMS leaves the library inactive and acquires no lock.</p></section>
+          <section class="card"><div class="row between"><strong>Unavailable</strong>${badge("service unavailable", "danger")}</div><p class="hint">Credential-store, Graph, or group-access failures do not issue or erase a code. Terminal expiry, decline, or failure exposes <button class="btn outline">Reissue code</button>.</p></section>
+        </div>
       </section>
       <section class="card">
         <h3 class="card-title">Application Entra configuration</h3>
