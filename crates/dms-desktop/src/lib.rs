@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     env, fs,
     path::{Component, Path, PathBuf},
     sync::Mutex,
@@ -51,8 +51,15 @@ const DESKTOP_REASSOCIATE_RULE_UNREGISTERED: &str =
 struct DesktopIntegrations {
     graph: Mutex<graph::MicrosoftGraphClient>,
     approver_actor: Mutex<Option<AuthenticatedActor>>,
+    group_bound_sessions: Mutex<BTreeMap<String, GroupBoundSession>>,
     startup_deep_links: Mutex<Vec<String>>,
     startup_authorization: Mutex<StartupAuthorization>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct GroupBoundSession {
+    binding_id: Uuid,
+    actor: AuthenticatedActor,
 }
 
 impl Default for DesktopIntegrations {
@@ -60,6 +67,7 @@ impl Default for DesktopIntegrations {
         Self {
             graph: Mutex::new(graph::MicrosoftGraphClient::production(None)),
             approver_actor: Mutex::new(None),
+            group_bound_sessions: Mutex::new(BTreeMap::new()),
             startup_deep_links: Mutex::new(Vec::new()),
             startup_authorization: Mutex::new(StartupAuthorization::Inactive),
         }
@@ -412,10 +420,19 @@ async fn select_directory(app: AppHandle) -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-fn open_workspace(edit_root: String) -> Result<WorkspaceSummary, String> {
-    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
-    shortcut::ensure_workspace_shortcut(&workspace)?;
-    Ok(workspace_summary_from(&workspace))
+fn open_workspace(
+    edit_root: String,
+    state: State<'_, DesktopIntegrations>,
+) -> Result<WorkspaceSummary, String> {
+    let mut graph = state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
+    let mut sessions = state
+        .group_bound_sessions
+        .lock()
+        .map_err(|_| "group-bound session state is unavailable".to_owned())?;
+    open_workspace_with(Path::new(&edit_root), &mut *graph, &mut sessions)
 }
 
 #[tauri::command]
@@ -719,6 +736,7 @@ fn configure_global_entra(
         .lock()
         .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())? =
         graph::MicrosoftGraphClient::production(runtime);
+    clear_group_bound_sessions(&state)?;
     Ok(effective)
 }
 
@@ -976,7 +994,7 @@ fn apply_identity_source(
             "applying a Microsoft Entra identity source requires explicit confirmation".to_owned(),
         );
     }
-    state
+    let configuration = state
         .graph
         .lock()
         .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?
@@ -995,7 +1013,9 @@ fn apply_identity_source(
                     )
                 })
             },
-        )
+        )?;
+    clear_group_bound_sessions(&state)?;
+    Ok(configuration)
 }
 
 fn apply_identity_source_to_workspace(
@@ -2653,6 +2673,55 @@ fn workspace_summary_from(workspace: &Workspace) -> WorkspaceSummary {
     }
 }
 
+fn clear_group_bound_sessions(state: &DesktopIntegrations) -> Result<(), String> {
+    state
+        .group_bound_sessions
+        .lock()
+        .map_err(|_| "group-bound session state is unavailable".to_owned())?
+        .clear();
+    Ok(())
+}
+
+fn open_workspace_with<G: GraphClient + ?Sized>(
+    edit_root: &Path,
+    graph: &mut G,
+    sessions: &mut BTreeMap<String, GroupBoundSession>,
+) -> Result<WorkspaceSummary, String> {
+    let workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
+    activate_group_bound_session(&workspace, graph, sessions)?;
+    shortcut::ensure_workspace_shortcut(&workspace)?;
+    Ok(workspace_summary_from(&workspace))
+}
+
+fn activate_group_bound_session<G: GraphClient + ?Sized>(
+    workspace: &Workspace,
+    graph: &mut G,
+    sessions: &mut BTreeMap<String, GroupBoundSession>,
+) -> Result<(), String> {
+    let key = path_key(&workspace.edit_root);
+    let Some(source) = workspace.identity_source() else {
+        sessions.remove(&key);
+        return Ok(());
+    };
+    sessions.remove(&key);
+    let configured_tenant_id = graph.tenant_id().map_err(|error| error.to_string())?;
+    let actor = graph
+        .authenticated_actor(source)
+        .map_err(|error| error.to_string())?;
+    let people = graph
+        .direct_user_members(source)
+        .map_err(|error| error.to_string())?;
+    let actor = graph::verify_group_bound_actor(source, configured_tenant_id, actor, &people)?;
+    sessions.insert(
+        key,
+        GroupBoundSession {
+            binding_id: source.binding_id,
+            actor,
+        },
+    );
+    Ok(())
+}
+
 fn workspace_configuration(
     app: &AppHandle,
     edit_root: &Path,
@@ -3335,6 +3404,222 @@ mod tests {
         }
     }
 
+    struct SessionGraph {
+        tenant_id: std::result::Result<Uuid, String>,
+        actor: std::result::Result<AuthenticatedActor, String>,
+        people: std::result::Result<Vec<EntraPerson>, String>,
+    }
+
+    impl GraphClient for SessionGraph {
+        fn tenant_id(&self) -> std::result::Result<Uuid, String> {
+            self.tenant_id.clone()
+        }
+
+        fn direct_user_members(
+            &mut self,
+            _source: &EntraIdentitySource,
+        ) -> std::result::Result<Vec<EntraPerson>, String> {
+            self.people.clone()
+        }
+
+        fn authenticated_actor(
+            &mut self,
+            _source: &EntraIdentitySource,
+        ) -> std::result::Result<AuthenticatedActor, String> {
+            self.actor.clone()
+        }
+    }
+
+    fn bound_workspace() -> (tempfile::TempDir, Workspace, Uuid, Uuid) {
+        let directory = tempfile::tempdir().unwrap();
+        let edit_root = directory.path().join("edit");
+        let publish_root = directory.path().join("publish");
+        fs::create_dir(&edit_root).unwrap();
+        let mut workspace = Workspace::init(&edit_root, &publish_root).unwrap();
+        let tenant_id = Uuid::new_v4();
+        let actor_id = Uuid::new_v4();
+        workspace
+            .replace_identity_source(
+                tenant_id,
+                Uuid::new_v4(),
+                "Quality",
+                vec![EntraPerson::eligible(
+                    actor_id,
+                    "Ada Actor",
+                    "ada@example.test",
+                )],
+            )
+            .unwrap();
+        workspace
+            .update_workflow_policy(
+                ".",
+                RoleUpdate::replace(actor_id),
+                RoleUpdate::replace(actor_id),
+            )
+            .unwrap();
+        workspace.save().unwrap();
+        (directory, workspace, tenant_id, actor_id)
+    }
+
+    fn cached_session(binding_id: Uuid, tenant_id: Uuid, actor_id: Uuid) -> GroupBoundSession {
+        GroupBoundSession {
+            binding_id,
+            actor: AuthenticatedActor {
+                tenant_id,
+                object_id: actor_id,
+            },
+        }
+    }
+
+    fn member_graph(tenant_id: Uuid, actor_id: Uuid) -> SessionGraph {
+        SessionGraph {
+            tenant_id: Ok(tenant_id),
+            actor: Ok(AuthenticatedActor {
+                tenant_id,
+                object_id: actor_id,
+            }),
+            people: Ok(vec![EntraPerson::eligible(
+                actor_id,
+                "Ada Actor",
+                "ada@example.test",
+            )]),
+        }
+    }
+
+    #[test]
+    fn group_bound_session_activation_preserves_unbound_libraries() {
+        let directory = tempfile::tempdir().unwrap();
+        let edit_root = directory.path().join("edit");
+        let publish_root = directory.path().join("publish");
+        fs::create_dir(&edit_root).unwrap();
+        let workspace = Workspace::init(&edit_root, &publish_root).unwrap();
+        let mut sessions = BTreeMap::new();
+        sessions.insert(
+            "other".to_owned(),
+            cached_session(Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4()),
+        );
+
+        let summary =
+            open_workspace_with(&edit_root, &mut UnavailableGraphClient, &mut sessions).unwrap();
+
+        assert_eq!(summary.workspace_id, workspace.workspace_id.to_string());
+        assert!(!sessions.contains_key(&path_key(&edit_root)));
+        assert!(sessions.contains_key("other"));
+    }
+
+    #[test]
+    fn group_bound_session_activation_caches_only_a_verified_enabled_member() {
+        let (_directory, workspace, tenant_id, actor_id) = bound_workspace();
+        let mut sessions = BTreeMap::new();
+        let mut graph = member_graph(tenant_id, actor_id);
+
+        activate_group_bound_session(&workspace, &mut graph, &mut sessions).unwrap();
+        let session = sessions.get(&path_key(&workspace.edit_root)).unwrap();
+        assert_eq!(
+            session.binding_id,
+            workspace.identity_source().unwrap().binding_id
+        );
+        assert_eq!(session.actor.object_id, actor_id);
+
+        graph.people = Ok(Vec::new());
+        let error =
+            activate_group_bound_session(&workspace, &mut graph, &mut sessions).unwrap_err();
+        assert!(error.contains("enabled direct member"));
+        assert!(!sessions.contains_key(&path_key(&workspace.edit_root)));
+    }
+
+    #[test]
+    fn group_bound_session_rejects_tenant_mismatch_without_caching() {
+        let (_directory, workspace, tenant_id, actor_id) = bound_workspace();
+        let mut sessions = BTreeMap::new();
+        sessions.insert(
+            path_key(&workspace.edit_root),
+            cached_session(
+                workspace.identity_source().unwrap().binding_id,
+                tenant_id,
+                actor_id,
+            ),
+        );
+        let other_tenant = Uuid::new_v4();
+        let mut graph = SessionGraph {
+            tenant_id: Ok(other_tenant),
+            actor: Ok(AuthenticatedActor {
+                tenant_id: other_tenant,
+                object_id: actor_id,
+            }),
+            people: Ok(vec![EntraPerson::eligible(
+                actor_id,
+                "Ada Actor",
+                "ada@example.test",
+            )]),
+        };
+
+        let error =
+            activate_group_bound_session(&workspace, &mut graph, &mut sessions).unwrap_err();
+        assert!(error.contains("tenant does not match"));
+        assert!(sessions.is_empty());
+    }
+
+    #[test]
+    fn group_bound_session_rejects_disabled_account_without_caching() {
+        let (_directory, workspace, tenant_id, actor_id) = bound_workspace();
+        let mut sessions = BTreeMap::new();
+        let mut graph = SessionGraph {
+            tenant_id: Ok(tenant_id),
+            actor: Ok(AuthenticatedActor {
+                tenant_id,
+                object_id: actor_id,
+            }),
+            people: Ok(vec![EntraPerson {
+                object_id: actor_id,
+                display_name: "Ada Actor".to_owned(),
+                email: "ada@example.test".to_owned(),
+                account_enabled: false,
+            }]),
+        };
+
+        let error =
+            activate_group_bound_session(&workspace, &mut graph, &mut sessions).unwrap_err();
+        assert!(error.contains("enabled direct member"));
+        assert!(sessions.is_empty());
+    }
+
+    #[test]
+    fn group_bound_session_rejects_unavailable_graph_without_caching() {
+        let (_directory, workspace, tenant_id, actor_id) = bound_workspace();
+        let mut sessions = BTreeMap::new();
+        sessions.insert(
+            path_key(&workspace.edit_root),
+            cached_session(
+                workspace.identity_source().unwrap().binding_id,
+                tenant_id,
+                actor_id,
+            ),
+        );
+
+        let error =
+            activate_group_bound_session(&workspace, &mut UnavailableGraphClient, &mut sessions)
+                .unwrap_err();
+        assert!(error.contains("Microsoft Graph"));
+        assert!(sessions.is_empty());
+    }
+
+    #[test]
+    fn group_bound_session_clears_cached_actors_on_entra_reconfiguration() {
+        let state = DesktopIntegrations::default();
+        state.group_bound_sessions.lock().unwrap().insert(
+            "library".to_owned(),
+            cached_session(Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4()),
+        );
+
+        clear_group_bound_sessions(&state).unwrap();
+        assert!(state.group_bound_sessions.lock().unwrap().is_empty());
+
+        let source = include_str!("lib.rs");
+        assert!(source.contains("clear_group_bound_sessions(&state)?;\n    Ok(effective)"));
+        assert!(source.contains("clear_group_bound_sessions(&state)?;\n    Ok(configuration)"));
+    }
+
     #[test]
     fn missing_preferences_use_expanded_sidebar_and_no_saved_views() {
         let directory = tempfile::tempdir().unwrap();
@@ -3619,7 +3904,9 @@ mod tests {
             true,
         )
         .unwrap();
-        let reopened = open_workspace(root).unwrap();
+        let workspace = Workspace::open(Path::new(&root)).unwrap();
+        shortcut::ensure_workspace_shortcut(&workspace).unwrap();
+        let reopened = workspace_summary_from(&workspace);
 
         assert_eq!(reopened, initialized);
         assert!(edit_root.join(".dms/workspace.json").is_file());
@@ -3672,7 +3959,8 @@ mod tests {
         assert!(shortcut_path.is_file());
         assert_shortcut();
         fs::remove_file(&shortcut_path).unwrap();
-        open_workspace(root).unwrap();
+        let mut sessions = BTreeMap::new();
+        open_workspace_with(Path::new(&root), &mut UnavailableGraphClient, &mut sessions).unwrap();
         assert!(shortcut_path.is_file());
         assert_shortcut();
     }

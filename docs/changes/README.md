@@ -20,7 +20,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
-| [CHG-0035](active/CHG-0035-entra-session-required-for-group-bound-library.md) | Entra session required for a group-bound library | pending | CAP-0011, CAP-0021 |
+| [CHG-0035](active/CHG-0035-entra-session-required-for-group-bound-library.md) | Entra session required for a group-bound library | in-progress | CAP-0011, CAP-0021 |
 | [CHG-0036](active/CHG-0036-pending-approval-status-and-review-request-resend.md) | Pending-approval status and review-request resend | pending | CAP-0002, CAP-0006, CAP-0010, CAP-0011 |
 | [CHG-0037](active/CHG-0037-library-switcher-and-lock-owner-feedback.md) | Library switcher and lock-owner feedback | pending | CAP-0005, CAP-0014 |
 | [CHG-0038](active/CHG-0038-candidate-approval-outcome-clarity.md) | Candidate, release, and Entra identity clarity | pending | CAP-0002, CAP-0006, CAP-0011, CAP-0015, CAP-0021 |

@@ -700,6 +700,7 @@ export async function switchWorkspaceSession(
   invoke,
 ) {
   if (currentWorkspace?.edit_root === workspace.edit_root) return null;
+  await invoke("open_workspace", { editRoot: workspace.edit_root });
   const lockStatus = await invoke("acquire_workspace_lock", {
     editRoot: workspace.edit_root,
     takeOverStale: lockOptions.takeOverStale ?? false,

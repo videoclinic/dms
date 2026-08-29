@@ -294,7 +294,7 @@ test("shell and Library panes contain scrolling without moving navigation", () =
   );
 });
 
-test("opening a workspace acquires its lock and switches only after releasing the prior lock", async () => {
+test("opening a workspace revalidates it before acquiring its lock and switches only after releasing the prior lock", async () => {
   const calls = [];
   const priorOwner = { process_id: 16 };
   const newOwner = { process_id: 17 };
@@ -313,6 +313,10 @@ test("opening a workspace acquires its lock and switches only after releasing th
   assert.equal(result, status);
   assert.deepEqual(calls, [
     {
+      command: "open_workspace",
+      arguments_: { editRoot: "/DMS/New" },
+    },
+    {
       command: "acquire_workspace_lock",
       arguments_: {
         editRoot: "/DMS/New",
@@ -324,6 +328,29 @@ test("opening a workspace acquires its lock and switches only after releasing th
       command: "release_workspace_lock",
       arguments_: { editRoot: "/DMS/Old", owner: priorOwner, confirmed: true },
     },
+  ]);
+});
+
+test("a failed bound open does not acquire a destination lock", async () => {
+  const calls = [];
+  await assert.rejects(
+    () => switchWorkspaceSession(
+      { edit_root: "/DMS/Old" },
+      { state: "current", stale_after_hours: 24, lock: { process_id: 16 } },
+      { edit_root: "/DMS/New" },
+      {},
+      async (command, arguments_) => {
+        calls.push({ command, arguments_ });
+        if (command === "open_workspace") {
+          throw new Error("the signed-in Microsoft Entra user is not an enabled direct member of this library group");
+        }
+        return null;
+      },
+    ),
+    /enabled direct member/,
+  );
+  assert.deepEqual(calls, [
+    { command: "open_workspace", arguments_: { editRoot: "/DMS/New" } },
   ]);
 });
 
