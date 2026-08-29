@@ -80,6 +80,7 @@ Do not import a `de-DE` ADML. Do not add a Windows ADMX dependency; this templat
 | Incomplete or malformed policy | DMS blocks Graph on purpose. Fix both UUID values or set **Not Configured**. There is no fallback to environment or saved settings while either policy value exists. |
 | Policy present but Configuration still editable | Confirm the query above returns both values on `HKLM`, then restart DMS. User-scoped `HKCU` policy is not used. |
 | Assigned to a user group | Reassign to a device group. This template is Computer Configuration writing `HKLM`; user assignment is not the supported path and does not replace device targeting. |
+| Intune shows the template but HKLM is empty | This is Computer Configuration. On a workplace-joined (user MDM) device, device-group assignment may ingest PolicyManager without writing `HKLM`. Confirm Azure AD join or that `reg.exe query HKLM\SOFTWARE\Policies\Videoclinic\DMS` returns both values after an Intune sync with no local fixture. |
 | Users still must sign in | Expected. Policy does not replace delegated device authorization or library identity-source application. |
 | Wrong tenant on every Windows user | Clear the policy as above. A computer policy is shared by every user of the device. |
 
