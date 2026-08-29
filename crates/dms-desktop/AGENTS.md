@@ -50,6 +50,14 @@ macOS.
   approver actor. The CLI stays local-principal-only and fails closed through
   `dms-core`. Bound `WorkspaceSummary.change_author` presents the cached
   display snapshot plus immutable tenant/object ID.
+- A missing or refresh-rejected group-bound credential creates one process-only
+  per-library device-flow challenge. Its IPC status exposes only the user code,
+  expiry, verification URI, and sanitized terminal state; tokens and
+  `device_code` never cross IPC. The shell blocks the selected library until
+  successful sign-in revalidates membership and acquires its destination lock.
+  It never opens a browser automatically; only the explicit host-mediated
+  **Open sign-in page** control does. The direct advisory-lock command rejects
+  group-bound libraries so IPC cannot bypass verified activation.
 - Store sidebar, saved-view, and recent-library preferences in the OS user
   app-config directory, never under `<edit-root>/.dms`. Recent libraries are at
   most ten unique edit roots in most-recent-first order; removing one never

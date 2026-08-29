@@ -27,8 +27,12 @@ import {
   toggleSavedView,
   workspaceSetupRequest,
   applyStartupAuthorization,
+  applyLibrarySessionAuthorization,
   cancelStartupAuthorizationPoll,
+  librarySessionAuthorizationMarkup,
+  librarySessionAuthorizationPollDelayMs,
   scheduleStartupAuthorizationPoll,
+  shouldPollLibrarySessionAuthorization,
   shouldPollStartupAuthorization,
   startupAuthorizationMarkup,
   startupAuthorizationPollDelayMs,
@@ -299,6 +303,10 @@ test("opening a workspace revalidates it before acquiring its lock and switches 
   const priorOwner = { process_id: 16 };
   const newOwner = { process_id: 17 };
   const status = { state: "current", stale_after_hours: 24, lock: newOwner };
+  const activation = {
+    workspace: { edit_root: "/DMS/New" },
+    lock_status: status,
+  };
   const result = await switchWorkspaceSession(
     { edit_root: "/DMS/Old" },
     { state: "current", stale_after_hours: 24, lock: priorOwner },
@@ -306,18 +314,14 @@ test("opening a workspace revalidates it before acquiring its lock and switches 
     { takeOverStale: true, overrideExisting: true },
     async (command, arguments_) => {
       calls.push({ command, arguments_ });
-      return command === "acquire_workspace_lock" ? status : null;
+      return command === "activate_workspace_session" ? activation : null;
     },
   );
 
-  assert.equal(result, status);
+  assert.equal(result, activation);
   assert.deepEqual(calls, [
     {
-      command: "open_workspace",
-      arguments_: { editRoot: "/DMS/New" },
-    },
-    {
-      command: "acquire_workspace_lock",
+      command: "activate_workspace_session",
       arguments_: {
         editRoot: "/DMS/New",
         takeOverStale: true,
@@ -341,7 +345,7 @@ test("a failed bound open does not acquire a destination lock", async () => {
       {},
       async (command, arguments_) => {
         calls.push({ command, arguments_ });
-        if (command === "open_workspace") {
+        if (command === "activate_workspace_session") {
           throw new Error("the signed-in Microsoft Entra user is not an enabled direct member of this library group");
         }
         return null;
@@ -350,7 +354,10 @@ test("a failed bound open does not acquire a destination lock", async () => {
     /enabled direct member/,
   );
   assert.deepEqual(calls, [
-    { command: "open_workspace", arguments_: { editRoot: "/DMS/New" } },
+    {
+      command: "activate_workspace_session",
+      arguments_: { editRoot: "/DMS/New", takeOverStale: false, overrideExisting: false },
+    },
   ]);
 });
 
@@ -849,4 +856,50 @@ test("terminal startup authorization offers explicit reissue and unavailable doe
   assert.match(declined, /Reissue code/);
   assert.doesNotMatch(unavailable, /Reissue code/);
   assert.doesNotMatch(unavailable, /data-startup-reissue/);
+});
+
+test("bound-library authorization blocks destinations without exposing credentials", () => {
+  const pending = {
+    kind: "pending",
+    edit_root: "/DMS/Quality",
+    library_label: "Quality",
+    group_label: "Quality workflow",
+    user_code: "ABCD-EFGH",
+    verification_uri: "https://microsoft.com/devicelogin",
+    message: "Enter the code to sign in.",
+    expires_in_seconds: 900,
+    next_poll_delay_ms: 5000,
+  };
+  const state = applyLibrarySessionAuthorization(createInitialState(), pending, {
+    takeOverStale: true,
+  });
+  const markup = librarySessionAuthorizationMarkup(state.library_session_authorization);
+
+  assert.match(markup, /data-library-session-authorization="pending"/);
+  assert.match(markup, /Sign in to open Quality/);
+  assert.match(markup, /Quality workflow/);
+  assert.match(markup, /ABCD-EFGH/);
+  assert.match(markup, /Open sign-in page/);
+  assert.doesNotMatch(markup, /device_code|access_token|refresh_token/);
+  assert.equal(shouldPollLibrarySessionAuthorization(state.library_session_authorization), true);
+  assert.equal(librarySessionAuthorizationPollDelayMs(state.library_session_authorization), 5000);
+  assert.equal(state.library_session_authorization.lock_options.takeOverStale, true);
+});
+
+test("terminal bound-library authorization reissues only when the service is reachable", () => {
+  const expired = librarySessionAuthorizationMarkup({
+    kind: "expired",
+    library_label: "Quality",
+    group_label: "Quality workflow",
+    message: "Microsoft Entra sign-in expired.",
+  });
+  const unavailable = librarySessionAuthorizationMarkup({
+    kind: "unavailable",
+    library_label: "Quality",
+    message: "cannot access the OS credential store",
+  });
+
+  assert.match(expired, /data-library-session-reissue/);
+  assert.match(expired, /Reissue code/);
+  assert.doesNotMatch(unavailable, /data-library-session-reissue/);
 });

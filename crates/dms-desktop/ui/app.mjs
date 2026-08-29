@@ -168,6 +168,7 @@ export function createInitialState(preferences = defaultPreferences()) {
     setup_edit_root: "",
     error: "",
     startup_authorization: { kind: "inactive" },
+    library_session_authorization: { kind: "inactive" },
   };
 }
 
@@ -374,6 +375,42 @@ export function startupAuthorizationMarkup(status) {
   return `<section class="startup-authorization-card" data-startup-authorization="${escapeHtml(status.kind)}"><h2>Microsoft Entra sign-in needs attention</h2><p>${escapeHtml(status.message ?? "")}</p><button class="button" type="button" data-startup-reissue>Reissue code</button></section>`;
 }
 
+export function applyLibrarySessionAuthorization(state, status, lockOptions = {}) {
+  return {
+    ...state,
+    library_session_authorization: {
+      ...(status ?? { kind: "inactive" }),
+      lock_options: lockOptions,
+    },
+  };
+}
+
+export function shouldPollLibrarySessionAuthorization(status) {
+  return status?.kind === "pending" && status.next_poll_delay_ms != null;
+}
+
+export function librarySessionAuthorizationPollDelayMs(status) {
+  if (!shouldPollLibrarySessionAuthorization(status)) return null;
+  const delay = Number(status.next_poll_delay_ms);
+  return Number.isFinite(delay) ? Math.max(0, delay) : 0;
+}
+
+export function librarySessionAuthorizationMarkup(status) {
+  if (!status || status.kind === "inactive" || status.kind === "valid") return "";
+  const library = escapeHtml(status.library_label ?? "selected library");
+  const group = escapeHtml(status.group_label ?? "configured Microsoft Entra group");
+  if (status.kind === "pending") {
+    const expiry = status.expires_in_seconds != null
+      ? `<dt>Expires in</dt><dd>${escapeHtml(String(status.expires_in_seconds))} seconds</dd>`
+      : "";
+    return `<section class="card library-session-authorization" data-library-session-authorization="pending"><span class="badge">Library sign-in required</span><h2>Sign in to open ${library}</h2><p>This library requires a verified Microsoft Entra member of <strong>${group}</strong>. ${escapeHtml(status.message ?? "")}</p><dl class="details-grid"><dt>Code</dt><dd><code>${escapeHtml(status.user_code ?? "")}</code></dd><dt>Sign-in page</dt><dd><button class="button secondary" type="button" data-open-external="${escapeHtml(status.verification_uri ?? "")}">Open sign-in page</button></dd>${expiry}</dl></section>`;
+  }
+  if (status.kind === "unavailable") {
+    return `<section class="card library-session-authorization" data-library-session-authorization="unavailable" role="alert"><span class="badge">Library sign-in unavailable</span><h2>Cannot open ${library}</h2><p>${escapeHtml(status.message ?? "")}</p></section>`;
+  }
+  return `<section class="card library-session-authorization" data-library-session-authorization="${escapeHtml(status.kind)}" role="alert"><span class="badge">Library sign-in needs attention</span><h2>Cannot open ${library}</h2><p>The verified member check for <strong>${group}</strong> did not complete. ${escapeHtml(status.message ?? "")}</p><button class="button" type="button" data-library-session-reissue>Reissue code</button></section>`;
+}
+
 export function workspaceFootMarkup(workspace) {
   if (!workspace) return "No workspace open";
   return `<span class="workspace-foot-label">Changes recorded as</span><strong class="workspace-change-author">${escapeHtml(workspace.change_author ?? "local operator")}</strong><span class="workspace-foot-meta"><strong>${escapeHtml(workspace.workspace_id)}</strong><br>edit: ${escapeHtml(workspace.edit_root)}<br>publish: ${escapeHtml(workspace.publish_root)}</span>`;
@@ -475,6 +512,79 @@ async function reissueStartupAuthorization() {
       kind: "failed",
       message: String(error),
     });
+  }
+  render(appState);
+}
+
+async function finishLibrarySessionActivation(activation) {
+  const currentWorkspace = appState.workspace;
+  if (currentWorkspace && currentWorkspace.edit_root !== activation.workspace.edit_root) {
+    const currentOwner = appState.maintenance.lock_status?.lock;
+    if (!currentOwner) {
+      await invokeCommand("release_workspace_lock", {
+        editRoot: activation.workspace.edit_root,
+        owner: activation.lock_status.lock,
+        confirmed: true,
+      });
+      throw new Error("Active workspace lock owner is unavailable.");
+    }
+    try {
+      await invokeCommand("release_workspace_lock", {
+        editRoot: currentWorkspace.edit_root,
+        owner: currentOwner,
+        confirmed: true,
+      });
+    } catch (error) {
+      await invokeCommand("release_workspace_lock", {
+        editRoot: activation.workspace.edit_root,
+        owner: activation.lock_status.lock,
+        confirmed: true,
+      });
+      throw error;
+    }
+  }
+  await applyWorkspaceActivation(activation);
+}
+
+async function pollLibrarySessionAuthorization() {
+  const current = appState.library_session_authorization;
+  if (!shouldPollLibrarySessionAuthorization(current) || !current.edit_root) return;
+  try {
+    const status = await invokeCommand("poll_library_session_authorization", {
+      editRoot: current.edit_root,
+      takeOverStale: current.lock_options?.takeOverStale ?? false,
+      overrideExisting: current.lock_options?.overrideExisting ?? false,
+    });
+    appState = applyLibrarySessionAuthorization(appState, status, current.lock_options);
+    if (status.activation) {
+      await finishLibrarySessionActivation(status.activation);
+    }
+  } catch (error) {
+    appState = applyLibrarySessionAuthorization(appState, {
+      ...current,
+      kind: "failed",
+      next_poll_delay_ms: null,
+      message: String(error),
+    }, current.lock_options);
+  }
+  render(appState);
+}
+
+async function reissueLibrarySessionAuthorization() {
+  const current = appState.library_session_authorization;
+  if (!current?.edit_root) return;
+  try {
+    const status = await invokeCommand("reissue_library_session_authorization", {
+      editRoot: current.edit_root,
+    });
+    appState = applyLibrarySessionAuthorization(appState, status, current.lock_options);
+  } catch (error) {
+    appState = applyLibrarySessionAuthorization(appState, {
+      ...current,
+      kind: "failed",
+      message: String(error),
+      next_poll_delay_ms: null,
+    }, current.lock_options);
   }
   render(appState);
 }
@@ -613,6 +723,7 @@ function activityMarkup(state, activity) {
 }
 
 let startupPollTimer = null;
+let librarySessionPollTimer = null;
 
 function render(state) {
   const root = document.querySelector("#app");
@@ -624,9 +735,10 @@ function render(state) {
   document.querySelector("#activity-heading").textContent = activity?.label ?? "Set up workspace";
   const mainContent = document.querySelector("#main-content");
   mainContent.classList.toggle("library-active", activity?.task === "Library");
-  mainContent.innerHTML = state.workspace
+  const librarySessionMarkup = librarySessionAuthorizationMarkup(state.library_session_authorization);
+  mainContent.innerHTML = librarySessionMarkup || (state.workspace
     ? activityMarkup(state, activity)
-    : setupMarkup(state.error, state.preferences.recent_libraries, state.setup_edit_root);
+    : setupMarkup(state.error, state.preferences.recent_libraries, state.setup_edit_root));
   const startupHost = document.querySelector("#startup-authorization");
   if (startupHost) {
     const markup = startupAuthorizationMarkup(state.startup_authorization);
@@ -637,6 +749,11 @@ function render(state) {
       void pollStartupAuthorization();
     });
   }
+  cancelStartupAuthorizationPoll(librarySessionPollTimer);
+  const librarySessionDelay = librarySessionAuthorizationPollDelayMs(state.library_session_authorization);
+  librarySessionPollTimer = librarySessionDelay == null
+    ? null
+    : setTimeout(() => { void pollLibrarySessionAuthorization(); }, librarySessionDelay);
 
   const bookmark = document.querySelector("#bookmark-view");
   const bookmarkTarget = bookmarkActivity(state);
@@ -700,8 +817,7 @@ export async function switchWorkspaceSession(
   invoke,
 ) {
   if (currentWorkspace?.edit_root === workspace.edit_root) return null;
-  await invoke("open_workspace", { editRoot: workspace.edit_root });
-  const lockStatus = await invoke("acquire_workspace_lock", {
+  const activation = await invoke("activate_workspace_session", {
     editRoot: workspace.edit_root,
     takeOverStale: lockOptions.takeOverStale ?? false,
     overrideExisting: lockOptions.overrideExisting ?? false,
@@ -710,8 +826,8 @@ export async function switchWorkspaceSession(
     const currentOwner = currentLockStatus?.lock;
     if (!currentOwner) {
       await invoke("release_workspace_lock", {
-        editRoot: workspace.edit_root,
-        owner: lockStatus.lock,
+        editRoot: activation.workspace.edit_root,
+        owner: activation.lock_status.lock,
         confirmed: true,
       });
       throw new Error("Active workspace lock owner is unavailable.");
@@ -724,36 +840,55 @@ export async function switchWorkspaceSession(
       });
     } catch (error) {
       await invoke("release_workspace_lock", {
-        editRoot: workspace.edit_root,
-        owner: lockStatus.lock,
+        editRoot: activation.workspace.edit_root,
+        owner: activation.lock_status.lock,
         confirmed: true,
       });
       throw error;
     }
   }
-  return lockStatus;
+  return activation;
 }
 
-async function activateWorkspace(workspace, lockOptions = {}, openLibrary = true) {
-  const transitioned = await switchWorkspaceSession(
-    appState.workspace,
-    appState.maintenance.lock_status,
-    workspace,
-    lockOptions,
-    invokeCommand,
-  );
-  const lockStatus = transitioned ?? appState.maintenance.lock_status;
+async function applyWorkspaceActivation(activation, openLibrary = true) {
+  const workspace = activation.workspace;
   const preferences = rememberRecentLibrary(appState.preferences, workspace.edit_root);
   const sidebarOverlay = appState.sidebar_overlay;
   const initial = createInitialState(preferences);
   appState = {
     ...initial,
     workspace,
-    maintenance: { ...initial.maintenance, lock_status: lockStatus },
+    maintenance: { ...initial.maintenance, lock_status: activation.lock_status },
     sidebar_overlay: sidebarOverlay,
   };
   await persistPreferences(appState);
   if (openLibrary) openDestination("Library");
+}
+
+async function activateWorkspace(workspace, lockOptions = {}, openLibrary = true) {
+  try {
+    const activation = await switchWorkspaceSession(
+      appState.workspace,
+      appState.maintenance.lock_status,
+      workspace,
+      lockOptions,
+      invokeCommand,
+    );
+    if (activation) {
+      await applyWorkspaceActivation(activation, openLibrary);
+      return;
+    }
+  } catch (error) {
+    const status = await invokeCommand("library_session_authorization_status", {
+      editRoot: workspace.edit_root,
+    });
+    if (status.kind !== "inactive") {
+      appState = applyLibrarySessionAuthorization(appState, status, lockOptions);
+      render(appState);
+      return;
+    }
+    throw error;
+  }
 }
 
 async function openPermalink(uri) {
@@ -1682,6 +1817,11 @@ async function handleClick(event) {
     return;
   }
 
+  if (event.target.closest("[data-library-session-reissue]")) {
+    await reissueLibrarySessionAuthorization();
+    return;
+  }
+
   const recentRemove = event.target.closest("[data-recent-library-remove]")?.dataset.recentLibraryRemove;
   if (recentRemove) {
     appState = {
@@ -1698,8 +1838,7 @@ async function handleClick(event) {
     appState = { ...appState, setup_edit_root: recentOpen, error: "" };
     render(appState);
     try {
-      const workspace = await invokeCommand("open_workspace", { editRoot: recentOpen });
-      await activateWorkspace(workspace);
+      await activateWorkspace({ edit_root: recentOpen });
     } catch (error) {
       appState = { ...appState, error: String(error) };
       render(appState);
@@ -2475,8 +2614,12 @@ async function handleSubmit(event) {
   event.preventDefault();
   try {
     const request = workspaceSetupRequest(event.target.id, new FormData(event.target));
-    const workspace = await invokeCommand(request.command, request.arguments);
-    await activateWorkspace(workspace, request.lockOptions ?? {});
+    if (request.command === "open_workspace") {
+      await activateWorkspace({ edit_root: request.arguments.editRoot }, request.lockOptions ?? {});
+    } else {
+      const workspace = await invokeCommand(request.command, request.arguments);
+      await activateWorkspace(workspace, request.lockOptions ?? {});
+    }
   } catch (error) {
     appState = { ...appState, error: String(error) };
     render(appState);

@@ -75,6 +75,7 @@ struct DelegatedTokenManifest {
 enum DeviceLoginPurpose {
     IdentitySource { group_id: Uuid },
     Approver,
+    LibrarySession { binding_id: Uuid },
     Startup,
 }
 
@@ -542,6 +543,50 @@ where
         self.begin_delegated_sign_in(self.configured_tenant_id()?, DeviceLoginPurpose::Startup)
     }
 
+    pub fn begin_library_session_sign_in(
+        &mut self,
+        source: &EntraIdentitySource,
+    ) -> Result<DeviceLoginChallenge, String> {
+        if let Some((challenge_id, pending)) =
+            self.active_library_session_pending(source.binding_id)
+        {
+            return Ok(device_login_challenge(challenge_id, pending));
+        }
+        self.begin_delegated_sign_in(
+            self.bound_tenant_id(source)?,
+            DeviceLoginPurpose::LibrarySession {
+                binding_id: source.binding_id,
+            },
+        )
+    }
+
+    pub fn reissue_library_session_sign_in(
+        &mut self,
+        source: &EntraIdentitySource,
+    ) -> Result<DeviceLoginChallenge, String> {
+        if self
+            .active_library_session_pending(source.binding_id)
+            .is_some()
+        {
+            return Err(
+                "a Microsoft Entra library-session sign-in code is already pending".to_owned(),
+            );
+        }
+        self.pending.retain(|_, pending| {
+            !matches!(
+                pending.purpose,
+                DeviceLoginPurpose::LibrarySession { binding_id }
+                    if binding_id == source.binding_id
+            )
+        });
+        self.begin_delegated_sign_in(
+            self.bound_tenant_id(source)?,
+            DeviceLoginPurpose::LibrarySession {
+                binding_id: source.binding_id,
+            },
+        )
+    }
+
     fn begin_delegated_sign_in(
         &mut self,
         tenant_id: Uuid,
@@ -658,6 +703,21 @@ where
         })
     }
 
+    fn bound_tenant_id(&self, source: &EntraIdentitySource) -> Result<Uuid, String> {
+        let bound = source.tenant_id.ok_or_else(|| {
+            "this library's Microsoft Entra identity source is unverified; reapply it before signing in"
+                .to_owned()
+        })?;
+        let configured = self.configured_tenant_id()?;
+        if configured != bound {
+            return Err(
+                "the configured Microsoft Entra tenant does not match this library's identity source"
+                    .to_owned(),
+            );
+        }
+        Ok(bound)
+    }
+
     fn wait_for_device_token(&mut self, challenge_id: Uuid) -> Result<DelegatedToken, String> {
         loop {
             match self.poll_device_token(challenge_id)? {
@@ -757,11 +817,45 @@ where
         Ok(poll)
     }
 
+    pub fn poll_library_session_authorization(
+        &mut self,
+        source: &EntraIdentitySource,
+    ) -> Result<DeviceTokenPoll, String> {
+        let Some((challenge_id, pending)) = self.active_library_session_pending(source.binding_id)
+        else {
+            return Ok(DeviceTokenPoll::Failed(
+                "Microsoft Entra library-session sign-in challenge is no longer available; start again"
+                    .to_owned(),
+            ));
+        };
+        let tenant_id = pending.tenant_id;
+        let poll = self.poll_device_token(challenge_id)?;
+        if let DeviceTokenPoll::Authorized(token) = &poll {
+            self.tokens.save(tenant_id, token)?;
+        }
+        Ok(poll)
+    }
+
     pub fn evaluate_startup_credential(&mut self) -> StartupCredentialEvaluation {
         let tenant_id = match self.configured_tenant_id() {
             Ok(tenant_id) => tenant_id,
             Err(error) => return StartupCredentialEvaluation::Unavailable(error),
         };
+        self.evaluate_delegated_credential(tenant_id)
+    }
+
+    pub fn evaluate_library_session_credential(
+        &mut self,
+        source: &EntraIdentitySource,
+    ) -> StartupCredentialEvaluation {
+        let tenant_id = match self.bound_tenant_id(source) {
+            Ok(tenant_id) => tenant_id,
+            Err(error) => return StartupCredentialEvaluation::Unavailable(error),
+        };
+        self.evaluate_delegated_credential(tenant_id)
+    }
+
+    fn evaluate_delegated_credential(&mut self, tenant_id: Uuid) -> StartupCredentialEvaluation {
         match inspect_cached_token(&self.tokens, tenant_id) {
             Err(error) => StartupCredentialEvaluation::Unavailable(error),
             Ok(TokenLoad::Missing | TokenLoad::Invalid) => {
@@ -789,6 +883,22 @@ where
         let now = Instant::now();
         self.pending.iter().find_map(|(challenge_id, pending)| {
             (matches!(pending.purpose, DeviceLoginPurpose::Startup) && pending.expires_at > now)
+                .then_some((*challenge_id, pending))
+        })
+    }
+
+    fn active_library_session_pending(
+        &self,
+        binding_id: Uuid,
+    ) -> Option<(Uuid, &PendingDeviceLogin)> {
+        let now = Instant::now();
+        self.pending.iter().find_map(|(challenge_id, pending)| {
+            (matches!(
+                pending.purpose,
+                DeviceLoginPurpose::LibrarySession {
+                    binding_id: pending_binding_id
+                } if pending_binding_id == binding_id
+            ) && pending.expires_at > now)
                 .then_some((*challenge_id, pending))
         })
     }
@@ -1904,6 +2014,92 @@ mod tests {
                 graph.begin_startup_sign_in().unwrap().challenge_id,
                 first.challenge_id
             );
+        }
+    }
+
+    mod library_session_device_authorization {
+        use super::*;
+
+        fn source(tenant_id: Uuid) -> EntraIdentitySource {
+            EntraIdentitySource {
+                binding_id: Uuid::new_v4(),
+                tenant_id: Some(tenant_id),
+                group_id: Uuid::new_v4(),
+                group_label: "Quality workflow".to_owned(),
+                last_refreshed_at: None,
+            }
+        }
+
+        #[test]
+        fn missing_credential_starts_a_distinct_library_session_challenge() {
+            let tenant_id = Uuid::new_v4();
+            let source = source(tenant_id);
+            let mut graph = MicrosoftGraphClient::with_parts(
+                "client",
+                tenant_id,
+                FakeHttp::with_responses(vec![response(200, device_code_body())]),
+                ScriptedTokenStore::missing(),
+            );
+
+            assert_eq!(
+                graph.evaluate_library_session_credential(&source),
+                StartupCredentialEvaluation::NeedsChallenge
+            );
+            let challenge = graph.begin_library_session_sign_in(&source).unwrap();
+
+            assert_eq!(challenge.user_code, "ABCD-EFGH");
+            assert!(matches!(
+                graph.pending.get(&challenge.challenge_id).map(|pending| &pending.purpose),
+                Some(DeviceLoginPurpose::LibrarySession { binding_id }) if *binding_id == source.binding_id
+            ));
+            assert!(graph
+                .reissue_library_session_sign_in(&source)
+                .unwrap_err()
+                .contains("already pending"));
+        }
+
+        #[test]
+        fn authorized_library_session_saves_the_token_and_clears_its_challenge() {
+            let tenant_id = Uuid::new_v4();
+            let source = source(tenant_id);
+            let tokens = ScriptedTokenStore::missing();
+            let mut graph = MicrosoftGraphClient::with_parts(
+                "client",
+                tenant_id,
+                FakeHttp::with_responses(vec![
+                    response(200, device_code_body()),
+                    response(
+                        200,
+                        r#"{"access_token":"access","refresh_token":"refresh","expires_in":3600}"#,
+                    ),
+                ]),
+                tokens,
+            );
+            graph.begin_library_session_sign_in(&source).unwrap();
+
+            assert!(matches!(
+                graph.poll_library_session_authorization(&source).unwrap(),
+                DeviceTokenPoll::Authorized(_)
+            ));
+            assert!(graph.pending.is_empty());
+        }
+
+        #[test]
+        fn library_session_rejects_a_mismatched_configured_tenant_without_a_code() {
+            let source = source(Uuid::new_v4());
+            let mut graph = MicrosoftGraphClient::with_parts(
+                "client",
+                Uuid::new_v4(),
+                FakeHttp::with_responses(Vec::new()),
+                ScriptedTokenStore::missing(),
+            );
+
+            assert!(matches!(
+                graph.evaluate_library_session_credential(&source),
+                StartupCredentialEvaluation::Unavailable(message)
+                    if message.contains("does not match this library's identity source")
+            ));
+            assert!(graph.pending.is_empty());
         }
     }
 }

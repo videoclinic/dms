@@ -52,6 +52,7 @@ struct DesktopIntegrations {
     graph: Mutex<graph::MicrosoftGraphClient>,
     approver_actor: Mutex<Option<AuthenticatedActor>>,
     group_bound_sessions: Mutex<BTreeMap<String, GroupBoundSession>>,
+    library_session_authorizations: Mutex<BTreeMap<String, LibrarySessionAuthorization>>,
     startup_deep_links: Mutex<Vec<String>>,
     startup_authorization: Mutex<StartupAuthorization>,
 }
@@ -62,12 +63,47 @@ struct GroupBoundSession {
     actor: AuthenticatedActor,
 }
 
+#[derive(Clone, Debug)]
+struct LibrarySessionTarget {
+    edit_root: String,
+    library_label: String,
+    group_label: String,
+}
+
+#[derive(Clone, Debug)]
+enum LibrarySessionAuthorization {
+    Pending {
+        target: LibrarySessionTarget,
+        challenge: graph::DeviceLoginChallenge,
+        next_poll_after: Instant,
+    },
+    Valid {
+        target: LibrarySessionTarget,
+        activation: WorkspaceActivation,
+    },
+    Declined {
+        target: LibrarySessionTarget,
+    },
+    Expired {
+        target: LibrarySessionTarget,
+    },
+    Failed {
+        target: LibrarySessionTarget,
+        message: String,
+    },
+    Unavailable {
+        target: LibrarySessionTarget,
+        message: String,
+    },
+}
+
 impl Default for DesktopIntegrations {
     fn default() -> Self {
         Self {
             graph: Mutex::new(graph::MicrosoftGraphClient::production(None)),
             approver_actor: Mutex::new(None),
             group_bound_sessions: Mutex::new(BTreeMap::new()),
+            library_session_authorizations: Mutex::new(BTreeMap::new()),
             startup_deep_links: Mutex::new(Vec::new()),
             startup_authorization: Mutex::new(StartupAuthorization::Inactive),
         }
@@ -259,6 +295,38 @@ pub struct StartupAuthorizationStatus {
     pub next_poll_delay_ms: Option<u64>,
 }
 
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LibrarySessionAuthorizationKind {
+    Inactive,
+    Valid,
+    Pending,
+    Declined,
+    Expired,
+    Failed,
+    Unavailable,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct WorkspaceActivation {
+    pub workspace: WorkspaceSummary,
+    pub lock_status: WorkspaceLockStatus,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct LibrarySessionAuthorizationStatus {
+    pub kind: LibrarySessionAuthorizationKind,
+    pub edit_root: Option<String>,
+    pub library_label: Option<String>,
+    pub group_label: Option<String>,
+    pub user_code: Option<String>,
+    pub verification_uri: Option<String>,
+    pub message: Option<String>,
+    pub expires_in_seconds: Option<u64>,
+    pub next_poll_delay_ms: Option<u64>,
+    pub activation: Option<WorkspaceActivation>,
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct LibrarySnapshot {
     pub tree: Vec<LibraryFolderNode>,
@@ -432,7 +500,122 @@ fn open_workspace(
         .group_bound_sessions
         .lock()
         .map_err(|_| "group-bound session state is unavailable".to_owned())?;
-    open_workspace_with(Path::new(&edit_root), &mut *graph, &mut sessions)
+    let mut authorizations = state
+        .library_session_authorizations
+        .lock()
+        .map_err(|_| "library-session authorization state is unavailable".to_owned())?;
+    open_workspace_with_library_session_authorization(
+        Path::new(&edit_root),
+        &mut graph,
+        &mut sessions,
+        &mut authorizations,
+    )
+}
+
+#[tauri::command]
+fn activate_workspace_session(
+    edit_root: String,
+    take_over_stale: bool,
+    override_existing: bool,
+    state: State<'_, DesktopIntegrations>,
+) -> Result<WorkspaceActivation, String> {
+    let mut graph = state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
+    let mut sessions = state
+        .group_bound_sessions
+        .lock()
+        .map_err(|_| "group-bound session state is unavailable".to_owned())?;
+    let mut authorizations = state
+        .library_session_authorizations
+        .lock()
+        .map_err(|_| "library-session authorization state is unavailable".to_owned())?;
+    activate_workspace_session_with(
+        Path::new(&edit_root),
+        take_over_stale,
+        override_existing,
+        &mut graph,
+        &mut sessions,
+        &mut authorizations,
+    )
+}
+
+#[tauri::command]
+fn library_session_authorization_status(
+    edit_root: String,
+    state: State<'_, DesktopIntegrations>,
+) -> Result<LibrarySessionAuthorizationStatus, String> {
+    let authorizations = state
+        .library_session_authorizations
+        .lock()
+        .map_err(|_| "library-session authorization state is unavailable".to_owned())?;
+    Ok(serialize_library_session_authorization(
+        authorizations.get(&path_key(Path::new(&edit_root))),
+    ))
+}
+
+#[tauri::command]
+fn reissue_library_session_authorization(
+    edit_root: String,
+    state: State<'_, DesktopIntegrations>,
+) -> Result<LibrarySessionAuthorizationStatus, String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    let source = workspace
+        .identity_source()
+        .ok_or_else(|| "this library does not require a Microsoft Entra session".to_owned())?;
+    let key = path_key(&workspace.edit_root);
+    let target = library_session_target(&workspace, source);
+    let mut graph = state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
+    let mut authorizations = state
+        .library_session_authorizations
+        .lock()
+        .map_err(|_| "library-session authorization state is unavailable".to_owned())?;
+    let challenge = graph.reissue_library_session_sign_in(source)?;
+    authorizations.insert(
+        key.clone(),
+        LibrarySessionAuthorization::Pending {
+            target,
+            next_poll_after: Instant::now()
+                + Duration::from_secs(challenge.poll_interval_seconds.max(1)),
+            challenge,
+        },
+    );
+    Ok(serialize_library_session_authorization(
+        authorizations.get(&key),
+    ))
+}
+
+#[tauri::command]
+fn poll_library_session_authorization(
+    edit_root: String,
+    take_over_stale: bool,
+    override_existing: bool,
+    state: State<'_, DesktopIntegrations>,
+) -> Result<LibrarySessionAuthorizationStatus, String> {
+    let mut graph = state
+        .graph
+        .lock()
+        .map_err(|_| "Microsoft Graph integration state is unavailable".to_owned())?;
+    let mut sessions = state
+        .group_bound_sessions
+        .lock()
+        .map_err(|_| "group-bound session state is unavailable".to_owned())?;
+    let mut authorizations = state
+        .library_session_authorizations
+        .lock()
+        .map_err(|_| "library-session authorization state is unavailable".to_owned())?;
+    poll_library_session_authorization_with(
+        Path::new(&edit_root),
+        take_over_stale,
+        override_existing,
+        &mut graph,
+        &mut sessions,
+        &mut authorizations,
+    )
 }
 
 #[tauri::command]
@@ -2193,15 +2376,19 @@ fn acquire_workspace_lock(
     take_over_stale: bool,
     override_existing: bool,
 ) -> Result<WorkspaceLockStatus, String> {
-    Workspace::open(Path::new(&edit_root))
-        .and_then(|workspace| {
-            if override_existing {
-                workspace.override_lock()
-            } else {
-                workspace.acquire_lock(take_over_stale)
-            }
-        })
-        .map_err(|error| error.to_string())
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    if workspace.identity_source().is_some() {
+        return Err(
+            "a group-bound library advisory lock is acquired only through verified workspace activation"
+                .to_owned(),
+        );
+    }
+    if override_existing {
+        workspace.override_lock()
+    } else {
+        workspace.acquire_lock(take_over_stale)
+    }
+    .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -2792,6 +2979,7 @@ fn clear_group_bound_sessions(state: &DesktopIntegrations) -> Result<(), String>
     Ok(())
 }
 
+#[cfg(test)]
 fn open_workspace_with<G: GraphClient + ?Sized>(
     edit_root: &Path,
     graph: &mut G,
@@ -2801,6 +2989,276 @@ fn open_workspace_with<G: GraphClient + ?Sized>(
     activate_group_bound_session(&workspace, graph, sessions)?;
     shortcut::ensure_workspace_shortcut(&workspace)?;
     Ok(workspace_summary_from(&workspace, sessions))
+}
+
+fn library_session_target(
+    workspace: &Workspace,
+    source: &EntraIdentitySource,
+) -> LibrarySessionTarget {
+    let library_label = workspace
+        .edit_root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .map(str::to_owned)
+        .unwrap_or_else(|| workspace.edit_root.to_string_lossy().into_owned());
+    LibrarySessionTarget {
+        edit_root: workspace.edit_root.to_string_lossy().into_owned(),
+        library_label,
+        group_label: source.group_label.clone(),
+    }
+}
+
+fn begin_library_session_authorization(
+    workspace: &Workspace,
+    graph: &mut graph::MicrosoftGraphClient,
+    authorizations: &mut BTreeMap<String, LibrarySessionAuthorization>,
+) -> Result<(), String> {
+    let key = path_key(&workspace.edit_root);
+    let Some(source) = workspace.identity_source() else {
+        authorizations.remove(&key);
+        return Ok(());
+    };
+    let target = library_session_target(workspace, source);
+    match graph.evaluate_library_session_credential(source) {
+        graph::StartupCredentialEvaluation::Valid => Ok(()),
+        graph::StartupCredentialEvaluation::NeedsChallenge => {
+            let challenge = graph.begin_library_session_sign_in(source)?;
+            authorizations.insert(
+                key,
+                LibrarySessionAuthorization::Pending {
+                    target,
+                    next_poll_after: Instant::now()
+                        + Duration::from_secs(challenge.poll_interval_seconds.max(1)),
+                    challenge,
+                },
+            );
+            Err(
+                "a verified Microsoft Entra session is required to activate this library"
+                    .to_owned(),
+            )
+        }
+        graph::StartupCredentialEvaluation::Unavailable(message) => {
+            authorizations.insert(
+                key,
+                LibrarySessionAuthorization::Unavailable {
+                    target,
+                    message: message.clone(),
+                },
+            );
+            Err(message)
+        }
+    }
+}
+
+fn open_workspace_with_library_session_authorization(
+    edit_root: &Path,
+    graph: &mut graph::MicrosoftGraphClient,
+    sessions: &mut BTreeMap<String, GroupBoundSession>,
+    authorizations: &mut BTreeMap<String, LibrarySessionAuthorization>,
+) -> Result<WorkspaceSummary, String> {
+    let workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
+    begin_library_session_authorization(&workspace, graph, authorizations)?;
+    activate_group_bound_session(&workspace, graph, sessions)?;
+    shortcut::ensure_workspace_shortcut(&workspace)?;
+    Ok(workspace_summary_from(&workspace, sessions))
+}
+
+fn activate_workspace_session_with(
+    edit_root: &Path,
+    take_over_stale: bool,
+    override_existing: bool,
+    graph: &mut graph::MicrosoftGraphClient,
+    sessions: &mut BTreeMap<String, GroupBoundSession>,
+    authorizations: &mut BTreeMap<String, LibrarySessionAuthorization>,
+) -> Result<WorkspaceActivation, String> {
+    let workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
+    let key = path_key(&workspace.edit_root);
+    begin_library_session_authorization(&workspace, graph, authorizations)?;
+    if let Err(error) = activate_group_bound_session(&workspace, graph, sessions) {
+        if let Some(source) = workspace.identity_source() {
+            authorizations.insert(
+                key,
+                LibrarySessionAuthorization::Failed {
+                    target: library_session_target(&workspace, source),
+                    message: error.clone(),
+                },
+            );
+        }
+        return Err(error);
+    }
+    let lock_status = if override_existing {
+        workspace.override_lock()
+    } else {
+        workspace.acquire_lock(take_over_stale)
+    }
+    .map_err(|error| error.to_string())?;
+    shortcut::ensure_workspace_shortcut(&workspace)?;
+    authorizations.remove(&key);
+    Ok(WorkspaceActivation {
+        workspace: workspace_summary_from(&workspace, sessions),
+        lock_status,
+    })
+}
+
+fn library_session_target_from_authorization(
+    authorization: &LibrarySessionAuthorization,
+) -> &LibrarySessionTarget {
+    match authorization {
+        LibrarySessionAuthorization::Pending { target, .. }
+        | LibrarySessionAuthorization::Valid { target, .. }
+        | LibrarySessionAuthorization::Declined { target }
+        | LibrarySessionAuthorization::Expired { target }
+        | LibrarySessionAuthorization::Failed { target, .. }
+        | LibrarySessionAuthorization::Unavailable { target, .. } => target,
+    }
+}
+
+fn serialize_library_session_authorization(
+    authorization: Option<&LibrarySessionAuthorization>,
+) -> LibrarySessionAuthorizationStatus {
+    let Some(authorization) = authorization else {
+        return LibrarySessionAuthorizationStatus {
+            kind: LibrarySessionAuthorizationKind::Inactive,
+            edit_root: None,
+            library_label: None,
+            group_label: None,
+            user_code: None,
+            verification_uri: None,
+            message: None,
+            expires_in_seconds: None,
+            next_poll_delay_ms: None,
+            activation: None,
+        };
+    };
+    let target = library_session_target_from_authorization(authorization);
+    let mut status = LibrarySessionAuthorizationStatus {
+        kind: LibrarySessionAuthorizationKind::Pending,
+        edit_root: Some(target.edit_root.clone()),
+        library_label: Some(target.library_label.clone()),
+        group_label: Some(target.group_label.clone()),
+        user_code: None,
+        verification_uri: None,
+        message: None,
+        expires_in_seconds: None,
+        next_poll_delay_ms: None,
+        activation: None,
+    };
+    match authorization {
+        LibrarySessionAuthorization::Pending {
+            challenge,
+            next_poll_after,
+            ..
+        } => {
+            status.user_code = Some(challenge.user_code.clone());
+            status.verification_uri = Some(challenge.verification_uri.clone());
+            status.message = Some(challenge.message.clone());
+            status.expires_in_seconds = Some(challenge.expires_in_seconds);
+            status.next_poll_delay_ms = Some(next_poll_delay_ms(*next_poll_after));
+        }
+        LibrarySessionAuthorization::Valid { activation, .. } => {
+            status.kind = LibrarySessionAuthorizationKind::Valid;
+            status.message = Some("Microsoft Entra session verified for this library.".to_owned());
+            status.activation = Some(activation.clone());
+        }
+        LibrarySessionAuthorization::Declined { .. } => {
+            status.kind = LibrarySessionAuthorizationKind::Declined;
+            status.message = Some("Microsoft Entra sign-in was declined.".to_owned());
+        }
+        LibrarySessionAuthorization::Expired { .. } => {
+            status.kind = LibrarySessionAuthorizationKind::Expired;
+            status.message = Some("Microsoft Entra sign-in expired.".to_owned());
+        }
+        LibrarySessionAuthorization::Failed { message, .. } => {
+            status.kind = LibrarySessionAuthorizationKind::Failed;
+            status.message = Some(message.clone());
+        }
+        LibrarySessionAuthorization::Unavailable { message, .. } => {
+            status.kind = LibrarySessionAuthorizationKind::Unavailable;
+            status.message = Some(message.clone());
+        }
+    }
+    status
+}
+
+fn poll_library_session_authorization_with(
+    edit_root: &Path,
+    take_over_stale: bool,
+    override_existing: bool,
+    graph: &mut graph::MicrosoftGraphClient,
+    sessions: &mut BTreeMap<String, GroupBoundSession>,
+    authorizations: &mut BTreeMap<String, LibrarySessionAuthorization>,
+) -> Result<LibrarySessionAuthorizationStatus, String> {
+    let workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
+    let key = path_key(&workspace.edit_root);
+    let Some(source) = workspace.identity_source() else {
+        authorizations.remove(&key);
+        return Ok(serialize_library_session_authorization(None));
+    };
+    let target = library_session_target(&workspace, source);
+    let Some(LibrarySessionAuthorization::Pending { challenge, .. }) = authorizations.get(&key)
+    else {
+        return Ok(serialize_library_session_authorization(
+            authorizations.get(&key),
+        ));
+    };
+    let poll = graph.poll_library_session_authorization(source)?;
+    match poll {
+        graph::DeviceTokenPoll::Pending { next_poll_after } => {
+            authorizations.insert(
+                key.clone(),
+                LibrarySessionAuthorization::Pending {
+                    target,
+                    challenge: challenge.clone(),
+                    next_poll_after,
+                },
+            );
+        }
+        graph::DeviceTokenPoll::Authorized(_) => {
+            match activate_workspace_session_with(
+                &workspace.edit_root,
+                take_over_stale,
+                override_existing,
+                graph,
+                sessions,
+                authorizations,
+            ) {
+                Ok(activation) => {
+                    authorizations.insert(
+                        key.clone(),
+                        LibrarySessionAuthorization::Valid { target, activation },
+                    );
+                }
+                Err(error) => {
+                    authorizations.insert(
+                        key.clone(),
+                        LibrarySessionAuthorization::Failed {
+                            target,
+                            message: error,
+                        },
+                    );
+                }
+            }
+        }
+        graph::DeviceTokenPoll::Declined => {
+            authorizations.insert(
+                key.clone(),
+                LibrarySessionAuthorization::Declined { target },
+            );
+        }
+        graph::DeviceTokenPoll::Expired => {
+            authorizations.insert(key.clone(), LibrarySessionAuthorization::Expired { target });
+        }
+        graph::DeviceTokenPoll::Failed(message) => {
+            authorizations.insert(
+                key.clone(),
+                LibrarySessionAuthorization::Failed { target, message },
+            );
+        }
+    }
+    Ok(serialize_library_session_authorization(
+        authorizations.get(&key),
+    ))
 }
 
 fn activate_group_bound_session<G: GraphClient + ?Sized>(
@@ -3474,6 +3932,10 @@ pub fn run() {
             select_directory,
             initialize_workspace,
             open_workspace,
+            activate_workspace_session,
+            library_session_authorization_status,
+            reissue_library_session_authorization,
+            poll_library_session_authorization,
             resolve_registered_permalink,
             startup_deep_links,
             load_workspace_configuration,
@@ -3704,6 +4166,21 @@ mod tests {
         assert_eq!(summary.workspace_id, workspace.workspace_id.to_string());
         assert!(!sessions.contains_key(&path_key(&edit_root)));
         assert!(sessions.contains_key("other"));
+    }
+
+    #[test]
+    fn direct_lock_ipc_rejects_a_group_bound_library_without_creating_a_lock() {
+        let (_directory, workspace, _tenant_id, _actor_id) = bound_workspace();
+
+        let error = acquire_workspace_lock(
+            workspace.edit_root.to_string_lossy().into_owned(),
+            false,
+            false,
+        )
+        .unwrap_err();
+
+        assert!(error.contains("only through verified workspace activation"));
+        assert!(workspace.lock_status().unwrap().lock.is_none());
     }
 
     #[test]
