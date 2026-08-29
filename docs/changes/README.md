@@ -29,6 +29,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 | [CHG-0042](active/CHG-0042-publish-root-released-document-index.md) | Publish-root released-document index | pending | CAP-0005, CAP-0016 |
 | [CHG-0024](active/CHG-0024-windows-nsis-installer-release.md) | Windows NSIS installer and signed GitHub Release | in-progress | CAP-0005 |
 | [CHG-0025](active/CHG-0025-windows-entra-deployment-policy.md) | Windows Entra deployment policy | in-progress | CAP-0021 |
+| [CHG-0045](active/CHG-0045-operator-library-name.md) | Operator-defined library name | pending | CAP-0001, CAP-0005 |
 
 
 ## Archive
