@@ -305,6 +305,7 @@ pub struct ReleaseRecord {
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowEventType {
     ReviewRequested,
+    ReviewRequestResent,
     ReviewDecisionApproved,
     ReviewDecisionRejected,
     ReviewDecisionChangedRequested,
@@ -869,6 +870,62 @@ impl Workspace {
                 },
             )?;
         }
+        let candidate = self.candidate(document_id, candidate_id)?;
+        Ok(CandidateSubmission {
+            candidate_id,
+            review_id: candidate.review_id,
+            version: candidate.version,
+            approval_required: true,
+            status: candidate.status,
+            delivery: Some(attempt),
+        })
+    }
+
+    pub fn resend_review_notification<N: NotificationClient>(
+        &mut self,
+        document_id: Uuid,
+        notifier: &mut N,
+        principal: &MutationPrincipal,
+    ) -> Result<CandidateSubmission> {
+        self.require_mutation_principal(principal)?;
+        let settings = self
+            .notification_settings
+            .clone()
+            .ok_or(DmsError::NotificationSettingsRequired)?;
+        let candidate_id = self.active_candidate_id(document_id)?;
+        let candidate = self.candidate(document_id, candidate_id)?.clone();
+        if !candidate.approval_required
+            || candidate.status != CandidateStatus::InReview
+            || self.document(document_id)?.lifecycle != Lifecycle::InReview
+        {
+            return Err(DmsError::InvalidLifecycleTransition(
+                "review notification can only be resent for an active in-review approval request"
+                    .to_owned(),
+            ));
+        }
+        let source_path = self
+            .edit_root
+            .join(&self.document(document_id)?.relative_path);
+        if sha256_file(&source_path)? != candidate.source_digest {
+            return Err(DmsError::InvalidLifecycleTransition(
+                "review request is no longer current".to_owned(),
+            ));
+        }
+        let message = self.review_message(document_id, candidate_id)?;
+        let attempt = delivery_attempt(&settings, &message, notifier);
+        self.candidate_mut(document_id, candidate_id)?
+            .delivery_attempts
+            .push(attempt.clone());
+        self.append_candidate_event(
+            document_id,
+            WorkflowEventType::ReviewRequestResent,
+            &candidate,
+            principal,
+            CandidateEventDetails {
+                delivery: Some(attempt.clone()),
+                ..CandidateEventDetails::default()
+            },
+        )?;
         let candidate = self.candidate(document_id, candidate_id)?;
         Ok(CandidateSubmission {
             candidate_id,

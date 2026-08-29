@@ -7,26 +7,26 @@ Show an approval-required document as **Pending approval** throughout the Librar
 **Created:** 2026-08-27
 **Depends on:** none
 **Entry checkpoint:** none
-**Context sources:** `AGENTS.md` (Architectural decisions, Application records); `docs/AGENTS.md` (Local Contracts, Work Guidance); `docs/changes/AGENTS.md`; `docs/product/AGENTS.md`; `docs/product/wireframes/AGENTS.md`; `docs/product/capabilities/CAP-0002-document-lifecycle.md` (Outcomes 3–6); `docs/product/capabilities/CAP-0006-library-explorer.md` (Outcomes); `docs/product/capabilities/CAP-0010-notification-transport.md` (Outcomes 2, 4, 8); `docs/product/capabilities/CAP-0011-approval-evidence.md` (Outcomes 1, 4, 8); `docs/design-decisions.md` (ADR-0004, ADR-0013); `crates/AGENTS.md`; `crates/dms-core/AGENTS.md`; `crates/dms-desktop/AGENTS.md`; `crates/dms-core/src/lifecycle.rs` (`Workspace::submit_candidate`, `Workspace::retry_review_notification`, `WorkflowEventType`, `CandidateStatus`); `crates/dms-core/src/audit.rs` (`event_type_text`, `Workspace::audit_rows`); `crates/dms-core/tests/lifecycle.rs`; `crates/dms-desktop/src/lib.rs` (candidate notification commands and `DocumentSelection`); `crates/dms-desktop/ui/library.mjs` (`lifecyclePanelMarkup`, `lifecycleLabel`, selection header); `crates/dms-desktop/ui/library.test.mjs`; `docs/product/wireframes/generate.mjs`
+**Context sources:** `AGENTS.md` (Architectural decisions, Application records); `docs/AGENTS.md` (Local Contracts, Work Guidance); `docs/changes/AGENTS.md`; `docs/product/AGENTS.md`; `docs/product/wireframes/AGENTS.md`; `docs/product/capabilities/CAP-0002-document-lifecycle.md` (Outcomes 3–6); `docs/product/capabilities/CAP-0006-library-explorer.md` (Outcomes); `docs/product/capabilities/CAP-0010-notification-transport.md` (Outcomes 2, 4, 8); `docs/product/capabilities/CAP-0011-approval-evidence.md` (Outcomes 1, 4, 8); `docs/design-decisions.md` (ADR-0004, ADR-0013); `crates/AGENTS.md`; `crates/dms-core/AGENTS.md`; `crates/dms-desktop/AGENTS.md`; `crates/dms-core/src/lifecycle.rs` (`Workspace::submit_candidate`, `Workspace::retry_review_notification`, `Workspace::resend_review_notification`, `WorkflowEventType`, `CandidateStatus`); `crates/dms-core/src/audit.rs` (`event_type_text`, `Workspace::audit_rows`); `crates/dms-core/tests/lifecycle.rs`; `crates/dms-desktop/src/lib.rs` (candidate notification commands and `DocumentSelection`); `crates/dms-desktop/ui/library.mjs` (`lifecyclePanelMarkup`, `lifecycleLabel`, selection header); `crates/dms-desktop/ui/library.test.mjs`; `docs/product/wireframes/generate.mjs`
 **Produces:** An active approval-required candidate visibly reads **Pending approval** in the Library, offers a deliberate **Resend approval request** action, and retains canonical evidence of every resend attempt while preserving the original candidate and review target.
-**Status:** pending — queued after P0400; implementation has not begun.
+**Status:** in-progress — Phase 1.
 
 | Field | Value |
 | --- | --- |
 | ID | CHG-0036 |
-| Status | pending |
+| Status | in-progress |
 | External request | Direct operator request: "create a change as recommended. The approval request should also be able to be resend" |
 | Affected CAPs | CAP-0002, CAP-0006, CAP-0010, CAP-0011 |
 | Decision records | ADR-0004 and ADR-0013 remain applicable; no new ADR is required. This extends the existing operator-maintained review and canonical-event contracts. |
 
 ## Current state
 
-- A successfully delivered approval-required candidate moves the document lifecycle and candidate status to `in_review`; the failed-delivery path leaves the candidate retryable in `review_delivery_failed` and the document in `draft` (`crates/dms-core/src/lifecycle.rs:733-777`; `crates/dms-core/tests/lifecycle.rs:579-603`).
-- The current core retry operation rejects every candidate other than `review_delivery_failed`; it cannot resend an already delivered active request (`crates/dms-core/src/lifecycle.rs:779-830`).
-- The Library selection header and Lifecycle table display the persisted lifecycle token directly, so an awaiting document reads `in_review` rather than a user-facing pending-approval state (`crates/dms-desktop/ui/library.mjs:815-818`, `crates/dms-desktop/ui/library.mjs:859-903`, `crates/dms-desktop/ui/library.mjs:1164-1171`).
-- The Library provides a delivery-confirmation form only for `review_delivery_failed`; for `in_review` it provides the approver decision form but no resend control (`crates/dms-desktop/ui/library.mjs:1055-1073`).
-- A successful original request and a successful failed-delivery retry append the same `review_requested` event; audit projection exposes event type, timestamp, actor, target, delivery status/detail, and evidence hash (`crates/dms-core/src/lifecycle.rs:754-766`, `crates/dms-core/src/lifecycle.rs:811-823`, `crates/dms-core/src/audit.rs:340-515`).
-- CAP-0002 currently promises only failed-send redelivery, while CAP-0010 requires workflow history to retain review-request delivery evidence (`docs/product/capabilities/CAP-0002-document-lifecycle.md:69-74`; `docs/product/capabilities/CAP-0010-notification-transport.md:66-69`).
+- A successfully delivered approval-required candidate moves the document lifecycle and candidate status to `in_review`; the failed-delivery path leaves the candidate retryable in `review_delivery_failed` and the document in `draft`.
+- `Workspace::retry_review_notification` still accepts only `review_delivery_failed` and, on successful delivery, establishes `InReview` with a `review_requested` event.
+- `Workspace::resend_review_notification` accepts only the active approval-required `InReview` candidate whose source digest still matches. It reuses the snapshotted review ID, digest, approver, and permalink, appends the delivery attempt, and records `review_request_resent` for accepted, confirmed, and failed sends without leaving `in_review`.
+- The Library selection header and Lifecycle table still display the persisted lifecycle token directly, so an awaiting document reads `in_review` rather than **Pending approval**.
+- The Library still provides a delivery-confirmation form only for `review_delivery_failed` and has no resend control for `in_review`.
+- CAP-0002 currently promises only failed-send redelivery, while CAP-0010 requires workflow history to retain review-request delivery evidence.
 
 ## Risk call-out
 
@@ -38,7 +38,7 @@ Delivery is an external side effect. SMTP may fail and `mailto:` requires explic
 
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
-| 1 | Preserve review identity while recording resend evidence | pending | `cargo test -p dms-core --test lifecycle` exits 0, proving successful and failed resend attempts preserve candidate ID/review ID/digest/approver/lifecycle and append the distinct canonical resend event |
+| 1 | Preserve review identity while recording resend evidence | done (`cargo test -p dms-core --test lifecycle` — 29 passed) | `cargo test -p dms-core --test lifecycle` exits 0, proving successful and failed resend attempts preserve candidate ID/review ID/digest/approver/lifecycle and append the distinct canonical resend event |
 | 2 | Expose Pending approval and deliberate resend in DMS Desktop | pending | `cargo test -p dms-desktop --lib` and `node --test crates/dms-desktop/ui/library.test.mjs` exit 0, proving only an active `in_review` approval candidate exposes the resend action and the library never presents a raw `in_review` status to an operator |
 | 3 | Publish capability contracts and Library wireframe, then close the change | pending | `node docs/product/wireframes/generate.mjs`, the CAP-0002 PNG render command, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `node --test crates/dms-desktop/ui/*.test.mjs`, the repository Markdown-link check, and `git diff --check` all exit 0; CAP/CHG indexes agree |
 

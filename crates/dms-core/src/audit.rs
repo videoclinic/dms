@@ -914,6 +914,7 @@ fn periodic_result_text(value: crate::PeriodicReviewResult) -> &'static str {
 fn event_type_text(value: WorkflowEventType) -> &'static str {
     match value {
         WorkflowEventType::ReviewRequested => "review_requested",
+        WorkflowEventType::ReviewRequestResent => "review_request_resent",
         WorkflowEventType::ReviewDecisionApproved => "review_decision_approved",
         WorkflowEventType::ReviewDecisionRejected => "review_decision_rejected",
         WorkflowEventType::ReviewDecisionChangedRequested => "review_decision_changes_requested",

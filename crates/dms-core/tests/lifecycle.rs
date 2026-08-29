@@ -761,6 +761,377 @@ fn major_review_requires_graph_refresh_transport_success_and_verified_actor() {
 }
 
 #[test]
+fn smtp_resend_preserves_review_identity_and_stays_distinct_from_retry() {
+    let mut fixture = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    let mut graph = fixture.graph();
+    let mut notifier = FakeNotifier {
+        receipts: [
+            Err("relay refused".to_owned()),
+            Ok(DeliveryReceipt::accepted(250, "accepted")),
+            Ok(DeliveryReceipt::accepted(250, "resent")),
+        ]
+        .into_iter()
+        .collect(),
+        messages: Vec::new(),
+    };
+
+    let pending = fixture
+        .workspace
+        .submit_candidate(
+            fixture.candidate_request(TargetSelection::NextMajor),
+            &mut graph,
+            &mut notifier,
+            &fixture.editor_principal(),
+        )
+        .expect("candidate remains retryable");
+    assert_eq!(pending.status, CandidateStatus::ReviewDeliveryFailed);
+    assert!(matches!(
+        fixture.workspace.resend_review_notification(
+            fixture.document_id,
+            &mut FakeNotifier::accepted(),
+            &fixture.editor_principal()
+        ),
+        Err(DmsError::InvalidLifecycleTransition(message))
+            if message.contains("active in-review approval request")
+    ));
+
+    let retried = fixture
+        .workspace
+        .retry_review_notification(
+            fixture.document_id,
+            &mut notifier,
+            &fixture.editor_principal(),
+        )
+        .expect("retry");
+    assert_eq!(retried.status, CandidateStatus::InReview);
+    let before = fixture.workspace.candidates(fixture.document_id).unwrap()[0].clone();
+    let before_lifecycle = fixture
+        .workspace
+        .document(fixture.document_id)
+        .unwrap()
+        .lifecycle;
+
+    let resent = fixture
+        .workspace
+        .resend_review_notification(
+            fixture.document_id,
+            &mut notifier,
+            &fixture.editor_principal(),
+        )
+        .expect("resend");
+    let after = fixture.workspace.candidates(fixture.document_id).unwrap()[0];
+    assert_eq!(resent.candidate_id, before.id);
+    assert_eq!(resent.review_id, before.review_id);
+    assert_eq!(resent.status, CandidateStatus::InReview);
+    assert_eq!(after.id, before.id);
+    assert_eq!(after.review_id, before.review_id);
+    assert_eq!(after.source_digest, before.source_digest);
+    assert_eq!(after.metadata.approver, before.metadata.approver);
+    assert_eq!(after.status, CandidateStatus::InReview);
+    assert_eq!(
+        fixture
+            .workspace
+            .document(fixture.document_id)
+            .unwrap()
+            .lifecycle,
+        before_lifecycle
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .document(fixture.document_id)
+            .unwrap()
+            .lifecycle,
+        Lifecycle::InReview
+    );
+    assert_eq!(after.delivery_attempts.len(), 3);
+    assert_eq!(
+        after.delivery_attempts.last().unwrap().status,
+        DeliveryStatus::Accepted
+    );
+    assert_eq!(
+        notifier.messages.last().unwrap().recipient,
+        "approver@example.test"
+    );
+    assert_eq!(
+        notifier.messages.last().unwrap().subject,
+        "[Internal] DMS review requested — Employee handbook — V1.0"
+    );
+
+    let history = fixture
+        .workspace
+        .workflow_history(fixture.document_id)
+        .unwrap();
+    let requested = history
+        .iter()
+        .filter(|event| event.body.event_type == WorkflowEventType::ReviewRequested)
+        .count();
+    let resent_events = history
+        .iter()
+        .filter(|event| event.body.event_type == WorkflowEventType::ReviewRequestResent)
+        .collect::<Vec<_>>();
+    assert_eq!(requested, 1);
+    assert_eq!(resent_events.len(), 1);
+    assert_eq!(
+        resent_events[0].body.delivery.as_ref().unwrap().status,
+        DeliveryStatus::Accepted
+    );
+    assert_eq!(
+        resent_events[0].body.revision_digest.as_deref(),
+        Some(before.source_digest.as_str())
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .verify_workflow(fixture.document_id)
+            .unwrap(),
+        WorkflowVerification::Valid
+    );
+
+    let audit = String::from_utf8(
+        fixture
+            .workspace
+            .preview_audit_report(AuditReportFormat::Csv, &AuditReportFilter::default())
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(audit.lines().any(|line| line.contains("review_requested")));
+    assert!(audit
+        .lines()
+        .any(|line| line.contains("review_request_resent")));
+}
+
+#[test]
+fn failed_smtp_resend_stays_in_review_and_records_evidence() {
+    let mut fixture = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    let mut graph = fixture.graph();
+    fixture
+        .workspace
+        .submit_candidate(
+            fixture.candidate_request(TargetSelection::NextMajor),
+            &mut graph,
+            &mut FakeNotifier::accepted(),
+            &fixture.editor_principal(),
+        )
+        .expect("review request");
+    let before = fixture.workspace.candidates(fixture.document_id).unwrap()[0].clone();
+    let mut notifier = FakeNotifier {
+        receipts: [Err("relay refused".to_owned())].into_iter().collect(),
+        messages: Vec::new(),
+    };
+
+    let resent = fixture
+        .workspace
+        .resend_review_notification(
+            fixture.document_id,
+            &mut notifier,
+            &fixture.editor_principal(),
+        )
+        .expect("failed resend remains pending");
+    let after = fixture.workspace.candidates(fixture.document_id).unwrap()[0];
+    assert_eq!(resent.status, CandidateStatus::InReview);
+    assert_eq!(resent.candidate_id, before.id);
+    assert_eq!(resent.review_id, before.review_id);
+    assert_eq!(after.source_digest, before.source_digest);
+    assert_eq!(after.metadata.approver, before.metadata.approver);
+    assert_eq!(
+        fixture
+            .workspace
+            .document(fixture.document_id)
+            .unwrap()
+            .lifecycle,
+        Lifecycle::InReview
+    );
+    assert_eq!(
+        after.delivery_attempts.last().unwrap().status,
+        DeliveryStatus::Failed
+    );
+    let resent_events = fixture
+        .workspace
+        .workflow_history(fixture.document_id)
+        .unwrap()
+        .into_iter()
+        .filter(|event| event.body.event_type == WorkflowEventType::ReviewRequestResent)
+        .collect::<Vec<_>>();
+    assert_eq!(resent_events.len(), 1);
+    assert_eq!(
+        resent_events[0].body.delivery.as_ref().unwrap().status,
+        DeliveryStatus::Failed
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .verify_workflow(fixture.document_id)
+            .unwrap(),
+        WorkflowVerification::Valid
+    );
+}
+
+#[test]
+fn confirmed_mailto_resend_preserves_review_identity() {
+    let mut fixture = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Mailto,
+    );
+    let mut graph = fixture.graph();
+    fixture
+        .workspace
+        .submit_candidate(
+            fixture.candidate_request(TargetSelection::NextMajor),
+            &mut graph,
+            &mut FakeNotifier::confirmed(),
+            &fixture.editor_principal(),
+        )
+        .expect("review request");
+    let before = fixture.workspace.candidates(fixture.document_id).unwrap()[0].clone();
+
+    let resent = fixture
+        .workspace
+        .resend_review_notification(
+            fixture.document_id,
+            &mut FakeNotifier::confirmed(),
+            &fixture.editor_principal(),
+        )
+        .expect("confirmed mailto resend");
+    let after = fixture.workspace.candidates(fixture.document_id).unwrap()[0];
+    assert_eq!(resent.status, CandidateStatus::InReview);
+    assert_eq!(resent.candidate_id, before.id);
+    assert_eq!(resent.review_id, before.review_id);
+    assert_eq!(after.source_digest, before.source_digest);
+    assert_eq!(after.metadata.approver, before.metadata.approver);
+    assert_eq!(
+        after.delivery_attempts.last().unwrap().status,
+        DeliveryStatus::Confirmed
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .document(fixture.document_id)
+            .unwrap()
+            .lifecycle,
+        Lifecycle::InReview
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .workflow_history(fixture.document_id)
+            .unwrap()
+            .into_iter()
+            .filter(|event| event.body.event_type == WorkflowEventType::ReviewRequestResent)
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn resend_rejects_ineligible_candidates() {
+    let mut fixture = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    let (mut graph, _) = release_first(&mut fixture);
+    fixture
+        .start_next_draft_cycle("# Handbook\n\nVersion: 1.1\n\nVertraulichkeitsstufe: Internal\n");
+    fixture
+        .workspace
+        .submit_candidate(
+            fixture.candidate_request(TargetSelection::NextMinor),
+            &mut graph,
+            &mut FakeNotifier::accepted(),
+            &fixture.editor_principal(),
+        )
+        .expect("minor candidate");
+    assert_eq!(
+        fixture.workspace.candidates(fixture.document_id).unwrap()[0].status,
+        CandidateStatus::Draft
+    );
+    assert!(matches!(
+        fixture.workspace.resend_review_notification(
+            fixture.document_id,
+            &mut FakeNotifier::accepted(),
+            &fixture.editor_principal()
+        ),
+        Err(DmsError::InvalidLifecycleTransition(_))
+    ));
+
+    let mut approval = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    let mut graph = approval.graph();
+    approval
+        .workspace
+        .submit_candidate(
+            approval.candidate_request(TargetSelection::NextMajor),
+            &mut graph,
+            &mut FakeNotifier::accepted(),
+            &approval.editor_principal(),
+        )
+        .expect("review request");
+    approval
+        .workspace
+        .cancel_review(
+            approval.document_id,
+            "Withdraw the request",
+            &approval.editor_principal(),
+        )
+        .expect("cancel");
+    assert!(matches!(
+        approval.workspace.resend_review_notification(
+            approval.document_id,
+            &mut FakeNotifier::accepted(),
+            &approval.editor_principal()
+        ),
+        Err(DmsError::InvalidLifecycleTransition(_) | DmsError::NoActiveCandidate)
+    ));
+
+    let mut stale = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    let mut graph = stale.graph();
+    stale
+        .workspace
+        .submit_candidate(
+            stale.candidate_request(TargetSelection::NextMajor),
+            &mut graph,
+            &mut FakeNotifier::accepted(),
+            &stale.editor_principal(),
+        )
+        .expect("review request");
+    fs::write(
+        &stale.source_path,
+        markdown_with_control_frontmatter(
+            "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n\nEdited after request.\n",
+        ),
+    )
+    .expect("edit draft");
+    assert!(matches!(
+        stale.workspace.resend_review_notification(
+            stale.document_id,
+            &mut FakeNotifier::accepted(),
+            &stale.editor_principal()
+        ),
+        Err(DmsError::InvalidLifecycleTransition(message))
+            if message.contains("no longer current")
+    ));
+    assert_eq!(
+        stale
+            .workspace
+            .document(stale.document_id)
+            .unwrap()
+            .lifecycle,
+        Lifecycle::InReview
+    );
+}
+
+#[test]
 fn approved_release_is_atomic_mirrors_tree_persists_chain_and_refuses_overwrite() {
     let mut fixture = Fixture::new(
         "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
