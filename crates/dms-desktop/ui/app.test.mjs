@@ -23,6 +23,11 @@ import {
   removeRecentLibrary,
   savedViewId,
   setupMarkup,
+  librarySwitcherMarkup,
+  openLibrarySwitcher,
+  dismissLibrarySwitcher,
+  isAdvisoryLockRefusal,
+  libraryLockOwnerFeedback,
   switchWorkspaceSession,
   toggleSavedView,
   workspaceSetupRequest,
@@ -364,6 +369,149 @@ test("a failed bound open does not acquire a destination lock", async () => {
       arguments_: { editRoot: "/DMS/New", takeOverStale: false, overrideExisting: false },
     },
   ]);
+});
+
+test("same-library reuse performs no lock handoff", async () => {
+  const calls = [];
+  const result = await switchWorkspaceSession(
+    { edit_root: "/DMS/Edit" },
+    { state: "current", lock: { process_id: 16 } },
+    { edit_root: "/DMS/Edit" },
+    {},
+    async (command, arguments_) => {
+      calls.push({ command, arguments_ });
+      return null;
+    },
+  );
+  assert.equal(result, null);
+  assert.deepEqual(calls, []);
+});
+
+test("a failed prior-lock release rolls back the destination lock", async () => {
+  const calls = [];
+  const priorOwner = { process_id: 16 };
+  const newOwner = { process_id: 17 };
+  await assert.rejects(
+    () => switchWorkspaceSession(
+      { edit_root: "/DMS/Old" },
+      { state: "current", lock: priorOwner },
+      { edit_root: "/DMS/New" },
+      {},
+      async (command, arguments_) => {
+        calls.push({ command, arguments_ });
+        if (command === "activate_workspace_session") {
+          return {
+            workspace: { edit_root: "/DMS/New" },
+            lock_status: { state: "current", lock: newOwner },
+          };
+        }
+        if (arguments_.editRoot === "/DMS/Old") {
+          throw new Error("workspace lock owner changed before release");
+        }
+        return null;
+      },
+    ),
+    /owner changed/,
+  );
+  assert.deepEqual(calls, [
+    {
+      command: "activate_workspace_session",
+      arguments_: { editRoot: "/DMS/New", takeOverStale: false, overrideExisting: false },
+    },
+    {
+      command: "release_workspace_lock",
+      arguments_: { editRoot: "/DMS/Old", owner: priorOwner, confirmed: true },
+    },
+    {
+      command: "release_workspace_lock",
+      arguments_: { editRoot: "/DMS/New", owner: newOwner, confirmed: true },
+    },
+  ]);
+});
+
+test("Open library switcher opens and dismisses without replacing the workspace", () => {
+  const workspace = { workspace_id: workspaceId, edit_root: "/DMS/Edit" };
+  const opened = openActivity(createInitialState(), {
+    workspace_id: workspaceId,
+    destination: "Library",
+    task: "Library",
+    label: "Library · /",
+    document_id: null,
+    route_state: { folder: "." },
+  });
+  opened.workspace = workspace;
+  const currentKey = opened.current_key;
+  const switching = openLibrarySwitcher(opened);
+  assert.equal(switching.library_switcher.open, true);
+  assert.equal(switching.workspace, workspace);
+  assert.equal(switching.current_key, currentKey);
+  const dismissed = dismissLibrarySwitcher(switching);
+  assert.equal(dismissed.library_switcher.open, false);
+  assert.equal(dismissed.workspace, workspace);
+  assert.equal(dismissed.current_key, currentKey);
+  assert.equal(dismissed.activities.length, 1);
+});
+
+test("active switcher reuses startup open and initialize controls", () => {
+  const markup = librarySwitcherMarkup("", ["/Users/name/DMS/Edit"], "/Users/name/DMS/Edit");
+  assert.match(markup, /aria-label="Open library"/);
+  assert.match(markup, /data-library-switcher-dismiss/);
+  assert.match(markup, /id="open-workspace-form"/);
+  assert.match(markup, /id="initialize-workspace-form"/);
+  assert.match(markup, /name="takeOverStale"/);
+  assert.match(markup, /name="overrideExisting"/);
+  assert.match(markup, /name="confirmed"[^>]*required/);
+  assert.match(markup, /data-recent-library-open="\/Users\/name\/DMS\/Edit"/);
+  assert.doesNotMatch(markup, /process_id|process ID/i);
+});
+
+test("blocked current and stale locks name the recorded OS user and host", () => {
+  const current = libraryLockOwnerFeedback("workspace has a current advisory lock", {
+    state: "current",
+    lock: {
+      os_user: "anna",
+      hostname: "desk-1",
+      process_id: 99,
+      acquired_at: "2026-08-29T10:00:00Z",
+    },
+  });
+  const stale = libraryLockOwnerFeedback("workspace lock is stale; explicit take-over is required", {
+    state: "stale",
+    lock: {
+      os_user: "lukas",
+      hostname: "desk-2",
+      process_id: 42,
+      acquired_at: "2026-08-28T09:00:00Z",
+    },
+  });
+  assert.equal(isAdvisoryLockRefusal("workspace has a current advisory lock"), true);
+  assert.equal(isAdvisoryLockRefusal("workspace lock is stale; explicit take-over is required"), true);
+  const currentMarkup = setupMarkup("workspace has a current advisory lock", [], "", current);
+  const staleMarkup = librarySwitcherMarkup(
+    "workspace lock is stale; explicit take-over is required",
+    [],
+    "",
+    stale,
+  );
+  assert.match(currentMarkup, /Held by anna on desk-1 \(current, acquired 2026-08-29T10:00:00Z\)/);
+  assert.match(staleMarkup, /Held by lukas on desk-2 \(stale, acquired 2026-08-28T09:00:00Z\)/);
+  assert.doesNotMatch(currentMarkup, /99/);
+  assert.doesNotMatch(staleMarkup, /42/);
+});
+
+test("a lock-status query failure keeps the original refusal without an owner claim", () => {
+  assert.equal(
+    libraryLockOwnerFeedback("workspace has a current advisory lock", { state: "unlocked", lock: null }),
+    null,
+  );
+  const markup = librarySwitcherMarkup("workspace has a current advisory lock", [], "/DMS/Blocked", null);
+  assert.match(markup, /workspace has a current advisory lock/);
+  assert.doesNotMatch(markup, /Held by/);
+});
+
+test("the Open library control is present in the shell chrome", () => {
+  const shell = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  assert.match(shell, /id="open-library"[^>]*>Open library…/);
 });
 
 test("preferences start expanded and persist no session activities", () => {

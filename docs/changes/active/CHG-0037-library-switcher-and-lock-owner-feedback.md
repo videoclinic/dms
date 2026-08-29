@@ -9,23 +9,22 @@ DMS Desktop will let an operator choose an existing or newly initialized library
 **Entry checkpoint:** none
 **Context sources:** `AGENTS.md` (Architectural decisions, Application records); `docs/AGENTS.md` (Local Contracts, Work Guidance); `docs/changes/AGENTS.md`; `docs/product/AGENTS.md`; `docs/product/wireframes/AGENTS.md`; `docs/architecture.md` (Runtime shape, Trust and control boundary); `docs/privacy.md` (Data classes, Processing principles); `docs/product/capabilities/CAP-0005-desktop-shell.md` (Outcomes 12, 17); `docs/product/capabilities/CAP-0014-workspace-integrity.md` (Outcomes 1–2); `crates/AGENTS.md`; `crates/dms-desktop/AGENTS.md`; `crates/dms-core/src/integrity.rs` (`WorkspaceLock`, `WorkspaceLockStatus`, lock acquisition); `crates/dms-desktop/src/lib.rs` (`open_workspace`, `workspace_lock_status`, `acquire_workspace_lock`); `crates/dms-desktop/ui/app.mjs` (`setupMarkup`, `switchWorkspaceSession`, `activateWorkspace`); `crates/dms-desktop/ui/app.test.mjs`; `docs/product/wireframes/generate.mjs`
 **Produces:** An active DMS Desktop session has an explicit library switcher with the same existing/open and initialize options as startup. A successful different-library selection acquires the destination lock, releases the former lock, clears the former session activities without confirmation, and opens the destination Library. A blocked target remains inactive and identifies its recorded local OS lock owner and host without releasing the current library.
-**Status:** pending — queued after P0500; implementation has not begun.
+**Status:** in-progress — Phase 1 done; Phase 2 pending.
 
 | Field | Value |
 | --- | --- |
 | ID | CHG-0037 |
-| Status | pending |
+| Status | in-progress |
 | External request | Direct operator request: "Allow the user to switch between multiple known libraries. If a different library is selected, the previous one is \"closed\" silently. Add also the ability to open a new library like with the starting screen so the user do not have to close DMS in order to open a different library. If a library is opened by a different user (blocked) show the user who keeps the library open" |
 | Affected CAPs | CAP-0005, CAP-0014 |
 | Decision records | ADR-0001 and ADR-0014 remain applicable; no new ADR is required because this reuses the existing single-active-workspace and advisory-lock contracts. |
 
 ## Current state
 
-- Startup has the required existing-workspace form, initialize form, native directory pickers, and a per-user list of at most ten recent edit roots, but `setupMarkup` is rendered only when there is no current activity (`crates/dms-desktop/ui/app.mjs:537-568`).
-- A successful switch already acquires the destination lock before releasing the old owner-matched lock, rolls back the newly acquired lock if old-lock release fails, then reconstructs frontend session state and opens Library (`crates/dms-desktop/ui/app.mjs:685-746`).
-- The current failure path renders the raw acquisition error beside the startup recent-library list. It does not query the existing read-only `workspace_lock_status` command for the blocking owner (`crates/dms-desktop/ui/app.mjs:548-568`; `crates/dms-desktop/src/lib.rs:1979-2001`).
-- `WorkspaceLockStatus` already returns a current or stale lock with its recorded `os_user`, hostname, process ID, and UTC acquisition timestamp; core refuses a current lock unless the explicit override path is selected (`crates/dms-core/src/integrity.rs:26-63, 101-118, 356-458`).
-- CAP-0005 currently limits recent-library selection to before a workspace is open, while CAP-0014 defines the advisory lock's local owner data and explicit stale/current-lock choices (`docs/product/capabilities/CAP-0005-desktop-shell.md:145-148`; `docs/product/capabilities/CAP-0014-workspace-integrity.md:14-25`).
+- Startup has the required existing-workspace form, initialize form, native directory pickers, and a per-user list of at most ten recent edit roots. An active session exposes **Open library…**, which presents those same controls without unlocking or replacing the current library until a different destination lock succeeds.
+- A successful switch already acquires the destination lock before releasing the old owner-matched lock, rolls back the newly acquired lock if old-lock release fails, then reconstructs frontend session state and opens Library (`crates/dms-desktop/ui/app.mjs`). Opening the same workspace focuses its singleton Library activity and performs no lock handoff.
+- A destination that refuses because a current or stale advisory lock exists queries read-only `workspace_lock_status` and names the recorded OS user, hostname, lock state, and acquired time. A status-query failure keeps the original refusal without an owner claim. The process ID is not shown.
+- CAP-0005 currently limits recent-library selection to before a workspace is open, while CAP-0014 defines the advisory lock's local owner data and explicit stale/current-lock choices (`docs/product/capabilities/CAP-0005-desktop-shell.md`; `docs/product/capabilities/CAP-0014-workspace-integrity.md`).
 
 ## Risk call-out
 
@@ -37,7 +36,7 @@ The owner label is advisory local-process evidence, not an Entra identity, acces
 
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
-| 1 | Implement active-session library switching and blocked-owner feedback | pending | `node --test crates/dms-desktop/ui/app.test.mjs` exits 0 with active-to-different switching, same-library reuse, blocked current/stale owner display, status-query failure, and destination/old-lock rollback coverage. |
+| 1 | Implement active-session library switching and blocked-owner feedback | done (`node --test crates/dms-desktop/ui/app.test.mjs` — 50 passed) | `node --test crates/dms-desktop/ui/app.test.mjs` exits 0 with active-to-different switching, same-library reuse, blocked current/stale owner display, status-query failure, and destination/old-lock rollback coverage. |
 | 2 | Publish shell and advisory-lock contracts, wireframe, and full verification | pending | `node docs/product/wireframes/generate.mjs`, the CAP-0005 PNG render command, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `node --test crates/dms-desktop/ui/*.test.mjs` exit 0; CAP/CHG indexes and DOX contracts agree. |
 
 Mark a phase `in-progress` while running it, `done (<evidence>)` once its gate passes, and `pending` otherwise.

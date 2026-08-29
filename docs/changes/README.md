@@ -20,7 +20,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
-| [CHG-0037](active/CHG-0037-library-switcher-and-lock-owner-feedback.md) | Library switcher and lock-owner feedback | pending | CAP-0005, CAP-0014 |
+| [CHG-0037](active/CHG-0037-library-switcher-and-lock-owner-feedback.md) | Library switcher and lock-owner feedback | in-progress | CAP-0005, CAP-0014 |
 | [CHG-0038](active/CHG-0038-candidate-approval-outcome-clarity.md) | Candidate, release, and Entra identity clarity | pending | CAP-0002, CAP-0006, CAP-0011, CAP-0015, CAP-0021 |
 | [CHG-0039](active/CHG-0039-library-table-sort-and-user-layout.md) | Library table sort direction and user layout | pending | CAP-0005, CAP-0006 |
 | [CHG-0040](active/CHG-0040-document-type-id-migration.md) | Document type-ID migration | pending | CAP-0001, CAP-0002, CAP-0013, CAP-0015 |

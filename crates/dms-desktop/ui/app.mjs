@@ -167,6 +167,7 @@ export function createInitialState(preferences = defaultPreferences()) {
     sidebar_overlay: false,
     flyout: null,
     setup_edit_root: "",
+    library_switcher: { open: false, error: "", lock_feedback: null },
     error: "",
     startup_authorization: { kind: "inactive" },
     library_session_authorization: { kind: "inactive" },
@@ -956,15 +957,68 @@ function recentLibrariesMarkup(recentLibraries) {
   }).join("");
 }
 
-export function setupMarkup(error, recentLibraries = [], openEditRoot = "") {
+export function isAdvisoryLockRefusal(error) {
+  return /current advisory lock|lock is stale/i.test(String(error ?? ""));
+}
+
+export function libraryLockOwnerFeedback(error, status) {
+  const lock = status?.lock;
+  const state = status?.state;
+  if (!lock || (state !== "current" && state !== "stale")) return null;
+  return {
+    refusal: String(error ?? ""),
+    state,
+    os_user: lock.os_user,
+    hostname: lock.hostname,
+    acquired_at: lock.acquired_at,
+  };
+}
+
+function libraryLockOwnerMarkup(feedback) {
+  if (!feedback) return "";
+  const stateLabel = feedback.state === "stale" ? "stale" : "current";
+  const acquired = feedback.acquired_at ? `, acquired ${escapeHtml(String(feedback.acquired_at))}` : "";
+  return `<p class="status" role="alert">${escapeHtml(feedback.refusal)} Held by ${escapeHtml(feedback.os_user)} on ${escapeHtml(feedback.hostname)} (${stateLabel}${acquired}).</p>`;
+}
+
+export function setupMarkup(error, recentLibraries = [], openEditRoot = "", lockFeedback = null) {
   const recent = normalizedRecentLibraries(recentLibraries);
-  const status = error ? `<p class="status" role="alert">${escapeHtml(error)}</p>` : "";
+  const status = libraryLockOwnerMarkup(lockFeedback)
+    || (error ? `<p class="status" role="alert">${escapeHtml(error)}</p>` : "");
   return `<section class="setup-workspace"><header><span class="badge">Local workspace</span><h2>Set up DMS Desktop</h2><p>Open existing metadata or initialize explicit edit and publish roots. No documents are moved or copied during setup.</p></header>${status}<section class="recent-libraries card" aria-labelledby="recent-libraries-heading"><h3 id="recent-libraries-heading">Recent libraries</h3><div class="recent-libraries-list">${recentLibrariesMarkup(recent)}</div></section><div class="setup-grid"><section class="card"><h3>Open an existing workspace</h3><p>Choose an edit root that already contains <code>.dms/workspace.json</code>. A current advisory lock blocks opening.</p><form id="open-workspace-form" class="setup-form">${directoryFieldMarkup("open-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit", openEditRoot)}<label class="confirm-field"><input type="checkbox" name="takeOverStale"> Take over the lock only if it is stale.</label><label class="confirm-field lock-override"><input type="checkbox" name="overrideExisting"><span><strong>Override any existing lock.</strong> Another DMS instance may still be writing workspace metadata.</span></label><button class="button" type="submit">Open workspace</button></form></section><section class="card"><h3>Initialize a workspace</h3><p>The desktop creates <code>.dms</code> under the edit root and creates the publish root if it does not exist.</p><form id="initialize-workspace-form" class="setup-form">${directoryFieldMarkup("initialize-edit-root", "editRoot", "Edit root", "C:\\DMS\\Edit or /Users/name/DMS/Edit")}${directoryFieldMarkup("publish-root", "publishRoot", "Publish root", "C:\\DMS\\Publish or /Users/name/DMS/Publish")}<label class="confirm-field"><input type="checkbox" name="confirmed" required> Initialize these roots and create workspace metadata.</label><button class="button" type="submit">Initialize workspace</button></form></section></div></section>`;
+}
+
+export function librarySwitcherMarkup(error, recentLibraries = [], openEditRoot = "", lockFeedback = null) {
+  return setupMarkup(error, recentLibraries, openEditRoot, lockFeedback)
+    .replace('class="setup-workspace"', 'class="setup-workspace library-switcher" aria-label="Open library"')
+    .replace(
+      '<span class="badge">Local workspace</span><h2>Set up DMS Desktop</h2><p>Open existing metadata or initialize explicit edit and publish roots. No documents are moved or copied during setup.</p>',
+      '<span class="badge">Open library</span><h2>Open library</h2><p>The current library stays open until a different destination lock succeeds. Dismissing this picker restores the unchanged activity.</p><button class="button secondary" type="button" data-library-switcher-dismiss>Cancel</button>',
+    );
+}
+
+export function openLibrarySwitcher(state) {
+  return {
+    ...state,
+    library_switcher: { open: true, error: "", lock_feedback: null },
+  };
+}
+
+export function dismissLibrarySwitcher(state) {
+  return {
+    ...state,
+    library_switcher: { open: false, error: "", lock_feedback: null },
+  };
 }
 
 function activityMarkup(state, activity) {
   if (!activity) {
-    return setupMarkup(state.error, state.preferences.recent_libraries, state.setup_edit_root);
+    return setupMarkup(
+      state.error,
+      state.preferences.recent_libraries,
+      state.setup_edit_root,
+      state.library_switcher?.lock_feedback,
+    );
   }
   const workspace = state.workspace;
   if (activity.task === "Notes") {
@@ -1014,6 +1068,8 @@ function render(state) {
   renderNavigation(state);
   renderGroups(state);
 
+  const switcher = state.library_switcher;
+  const switcherOpen = Boolean(state.workspace && switcher?.open);
   const activity = currentActivity(state);
   const librarySessionMarkup = librarySessionAuthorizationMarkup(
     state.library_session_authorization,
@@ -1023,13 +1079,27 @@ function render(state) {
     state.library_session_authorization,
     state.configuration,
   )
-    ?? activity?.label
+    ?? (switcherOpen ? "Open library" : activity?.label)
     ?? "Set up workspace";
   const mainContent = document.querySelector("#main-content");
-  mainContent.classList.toggle("library-active", activity?.task === "Library");
-  mainContent.innerHTML = librarySessionMarkup || (state.workspace
+  mainContent.classList.toggle("library-active", !switcherOpen && activity?.task === "Library");
+  const pickerError = switcherOpen ? (switcher.error || state.error) : state.error;
+  mainContent.innerHTML = librarySessionMarkup || (switcherOpen
+    ? librarySwitcherMarkup(
+      pickerError,
+      state.preferences.recent_libraries,
+      state.setup_edit_root,
+      switcher.lock_feedback,
+    )
+    : state.workspace
     ? activityMarkup(state, activity)
-    : setupMarkup(state.error, state.preferences.recent_libraries, state.setup_edit_root));
+    : setupMarkup(state.error, state.preferences.recent_libraries, state.setup_edit_root, switcher?.lock_feedback));
+  const openLibrary = document.querySelector("#open-library");
+  if (openLibrary) {
+    const showOpenLibrary = Boolean(state.workspace) && !librarySessionBlocksShell(state.library_session_authorization);
+    openLibrary.hidden = !showOpenLibrary;
+    openLibrary.setAttribute("aria-pressed", String(switcherOpen));
+  }
   const startupHost = document.querySelector("#startup-authorization");
   if (startupHost) {
     const markup = startupAuthorizationMarkup(state.startup_authorization);
@@ -1181,12 +1251,41 @@ async function activateWorkspace(workspace, lockOptions = {}, openLibrary = true
       await applyWorkspaceActivation(activation, openLibrary);
       return;
     }
+    appState = dismissLibrarySwitcher(appState);
+    if (openLibrary) openDestination("Library");
+    else render(appState);
+    return;
   } catch (error) {
     const status = await invokeCommand("library_session_authorization_status", {
       editRoot: workspace.edit_root,
     });
     if (status.kind !== "inactive") {
       appState = applyLibrarySessionAuthorization(appState, status, lockOptions);
+      render(appState);
+      return;
+    }
+    const message = String(error);
+    if (isAdvisoryLockRefusal(message)) {
+      let lockFeedback = null;
+      try {
+        const lockStatus = await invokeCommand("workspace_lock_status", {
+          editRoot: workspace.edit_root,
+        });
+        lockFeedback = libraryLockOwnerFeedback(message, lockStatus);
+      } catch {
+        lockFeedback = null;
+      }
+      const switcherOpen = Boolean(appState.workspace);
+      appState = {
+        ...appState,
+        setup_edit_root: workspace.edit_root,
+        library_switcher: {
+          open: switcherOpen || Boolean(appState.library_switcher?.open),
+          error: message,
+          lock_feedback: lockFeedback,
+        },
+        error: switcherOpen ? appState.error : message,
+      };
       render(appState);
       return;
     }
@@ -2125,6 +2224,18 @@ async function handleClick(event) {
     const editRoot = appState.library_session_authorization?.edit_root;
     if (!editRoot) return;
     await activateWorkspace({ edit_root: editRoot }, appState.library_session_authorization.lock_options ?? {});
+    return;
+  }
+
+  if (event.target.closest("#open-library")) {
+    appState = openLibrarySwitcher(appState);
+    render(appState);
+    return;
+  }
+
+  if (event.target.closest("[data-library-switcher-dismiss]")) {
+    appState = dismissLibrarySwitcher(appState);
+    render(appState);
     return;
   }
 
