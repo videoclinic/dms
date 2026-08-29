@@ -79,6 +79,7 @@ Do not import a `de-DE` ADML. Do not add a Windows ADMX dependency; this templat
 | Need to stop enforcing identifiers | Set the policy to **Not Configured** (or remove both registry values), refresh policy, and restart DMS. Saved OS-user configuration and workspace `.dms` metadata are untouched. |
 | Incomplete or malformed policy | DMS blocks Graph on purpose. Fix both UUID values or set **Not Configured**. There is no fallback to environment or saved settings while either policy value exists. |
 | Policy present but Configuration still editable | Confirm the query above returns both values on `HKLM`, then restart DMS. User-scoped `HKCU` policy is not used. |
+| Assigned to a user group | Reassign to a device group. This template is Computer Configuration writing `HKLM`; user assignment is not the supported path and does not replace device targeting. |
 | Users still must sign in | Expected. Policy does not replace delegated device authorization or library identity-source application. |
 | Wrong tenant on every Windows user | Clear the policy as above. A computer policy is shared by every user of the device. |
 
