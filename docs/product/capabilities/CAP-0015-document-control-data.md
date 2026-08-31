@@ -86,8 +86,8 @@
     approval but remain auditable. Effective date is not mutable profile data.
 11. The CAP-0006 selection pane and any expanded document-control-data form show
     mutable document profile, current released version (with its immutable
-    release-time profile, Owner snapshot, required candidate effective date, and
-    a recent release list
+    release-time profile, Owner, requester, responsible Editor, and approval
+    snapshots, required candidate effective date, and a recent release list
     when space allows),
     next review due (with **overdue** highlight when past due and not obsolete),
     lifecycle state, effective confidentiality with its source and
@@ -118,7 +118,12 @@
     navigation or the Actions summary. CAP-0006's
     bounded session splitter may widen this
     pane without changing its field rules, independent-scroll contract, or
-    persisted document data.
+    persisted document data. The Releases topic calls this group **Immutable
+    release snapshot** and labels its historical values **Owner at release**,
+    **Requested by**, **Responsible editor at release**, and **Approval**;
+    current effective Editor/Approver values never fill these fields. Missing
+    historic values are **Unrecorded**, and an approval-optional release is
+    **Not required**.
 12. Title, document type, a resolved eligible owner, and a candidate effective
     date are required before review submission.
     Document number, when set, is trimmed and case-insensitively unique across
@@ -143,9 +148,17 @@
     listed first when available, uses **Create release candidate** whether the
     selected target skips approval or opens review, always includes **Review
     content-check override reason (only when needed)**, shows the resolved
-    effective target version for Next minor / Next major / Manual, labels later
-    Next minor options **approval optional**, and keeps Manual major/minor
-    disabled unless Manual target is selected. **Version history & changes** is
+    effective target version for Next minor / Next major / Manual, and a
+    target-sensitive **What happens next** message: direct candidates stay Draft
+    without an approval request, while approval-required candidates start
+    approval and become Pending approval only after delivery succeeds. It labels
+    later Next minor options **approval optional**, keeps Manual major/minor
+    disabled unless Manual target is selected, and states that incomplete Manual
+    targets need valid values before their approval outcome is known. Its
+    **Requesting editor** picker uses **Choose requesting editor**, explains that
+    it records the requester rather than the workflow-selected approver, and may
+    preselect only an exact eligible immutable session-actor object ID while
+    remaining editable. **Version history & changes** is
     a separate foldable topic; it is not part of Revision cycle. There is no **Begin revision** action:
     Draft/Released follows CAP-0002 digest rules. These actions are not offered
     as multi-select batch actions unless a future CAP explicitly allows bulk

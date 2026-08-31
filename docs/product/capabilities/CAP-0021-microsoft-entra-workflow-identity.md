@@ -193,7 +193,11 @@
     call cannot bypass this activation boundary. Unbound libraries retain local
     operator activation. A blocking library-session surface always returns to
     Set up workspace. An unverified tenant binding is remediable from that
-    surface by reapplying the identity source without activating the library.
+    surface by reapplying the identity source without activating the library. The
+   candidate form may use that process-session actor only as an editable
+   Requesting editor default when its immutable object ID exactly equals an
+   eligible-person picker option. It never substitutes a display name, email,
+   local OS identity, or persisted local-to-Entra mapping.
 
 ## Non-goals
 

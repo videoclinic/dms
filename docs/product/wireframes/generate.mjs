@@ -105,7 +105,7 @@ const CAPS = [
             ["Changelog *", "Updated retention table to 24 months."],
             ["Effective date *", "2025-08-15 <span class=\"muted\">(captured only by successful release)</span>"],
             ["Owner *", "Lukas Roth · lukas@vc.de · object ID 8a1f…"],
-            ["Requesting editor *", "Lukas Roth · object ID 8a1f…"],
+            ["Requesting editor *", "Lukas Roth · object ID 8a1f… <span class=\"muted\">(signed-in Entra actor default)</span>"],
             ["Target version *", "Next minor V1.4 <span class=\"muted\">(default · approval optional)</span> · Next major V2.0 <span class=\"muted\">(approval required)</span> · Manual V&lt;major&gt;.&lt;minor&gt;"],
             ["Manual validation", "<span class=\"muted\">Greater unused target required when manual is selected</span>"],
             ["Candidate", "V1.4 <span class=\"muted\">(minor release; no approval required)</span>"],
@@ -117,9 +117,9 @@ const CAPS = [
           <form class="stack" style="margin-top:0.75rem">
             <label class="label">Effective date * <input type="date" value="2025-08-15" required></label>
             <label class="label">Owner * <select required><option value="8a1f">Lukas Roth · lukas@vc.de</option><option value="41c2">Anna Berg · anna@vc.de</option></select></label>
-            <label class="label">Requesting editor * <select required><option value="8a1f">Lukas Roth · lukas@vc.de</option></select></label>
+            <label class="label">Requesting editor * <small class="muted">This person is recorded as the requester; the assigned approver is selected by the workflow when approval is required.</small> <select required><option value="">Choose requesting editor</option><option value="8a1f" selected>Lukas Roth · lukas@vc.de</option></select></label>
             <label class="label">Target * <select required><option value="next_minor" selected>Next minor · V1.4 (approval optional)</option><option value="next_major">Next major · V2.0 (approval required)</option><option value="manual">Manual target</option></select></label>
-            <p class="hint">Effective target: V1.4 · stays in draft for direct PDF export. Manual major/minor stay disabled until Manual target is selected.</p>
+            <p class="hint"><strong>What happens next:</strong> No approval request will be sent. Creating this candidate keeps the document in Draft; you can export and release V1.4 directly. Manual major/minor stay disabled until Manual target is selected; valid values show their approval outcome.</p>
             <label class="label">Changelog * <textarea required>Updated retention table to 24 months.</textarea></label>
             <label class="label">Review content-check override reason (only when needed) <textarea></textarea></label>
             <div class="row gap-2" style="flex-wrap:wrap"><button class="btn">Create release candidate</button></div>
@@ -1395,8 +1395,8 @@ function documentControlDataSelectionPane() {
         <strong>Create release candidate</strong>
         <label class="label">Effective date * <input type="date" value="2025-08-15" required></label>
         <label class="label">Target * <select><option value="next_minor" selected>Next minor · V1.4 (approval optional)</option><option value="next_major">Next major · V2.0 (approval required)</option><option value="manual">Manual target</option></select></label>
-        <p class="hint">Effective target: V1.4 · stays in draft for direct PDF export. Manual major/minor stay disabled until Manual target is selected.</p>
-        <label class="label">Requesting editor * <select><option value="8a1f">Lukas Roth · lukas@vc.de</option></select></label>
+        <p class="hint"><strong>What happens next:</strong> No approval request will be sent. Creating this candidate keeps the document in Draft; you can export and release V1.4 directly. Manual major/minor stay disabled until Manual target is selected; valid values show their approval outcome.</p>
+        <label class="label">Requesting editor * <small class="muted">This person is recorded as the requester; the assigned approver is selected by the workflow when approval is required.</small> <select><option value="">Choose requesting editor</option><option value="8a1f" selected>Lukas Roth · lukas@vc.de</option></select></label>
         <label class="label">Changelog * <textarea required>Updated retention table to 24 months.</textarea></label>
         <label class="label">Review content-check override reason (only when needed) <textarea></textarea></label>
         <button class="btn">Create release candidate</button>
@@ -1429,11 +1429,15 @@ function documentControlDataSelectionPane() {
     <details class="selection-section" open>
       <summary><span class="selection-section-title">Releases</span><span class="selection-section-meta">4 recorded</span></summary>
       <div class="selection-section-body stack">
+        <h4 class="card-title" style="margin:0">Immutable release snapshot</h4>
         ${kv([
           ["Current released PDF", "V1.3 · policies/HR/…_V1.3_internal.pdf"],
           ["Effective date", "2025-08-01"],
           ["Captured title", "HR Data Privacy Policy"],
-          ["Captured owner", "Lukas Roth · object ID 8a1f…"],
+          ["Owner at release", "Lukas Roth · object ID 8a1f…"],
+          ["Requested by", "Lukas Roth · object ID 8a1f…"],
+          ["Responsible editor at release", "Lukas Roth · object ID 8a1f…"],
+          ["Approval", "Approved by Anna Berg · object ID 41c2…"],
           ["Draft", badge("newer than last release", "warn")],
         ])}
         <button class="btn outline">Open latest released PDF</button>

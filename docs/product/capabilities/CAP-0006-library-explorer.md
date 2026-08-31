@@ -132,7 +132,11 @@
    - CAP-0015 **Document control data** and related status (mutable profile,
      immutable current-release profile and effective date, effective
      confidentiality with its source and inherited/overridden status, effective
-     editor/approver, current release, draft-newer marker)
+     editor/approver, current release, draft-newer marker). The **Releases**
+     topic labels its historical fields **Immutable release snapshot** and
+     distinguishes Owner at release, Requested by, Responsible editor at release,
+     and Approval from current effective routing; legacy omissions are
+     **Unrecorded** and direct releases state **Not required** for approval.
    - **document actions** for that selection
    CAP-0015 owns field rules and revision/obsolescence semantics; CAP-0006 owns
    navigation, selection, and pane placement. Its **Document control data**,

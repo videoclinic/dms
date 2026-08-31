@@ -40,14 +40,26 @@
    override reason (only when needed)** for both approval-optional and
    approval-required targets. The form defaults its
    target-version control to **Next minor** and always shows the **effective
-   target version** that the selected mode resolves to. After the first
+   target version** that the selected mode resolves to. A target-sensitive
+   **What happens next** message states either that no approval request will be
+   sent, the document remains Draft, and that target may be released directly,
+   or that approval is required, candidate creation starts approval, and the
+   document becomes Pending approval only after delivery succeeds. An incomplete
+   Manual target states that its approval outcome appears after valid values are
+   entered. After the first
    release, the Next minor option is labeled **approval optional**; Next major
    remains **approval required**. First-release Next minor stays
    `Next minor · V1.0 (first release)` because `V1.0` still requires approval.
    **Manual major** and
    **Manual minor** stay disabled until **Manual target** is selected. The first
-   release still resolves to `V1.0`. The requester identity and email are
-   snapshotted with the release candidate. The first release proposes `V1.0`.
+   release still resolves to `V1.0`. The **Requesting editor** picker records
+   the requester, not the approver: its empty state is **Choose requesting
+   editor** and it explains that workflow routing selects the approver when
+   required. In a group-bound library, it may preselect the verified session
+   actor only when that actor's immutable object ID exactly matches an eligible
+   person; the picker remains editable and never falls back to display name,
+   email, local OS user, or a local mapping. The requester identity and email
+   are snapshotted with the release candidate. The first release proposes `V1.0`.
    For every later release, the editor selects exactly one target-version mode:
    - **Minor version change** proposes the next minor version of the current
      release (`V1.3` → `V1.4`; never-released → `V1.0`).

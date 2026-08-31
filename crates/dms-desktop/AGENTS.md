@@ -166,7 +166,13 @@ macOS.
   content-check override reason (only when needed)**, shows the resolved
   effective target version, labels later Next minor options **approval
   optional**, keeps Manual major/minor disabled until Manual target is
-  selected. **Version history & changes** owns the per-person, release-interval
+  selected. Its target-sensitive **What happens next** message states whether
+  submission starts approval or remains a direct Draft release path; incomplete
+  Manual values state that their approval outcome is not yet resolved. The
+  **Requesting editor** picker uses **Choose requesting editor**, explains that
+  it records the requester rather than the workflow-selected approver, and may
+  preselect only the exact eligible immutable object ID of the signed-in Entra
+  actor while remaining editable. **Version history & changes** owns the per-person, release-interval
   workflow evidence and its verification verdict; only its newest actor block
   starts expanded, while older actor blocks start folded. It is separate from
   Revision cycle. There is no **Begin revision** control: library
@@ -199,8 +205,11 @@ macOS.
 - Note mutations call `dms-core`, save the workspace metadata, retain failed
   form drafts for retry, and clear the composer only after a successful save.
 - The Releases pane lists every recorded release with its immutable title,
-  profile/owner snapshot, effective date, and verification status; legacy
-  omissions are visibly unrecorded rather than replaced by current metadata. It
+  profile/Owner, requester, responsible Editor, approver result, effective date,
+  and verification status. Its **Immutable release snapshot** labels Owner at
+  release, Requested by, Responsible editor at release, and Approval; direct
+  releases say Not required, and legacy omissions are visibly Unrecorded rather
+  than replaced by current metadata. It
   filters by captured title and exposes per-release and workspace-wide
   verification actions. It never edits, repairs, or replaces release bytes.
 - The Audit & Reports pane generates filtered CSV/PDF reports, lists report

@@ -58,7 +58,11 @@
 6. The event chain head is stored with each release record. An
    approval-required release additionally stores its approval-chain head so a
    downstream reader can confirm that the released version was the approved
-   revision; a minor release records no approval decision.
+   revision; a minor release records no approval decision. The Library Releases
+   summary derives **Approval** and its immutable requester/editor/approver
+   presentation from that release evidence, never from current workflow routing;
+   it states **Not required** for a direct release and **Unrecorded** for missing
+   historical evidence.
 7. Comment length, encoding, and disallowed characters are documented and
    enforced at entry. Comments are stored as UTF-8 text; line breaks are
    preserved. A line length limit applies for legibility (default 500
