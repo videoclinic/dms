@@ -531,27 +531,20 @@ export function candidateTargetHelpText(detail, targetMode, manualMajor, manualM
   const target = effectiveCandidateTarget(detail, targetMode, manualMajor, manualMinor);
   const preview = previewTargetVersions(detail);
   if (!target) {
-    if (targetMode === "manual") return "Effective target: enter Manual major and minor";
-    return "Effective target: choose a target version";
+    if (targetMode === "manual") {
+      return "What happens next: enter valid Manual major and minor values to see whether approval is required.";
+    }
+    return "What happens next: choose a target version.";
   }
   const label = formatVersionLabel(target);
-  if (preview.first_release && targetMode !== "manual") {
-    return `Effective target: ${label} (first release · approval required)`;
-  }
-  if (targetMode === "next_minor") {
-    return `Effective target: ${label} · stays in draft for direct PDF export`;
-  }
-  if (targetMode === "next_major") {
-    return `Effective target: ${label} · opens approver review after notification`;
-  }
   const current = preview.current;
   const approvalRequired = !current
     ? target.major === 1 && target.minor === 0
     : target.major > current.major;
   if (approvalRequired) {
-    return `Effective target: ${label} · opens approver review after notification`;
+    return `What happens next: Approval is required. Creating this candidate starts approval and sends the request to the assigned approver. The document becomes Pending approval after delivery succeeds. Effective target: ${label}.`;
   }
-  return `Effective target: ${label} · stays in draft for direct PDF export`;
+  return `What happens next: No approval request will be sent. Creating this candidate keeps the document in Draft; you can export and release ${label} directly.`;
 }
 
 /** Enable manual fields only for Manual target; refresh effective-target label. */
@@ -1079,10 +1072,16 @@ function externalLifecycleMarkup(library, detail, workspace) {
   const peopleOptions = (detail.eligible_people ?? [])
     .map((person) => `<option value="${escapeHtml(person.object_id)}">${escapeHtml(person.display_name)} · ${escapeHtml(person.email)}</option>`)
     .join("");
+  const activeRequesterObjectId = workspace?.active_session_actor_object_id;
+  const requesterMatchesEligiblePerson = (detail.eligible_people ?? [])
+    .some((person) => person.object_id === activeRequesterObjectId);
+  const requesterOptions = (detail.eligible_people ?? [])
+    .map((person) => `<option value="${escapeHtml(person.object_id)}" ${person.object_id === activeRequesterObjectId && requesterMatchesEligiblePerson ? "selected" : ""}>${escapeHtml(person.display_name)} · ${escapeHtml(person.email)}</option>`)
+    .join("");
   const peopleAvailable = (detail.eligible_people ?? []).length > 0;
   const placeholderRequestingEditor = detail.eligible_people_state === "successful_empty"
     ? '<label>Requesting editor<input value="&lt;editor&gt;" readonly aria-readonly="true"></label>'
-    : `<label>Requesting editor<select name="requesterObjectId" required><option value="">Choose person</option>${peopleOptions}</select></label>`;
+    : `<label>Requesting editor<small>This person is recorded as the requester; the assigned approver is selected by the workflow when approval is required.</small>${requesterMatchesEligiblePerson ? '<small>Signed-in Microsoft Entra actor is selected by default.</small>' : ""}<select name="requesterObjectId" required><option value="">Choose requesting editor</option>${requesterOptions}</select></label>`;
   const handover = detail.requires_identity_handover && peopleAvailable
     ? `<fieldset><legend>Apply real identities with successful release</legend><p class="source-path">These values remain staged through review and failed export. Current document and release identity do not change until release succeeds.</p><label>Owner<select name="stagedOwnerObjectId" required><option value="">Choose person</option>${peopleOptions}</select></label><label>Editor<select name="stagedEditorObjectId" required><option value="">Choose person</option>${peopleOptions}</select></label></fieldset>`
     : "";
@@ -1180,7 +1179,7 @@ function selectionMarkup(library, workspace) {
   const release = detail.current_release;
   const releaseProfile = release?.profile ?? release?.document_control_snapshot ?? null;
   const currentReleaseIdentity = release
-    ? `<div class="current-release-profile"><strong>Current released PDF · V${escapeHtml(release.version)}</strong><span>${escapeHtml(release.relative_pdf_path)}</span><small>${release.pdf_exists ? "Available" : "Missing PDF"}</small><h4>Immutable current release profile</h4>${releaseProfile ? `<dl class="selection-details"><dt>Effective date</dt><dd>${escapeHtml(release.effective_date ?? releaseProfile.effective_date ?? "Unknown")}</dd><dt>Title</dt><dd>${escapeHtml(releaseProfile.title)}</dd><dt>Document number</dt><dd>${escapeHtml(releaseProfile.document_number ?? "Not set")}</dd><dt>Document type</dt><dd>${escapeHtml(releaseProfile.document_type ?? "Not set")}</dd><dt>Owner</dt><dd>${escapeHtml(identityLabel(releaseProfile.owner, "Unknown"))}</dd></dl>` : '<p class="source-path">Unknown · this legacy release has no stored profile or effective date.</p>'}</div>`
+    ? `<div class="current-release-profile"><strong>Current released PDF · V${escapeHtml(release.version)}</strong><span>${escapeHtml(release.relative_pdf_path)}</span><small>${release.pdf_exists ? "Available" : "Missing PDF"}</small><h4>Immutable release snapshot</h4><dl class="selection-details"><dt>Effective date</dt><dd>${escapeHtml(release.effective_date ?? releaseProfile?.effective_date ?? "Unrecorded")}</dd><dt>Title</dt><dd>${escapeHtml(releaseProfile?.title ?? "Unrecorded")}</dd><dt>Document number</dt><dd>${escapeHtml(releaseProfile?.document_number ?? "Unrecorded")}</dd><dt>Document type</dt><dd>${escapeHtml(releaseProfile?.document_type ?? "Unrecorded")}</dd><dt>Owner at release</dt><dd>${escapeHtml(identityLabel(releaseProfile?.owner, "Unrecorded"))}</dd><dt>Requested by</dt><dd>${escapeHtml(identityLabel(release.requester, "Unrecorded"))}</dd><dt>Responsible editor at release</dt><dd>${escapeHtml(identityLabel(release.editor, "Unrecorded"))}</dd><dt>Approval</dt><dd>${escapeHtml(!release.approval_required ? "Not required" : release.approval_recorded && release.approver ? `Approved by ${identityLabel(release.approver, "Unrecorded")}` : "Unrecorded")}</dd></dl></div>`
     : '<div class="current-release-profile"><strong>Current released PDF</strong><span>No active release</span></div>';
   const documentTypeOptions = (detail.document_types ?? [])
     .filter((type) => type.enabled || type.id === detail.control.document_type)

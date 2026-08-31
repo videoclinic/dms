@@ -199,6 +199,7 @@ pub struct WorkspaceSummary {
     pub publish_root: String,
     pub document_count: usize,
     pub change_author: String,
+    pub active_session_actor_object_id: Option<Uuid>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -391,6 +392,11 @@ pub struct CurrentReleaseSelection {
     pub pdf_exists: bool,
     pub effective_date: Option<NaiveDate>,
     pub profile: Option<ReleaseProfileSelection>,
+    pub requester: Option<PersonSnapshot>,
+    pub editor: Option<PersonSnapshot>,
+    pub approver: Option<PersonSnapshot>,
+    pub approval_required: bool,
+    pub approval_recorded: bool,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -693,8 +699,10 @@ fn initialize_workspace(
 fn load_workspace_configuration(
     app: AppHandle,
     edit_root: String,
+    state: State<'_, DesktopIntegrations>,
 ) -> Result<WorkspaceConfiguration, String> {
-    workspace_configuration(&app, Path::new(&edit_root))
+    let sessions = locked_group_bound_sessions(&state)?;
+    workspace_configuration(&app, Path::new(&edit_root), &sessions)
 }
 
 #[tauri::command]
@@ -3180,6 +3188,7 @@ fn workspace_summary_from(
         publish_root: workspace.publish_root.to_string_lossy().into_owned(),
         document_count: workspace.documents().len(),
         change_author: change_author_for(workspace, sessions),
+        active_session_actor_object_id: active_session_actor_object_id_for(workspace, sessions),
     }
 }
 
@@ -3580,13 +3589,29 @@ fn change_author_for(
     }
 }
 
+fn active_session_actor_object_id_for(
+    workspace: &Workspace,
+    sessions: &BTreeMap<String, GroupBoundSession>,
+) -> Option<Uuid> {
+    let source = workspace.identity_source()?;
+    let session = sessions.get(&path_key(&workspace.edit_root))?;
+    (session.binding_id == source.binding_id && source.tenant_id == Some(session.actor.tenant_id))
+        .then_some(session.actor.object_id)
+}
+
 fn workspace_configuration(
     app: &AppHandle,
     edit_root: &Path,
+    sessions: &BTreeMap<String, GroupBoundSession>,
 ) -> Result<WorkspaceConfiguration, String> {
     let workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
     let settings = load_global_settings_at(&global_settings_path(app)?)?;
-    workspace_configuration_from_with_global(&workspace, &settings)
+    workspace_configuration_from_with_global_and_credentials_and_sessions(
+        &workspace,
+        &settings,
+        &notify::OsCredentialStore,
+        sessions,
+    )
 }
 
 fn workspace_configuration_from(workspace: &Workspace) -> Result<WorkspaceConfiguration, String> {
@@ -3609,8 +3634,24 @@ fn workspace_configuration_from_with_global_and_credentials<C: notify::Credentia
     global_settings: &GlobalSettings,
     credentials: &C,
 ) -> Result<WorkspaceConfiguration, String> {
+    workspace_configuration_from_with_global_and_credentials_and_sessions(
+        workspace,
+        global_settings,
+        credentials,
+        &BTreeMap::new(),
+    )
+}
+
+fn workspace_configuration_from_with_global_and_credentials_and_sessions<
+    C: notify::CredentialStore,
+>(
+    workspace: &Workspace,
+    global_settings: &GlobalSettings,
+    credentials: &C,
+    sessions: &BTreeMap<String, GroupBoundSession>,
+) -> Result<WorkspaceConfiguration, String> {
     Ok(WorkspaceConfiguration {
-        workspace: workspace_summary_from(workspace, &BTreeMap::new()),
+        workspace: workspace_summary_from(workspace, sessions),
         markdown_template: workspace.markdown_template().cloned(),
         markdown_template_validation: workspace.markdown_template_validation(),
         default_review_interval_months: workspace.default_review_interval_months(),
@@ -3703,6 +3744,11 @@ fn document_selection(edit_root: &Path, document_id: Uuid) -> Result<DocumentSel
                     document_type: control.document_type.clone(),
                     owner: release.owner.clone(),
                 }),
+            requester: Some(release.requester.clone()),
+            editor: Some(release.editor.clone()),
+            approver: Some(release.approver.clone()),
+            approval_required: release.approval_required,
+            approval_recorded: release.approval_required && release.approval_chain_head.is_some(),
         });
     let active_candidate = workspace
         .active_candidate(document_id)
@@ -4613,9 +4659,14 @@ mod tests {
             summary.change_author,
             format!("Ada Actor ({tenant_id}/{actor_id})")
         );
+        assert_eq!(summary.active_session_actor_object_id, Some(actor_id));
         assert_eq!(
             workspace_summary_from(&workspace, &empty_sessions()).change_author,
             WorkspaceLock::current().os_user
+        );
+        assert_eq!(
+            workspace_summary_from(&workspace, &empty_sessions()).active_session_actor_object_id,
+            None
         );
     }
 
@@ -6453,7 +6504,13 @@ mod tests {
             &mut release_context,
         )
         .unwrap();
-        assert!(released.current_release.unwrap().pdf_exists);
+        let current_release = released.current_release.unwrap();
+        assert!(current_release.pdf_exists);
+        assert_eq!(current_release.requester.unwrap().object_id, requester_id);
+        assert_eq!(current_release.editor.unwrap().object_id, editor_id);
+        assert_eq!(current_release.approver.unwrap().object_id, approver_id);
+        assert!(current_release.approval_required);
+        assert!(current_release.approval_recorded);
         let maintenance = load_releases(root).unwrap();
         let release = &maintenance.rows[0];
         assert_eq!(release.document_title, "Employee handbook");

@@ -573,6 +573,11 @@ test("library markup separates source Name from DMS Title and keeps actions in t
           document_type: "procedure",
           owner: { kind: "entra", object_id: "owner-1", display_name: "Olivia Owner" },
         },
+        requester: { kind: "entra", object_id: "editor-1", display_name: "Eva Editor" },
+        editor: { kind: "entra", object_id: "editor-2", display_name: "Ed Editor" },
+        approver: { kind: "entra", object_id: "approver-1", display_name: "Aaron Approver" },
+        approval_required: true,
+        approval_recorded: true,
       },
       review_schedule: {
         workspace_interval_months: 12,
@@ -604,7 +609,7 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /Review content-check override reason \(only when needed\)/);
   assert.match(markup, /Next minor · V1\.3 \(approval optional\)/);
   assert.match(markup, /Next major · V2\.0 \(approval required\)/);
-  assert.match(markup, /Effective target: V1\.3 · stays in draft for direct PDF export/);
+  assert.match(markup, /No approval request will be sent\. Creating this candidate keeps the document in Draft; you can export and release V1\.3 directly\./);
   assert.match(markup, /data-candidate-manual-field hidden/);
   assert.match(markup, /name="manualMajor"[^>]* disabled/);
   assert.doesNotMatch(markup, /View workflow evidence|Canonical workflow evidence/);
@@ -637,7 +642,11 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /name="ownerObjectId" required/);
   assert.match(markup, /<option value="owner-1" selected>Olivia Owner/);
   assert.doesNotMatch(markup, /name="owner"/);
-  assert.match(markup, /Immutable current release profile/);
+  assert.match(markup, /Immutable release snapshot/);
+  assert.match(markup, /Owner at release/);
+  assert.match(markup, /Requested by/);
+  assert.match(markup, /Responsible editor at release/);
+  assert.match(markup, /Approved by Aaron Approver/);
   assert.match(markup, /2026-08-11/);
   assert.match(markup, /id="library-review-schedule-form"/);
   assert.match(markup, /data-baseline-mode="override"/);
@@ -1338,12 +1347,93 @@ test("previewTargetVersions follows CAP-0002 first release and next-minor steps"
   });
   assert.match(
     candidateTargetHelpText({ current_release: { version: "0.1" } }, "next_minor"),
-    /Effective target: V0\.2 · stays in draft for direct PDF export/,
+    /No approval request will be sent\. Creating this candidate keeps the document in Draft; you can export and release V0\.2 directly\./,
   );
   assert.match(
     candidateTargetHelpText({}, "next_minor"),
-    /Effective target: V1\.0 \(first release · approval required\)/,
+    /Approval is required\. Creating this candidate starts approval and sends the request to the assigned approver\./,
   );
+  assert.match(
+    candidateTargetHelpText({ current_release: { version: "1.2" } }, "manual", "2", "0"),
+    /Approval is required/,
+  );
+  assert.match(
+    candidateTargetHelpText({ current_release: { version: "1.2" } }, "manual", "1", "3"),
+    /No approval request will be sent/,
+  );
+  assert.match(
+    candidateTargetHelpText({ current_release: { version: "1.2" } }, "manual", "x", "3"),
+    /enter valid Manual major and minor values/,
+  );
+});
+
+test("candidate requester defaults only to the exact active Entra actor and release snapshots stay immutable", () => {
+  const registered = file("Handbook.md", { in_library: { document_id: "doc-1" } }, {
+    id: "doc-1",
+    lifecycle: "draft",
+    control: { title: "Handbook" },
+  });
+  const detail = {
+    document_id: "doc-1",
+    source_name: "Handbook.md",
+    relative_path: "Policies/Handbook.md",
+    source_exists: true,
+    source_state: "registered",
+    lifecycle: "draft",
+    control: { title: "Handbook" },
+    eligible_people: [
+      { object_id: "actor-1", display_name: "Ada Actor", email: "ada@example.test" },
+      { object_id: "requester-2", display_name: "Ada Actor", email: "other@example.test" },
+    ],
+    lifecycle_actions: {},
+    workflow_events: [],
+    workflow_verification: "valid",
+    effective_workflow_roles: {
+      editor: { object_id: "current-editor", display_name: "Current Editor" },
+      approver: { object_id: "current-approver", display_name: "Current Approver" },
+    },
+    current_release: {
+      release_id: "release-1",
+      version: "1.2",
+      relative_pdf_path: "Policies/Handbook_V1.2_internal.pdf",
+      pdf_exists: true,
+      requester: { object_id: "requester-1", display_name: "Rita Requester" },
+      editor: { object_id: "editor-1", display_name: "Ed Editor" },
+      approver: { object_id: "approver-1", display_name: "Ann Approver" },
+      approval_required: false,
+      approval_recorded: false,
+    },
+  };
+  const render = (workspace, detailOverride = detail) => libraryMarkup(
+    workspace,
+    { route_state: { folder: "Policies" } },
+    { ...createLibraryState(), folder: snapshot("Policies", [registered]).folder, selection: ["Policies/Handbook.md"], detail: detailOverride },
+  );
+  const matched = render({ edit_root: "/srv/Edit", workspace_id: "ws-1", active_session_actor_object_id: "actor-1" });
+  assert.match(matched, /Choose requesting editor/);
+  assert.match(matched, /This person is recorded as the requester; the assigned approver is selected by the workflow when approval is required\./);
+  assert.match(matched, /Signed-in Microsoft Entra actor is selected by default\./);
+  assert.match(matched, /<option value="actor-1" selected>Ada Actor/);
+  assert.match(matched, /<dt>Approval<\/dt><dd>Not required<\/dd>/);
+  assert.match(matched, /Requested by<\/dt><dd>Rita Requester/);
+  assert.match(matched, /Responsible editor at release<\/dt><dd>Ed Editor/);
+  assert.match(matched, /Title<\/dt><dd>Unrecorded<\/dd>/);
+  assert.doesNotMatch(matched, /Requested by<\/dt><dd>Current Editor/);
+  const approvalRequired = render(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    {
+      ...detail,
+      current_release: {
+        ...detail.current_release,
+        approval_required: true,
+        approval_recorded: true,
+      },
+    },
+  );
+  assert.match(approvalRequired, /<dt>Approval<\/dt><dd>Approved by Ann Approver<\/dd>/);
+  const unmatched = render({ edit_root: "/srv/Edit", workspace_id: "ws-1", active_session_actor_object_id: "missing-actor" });
+  assert.doesNotMatch(unmatched, /Signed-in Microsoft Entra actor is selected by default\./);
+  assert.doesNotMatch(unmatched, /<option value="actor-1" selected>/);
 });
 
 test("updated document selection refreshes the detail and visible row in place", () => {
