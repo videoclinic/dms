@@ -21,14 +21,16 @@
 2. Under **Configuration → Document defaults**, confidentiality uses the same
    defaults-first policy layout as CAP-0019: a compact workspace-default summary
    identifies the edit root's type and enabled-type count, while direct folder
-   policies are the primary workspace. The persistent Configuration navigation
-   also exposes Workspace, Workflow, and Notifications so this policy editor is
-   not a dead-end page. **Manage confidentiality types** opens catalogue
-   administration as a secondary surface and returns to Document defaults when
-   dismissed; the full type list and its controls do not occupy a permanent
-   Configuration column. Each retained source ID has a **Future release type**
-   selector that sends its migration to core validation; the UI does not infer
-   document references or implement cycle checks itself.
+   policies are the primary workspace. The summary itself exposes **Manage
+   confidentiality types**. If no type or root policy exists, it says to create
+   the first type and make it the workspace default. The persistent Configuration
+   navigation also exposes Workspace, Workflow, and Notifications so this policy
+   editor is not a dead-end page. **Manage confidentiality types** opens
+   catalogue administration as a secondary surface and returns to Document
+   defaults when dismissed; the full type list and its controls do not occupy a
+   permanent Configuration column. Each retained source ID has a **Future release
+   type** selector that sends its migration to core validation; the UI does not
+   infer document references or implement cycle checks itself.
 3. The folder-policy editor shows a semantic, independently expandable
    edit-root-relative folder tree containing the edit root and every accessible
    descendant folder, including empty folders and folders without library

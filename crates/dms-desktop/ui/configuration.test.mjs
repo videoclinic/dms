@@ -578,6 +578,29 @@ test("confidentiality catalogue is a secondary surface that returns to document 
   assert.match(markup, /Create confidentiality type/);
 });
 
+test("document defaults exposes confidentiality setup before the folder and document-type editors", () => {
+  let state = applyConfigurationSnapshot(createConfigurationState(), {
+    ...snapshot,
+    confidentiality_types: [],
+    confidentiality_policies: [],
+  });
+  state = setConfigurationRoute(state, "document-defaults");
+  const markup = configurationMarkup(state, assistancePolicy);
+
+  assert.match(markup, /No workspace default is configured\. Create the first confidentiality type and make it the workspace default\./);
+  assert.match(markup, /configuration-summary[\s\S]*?data-configuration-secondary="confidentiality-types"/);
+  assert.ok(markup.indexOf("Manage confidentiality types") < markup.indexOf("Choose default or exception"));
+  assert.ok(markup.indexOf("Manage confidentiality types") < markup.indexOf("Document types"));
+
+  const catalogue = configurationMarkup(
+    openConfigurationSecondary(state, "confidentiality-types"),
+    assistancePolicy,
+  );
+  assert.match(catalogue, /No confidentiality types configured\./);
+  assert.match(catalogue, /Create confidentiality type/);
+  assert.match(catalogue, /name="workspaceDefault" value="on"/);
+});
+
 test("document defaults route exposes folder policy and document-type catalogue mutations", () => {
   let state = applyConfigurationSnapshot(createConfigurationState(), snapshot);
   state = setConfigurationRoute(state, "document-defaults");
@@ -592,6 +615,7 @@ test("document defaults route exposes folder policy and document-type catalogue 
   assert.match(markup, /data-configuration-form="document-type"/);
   assert.match(markup, /Create document type/);
   assert.match(markup, /Manage confidentiality types/);
+  assert.equal((markup.match(/Manage confidentiality types/g) ?? []).length, 1);
   assert.match(markup, /No template is configured/);
   assert.match(markup, /data-configuration-form="markdown-template-select"/);
   assert.doesNotMatch(markup, /data-configuration-form="markdown-template-remove"/);

@@ -220,7 +220,7 @@ function documentTypesMarkup(snapshot) {
   const rows = snapshot.document_types.length === 0
     ? '<p class="subtle">No document types configured.</p>'
     : snapshot.document_types.map((type) => `<form class="configuration-type-row" data-configuration-form="document-type"><input type="hidden" name="id" value="${escapeHtml(type.id)}"><label><span class="visually-hidden">Label for ${escapeHtml(type.id)}</span><input name="label" required value="${escapeHtml(type.label)}"></label><code>${escapeHtml(type.id)}</code><label class="configuration-enabled"><input type="checkbox" name="enabled" ${type.enabled ? "checked" : ""}> Enabled</label><button class="button secondary" type="submit">Save</button></form>`).join("");
-  return `<section class="card configuration-card configuration-catalogue"><div class="configuration-card-heading"><div><h3>Document types</h3><p>Add, rename, or disable workspace document types.</p></div><button class="button secondary" type="button" data-configuration-secondary="confidentiality-types">Manage confidentiality types…</button></div>${rows}<form class="configuration-type-row create" data-configuration-form="document-type"><label><span class="visually-hidden">New document type ID</span><input name="id" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="type-id"></label><label><span class="visually-hidden">New document type label</span><input name="label" required placeholder="Display label"></label><label class="configuration-enabled"><input type="checkbox" name="enabled" checked> Enabled</label><button class="button" type="submit">Create document type</button></form></section>`;
+  return `<section class="card configuration-card configuration-catalogue"><div class="configuration-card-heading"><div><h3>Document types</h3><p>Add, rename, or disable workspace document types.</p></div></div>${rows}<form class="configuration-type-row create" data-configuration-form="document-type"><label><span class="visually-hidden">New document type ID</span><input name="id" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="type-id"></label><label><span class="visually-hidden">New document type label</span><input name="label" required placeholder="Display label"></label><label class="configuration-enabled"><input type="checkbox" name="enabled" checked> Enabled</label><button class="button" type="submit">Create document type</button></form></section>`;
 }
 
 function markdownTemplateMarkup(snapshot) {
@@ -248,7 +248,10 @@ function documentDefaultsMarkup(state) {
   const root = snapshot.confidentiality_policies.find((policy) => policy.folder === ".");
   const rootType = snapshot.confidentiality_types.find((type) => type.id === root?.type_id);
   const enabledCount = snapshot.confidentiality_types.filter((type) => type.enabled).length;
-  return `${markdownTemplateMarkup(snapshot)}<section class="configuration-summary"><div><strong>Workspace default</strong><span>${escapeHtml(rootType?.label ?? "Not configured")}</span></div><span class="badge">${enabledCount} enabled confidentiality ${enabledCount === 1 ? "type" : "types"}</span></section><div class="configuration-defaults-grid">${folderTreeMarkup(state, "confidentiality")}${selectedPolicyMarkup(state)}</div>${documentTypesMarkup(snapshot)}`;
+  const summary = rootType
+    ? `${escapeHtml(rootType.label)} is the edit-root fallback. Choose a folder to add an exception.`
+    : "No workspace default is configured. Create the first confidentiality type and make it the workspace default.";
+  return `${markdownTemplateMarkup(snapshot)}<section class="configuration-summary"><div><strong>Workspace default</strong><span>${summary}</span></div><span class="badge">${enabledCount} enabled confidentiality ${enabledCount === 1 ? "type" : "types"}</span><button class="button secondary" type="button" data-configuration-secondary="confidentiality-types">Manage confidentiality types…</button></section><div class="configuration-defaults-grid">${folderTreeMarkup(state, "confidentiality")}${selectedPolicyMarkup(state)}</div>${documentTypesMarkup(snapshot)}`;
 }
 
 function confidentialityTypesMarkup(state) {
