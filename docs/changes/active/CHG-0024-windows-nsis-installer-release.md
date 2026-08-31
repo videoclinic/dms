@@ -93,7 +93,7 @@ Steps:
    - `<packageId>.locale.en-US.yaml` (`ManifestType: defaultLocale`, with `PackageName: DMS Desktop`, `License: MIT`, `Moniker: dms-desktop`, `Tags`, `PublisherUrl`, `PrivacyUrl`, `LicenseUrl`, `ReleaseNotesUrl`)
    - `<packageId>.installer.yaml` (`ManifestType: installer`, `InstallerType: nullsoft`, `Platform: [Windows.Desktop]`, `MinimumOSVersion: 10.0.17763.0`, `InstallModes: [silent, silentWithProgress]`, `Installers[0].Architecture: x64`, plus the real `InstallerUrl` + `InstallerSha256`).
    - `SUBMIT.md` — the one-pager the operator follows after downloading the artifact.
-   The package id is `Videoclinic.DMSDesktop` (path drops the space, `PackageName` keeps it). Each generated file starts with the required schema header and declares `ManifestVersion: 1.12.0`, the upstream PR template's recommended schema. Sanity checks in the script: publisher id matches `^[A-Za-z][A-Za-z0-9.-]{0,31}$`, sha-256 is 64 hex chars, all three required fields per file present (verified locally against the JSON schemas at `winget-cli/schemas/JSON/manifests/v1.12.0/manifest.*.json`).
+   The package id is `Videoclinic.DMSDesktop` (path drops the space, `PackageName` keeps it). Each generated file starts with the required schema header and declares `ManifestVersion: 1.12.0`, the upstream PR template's recommended schema. Sanity checks in the script: publisher ID begins with a letter, then has at most 31 letters, digits, dots, or hyphens; SHA-256 is 64 hex chars; all three required fields per file are present (verified locally against the JSON schemas at `winget-cli/schemas/JSON/manifests/v1.12.0/manifest.*.json`).
 2. Add a `Build winget submission kit` step to `.github/workflows/release-windows.yml` after the publish step, gated on `!contains(steps.tag.outputs.name, '-')` so prerelease tags (e.g. `v0.1.0-installer-preview.1`) skip it — winget only takes stable versions. The step:
    - reads the just-computed `*.sha256` sidecar and the version from `crates/dms-desktop/tauri.conf.json`,
    - builds the canonical `https://github.com/<repo>/releases/download/<tag>/<asset>` URL,
@@ -133,7 +133,7 @@ Steps:
 
 1. Move `docs/changes/active/CHG-0024-windows-nsis-installer-release.md` to `docs/changes/archive/CHG-0024-windows-nsis-installer-release.md`.
 2. Set `Status: done — closed YYYY-MM-DD` in the moved file; record the run id, tag, installer size, and SHA-256 hash under the phase 1 evidence.
-3. In `docs/changes/README.md`, clear the "Active" table row (already empty before this CHG), and add an archive entry: `| [CHG-0024](archive/CHG-0024-windows-nsis-installer-release.md) | Windows NSIS installer and signed GitHub Release | done | CAP-0005 |`.
+3. In `docs/changes/README.md`, remove the active row and add the `CHG-0024` archive entry that names the archived Windows NSIS installer and signed GitHub Release record with status `done` and CAP impact `CAP-0005`.
 
 ## Out of scope
 
