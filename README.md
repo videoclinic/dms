@@ -126,32 +126,37 @@ environment.
 
 ### Windows setup
 
-1. Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
-   and select **Desktop development with C++**. Keep the MSVC x64/x86 build
-   tools and a Windows 10 or 11 SDK selected.
-2. Install the [Microsoft Edge WebView2 Evergreen Runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
-3. In PowerShell, install Rustup and Node.js LTS, then restart the terminal so
-   `%USERPROFILE%\\.cargo\\bin` is on `PATH`:
+Run the following from an elevated native Windows PowerShell. The Build Tools
+command installs the **Desktop development with C++** workload, including the
+MSVC x64/x86 toolchain and Windows SDK required by Rust and Tauri:
 
-   ```powershell
-   winget install --id Rustlang.Rustup
-   winget install --id OpenJS.NodeJS.LTS
-   ```
+```powershell
+winget install --exact --id Microsoft.VisualStudio.2022.BuildTools --source winget `
+  --accept-package-agreements --accept-source-agreements `
+  --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+winget install --exact --id Microsoft.EdgeWebView2Runtime --source winget `
+  --accept-package-agreements --accept-source-agreements
+winget install --exact --id Rustlang.Rustup --source winget `
+  --accept-package-agreements --accept-source-agreements
+winget install --exact --id OpenJS.NodeJS.LTS --source winget `
+  --accept-package-agreements --accept-source-agreements
+```
 
-   In the repository, Rustup automatically installs/selects the committed
-   `1.88.0-x86_64-pc-windows-msvc` toolchain. Confirm the required commands
-   resolve before testing:
+Restart PowerShell so `%USERPROFILE%\\.cargo\\bin` is on `PATH`. In the
+repository, Rustup automatically installs/selects the committed
+`1.88.0-x86_64-pc-windows-msvc` toolchain. Confirm the required commands
+resolve before testing:
 
-   ```powershell
-   cargo --version
-   rustc --version
-   rustup component list --installed
-   node --version
-   ```
+```powershell
+cargo --version
+rustc --version
+rustup component list --installed
+node --version
+```
 
-4. For the external Office-release smoke only, install and license the
-   appropriate Microsoft Office desktop applications. Office is not needed for
-   the ordinary Rust and frontend test suites.
+For the external Office-release smoke only, install and license the appropriate
+Microsoft Office desktop applications. Office is not needed for the ordinary
+Rust and frontend test suites.
 
 Then run the local checks from a native Windows terminal:
 
