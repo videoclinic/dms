@@ -413,7 +413,8 @@ test("opening a workspace revalidates it before acquiring its lock and switches 
     },
   );
 
-  assert.equal(result, activation);
+  assert.equal(result.kind, "activated");
+  assert.equal(result.activation, activation);
   assert.deepEqual(calls, [
     {
       command: "activate_workspace_session",
@@ -454,6 +455,35 @@ test("a failed bound open does not acquire a destination lock", async () => {
       arguments_: { editRoot: "/DMS/New", takeOverStale: false, overrideExisting: false },
     },
   ]);
+});
+
+test("an authorization-required workspace open returns its sign-in state without a lock handoff", async () => {
+  const calls = [];
+  const authorization = {
+    kind: "pending",
+    edit_root: "/DMS/New",
+    library_label: "New",
+    group_label: "Quality workflow",
+    user_code: "ABCD-EFGH",
+    verification_uri: "https://microsoft.com/devicelogin",
+  };
+
+  const result = await switchWorkspaceSession(
+    { edit_root: "/DMS/Old" },
+    { state: "current", stale_after_hours: 24, lock: { process_id: 16 } },
+    { edit_root: "/DMS/New" },
+    {},
+    async (command, arguments_) => {
+      calls.push({ command, arguments_ });
+      return { kind: "authorization_required", authorization };
+    },
+  );
+
+  assert.deepEqual(result, { kind: "authorization_required", authorization });
+  assert.deepEqual(calls, [{
+    command: "activate_workspace_session",
+    arguments_: { editRoot: "/DMS/New", takeOverStale: false, overrideExisting: false },
+  }]);
 });
 
 test("same-library reuse performs no lock handoff", async () => {

@@ -1226,11 +1226,13 @@ export async function switchWorkspaceSession(
   invoke,
 ) {
   if (currentWorkspace?.edit_root === workspace.edit_root) return null;
-  const activation = await invoke("activate_workspace_session", {
+  const attempt = await invoke("activate_workspace_session", {
     editRoot: workspace.edit_root,
     takeOverStale: lockOptions.takeOverStale ?? false,
     overrideExisting: lockOptions.overrideExisting ?? false,
   });
+  if (attempt?.kind === "authorization_required") return attempt;
+  const activation = attempt?.activation ?? attempt;
   if (currentWorkspace) {
     const currentOwner = currentLockStatus?.lock;
     if (!currentOwner) {
@@ -1256,7 +1258,7 @@ export async function switchWorkspaceSession(
       throw error;
     }
   }
-  return activation;
+  return { kind: "activated", activation };
 }
 
 async function applyWorkspaceActivation(activation, openLibrary = true) {
@@ -1276,13 +1278,19 @@ async function applyWorkspaceActivation(activation, openLibrary = true) {
 
 async function activateWorkspace(workspace, lockOptions = {}, openLibrary = true) {
   try {
-    const activation = await switchWorkspaceSession(
+    const attempt = await switchWorkspaceSession(
       appState.workspace,
       appState.maintenance.lock_status,
       workspace,
       lockOptions,
       invokeCommand,
     );
+    if (attempt?.kind === "authorization_required") {
+      appState = applyLibrarySessionAuthorization(appState, attempt.authorization, lockOptions);
+      render(appState);
+      return;
+    }
+    const activation = attempt?.activation ?? attempt;
     if (activation) {
       await applyWorkspaceActivation(activation, openLibrary);
       return;

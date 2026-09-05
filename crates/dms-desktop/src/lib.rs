@@ -327,6 +327,17 @@ pub struct WorkspaceActivation {
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum WorkspaceActivationAttempt {
+    Activated {
+        activation: WorkspaceActivation,
+    },
+    AuthorizationRequired {
+        authorization: LibrarySessionAuthorizationStatus,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct LibrarySessionAuthorizationStatus {
     pub kind: LibrarySessionAuthorizationKind,
     pub edit_root: Option<String>,
@@ -544,7 +555,7 @@ fn activate_workspace_session(
     take_over_stale: bool,
     override_existing: bool,
     state: State<'_, DesktopIntegrations>,
-) -> Result<WorkspaceActivation, String> {
+) -> Result<WorkspaceActivationAttempt, String> {
     let mut graph = state
         .graph
         .lock()
@@ -557,14 +568,30 @@ fn activate_workspace_session(
         .library_session_authorizations
         .lock()
         .map_err(|_| "library-session authorization state is unavailable".to_owned())?;
-    activate_workspace_session_with(
+    match activate_workspace_session_with(
         Path::new(&edit_root),
         take_over_stale,
         override_existing,
         &mut graph,
         &mut sessions,
         &mut authorizations,
-    )
+    ) {
+        Ok(activation) => Ok(WorkspaceActivationAttempt::Activated { activation }),
+        Err(error) => {
+            match library_session_authorization_status_from(Path::new(&edit_root), &authorizations)
+            {
+                Ok(authorization)
+                    if !matches!(
+                        authorization.kind,
+                        LibrarySessionAuthorizationKind::Inactive
+                    ) =>
+                {
+                    Ok(WorkspaceActivationAttempt::AuthorizationRequired { authorization })
+                }
+                _ => Err(error),
+            }
+        }
+    }
 }
 
 #[tauri::command]
@@ -576,9 +603,7 @@ fn library_session_authorization_status(
         .library_session_authorizations
         .lock()
         .map_err(|_| "library-session authorization state is unavailable".to_owned())?;
-    Ok(serialize_library_session_authorization(
-        authorizations.get(&path_key(Path::new(&edit_root))),
-    ))
+    library_session_authorization_status_from(Path::new(&edit_root), &authorizations)
 }
 
 #[tauri::command]
@@ -3336,6 +3361,16 @@ fn library_session_target_from_authorization(
     }
 }
 
+fn library_session_authorization_status_from(
+    edit_root: &Path,
+    authorizations: &BTreeMap<String, LibrarySessionAuthorization>,
+) -> Result<LibrarySessionAuthorizationStatus, String> {
+    let workspace = Workspace::open(edit_root).map_err(|error| error.to_string())?;
+    Ok(serialize_library_session_authorization(
+        authorizations.get(&path_key(&workspace.edit_root)),
+    ))
+}
+
 fn serialize_library_session_authorization(
     authorization: Option<&LibrarySessionAuthorization>,
 ) -> LibrarySessionAuthorizationStatus {
@@ -4403,6 +4438,32 @@ mod tests {
             ),
         );
         sessions
+    }
+
+    #[test]
+    fn library_session_authorization_status_uses_the_canonical_workspace_root() {
+        let (_directory, workspace, _tenant_id, _actor_id) = bound_workspace();
+        let source = workspace.identity_source().unwrap();
+        let mut authorizations = BTreeMap::new();
+        authorizations.insert(
+            path_key(&workspace.edit_root),
+            LibrarySessionAuthorization::Failed {
+                target: library_session_target(&workspace, source),
+                message: "Microsoft Entra sign-in did not complete.".to_owned(),
+            },
+        );
+
+        let status = library_session_authorization_status_from(
+            &workspace.edit_root.join("."),
+            &authorizations,
+        )
+        .unwrap();
+
+        assert_eq!(status.kind, LibrarySessionAuthorizationKind::Failed);
+        assert_eq!(
+            status.message.as_deref(),
+            Some("Microsoft Entra sign-in did not complete.")
+        );
     }
 
     fn member_graph(tenant_id: Uuid, actor_id: Uuid) -> SessionGraph {
