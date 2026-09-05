@@ -411,6 +411,7 @@ button { cursor: pointer; }
 .document-control-editor .button { justify-self: start; }
 .confidentiality-editor { padding-top: 4px; border-top: 0; }
 .library-detail-error { margin: 0 !important; padding: 9px; color: #922b21 !important; background: #fff0ed; border-radius: 6px; font-size: 12px; }
+.library-notice { margin: 0 !important; padding: 9px; color: #17623b !important; background: #edf9f0; border-radius: 6px; font-size: 12px; font-weight: 700; }
 .lifecycle-panel { display: grid; gap: 12px; margin: 0; padding: 0; border: 0; background: transparent; }
 .lifecycle-actions { display: grid; gap: 12px; }
 .lifecycle-action { display: grid; gap: 7px; padding: 0; border: 0; border-radius: 0; }

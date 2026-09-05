@@ -186,7 +186,15 @@ macOS.
   host handler first and advances only through its explicit confirmation retry;
   review decisions require a fresh interactive Entra sign-in. Cancel review
   and mark obsolete retain failed reason drafts and require explicit confirmation.
-  Validation failures stay in that selected-document context. Its notes action
+  Validation failures stay in that selected-document context. A successful
+  candidate creation writes a one-line **Revision cycle** notice
+  inside the selected-document pane that names the candidate version and the
+  resulting workflow state (Pending approval, in-Draft direct release, or
+  delivery failed awaiting confirmation). The notice clears when the document
+  selection, the folder snapshot, or the next lifecycle action changes. A failed
+  selected-document action renders one alert above the foldable topics and opens
+  its initiating section; it is never left behind an unrelated folded section.
+  Its notes action
   opens a document-scoped activity keyed by stable document ID. Document Notes
   returns to the singleton Library activity with the same stable document
   selected, preserves an unchanged Library view without reloading, and retains

@@ -15,6 +15,7 @@ import {
   finishFormSubmission,
   lifecycleFailureLibraryState,
   lifecycleSuccessLibraryState,
+  selectionFeedbackLibraryState,
   notesLibraryReturnTarget,
   openActivity,
   permalinkActivity,
@@ -147,6 +148,7 @@ test("a failed decision consumes the one-time approver sign-in in frontend state
   );
   assert.equal(failedDecision.approver_sign_in, null);
   assert.equal(failedDecision.detail_error, "actor mismatch");
+  assert.equal(failedDecision.selection_open.revision, true);
 
   const failedRelease = lifecycleFailureLibraryState(
     library,
@@ -155,6 +157,16 @@ test("a failed decision consumes the one-time approver sign-in in frontend state
     { reason: "", confirmed: false },
   );
   assert.deepEqual(failedRelease.approver_sign_in, library.approver_sign_in);
+});
+
+test("selected-document feedback opens its target section", () => {
+  const library = createInitialState().library;
+  for (const section of ["control", "schedule", "revision", "actions"]) {
+    const updated = selectionFeedbackLibraryState(library, section, "configuration field document type cannot be empty");
+    assert.equal(updated.detail_error, "configuration field document type cannot be empty");
+    assert.equal(updated.lifecycle_notice, "");
+    assert.equal(updated.selection_open[section], true);
+  }
 });
 
 test("a successful decision also clears the one-time approver sign-in", () => {
@@ -170,6 +182,79 @@ test("a successful decision also clears the one-time approver sign-in", () => {
   const released = lifecycleSuccessLibraryState(library, "release_candidate", detail);
   assert.deepEqual(released.approver_sign_in, library.approver_sign_in);
 });
+
+test("submit_candidate success writes a revision-cycle notice naming the candidate outcome", () => {
+  const library = createInitialState().library;
+
+  const approvedRequired = lifecycleSuccessLibraryState(
+    library,
+    "submit_candidate",
+    {
+      document_id: "doc-1",
+      active_candidate: {
+        approval_required: true,
+        status: "in_review",
+        version: { major: 1, minor: 0 },
+      },
+    },
+  );
+  assert.equal(
+    approvedRequired.lifecycle_notice,
+    "Release candidate V1.0 created and submitted for approval. The document is now Pending approval.",
+  );
+  assert.equal(approvedRequired.selection_open.revision, true);
+
+  const deliveryFailed = lifecycleSuccessLibraryState(
+    library,
+    "submit_candidate",
+    {
+      document_id: "doc-1",
+      active_candidate: {
+        approval_required: true,
+        status: "review_delivery_failed",
+        version: { major: 1, minor: 0 },
+      },
+    },
+  );
+  assert.match(deliveryFailed.lifecycle_notice, /Confirm review request delivery/);
+
+  const minor = lifecycleSuccessLibraryState(
+    library,
+    "submit_candidate",
+    {
+      document_id: "doc-1",
+      active_candidate: {
+        approval_required: false,
+        status: "draft",
+        version: { major: 1, minor: 4 },
+      },
+    },
+  );
+  assert.match(minor.lifecycle_notice, /export and release/);
+
+  const decided = lifecycleSuccessLibraryState(
+    library,
+    "decide_review",
+    { document_id: "doc-1", active_candidate: { status: "approved" } },
+  );
+  assert.equal(decided.lifecycle_notice, "");
+});
+
+test("lifecycleFailureLibraryState clears any prior success notice", () => {
+  const library = {
+    ...createInitialState().library,
+    lifecycle_notice: "Release candidate V1.0 created and submitted for approval.",
+  };
+  const failed = lifecycleFailureLibraryState(
+    library,
+    "submit_candidate",
+    "actor mismatch",
+    { reason: "", confirmed: false },
+  );
+  assert.equal(failed.lifecycle_notice, "");
+  assert.equal(failed.detail_error, "actor mismatch");
+});
+
 
 function documentActivity(task) {
   return {

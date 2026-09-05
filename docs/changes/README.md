@@ -33,6 +33,9 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
+| [CHG-0049](archive/CHG-0049-visible-selection-pane-action-feedback.md) | Visible selection-pane action feedback | done | CAP-0002, CAP-0006, CAP-0015 |
+| [CHG-0048](archive/CHG-0048-candidate-submission-outcome-feedback.md) | Candidate submission outcome feedback | done | CAP-0002, CAP-0006, CAP-0015 |
+| [CHG-0047](archive/CHG-0047-candidate-approver-route-and-validation-feedback.md) | Candidate approver route and validation feedback | done | CAP-0002, CAP-0006, CAP-0015 |
 | [CHG-0046](archive/CHG-0046-confidentiality-catalogue-discovery.md) | Confidentiality catalogue discovery | done | CAP-0008 |
 | [CHG-0038](archive/CHG-0038-candidate-approval-outcome-clarity.md) | Candidate, release, and Entra identity clarity | done | CAP-0002, CAP-0006, CAP-0011, CAP-0015, CAP-0021 |
 | [CHG-0037](archive/CHG-0037-library-switcher-and-lock-owner-feedback.md) | Library switcher and lock-owner feedback | done | CAP-0005, CAP-0014 |

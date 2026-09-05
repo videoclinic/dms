@@ -78,6 +78,7 @@ export function createLibraryState() {
     detail_error: "",
     reassociate_path: "",
     selection_open: { ...DEFAULT_SELECTION_OPEN },
+    lifecycle_notice: "",
     lifecycle_drafts: {},
     results: null,
     query: "",
@@ -175,6 +176,7 @@ export function applyLibrarySnapshot(library, snapshot, target, historyMode = "p
     selection: [],
     detail: null,
     detail_error: "",
+    lifecycle_notice: "",
     reassociate_path: "",
     lifecycle_drafts: {},
     results: null,
@@ -252,6 +254,7 @@ export function toggleLibrarySelection(library, relativePath, additive = false) 
     selection,
     detail: null,
     detail_error: "",
+    lifecycle_notice: "",
     reassociate_path: "",
     lifecycle_drafts: {},
   };
@@ -732,6 +735,7 @@ export function applyDocumentSelection(library, detail, openHistory = false) {
     ...library,
     detail,
     detail_error: "",
+    lifecycle_notice: "",
     selection_open: openHistory ? { ...(library.selection_open ?? {}), history: true } : library.selection_open,
     lifecycle_drafts: {},
     folder: { ...library.folder, entries: (library.folder?.entries ?? []).map(updateEntry) },
@@ -1004,13 +1008,16 @@ function lifecyclePanelMarkup(library, detail, workspace) {
   const availability = (name, fallback) => actions[name] ?? { available: false, reason: fallback };
   const cancel = availability("cancel_review", "Lifecycle state is unavailable.");
   const obsolete = availability("mark_obsolete", "Lifecycle state is unavailable.");
+  const notice = library.lifecycle_notice
+    ? `<p class="library-notice" role="status" data-library-lifecycle-notice>${escapeHtml(library.lifecycle_notice)}</p>`
+    : "";
   const form = (action, title, available, reason) => {
     const draft = library.lifecycle_drafts?.[action] ?? {};
     const disabled = available ? "" : "disabled";
     return `<form class="lifecycle-action" data-library-lifecycle-form="${action}"><strong>${title}</strong>${reason ? `<small>${escapeHtml(reason)}</small>` : ""}<label>Reason<textarea name="reason" required ${disabled}>${escapeHtml(draft.reason ?? "")}</textarea></label><label class="confirmation"><input type="checkbox" name="confirmed" value="yes" ${draft.confirmed ? "checked" : ""} ${disabled}> I confirm this lifecycle change.</label><button class="button ${action === "mark_obsolete" ? "danger" : "secondary"}" type="submit" ${disabled}>${title}</button></form>`;
   };
   const external = externalLifecycleMarkup(library, detail, workspace);
-  return `<div class="lifecycle-panel" aria-label="Revision cycle actions"><div class="lifecycle-actions">${external}${form("cancel_review", "Cancel review", cancel.available, cancel.reason)}${form("mark_obsolete", "Mark obsolete", obsolete.available, obsolete.reason)}</div></div>`;
+  return `<div class="lifecycle-panel" aria-label="Revision cycle actions">${notice}<div class="lifecycle-actions">${external}${form("cancel_review", "Cancel review", cancel.available, cancel.reason)}${form("mark_obsolete", "Mark obsolete", obsolete.available, obsolete.reason)}</div></div>`;
 }
 
 function versionHistoryMarkup(detail) {
@@ -1109,8 +1116,13 @@ function externalLifecycleMarkup(library, detail, workspace) {
     ? `Next major · ${nextMajorLabel} (first release · approval required)`
     : `Next major · ${nextMajorLabel} (approval required)`;
   const effectiveHelp = candidateTargetHelpText(detail, "next_minor");
+  const effectiveApprover = identityLabel(
+    detail.effective_workflow_roles?.approver,
+    "Not configured",
+  );
+  const approvalRoute = `<div class="source-path" data-candidate-approval-route><strong>Approval route</strong><br>Approval-required targets use ${escapeHtml(effectiveApprover)}. Change this in Configuration → Workflow; candidate creation cannot change the approver.</div>`;
   const submit = detail.lifecycle === "draft" && !candidate
-    ? `<form class="lifecycle-action" data-library-lifecycle-form="submit_candidate" data-current-release-version="${escapeHtml(currentReleaseVersion)}" data-first-release="${preview.first_release ? "1" : "0"}"><strong>Create release candidate</strong><p class="source-path">Records target version, effective date, and changelog for this draft in the workspace. It does not send a file elsewhere. Next minor stays in draft so you can export the PDF next. Next major and first release open approver review after the notification is sent.</p>${placeholderBlock}<label>Target version<select name="targetMode"><option value="next_minor" selected>${escapeHtml(nextMinorOption)}</option><option value="next_major">${escapeHtml(nextMajorOption)}</option><option value="manual">Manual target</option></select></label><p class="source-path" data-candidate-effective-target>${escapeHtml(effectiveHelp)}</p><label data-candidate-manual-field hidden>Manual major<input name="manualMajor" inputmode="numeric" disabled></label><label data-candidate-manual-field hidden>Manual minor<input name="manualMinor" inputmode="numeric" disabled></label><label>Effective date<input name="effectiveDate" type="date" required></label>${placeholderRequestingEditor}${handover}<label>Changelog<textarea name="changelog" required></textarea></label><label>Review content-check override reason (only when needed)<textarea name="reviewOverrideReason"></textarea></label><button class="button" type="submit" ${detail.requires_identity_handover && !peopleAvailable ? "disabled" : ""}>Create release candidate</button></form>`
+    ? `<form class="lifecycle-action" data-library-lifecycle-form="submit_candidate" data-current-release-version="${escapeHtml(currentReleaseVersion)}" data-first-release="${preview.first_release ? "1" : "0"}" novalidate><strong>Create release candidate</strong><p class="source-path">Records target version, effective date, and changelog for this draft in the workspace. It does not send a file elsewhere. Next minor stays in draft so you can export the PDF next. Next major and first release open approver review after the notification is sent.</p>${placeholderBlock}<label>Target version<select name="targetMode"><option value="next_minor" selected>${escapeHtml(nextMinorOption)}</option><option value="next_major">${escapeHtml(nextMajorOption)}</option><option value="manual">Manual target</option></select></label><p class="source-path" data-candidate-effective-target>${escapeHtml(effectiveHelp)}</p>${approvalRoute}<label data-candidate-manual-field hidden>Manual major<input name="manualMajor" inputmode="numeric" disabled></label><label data-candidate-manual-field hidden>Manual minor<input name="manualMinor" inputmode="numeric" disabled></label><label>Effective date<input name="effectiveDate" type="date" required></label>${placeholderRequestingEditor}${handover}<label>Changelog<textarea name="changelog" required></textarea></label><label>Review content-check override reason (only when needed)<textarea name="reviewOverrideReason"></textarea></label><button class="button" type="submit" ${detail.requires_identity_handover && !peopleAvailable ? "disabled" : ""}>Create release candidate</button></form>`
     : "";
   const reviewRetry = candidate?.status === "review_delivery_failed"
     ? `<form class="lifecycle-action" data-library-lifecycle-form="retry_review_notification"><strong>Confirm review request delivery</strong><small>The host mail handler opened without advancing the review.</small>${mailConfirmation("the review request")}<button class="button" type="submit">Confirm review message sent</button></form>`
@@ -1206,18 +1218,15 @@ function selectionMarkup(library, workspace) {
     : `<form id="library-review-schedule-form" class="confidentiality-editor" data-baseline-mode="${escapeHtml(scheduleBaseline.mode)}" data-baseline-interval="${escapeHtml(scheduleBaseline.intervalMonths)}" data-baseline-exemption="${escapeHtml(scheduleBaseline.exemptionReason)}"><p class="source-path">Next review is derived from the current release effective date. An exemption records a reason and creates no due date.</p><label>Schedule<select name="scheduleMode"><option value="inherit" ${scheduleMode === "inherit" ? "selected" : ""}>Use workspace interval (${escapeHtml(schedule.workspace_interval_months ?? "—")} months)</option><option value="override" ${scheduleMode === "override" ? "selected" : ""}>Document interval override</option><option value="exempt" ${scheduleMode === "exempt" ? "selected" : ""}>Exempt document</option></select></label><label data-review-schedule-field="interval"${scheduleMode === "override" ? "" : " hidden"}>Review interval months<input name="reviewIntervalMonths" type="number" min="1" max="120" value="${escapeHtml(schedule.interval_months ?? "")}"${scheduleMode === "override" ? " required" : " disabled"}></label><label data-review-schedule-field="exemption"${scheduleMode === "exempt" ? "" : " hidden"}>Exemption reason<textarea name="reviewExemptionReason"${scheduleMode === "exempt" ? " required" : " disabled"}>${escapeHtml(schedule.exemption_reason ?? "")}</textarea></label><p class="source-path">Next review due: ${escapeHtml(schedule.next_due_date ?? (schedule.exemption_reason ? "Exempt" : "Unknown until release date is known"))}</p><button class="button secondary" type="submit" disabled>Update review schedule</button></form>`;
   const editor = sourceLost
     ? '<p class="source-path">Document control and confidentiality changes are unavailable while the source is Lost source. Reassociate the source first.</p>'
-    : `<div class="document-control-editor" aria-labelledby="document-control-editor-heading"><h4 id="document-control-editor-heading">Edit document control data</h4><p class="source-path">Applies to ${escapeHtml(detail.source_name)} · ${escapeHtml(detail.relative_path)}</p>${library.detail_error ? `<p class="library-detail-error" role="alert">${escapeHtml(library.detail_error)}</p>` : ""}${ownerSelectable ? "" : '<p class="library-detail-error" role="status">No eligible Microsoft Entra owner is available. Identity placeholders and legacy owner text are display-only.</p>'}<form id="library-document-control-form"><div class="document-control-fields"><label>Title<input name="title" required value="${escapeHtml(detail.control.title)}"></label><label>Document number<input name="documentNumber" value="${escapeHtml(detail.control.document_number ?? "")}"></label><label>Document type<select name="documentType"><option value="">Not set</option>${documentTypeOptions}</select></label><label>Owner<select name="ownerObjectId" required ${ownerSelectable ? "" : "disabled"}>${unresolvedOwnerOption}${ownerOptions}</select></label></div><button class="button" type="submit" ${ownerSelectable ? "" : "disabled"}>Save document control</button></form><form id="library-confidentiality-form" class="confidentiality-editor"><label>Confidentiality override<select name="confidentialityTypeId"><option value="">Use inherited folder policy</option>${confidentialityOptions}</select></label><button class="button secondary" type="submit">Apply confidentiality</button></form></div>`;
+    : `<div class="document-control-editor" aria-labelledby="document-control-editor-heading"><h4 id="document-control-editor-heading">Edit document control data</h4><p class="source-path">Applies to ${escapeHtml(detail.source_name)} · ${escapeHtml(detail.relative_path)}</p>${ownerSelectable ? "" : '<p class="library-detail-error" role="status">No eligible Microsoft Entra owner is available. Identity placeholders and legacy owner text are display-only.</p>'}<form id="library-document-control-form"><div class="document-control-fields"><label>Title<input name="title" required value="${escapeHtml(detail.control.title)}"></label><label>Document number<input name="documentNumber" value="${escapeHtml(detail.control.document_number ?? "")}"></label><label>Document type<select name="documentType"><option value="">Not set</option>${documentTypeOptions}</select></label><label>Owner<select name="ownerObjectId" required ${ownerSelectable ? "" : "disabled"}>${unresolvedOwnerOption}${ownerOptions}</select></label></div><button class="button" type="submit" ${ownerSelectable ? "" : "disabled"}>Save document control</button></form><form id="library-confidentiality-form" class="confidentiality-editor"><label>Confidentiality override<select name="confidentialityTypeId"><option value="">Use inherited folder policy</option>${confidentialityOptions}</select></label><button class="button secondary" type="submit">Apply confidentiality</button></form></div>`;
   const openAttr = (key) => (selectionSectionOpen(library, key) ? " open" : "");
   const section = (key, title, body, extraClass = "") =>
     `<details class="selection-section${extraClass ? ` ${extraClass}` : ""}" data-library-section="${key}"${openAttr(key)}><summary><span class="selection-section-chevron" aria-hidden="true"></span><span class="selection-section-title">${title}</span><span class="selection-section-hint" aria-hidden="true"></span></summary><div class="selection-section-body">${body}</div></details>`;
   const controlSummary = `<dl class="selection-details"><dt>Document type</dt><dd>${escapeHtml(detail.control.document_type ?? "Not set")}</dd><dt>Owner</dt><dd>${escapeHtml(identityLabel(currentOwner, "Not set"))}</dd><dt>Confidentiality</dt><dd>${escapeHtml(confidentiality?.label ?? "Not configured")}${confidentiality ? ` · ${escapeHtml(confidentiality.document_override ? "override" : `from ${confidentiality.source_folder}`)}` : ""}</dd><dt>Editor</dt><dd>${escapeHtml(role(roles?.editor, "<editor>"))}</dd><dt>Approver</dt><dd>${escapeHtml(role(roles?.approver, "Not configured"))}</dd></dl>`;
   const controlBody = `${controlSummary}${editor}`;
   const reassociatePath = library.reassociate_path || detail.relative_path;
-  const reassociateError = library.detail_error
-    ? `<p class="library-detail-error" role="alert">${escapeHtml(library.detail_error)}</p>`
-    : "";
   const reassociateMarkup = sourceLost
-    ? `${reassociateError}<p class="source-path">Choose another supported file under the edit root.</p><form id="library-reassociate-form" class="reassociate-form"><label for="library-reassociate-path">Reassociate source</label><div class="directory-field"><input id="library-reassociate-path" name="path" required value="${escapeHtml(reassociatePath)}" aria-label="New edit-root-relative source path"><button class="button secondary" type="button" data-reassociate-browse>Browse…</button></div><button class="button secondary" type="submit">Reassociate source</button></form>`
+    ? `<p class="source-path">Choose another supported file under the edit root.</p><form id="library-reassociate-form" class="reassociate-form"><label for="library-reassociate-path">Reassociate source</label><div class="directory-field"><input id="library-reassociate-path" name="path" required value="${escapeHtml(reassociatePath)}" aria-label="New edit-root-relative source path"><button class="button secondary" type="button" data-reassociate-browse>Browse…</button></div><button class="button secondary" type="submit">Reassociate source</button></form>`
     : "";
   const actionsBody = `<div class="selection-actions"><button class="button" type="button" data-library-open-source ${sourceAvailable ? "" : "disabled"}>Open source draft</button><button class="button" type="button" data-library-open-release ${release?.pdf_exists ? "" : "disabled"}>Open current released PDF</button><button class="button" type="button" data-library-open-notes>Open notes</button><button class="button secondary" type="button" data-library-open-assistance ${sourceLost ? "disabled" : ""}>Evaluate changes with Claude</button><button class="button secondary" type="button" data-library-copy-permalink>Copy permalink</button><button class="button danger" type="button" data-library-unregister>Unregister</button></div>${reassociateMarkup}`;
   const actionsFooter = section("actions", "Actions", actionsBody, "selection-actions-footer");
@@ -1232,8 +1241,11 @@ function selectionMarkup(library, workspace) {
   const lostBanner = sourceLost
     ? '<p class="library-detail-error" role="status">The draft file is not at the stored path. Most actions stay disabled until you reassociate the source.</p>'
     : "";
+  const selectionError = library.detail_error
+    ? `<p class="library-detail-error selection-feedback" role="alert" data-library-selection-error>${escapeHtml(library.detail_error)}</p>`
+    : "";
   return selectionScroll(
-    `<div class="selection-header"><div class="selection-header-badges">${membershipBadge}${lifecycleBadge}</div><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><h3>${escapeHtml(detail.control.title)}</h3>${detail.control.document_number ? `<p class="document-number">${escapeHtml(detail.control.document_number)}</p>` : ""}${lostBanner}<div class="source-identity"><strong>Source file</strong><span>${escapeHtml(detail.source_name)}</span><small>${escapeHtml(detail.relative_path)}</small></div>${section("control", "Document control data", controlBody)}${section("schedule", "Document review schedule", scheduleMarkup)}${section("revision", "Revision cycle", sourceLost ? '<p class="source-path">Revision cycle actions are unavailable while the source is Lost source.</p>' : lifecyclePanelMarkup(library, detail, workspace))}${section("history", "Version history &amp; changes", versionHistoryMarkup(detail))}${section("releases", "Releases", releasesBody)}`,
+    `<div class="selection-header"><div class="selection-header-badges">${membershipBadge}${lifecycleBadge}</div><button class="text-button" type="button" data-library-clear-selection>Clear</button></div>${selectionError}<h3>${escapeHtml(detail.control.title)}</h3>${detail.control.document_number ? `<p class="document-number">${escapeHtml(detail.control.document_number)}</p>` : ""}${lostBanner}<div class="source-identity"><strong>Source file</strong><span>${escapeHtml(detail.source_name)}</span><small>${escapeHtml(detail.relative_path)}</small></div>${section("control", "Document control data", controlBody)}${section("schedule", "Document review schedule", scheduleMarkup)}${section("revision", "Revision cycle", sourceLost ? '<p class="source-path">Revision cycle actions are unavailable while the source is Lost source.</p>' : lifecyclePanelMarkup(library, detail, workspace))}${section("history", "Version history &amp; changes", versionHistoryMarkup(detail))}${section("releases", "Releases", releasesBody)}`,
     actionsFooter,
   );
 }

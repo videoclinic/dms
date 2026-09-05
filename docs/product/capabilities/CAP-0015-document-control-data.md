@@ -158,7 +158,16 @@
     **Requesting editor** picker uses **Choose requesting editor**, explains that
     it records the requester rather than the workflow-selected approver, and may
     preselect only an exact eligible immutable session-actor object ID while
-    remaining editable. **Version history & changes** is
+    remaining editable. The form shows its resolved effective approver as a
+    read-only **Approval route** and directs changes to **Configuration →
+    Workflow**; candidate creation has no approver picker. Missing or invalid
+    candidate values return explicit selection-pane feedback and do not create a
+    candidate request. Successful candidate creation displays a short **Revision
+    cycle** outcome with its version and resulting approval/delivery state before
+    the refreshed active-candidate actions replace the form. Any selected-document
+    action error remains visible above the foldable topics and opens its initiating
+    section; it is never hidden inside unrelated **Document control data**.
+    **Version history & changes** is
     a separate foldable topic; it is not part of Revision cycle. There is no **Begin revision** action:
     Draft/Released follows CAP-0002 digest rules. These actions are not offered
     as multi-select batch actions unless a future CAP explicitly allows bulk

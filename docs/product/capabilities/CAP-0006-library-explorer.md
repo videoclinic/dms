@@ -132,7 +132,16 @@
    - CAP-0015 **Document control data** and related status (mutable profile,
      immutable current-release profile and effective date, effective
      confidentiality with its source and inherited/overridden status, effective
-     editor/approver, current release, draft-newer marker). The **Releases**
+     editor/approver, current release, draft-newer marker). Its candidate form
+     shows the effective approver as a read-only **Approval route** and directs
+     approver changes to **Configuration → Workflow**; a missing candidate value
+     returns selection-pane feedback rather than silently blocking submission.
+     A successful candidate submission likewise names the created version and
+     resulting workflow state in **Revision cycle** rather than looking like an
+     unexplained selection-pane reload.
+     Selected-document action errors remain visible above the foldable topics,
+     while the section that initiated the action opens for correction or retry.
+     The **Releases**
      topic labels its historical fields **Immutable release snapshot** and
      distinguishes Owner at release, Requested by, Responsible editor at release,
      and Approval from current effective routing; legacy omissions are

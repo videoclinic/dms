@@ -91,22 +91,58 @@ export function finishFormSubmission(form, submitter) {
 }
 
 export function lifecycleFailureLibraryState(library, lifecycleAction, error, draft) {
-  return {
+  return selectionFeedbackLibraryState({
     ...library,
     approver_sign_in: lifecycleAction === "decide_review" ? null : library.approver_sign_in,
-    detail_error: String(error),
     lifecycle_drafts: {
       ...library.lifecycle_drafts,
       [lifecycleAction]: draft,
     },
-  };
+  }, "revision", error);
 }
 
 export function lifecycleSuccessLibraryState(library, lifecycleAction, detail) {
-  const updated = applyDocumentSelection(library, detail, true);
-  return lifecycleAction === "decide_review"
-    ? { ...updated, approver_sign_in: null }
-    : updated;
+  const updated = setSelectionSectionOpen(
+    applyDocumentSelection(library, detail, true),
+    "revision",
+    true,
+  );
+  const notice = candidateSuccessNotice(lifecycleAction, detail);
+  return {
+    ...updated,
+    approver_sign_in: lifecycleAction === "decide_review" ? null : updated.approver_sign_in,
+    lifecycle_notice: notice,
+  };
+}
+
+export function selectionFeedbackLibraryState(library, section, error) {
+  return setSelectionSectionOpen({
+    ...library,
+    detail_error: String(error),
+    lifecycle_notice: "",
+  }, section, true);
+}
+
+function candidateSuccessNotice(lifecycleAction, detail) {
+  if (lifecycleAction !== "submit_candidate") return "";
+  const candidate = detail?.active_candidate;
+  if (!candidate) return "Release candidate created. Continue with the next available action.";
+  const version = candidate.version
+    ? `V${candidate.version.major}.${candidate.version.minor}`
+    : "the requested version";
+  if (candidate.approval_required) {
+    if (candidate.status === "in_review") {
+      return `Release candidate ${version} created and submitted for approval. The document is now Pending approval.`;
+    }
+    if (candidate.status === "review_delivery_failed") {
+      return `Release candidate ${version} recorded, but the approval request was not delivered. Use Confirm review request delivery before the document leaves Draft.`;
+    }
+    return `Release candidate ${version} created. Approval is required; the document will enter Pending approval once delivery succeeds.`;
+  }
+  if (candidate.status === "draft") {
+    return `Release candidate ${version} created. The document stays in Draft until you export and release it.`;
+  }
+  return `Release candidate ${version} created.`;
 }
 
 export function defaultPreferences() {
@@ -2004,7 +2040,7 @@ async function handleLibraryClick(event) {
     } catch (error) {
       appState = {
         ...appState,
-        library: { ...appState.library, detail_error: String(error) },
+        library: selectionFeedbackLibraryState(appState.library, "revision", error),
       };
     }
     render(appState);
@@ -2025,13 +2061,17 @@ async function handleLibraryClick(event) {
       });
       appState = {
         ...appState,
-        library: applyDocumentSelection(appState.library, detail, true),
+        library: setSelectionSectionOpen(
+          applyDocumentSelection(appState.library, detail, true),
+          "revision",
+          true,
+        ),
         error: "",
       };
     } catch (error) {
       appState = {
         ...appState,
-        library: { ...appState.library, detail_error: String(error) },
+        library: selectionFeedbackLibraryState(appState.library, "revision", error),
       };
     }
     render(appState);
@@ -2740,9 +2780,10 @@ async function handleSubmit(event) {
         error: "",
       };
     } catch (error) {
+      const section = event.target.id === "library-review-schedule-form" ? "schedule" : "control";
       appState = {
         ...appState,
-        library: { ...appState.library, detail_error: String(error) },
+        library: selectionFeedbackLibraryState(appState.library, section, error),
       };
     }
     render(appState);
@@ -3022,9 +3063,8 @@ async function handleSubmit(event) {
       appState = {
         ...appState,
         library: {
-          ...appState.library,
+          ...selectionFeedbackLibraryState(appState.library, "actions", error),
           reassociate_path: path,
-          detail_error: String(error),
         },
       };
       render(appState);

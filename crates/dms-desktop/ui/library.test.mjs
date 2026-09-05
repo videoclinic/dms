@@ -1130,12 +1130,32 @@ test("external lifecycle forms map candidates, decisions, releases, and mail con
     retryable_minor_publication: { release_id: "release-1" },
   };
   const submit = new FormData();
+  assert.throws(
+    () => lifecycleActionRequest("submit_candidate", submit, detail),
+    /Choose a target version/,
+  );
   submit.set("targetMode", "manual");
+  assert.throws(
+    () => lifecycleActionRequest("submit_candidate", submit, detail),
+    /Choose the requesting editor/,
+  );
+  submit.set("requesterObjectId", "editor-1");
+  assert.throws(
+    () => lifecycleActionRequest("submit_candidate", submit, detail),
+    /release changelog is required/,
+  );
+  submit.set("changelog", " Clarify escalation path ");
+  assert.throws(
+    () => lifecycleActionRequest("submit_candidate", submit, detail),
+    /Effective date must use YYYY-MM-DD/,
+  );
+  submit.set("effectiveDate", "2026-08-11");
+  assert.throws(
+    () => lifecycleActionRequest("submit_candidate", submit, detail),
+    /Manual target version needs whole major and minor numbers/,
+  );
   submit.set("manualMajor", "2");
   submit.set("manualMinor", "4");
-  submit.set("requesterObjectId", "editor-1");
-  submit.set("changelog", " Clarify escalation path ");
-  submit.set("effectiveDate", "2026-08-11");
   submit.set("reviewOverrideReason", " Marker retained for review ");
   assert.deepEqual(lifecycleActionRequest("submit_candidate", submit, detail), {
     command: "submit_document_candidate",
@@ -1410,6 +1430,11 @@ test("candidate requester defaults only to the exact active Entra actor and rele
     { ...createLibraryState(), folder: snapshot("Policies", [registered]).folder, selection: ["Policies/Handbook.md"], detail: detailOverride },
   );
   const matched = render({ edit_root: "/srv/Edit", workspace_id: "ws-1", active_session_actor_object_id: "actor-1" });
+  assert.match(matched, /data-library-lifecycle-form="submit_candidate"[^>]*novalidate/);
+  assert.match(matched, /Approval route/);
+  assert.match(matched, /Approval-required targets use Current Approver/);
+  assert.match(matched, /Change this in Configuration → Workflow; candidate creation cannot change the approver\./);
+  assert.doesNotMatch(matched, /name="approverObjectId"/);
   assert.match(matched, /Choose requesting editor/);
   assert.match(matched, /This person is recorded as the requester; the assigned approver is selected by the workflow when approval is required\./);
   assert.match(matched, /Signed-in Microsoft Entra actor is selected by default\./);
@@ -1459,6 +1484,85 @@ test("updated document selection refreshes the detail and visible row in place",
   assert.equal(selectionSectionOpen(updated, "history"), true);
   assert.equal(updated.folder.entries[0].document.control.title, "Employee handbook");
   assert.equal(updated.results[0].document.control.document_number, "HR-001");
+});
+
+test("applyDocumentSelection clears any prior lifecycle notice", () => {
+  const library = {
+    ...createLibraryState(),
+    lifecycle_notice: "Release candidate V1.0 created and submitted for approval.",
+  };
+  const updated = applyDocumentSelection(library, { document_id: "doc-1", lifecycle: "draft" });
+  assert.equal(updated.lifecycle_notice, "");
+});
+
+test("revision-cycle panel renders a success notice without a detail error", () => {
+  const registered = file("Handbook.md", { in_library: { document_id: "doc-1" } }, {
+    id: "doc-1",
+    lifecycle: "in_review",
+    control: { title: "Handbook" },
+  });
+  const detail = {
+    document_id: "doc-1",
+    source_name: "Handbook.md",
+    relative_path: "Policies/Handbook.md",
+    source_exists: true,
+    source_state: "registered",
+    lifecycle: "in_review",
+    control: { title: "Handbook" },
+    active_candidate: { approval_required: true, status: "in_review", version: { major: 1, minor: 0 } },
+    eligible_people: [],
+    lifecycle_actions: {},
+    workflow_events: [],
+    workflow_verification: "valid",
+  };
+  const library = {
+    ...createLibraryState(),
+    detail,
+    lifecycle_notice: "Release candidate V1.0 created and submitted for approval.",
+  };
+  const markup = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies" } },
+    { ...library, folder: snapshot("Policies", [registered]).folder, selection: ["Policies/Handbook.md"] },
+  );
+  assert.match(markup, /data-library-lifecycle-notice/);
+  assert.match(markup, /Release candidate V1\.0 created and submitted for approval\./);
+});
+
+test("selected-document errors remain visible and their initiating section stays open", () => {
+  const registered = file("Handbook.md", { in_library: { document_id: "doc-1" } }, {
+    id: "doc-1",
+    lifecycle: "draft",
+    control: { title: "Handbook" },
+  });
+  const detail = {
+    document_id: "doc-1",
+    source_name: "Handbook.md",
+    relative_path: "Policies/Handbook.md",
+    source_exists: true,
+    source_state: "registered",
+    lifecycle: "draft",
+    control: { title: "Handbook" },
+    eligible_people: [],
+    lifecycle_actions: {},
+    workflow_events: [],
+    workflow_verification: "valid",
+  };
+  const markup = libraryMarkup(
+    { edit_root: "/srv/Edit", workspace_id: "ws-1" },
+    { route_state: { folder: "Policies" } },
+    {
+      ...createLibraryState(),
+      detail,
+      detail_error: "configuration field document type cannot be empty",
+      selection_open: { revision: true },
+      folder: snapshot("Policies", [registered]).folder,
+      selection: ["Policies/Handbook.md"],
+    },
+  );
+  assert.match(markup, /data-library-selection-error/);
+  assert.equal((markup.match(/configuration field document type cannot be empty/g) ?? []).length, 1);
+  assert.match(markup, /data-library-section="revision" open/);
 });
 
 test("lost source rows use italic state, dedicated filter, and reassociate-focused actions", () => {
@@ -1584,7 +1688,7 @@ test("lost source submit-time error stays in the pane and keeps the typed path",
     { route_state: { folder: "Policies" } },
     library,
   );
-  assert.match(markup, /role="alert">Cannot reassociate this path/);
+  assert.match(markup, /role="alert" data-library-selection-error>Cannot reassociate this path/);
   assert.match(markup, /value="\/tmp\/outside\.md"/);
   assert.doesNotMatch(markup, /appState\.error/);
 });

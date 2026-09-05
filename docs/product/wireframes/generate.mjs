@@ -106,6 +106,7 @@ const CAPS = [
             ["Effective date *", "2025-08-15 <span class=\"muted\">(captured only by successful release)</span>"],
             ["Owner *", "Lukas Roth · lukas@vc.de · object ID 8a1f…"],
             ["Requesting editor *", "Lukas Roth · object ID 8a1f… <span class=\"muted\">(signed-in Entra actor default)</span>"],
+            ["Approval route", "Anna Berg · object ID 41c2… <span class=\"muted\">(read-only workflow assignment)</span>"],
             ["Target version *", "Next minor V1.4 <span class=\"muted\">(default · approval optional)</span> · Next major V2.0 <span class=\"muted\">(approval required)</span> · Manual V&lt;major&gt;.&lt;minor&gt;"],
             ["Manual validation", "<span class=\"muted\">Greater unused target required when manual is selected</span>"],
             ["Candidate", "V1.4 <span class=\"muted\">(minor release; no approval required)</span>"],
@@ -118,11 +119,15 @@ const CAPS = [
             <label class="label">Effective date * <input type="date" value="2025-08-15" required></label>
             <label class="label">Owner * <select required><option value="8a1f">Lukas Roth · lukas@vc.de</option><option value="41c2">Anna Berg · anna@vc.de</option></select></label>
             <label class="label">Requesting editor * <small class="muted">This person is recorded as the requester; the assigned approver is selected by the workflow when approval is required.</small> <select required><option value="">Choose requesting editor</option><option value="8a1f" selected>Lukas Roth · lukas@vc.de</option></select></label>
+            <p class="hint"><strong>Approval route:</strong> Approval-required targets use Anna Berg. Change this in Configuration → Workflow; candidate creation cannot change the approver.</p>
             <label class="label">Target * <select required><option value="next_minor" selected>Next minor · V1.4 (approval optional)</option><option value="next_major">Next major · V2.0 (approval required)</option><option value="manual">Manual target</option></select></label>
             <p class="hint"><strong>What happens next:</strong> No approval request will be sent. Creating this candidate keeps the document in Draft; you can export and release V1.4 directly. Manual major/minor stay disabled until Manual target is selected; valid values show their approval outcome.</p>
             <label class="label">Changelog * <textarea required>Updated retention table to 24 months.</textarea></label>
             <label class="label">Review content-check override reason (only when needed) <textarea></textarea></label>
             <div class="row gap-2" style="flex-wrap:wrap"><button class="btn">Create release candidate</button></div>
+            <p class="hint">If a required value is missing or invalid, the selection pane names it and no candidate request is sent.</p>
+            <div class="callout warn"><strong>Revision cycle:</strong> Configuration field document type cannot be empty. Update Document control data, then retry.</div>
+            <div class="callout info"><strong>Revision cycle:</strong> Release candidate V1.4 created. The document remains Draft until you export and release it.</div>
           </form>
           <p class="hint">A successful empty people import shows literal <code>&lt;owner&gt;</code> and <code>&lt;editor&gt;</code> placeholders here and blocks submission. Minor release snapshots the requested profile, effective date, changelog, mode, editor, and approver; it stays in <code>draft</code> until successful atomic export.</p>
         </section>
@@ -145,6 +150,7 @@ const CAPS = [
           <div class="row gap-2">${badge("Pending approval", "info")}${badge("In library", "muted")}</div>
           <p class="hint">Persisted state remains <code>in_review</code>. The Library table and selection badge never show that token.</p>
           <p class="muted" style="font-size:0.85rem">Target V2.0 · snapshotted approver Anna Berg · review ID 9c4e…</p>
+          <div class="callout info"><strong>Revision cycle:</strong> Release candidate V2.0 created and submitted for approval. The document is now Pending approval.</div>
           <strong>Record review decision</strong>
           <label class="label">Decision <select><option>Choose decision</option><option>Approve</option><option>Reject</option><option>Request changes</option></select></label>
           <button class="btn">Record decision</button>
@@ -1357,6 +1363,7 @@ function documentControlDataSelectionPane() {
       <div class="muted" style="font-size:0.75rem;margin-top:0.2rem">Folder: policies/HR</div>
     </div>
     <p class="hint">Document topics scroll here. Actions stays docked at the pane bottom and uses the same session-only fold state.</p>
+    <div class="callout warn"><strong>Revision cycle:</strong> Configuration field document type cannot be empty. Update Document control data, then retry.</div>
     <details class="selection-section">
       <summary><span class="selection-section-title">Document control data</span><span class="selection-section-meta">Mutable · managed in DMS Desktop</span></summary>
       <div class="selection-section-body">${kv([
@@ -1388,7 +1395,7 @@ function documentControlDataSelectionPane() {
         <button class="btn outline" disabled>Update review schedule</button>
       </div></div>
     </details>
-    <details class="selection-section">
+    <details class="selection-section" open>
       <summary><span class="selection-section-title">Revision cycle</span></summary>
       <div class="selection-section-body stack">
         <p class="muted" style="font-size:0.85rem;margin:0">Create a release candidate here in the workspace (not an external upload). Lifecycle is <code>released</code> while the draft matches the current release digest, and becomes <code>draft</code> when the draft changes or was never released. PDFs and history remain preserved.</p>
@@ -1397,9 +1404,12 @@ function documentControlDataSelectionPane() {
         <label class="label">Target * <select><option value="next_minor" selected>Next minor · V1.4 (approval optional)</option><option value="next_major">Next major · V2.0 (approval required)</option><option value="manual">Manual target</option></select></label>
         <p class="hint"><strong>What happens next:</strong> No approval request will be sent. Creating this candidate keeps the document in Draft; you can export and release V1.4 directly. Manual major/minor stay disabled until Manual target is selected; valid values show their approval outcome.</p>
         <label class="label">Requesting editor * <small class="muted">This person is recorded as the requester; the assigned approver is selected by the workflow when approval is required.</small> <select><option value="">Choose requesting editor</option><option value="8a1f" selected>Lukas Roth · lukas@vc.de</option></select></label>
+        <p class="hint"><strong>Approval route:</strong> Approval-required targets use Anna Berg. Change this in Configuration → Workflow; candidate creation cannot change the approver.</p>
         <label class="label">Changelog * <textarea required>Updated retention table to 24 months.</textarea></label>
         <label class="label">Review content-check override reason (only when needed) <textarea></textarea></label>
         <button class="btn">Create release candidate</button>
+        <p class="hint">If a required value is missing or invalid, the selection pane names it and no candidate request is sent.</p>
+        <div class="callout info"><strong>Revision cycle:</strong> Release candidate V1.4 created. The document remains Draft until you export and release it.</div>
         <button class="btn outline">Cancel review</button>
         <button class="btn danger">Mark obsolete</button>
         <p class="hint">Document-control-data changes while a review is open invalidate that review. Copy permalink uses workspace + document IDs only.</p>

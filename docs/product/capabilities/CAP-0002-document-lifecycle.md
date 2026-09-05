@@ -59,7 +59,19 @@
    actor only when that actor's immutable object ID exactly matches an eligible
    person; the picker remains editable and never falls back to display name,
    email, local OS user, or a local mapping. The requester identity and email
-   are snapshotted with the release candidate. The first release proposes `V1.0`.
+   are snapshotted with the release candidate. The candidate form also shows the
+   resolved effective approver as a read-only **Approval route** and directs an
+   approver change to **Configuration → Workflow**; it has no candidate-time
+   approver picker. An incomplete candidate submission reports its first missing
+   or invalid value in the selected-document pane and sends no candidate request.
+   A successful submission writes a short **Revision cycle** message that names
+   the candidate version and states whether it is Pending approval, remains Draft
+   for direct release, or is awaiting review-delivery confirmation; it clears
+   when the operator changes selection or begins a later lifecycle action.
+   Any candidate validation or delivery error is a visible selected-document
+   alert, and **Revision cycle** opens so the operator can correct or retry the
+   action without discovering an error behind another folded section.
+   The first release proposes `V1.0`.
    For every later release, the editor selects exactly one target-version mode:
    - **Minor version change** proposes the next minor version of the current
      release (`V1.3` → `V1.4`; never-released → `V1.0`).
