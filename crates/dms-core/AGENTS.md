@@ -189,6 +189,11 @@ persistence.
   `v17.json.bak` and leaves a group-only binding explicitly unverified until an
   operator reapplies the source; it never infers tenant identity from cache,
   OS-user configuration, or historic evidence.
+- Schema v19 adds optional document-type replacement IDs. Its v18 migration
+  writes `replacement_type_id: null` for every catalogue entry and retains
+  `v18.json.bak`. Mappings retain the current document-control ID, invalidate
+  affected active candidates, and resolve only into later candidate/release
+  snapshots.
 
 ## Verification
 

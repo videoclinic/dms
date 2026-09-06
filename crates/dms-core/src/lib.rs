@@ -34,7 +34,7 @@ pub use policies::*;
 pub use source_history::*;
 pub use template::*;
 
-pub const SCHEMA_VERSION: u32 = 18;
+pub const SCHEMA_VERSION: u32 = 19;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 
@@ -144,6 +144,11 @@ pub enum DmsError {
     DisabledDocumentType(String),
     #[error("document type {0:?} is referenced by a document")]
     DocumentTypeInUse(String),
+    #[error("document type migration from {from_type_id:?} to {replacement:?} must use different non-cyclic enabled type IDs")]
+    InvalidDocumentTypeMigration {
+        from_type_id: String,
+        replacement: String,
+    },
     #[error("confidentiality type {0:?} is referenced by a live policy, document, or migration")]
     ConfidentialityTypeInUse(String),
     #[error("confidentiality type migration from {from_type_id:?} to {replacement:?} must use different non-cyclic enabled type IDs")]
@@ -484,7 +489,7 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = matches!(found, 1..=17);
+        let migrated = matches!(found, 1..=18);
         if found == 1 {
             migrate_v1_catalogues(&mut value)?;
         }
@@ -508,6 +513,9 @@ impl Workspace {
         }
         if found <= 17 {
             migrate_v17_identity_source_tenant(&mut value);
+        }
+        if found <= 18 {
+            migrate_v19_document_type_replacements(&mut value);
         }
         if migrated {
             value["schema_version"] = serde_json::Value::from(SCHEMA_VERSION);
@@ -623,6 +631,7 @@ impl Workspace {
                 return Err(DmsError::InvalidReviewInterval);
             }
         }
+        self.validate_document_type_migrations()?;
         self.validate_policies()?;
         self.validate_lifecycle_records()?;
         Ok(())
@@ -1069,6 +1078,23 @@ fn migrate_v17_identity_source_tenant(value: &mut serde_json::Value) {
     source
         .entry("tenant_id".to_owned())
         .or_insert(serde_json::Value::Null);
+}
+
+fn migrate_v19_document_type_replacements(value: &mut serde_json::Value) {
+    let Some(document_types) = value
+        .get_mut("document_types")
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return;
+    };
+    for document_type in document_types.values_mut() {
+        let Some(document_type) = document_type.as_object_mut() else {
+            continue;
+        };
+        document_type
+            .entry("replacement_type_id".to_owned())
+            .or_insert(serde_json::Value::Null);
+    }
 }
 
 fn migrate_v11_release_bound_control(value: &mut serde_json::Value) {

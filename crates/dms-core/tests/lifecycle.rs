@@ -1932,6 +1932,120 @@ fn approved_candidate_is_invalidated_by_control_or_source_changes() {
 }
 
 #[test]
+fn document_type_migration_invalidates_existing_candidates_and_snapshots_future_releases() {
+    let mut fixture = Fixture::new(
+        "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal\n",
+        NotificationTransport::Smtp,
+    );
+    fixture
+        .workspace
+        .configure_document_type("policy", "Policy", true)
+        .expect("replacement document type");
+    let mut graph = fixture.graph();
+    let mut review_notifier = FakeNotifier::accepted();
+    fixture
+        .workspace
+        .submit_candidate(
+            fixture.candidate_request(TargetSelection::NextMajor),
+            &mut graph,
+            &mut review_notifier,
+            &fixture.editor_principal(),
+        )
+        .expect("source-type candidate");
+    assert_eq!(
+        fixture.workspace.candidates(fixture.document_id).unwrap()[0]
+            .metadata
+            .control
+            .document_type
+            .as_deref(),
+        Some("procedure")
+    );
+
+    fixture
+        .workspace
+        .migrate_document_type("procedure", "policy")
+        .expect("document type migration");
+    assert_eq!(
+        fixture.workspace.candidates(fixture.document_id).unwrap()[0].status,
+        CandidateStatus::Invalidated
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .document(fixture.document_id)
+            .unwrap()
+            .control
+            .document_type
+            .as_deref(),
+        Some("procedure")
+    );
+
+    let mut replacement_notifier = FakeNotifier::accepted();
+    fixture
+        .workspace
+        .submit_candidate(
+            fixture.candidate_request(TargetSelection::NextMajor),
+            &mut graph,
+            &mut replacement_notifier,
+            &fixture.editor_principal(),
+        )
+        .expect("replacement-type candidate");
+    assert_eq!(
+        fixture
+            .workspace
+            .active_candidate(fixture.document_id)
+            .expect("active candidate")
+            .expect("replacement candidate")
+            .metadata
+            .control
+            .document_type
+            .as_deref(),
+        Some("policy")
+    );
+    let mut decision_notifier = FakeNotifier::accepted();
+    fixture
+        .workspace
+        .decide_review(
+            fixture.document_id,
+            ReviewDecision::Approved,
+            None,
+            &mut graph,
+            &mut decision_notifier,
+            &fixture.approver_principal(),
+        )
+        .expect("approval");
+    let mut exporter = FakeExporter::successful();
+    fixture
+        .workspace
+        .release_candidate(
+            fixture.document_id,
+            None,
+            &mut graph,
+            &mut decision_notifier,
+            &mut exporter,
+            &fixture.editor_principal(),
+        )
+        .expect("release");
+    assert_eq!(
+        fixture.workspace.releases(fixture.document_id).unwrap()[0]
+            .control
+            .as_ref()
+            .and_then(|control| control.document_type.as_deref()),
+        Some("policy")
+    );
+    assert_eq!(
+        fixture
+            .workspace
+            .document(fixture.document_id)
+            .unwrap()
+            .control
+            .document_type
+            .as_deref(),
+        Some("procedure")
+    );
+}
+
+#[test]
 fn marker_scanners_ignore_non_rendered_markdown_scan_docx_surfaces_and_fail_closed() {
     let temp = tempfile::tempdir().unwrap();
     let markdown = temp.path().join("policy.md");

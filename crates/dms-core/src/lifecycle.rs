@@ -674,6 +674,9 @@ impl Workspace {
         let confidentiality = self.release_confidentiality(request.document_id)?;
         let roles = self.effective_workflow_roles(request.document_id)?;
         let mut control = document.control.clone();
+        if let Some(type_id) = control.document_type.as_deref() {
+            control.document_type = Some(self.release_document_type(type_id)?.id.clone());
+        }
         if let Some(owner) = staged_owner {
             control.owner = Some(owner);
             control.legacy_owner_label = None;
@@ -2013,6 +2016,9 @@ impl Workspace {
     ) -> Result<()> {
         let document = self.document(document_id)?;
         let mut control = document.control.clone();
+        if let Some(type_id) = control.document_type.as_deref() {
+            control.document_type = Some(self.release_document_type(type_id)?.id.clone());
+        }
         if let Some(owner) = candidate.staged_owner {
             self.require_eligible_owner(owner)?;
             control.owner = Some(owner);

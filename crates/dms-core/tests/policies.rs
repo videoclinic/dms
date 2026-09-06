@@ -173,6 +173,139 @@ fn document_type_catalogue_is_persisted_and_controls_document_values() {
 }
 
 #[test]
+fn document_type_migration_retains_current_control_and_preserves_catalogue_references() {
+    let (_temp, mut workspace) = initialized_workspace();
+    workspace
+        .configure_document_type("procedure", "Procedure", true)
+        .expect("source type");
+    workspace
+        .configure_document_type("policy", "Policy", true)
+        .expect("replacement type");
+    workspace
+        .configure_document_type("retired", "Retired", false)
+        .expect("disabled type");
+    fs::write(workspace.edit_root.join("Handbook.md"), "# Handbook").expect("source");
+    let document = workspace
+        .add_document(Path::new("Handbook.md"))
+        .expect("document");
+    workspace
+        .update_control(
+            document.id,
+            ControlUpdate {
+                document_type: Some(Some("procedure".to_owned())),
+                ..ControlUpdate::default()
+            },
+            &dms_core::MutationPrincipal::local_os_user("test-operator"),
+        )
+        .expect("document control");
+    let source_before_migration = fs::read_to_string(workspace.edit_root.join("Handbook.md"))
+        .expect("source before migration");
+
+    let migrated = workspace
+        .migrate_document_type("procedure", "policy")
+        .expect("document type migration");
+    assert_eq!(migrated.replacement_type_id.as_deref(), Some("policy"));
+    assert_eq!(
+        workspace
+            .document(document.id)
+            .expect("document")
+            .control
+            .document_type
+            .as_deref(),
+        Some("procedure")
+    );
+    assert_eq!(
+        fs::read_to_string(workspace.edit_root.join("Handbook.md"))
+            .expect("source after migration"),
+        source_before_migration
+    );
+    assert_eq!(
+        workspace
+            .configure_document_type("procedure", "Procedure", true)
+            .expect("rename source")
+            .replacement_type_id
+            .as_deref(),
+        Some("policy")
+    );
+    assert!(matches!(
+        workspace.configure_document_type("procedure", "Procedure", false),
+        Err(DmsError::DocumentTypeInUse(value)) if value == "procedure"
+    ));
+    assert!(matches!(
+        workspace.configure_document_type("policy", "Policy", false),
+        Err(DmsError::DocumentTypeInUse(value)) if value == "policy"
+    ));
+    assert!(matches!(
+        workspace.migrate_document_type("missing", "policy"),
+        Err(DmsError::UnknownDocumentType(value)) if value == "missing"
+    ));
+    assert!(matches!(
+        workspace.migrate_document_type("procedure", "retired"),
+        Err(DmsError::DisabledDocumentType(value)) if value == "retired"
+    ));
+    assert!(matches!(
+        workspace.migrate_document_type("procedure", "procedure"),
+        Err(DmsError::InvalidDocumentTypeMigration { .. })
+    ));
+    assert!(matches!(
+        workspace.migrate_document_type("policy", "procedure"),
+        Err(DmsError::InvalidDocumentTypeMigration { .. })
+    ));
+
+    workspace.save().expect("persist migration");
+    let reopened = Workspace::open(&workspace.edit_root).expect("reopen workspace");
+    assert_eq!(
+        reopened
+            .document_types()
+            .into_iter()
+            .find(|configured| configured.id == "procedure")
+            .expect("source type")
+            .replacement_type_id
+            .as_deref(),
+        Some("policy")
+    );
+}
+
+#[test]
+fn schema_v18_migrates_document_type_replacements_with_a_backup() {
+    let (_temp, mut workspace) = initialized_workspace();
+    workspace
+        .configure_document_type("procedure", "Procedure", true)
+        .expect("document type");
+    workspace.save().expect("workspace metadata");
+    let metadata_path = workspace.edit_root.join(".dms/workspace.json");
+    let mut metadata: Value = serde_json::from_slice(&fs::read(&metadata_path).expect("metadata"))
+        .expect("metadata JSON");
+    metadata["schema_version"] = Value::from(18);
+    metadata["document_types"]["procedure"]
+        .as_object_mut()
+        .expect("document type")
+        .remove("replacement_type_id");
+    fs::write(
+        &metadata_path,
+        serde_json::to_vec_pretty(&metadata).expect("metadata serialization"),
+    )
+    .expect("v18 metadata");
+
+    let migrated = Workspace::open(&workspace.edit_root).expect("migrated workspace");
+    assert_eq!(migrated.schema_version, SCHEMA_VERSION);
+    assert!(migrated
+        .document_types()
+        .iter()
+        .all(|configured| configured.replacement_type_id.is_none()));
+    assert!(workspace
+        .edit_root
+        .join(".dms/workspace.v18.json.bak")
+        .is_file());
+    let current: Value =
+        serde_json::from_slice(&fs::read(&metadata_path).expect("migrated metadata"))
+            .expect("migrated metadata JSON");
+    assert!(current["document_types"]["procedure"]
+        .get("replacement_type_id")
+        .is_some_and(Value::is_null));
+}
+
+#[test]
 fn policy_folder_tree_contains_root_and_empty_folders_but_not_metadata() {
     let (_temp, workspace) = initialized_workspace();
     fs::create_dir_all(workspace.edit_root.join("policies/HR/empty")).expect("empty folder");
