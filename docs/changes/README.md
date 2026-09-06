@@ -25,7 +25,6 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 | [CHG-0041](active/CHG-0041-library-batch-execution-activity.md) | Library batch execution activity | pending | CAP-0005, CAP-0006 |
 | [CHG-0042](active/CHG-0042-publish-root-released-document-index.md) | Publish-root released-document index | pending | CAP-0005, CAP-0016 |
 | [CHG-0024](active/CHG-0024-windows-nsis-installer-release.md) | Windows NSIS installer and signed GitHub Release | in-progress | CAP-0005 |
-| [CHG-0025](active/CHG-0025-windows-entra-deployment-policy.md) | Windows Entra deployment policy | in-progress | CAP-0021 |
 | [CHG-0045](active/CHG-0045-operator-library-name.md) | Operator-defined library name | pending | CAP-0001, CAP-0005 |
 
 
@@ -33,6 +32,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
+| [CHG-0025](archive/CHG-0025-windows-entra-deployment-policy.md) | Windows Entra deployment policy | done | CAP-0021 |
 | [CHG-0049](archive/CHG-0049-visible-selection-pane-action-feedback.md) | Visible selection-pane action feedback | done | CAP-0002, CAP-0006, CAP-0015 |
 | [CHG-0048](archive/CHG-0048-candidate-submission-outcome-feedback.md) | Candidate submission outcome feedback | done | CAP-0002, CAP-0006, CAP-0015 |
 | [CHG-0047](archive/CHG-0047-candidate-approver-route-and-validation-feedback.md) | Candidate approver route and validation feedback | done | CAP-0002, CAP-0006, CAP-0015 |
