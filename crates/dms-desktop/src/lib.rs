@@ -4625,7 +4625,7 @@ mod tests {
         clear_group_bound_sessions(&state).unwrap();
         assert!(state.group_bound_sessions.lock().unwrap().is_empty());
 
-        let source = include_str!("lib.rs");
+        let source = include_str!("lib.rs").replace("\r\n", "\n");
         assert!(source.contains("clear_group_bound_sessions(&state)?;\n    Ok(effective)"));
         assert!(source.contains("clear_group_bound_sessions(&state)?;\n    Ok(configuration)"));
     }
