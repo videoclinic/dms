@@ -4,9 +4,11 @@ import { readFileSync } from "node:fs";
 
 import {
   activityKey,
+  applyLibrarySort,
   applyNotesLibraryRestoration,
   applyPermalinkDocumentSelection,
   beginFormSubmission,
+  bookmarkActivity,
   closeActivity,
   closeWorkspaceSession,
   createInitialState,
@@ -22,6 +24,7 @@ import {
   refreshLibrarySnapshot,
   rememberRecentLibrary,
   removeRecentLibrary,
+  resetLibraryTableLayout,
   savedViewId,
   setupMarkup,
   librarySwitcherMarkup,
@@ -635,7 +638,52 @@ test("preferences start expanded and persist no session activities", () => {
   assert.equal(state.preferences.sidebar_expanded, true);
   assert.deepEqual(state.preferences.saved_views, []);
   assert.deepEqual(state.preferences.recent_libraries, []);
+  assert.deepEqual(state.preferences.library_table_column_widths, {});
   assert.deepEqual(state.activities, []);
+});
+
+test("Library width preferences hydrate across sessions and reset only that personal layout", () => {
+  const preferences = {
+    ...defaultPreferences(),
+    sidebar_expanded: false,
+    saved_views: [{ id: "saved", workspace_id: workspaceId }],
+    recent_libraries: ["/DMS/Edit"],
+    library_table_column_widths: { "col-name": 260, unknown: 999 },
+  };
+  let state = createInitialState(preferences);
+  state = {
+    ...state,
+    library: applyLibrarySort({ ...state.library, detail_width: 512 }, "title", "descending"),
+  };
+  const activity = {
+    workspace_id: workspaceId,
+    destination: "Library",
+    task: "Library",
+    label: "Library · Policies",
+    document_id: null,
+    route_state: { folder: "Policies" },
+  };
+  state = openActivity(state, activity);
+
+  assert.deepEqual(state.preferences.library_table_column_widths, { "col-name": 260 });
+  assert.deepEqual(state.library.column_widths, { "col-name": 260 });
+  assert.equal(bookmarkActivity(state).route_state.sort_direction, "descending");
+  assert.equal(
+    savedViewId({ ...activity, route_state: { folder: "Policies", sort: "title", sort_direction: "ascending" } }),
+    `${workspaceId}:saved:Library:Policies:title:none`,
+  );
+  assert.notEqual(
+    savedViewId({ ...activity, route_state: { folder: "Policies", sort: "title", sort_direction: "ascending" } }),
+    savedViewId({ ...activity, route_state: { folder: "Policies", sort: "title", sort_direction: "descending" } }),
+  );
+
+  state = resetLibraryTableLayout(state);
+  assert.deepEqual(state.preferences.library_table_column_widths, {});
+  assert.deepEqual(state.library.column_widths, {});
+  assert.equal(state.library.detail_width, 512);
+  assert.equal(state.preferences.sidebar_expanded, false);
+  assert.deepEqual(state.preferences.saved_views, preferences.saved_views);
+  assert.deepEqual(state.preferences.recent_libraries, preferences.recent_libraries);
 });
 
 test("the expanded sidebar identifies the local author recorded for workspace changes", () => {

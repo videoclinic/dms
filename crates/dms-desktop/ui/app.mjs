@@ -13,6 +13,9 @@ import {
   libraryOpenRequest,
   membershipKind,
   normalizeLibraryPath,
+  normalizeLibrarySortDirection,
+  normalizeLibraryTableColumnWidths,
+  resetLibraryTableColumnWidths,
   resizeLibraryDetailWidth,
   resizeLibraryTreeWidth,
   selectedEntries,
@@ -146,7 +149,12 @@ function candidateSuccessNotice(lifecycleAction, detail) {
 }
 
 export function defaultPreferences() {
-  return { sidebar_expanded: true, saved_views: [], recent_libraries: [] };
+  return {
+    sidebar_expanded: true,
+    saved_views: [],
+    recent_libraries: [],
+    library_table_column_widths: {},
+  };
 }
 
 function normalizedRecentLibraries(paths) {
@@ -176,16 +184,20 @@ export function removeRecentLibrary(preferences, editRoot) {
 }
 
 export function createInitialState(preferences = defaultPreferences()) {
+  const libraryTableColumnWidths = normalizeLibraryTableColumnWidths(
+    preferences.library_table_column_widths,
+  );
   return {
     preferences: {
       sidebar_expanded: preferences.sidebar_expanded !== false,
       saved_views: Array.isArray(preferences.saved_views) ? preferences.saved_views : [],
       recent_libraries: normalizedRecentLibraries(preferences.recent_libraries),
+      library_table_column_widths: libraryTableColumnWidths,
     },
     activities: [],
     current_key: null,
     workspace: null,
-    library: createLibraryState(),
+    library: createLibraryState(libraryTableColumnWidths),
     note_documents: {},
     assistance_documents: {},
     assistance_policy: { value: null, error: "" },
@@ -232,8 +244,27 @@ export function savedViewId(activity) {
   if (activity.task !== "Library") return activityKey(activity);
   const folder = normalizedFolder(activity.route_state?.folder);
   const sort = activity.route_state?.sort ?? "name";
+  const sortDirection = normalizeLibrarySortDirection(activity.route_state?.sort_direction);
   const document = activity.document_id ?? "none";
-  return `${activity.workspace_id}:saved:Library:${folder}:${sort}:${document}`;
+  const base = `${activity.workspace_id}:saved:Library:${folder}:${sort}`;
+  return sortDirection === "descending" ? `${base}:descending:${document}` : `${base}:${document}`;
+}
+
+export function applyLibrarySort(library, sort, direction = library.sort_direction) {
+  return {
+    ...library,
+    sort,
+    sort_direction: normalizeLibrarySortDirection(direction),
+    page: 0,
+  };
+}
+
+export function resetLibraryTableLayout(state) {
+  return {
+    ...state,
+    preferences: { ...state.preferences, library_table_column_widths: {} },
+    library: resetLibraryTableColumnWidths(state.library),
+  };
 }
 
 export function openActivity(state, activity) {
@@ -555,7 +586,7 @@ function currentActivity(state) {
   return state.activities.find((activity) => activity.key === state.current_key) ?? null;
 }
 
-function bookmarkActivity(state) {
+export function bookmarkActivity(state) {
   const activity = currentActivity(state);
   if (!activity || activity.task !== "Library") return activity;
   const selected = selectedEntries(state.library);
@@ -569,6 +600,7 @@ function bookmarkActivity(state) {
       ...activity.route_state,
       folder: normalizeLibraryPath(state.library.folder.relative_path),
       sort: state.library.sort,
+      sort_direction: state.library.sort_direction,
     },
   };
 }
@@ -1088,6 +1120,7 @@ function activityMarkup(state, activity) {
         ? state.configuration
         : setConfigurationRoute(state.configuration, route),
       state.assistance_policy,
+      state.preferences,
     );
   }
   return `<section class="card"><span class="badge">${escapeHtml(activity.destination)}</span><h2>${escapeHtml(activity.label)}</h2><p>The desktop shell is connected to the shared Rust core. Domain workflows beyond the phase-1 shell remain unavailable until their CHG phases are implemented.</p><dl class="details-grid"><dt>Workspace ID</dt><dd>${escapeHtml(workspace.workspace_id)}</dd><dt>Edit root</dt><dd>${escapeHtml(workspace.edit_root)}</dd><dt>Publish root</dt><dd>${escapeHtml(workspace.publish_root)}</dd><dt>Controlled documents</dt><dd>${escapeHtml(workspace.document_count)}</dd></dl></section>`;
@@ -1444,7 +1477,12 @@ function updateLibraryActivity(folder) {
     ...activity,
     label: normalized === "." ? "Library · /" : `Library · ${normalized}`,
     document_id: null,
-    route_state: { ...activity.route_state, folder: normalized, sort: appState.library.sort },
+    route_state: {
+      ...activity.route_state,
+      folder: normalized,
+      sort: appState.library.sort,
+      sort_direction: appState.library.sort_direction,
+    },
   });
 }
 
@@ -2373,6 +2411,28 @@ async function handleClick(event) {
     return;
   }
 
+  if (event.target.closest("[data-library-table-layout-reset]")) {
+    const resetState = resetLibraryTableLayout(appState);
+    try {
+      await invokeCommand("save_preferences", { preferences: resetState.preferences });
+      appState = {
+        ...resetState,
+        configuration: {
+          ...resetState.configuration,
+          notice: "Library table layout reset to default widths for this OS user.",
+          error: "",
+        },
+      };
+    } catch (error) {
+      appState = {
+        ...appState,
+        configuration: { ...appState.configuration, notice: "", error: String(error) },
+      };
+    }
+    render(appState);
+    return;
+  }
+
   const configurationSecondary = event.target.closest("[data-configuration-secondary]")?.dataset.configurationSecondary;
   if (configurationSecondary) {
     try {
@@ -2612,7 +2672,11 @@ async function handleClick(event) {
       } else if (view.destination === "Library") {
         appState = {
           ...appState,
-          library: { ...appState.library, sort: view.route_state?.sort ?? "name" },
+          library: applyLibrarySort(
+            appState.library,
+            view.route_state?.sort ?? "name",
+            view.route_state?.sort_direction,
+          ),
         };
         void loadLibraryFolder(
           view.route_state?.folder ?? ".",
@@ -3181,8 +3245,13 @@ function handleChange(event) {
     render(appState);
     return;
   }
-  if (!event.target.matches("[data-library-sort]")) return;
-  appState = { ...appState, library: { ...appState.library, sort: event.target.value, page: 0 } };
+  if (!event.target.matches("[data-library-sort], [data-library-sort-direction]")) return;
+  appState = {
+    ...appState,
+    library: event.target.matches("[data-library-sort]")
+      ? applyLibrarySort(appState.library, event.target.value)
+      : applyLibrarySort(appState.library, appState.library.sort, event.target.value),
+  };
   updateLibraryActivity(appState.library.folder.relative_path);
   render(appState);
 }
@@ -3365,6 +3434,14 @@ function finishLibraryResize(event) {
       ...appState,
       library: setColumnWidth(appState.library, colResize.colKey, finalWidth),
     };
+    appState = {
+      ...appState,
+      preferences: {
+        ...appState.preferences,
+        library_table_column_widths: appState.library.column_widths,
+      },
+    };
+    void persistPreferences(appState);
     colResize = null;
     return;
   }

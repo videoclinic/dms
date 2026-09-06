@@ -9,12 +9,12 @@ DMS Desktop will let an operator reverse the Library table’s existing sort ord
 **Entry checkpoint:** CHG-0022 is archived with session-only table resizing evidence.
 **Context sources:** `AGENTS.md` (Architectural decisions, Application records); `docs/AGENTS.md` (Local Contracts, Work Guidance); `docs/changes/AGENTS.md`; `docs/product/AGENTS.md`; `docs/product/wireframes/AGENTS.md`; `docs/product/capabilities/CAP-0005-desktop-shell.md` (Outcomes 13, 17); `docs/product/capabilities/CAP-0006-library-explorer.md` (Outcomes 2, 9–10, 14); `docs/changes/archive/CHG-0022-library-table-workflow-columns.md`; `crates/AGENTS.md`; `crates/dms-desktop/AGENTS.md`; `crates/dms-desktop/src/lib.rs` (`Preferences`, `load_preferences_at`, `save_preferences_at`, `normalize_preferences`); `crates/dms-desktop/ui/app.mjs` (`defaultPreferences`, `createInitialState`, `persistPreferences`, `updateLibraryActivity`, Library sort and column-resize handlers); `crates/dms-desktop/ui/library.mjs` (`createLibraryState`, `sortLibraryEntries`, `LIBRARY_COLUMNS`, `setColumnWidth`, `libraryMarkup`); `crates/dms-desktop/ui/configuration.mjs` (`workspaceMarkup`); `crates/dms-desktop/ui/*.test.mjs`; `docs/product/wireframes/generate.mjs`
 **Produces:** Every Library table supports ascending and descending order for its existing sort keys while folders remain before files; all eight table-column widths are one OS-user preference shared by every library and restored after relaunch; Configuration can reset those widths to defaults without touching `.dms`, saved views, sidebar preferences, pane widths, or session state.
-**Status:** pending — queued after P0700; implementation has not begun.
+**Status:** in-progress — Phase 1 complete; Phase 2 pending its commit checkpoint.
 
 | Field | Value |
 | --- | --- |
 | ID | CHG-0039 |
-| Status | pending |
+| Status | in-progress |
 | External request | Direct operator request: "The table view of the directory content, the documents and folders, should allow switching sort order. If the user changes the width of an column, this width should not be changed and kept fix. this confiugration is user specific not library specific. within the configuration a ability to reset the \"layout\" could be implemented" |
 | Affected CAPs | CAP-0005, CAP-0006 |
 | Decision records | No new ADR. This extends the established OS-user preference boundary and keeps controlled workspace metadata unchanged. |
@@ -38,7 +38,7 @@ The persisted preference file is user-controlled and may come from an earlier ve
 
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
-| 1 | Implement direction switching and user-scoped table-width persistence | pending | `cargo test -p dms-desktop` and `node --test crates/dms-desktop/ui/app.test.mjs crates/dms-desktop/ui/library.test.mjs crates/dms-desktop/ui/configuration.test.mjs` exit 0 with ascending/descending ordering, folders-first ordering, preference round-trip, relaunch hydration, cross-library width reuse, and reset coverage. |
+| 1 | Implement direction switching and user-scoped table-width persistence | done (`cargo test -p dms-desktop` — 91 passed; `node --test crates/dms-desktop/ui/app.test.mjs crates/dms-desktop/ui/library.test.mjs crates/dms-desktop/ui/configuration.test.mjs` — 117 passed; `cargo fmt --all -- --check` + `git diff --check` exit 0) | `cargo test -p dms-desktop` and `node --test crates/dms-desktop/ui/app.test.mjs crates/dms-desktop/ui/library.test.mjs crates/dms-desktop/ui/configuration.test.mjs` exit 0 with ascending/descending ordering, folders-first ordering, preference round-trip, relaunch hydration, cross-library width reuse, and reset coverage. |
 | 2 | Publish Library and shell contracts, wireframes, and completion evidence | pending | `node docs/product/wireframes/generate.mjs`, the CAP-0005 and CAP-0006 PNG render commands, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `node --test crates/dms-desktop/ui/*.test.mjs`, and `git diff --check` exit 0; CAP/CHG indexes and DOX contracts agree. |
 
 Mark a phase `in-progress` while running it, `done (<evidence>)` once its gate passes, and `pending` otherwise.

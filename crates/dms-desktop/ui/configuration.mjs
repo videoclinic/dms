@@ -137,9 +137,10 @@ function routeNavigation(route) {
   }).join("")}</nav></section>`;
 }
 
-function workspaceMarkup(snapshot, assistancePolicy) {
+function workspaceMarkup(snapshot, assistancePolicy, preferences = {}) {
   const workspace = snapshot.workspace;
-  return `<div class="configuration-grid"><section class="card configuration-card"><span class="badge">Workspace</span><h2>Local workspace</h2><p>These roots and the stable workspace identity come from <code>.dms</code>.</p><dl class="details-grid"><dt>Workspace ID</dt><dd>${escapeHtml(workspace.workspace_id)}</dd><dt>Edit root</dt><dd>${escapeHtml(workspace.edit_root)}</dd><dt>Publish root</dt><dd>${escapeHtml(workspace.publish_root)}</dd><dt>Controlled documents</dt><dd>${escapeHtml(workspace.document_count)}</dd></dl><form class="configuration-form" data-configuration-form="review-interval"><label>Default review interval (months)<input name="months" type="number" min="1" required value="${escapeHtml(snapshot.default_review_interval_months)}"></label><button class="button" type="submit">Save review interval</button></form></section>${assistancePolicyMarkup(assistancePolicy)}</div>`;
+  const configuredWidths = Object.keys(preferences.library_table_column_widths ?? {}).length;
+  return `<div class="configuration-grid"><section class="card configuration-card"><span class="badge">Workspace</span><h2>Local workspace</h2><p>These roots and the stable workspace identity come from <code>.dms</code>.</p><dl class="details-grid"><dt>Workspace ID</dt><dd>${escapeHtml(workspace.workspace_id)}</dd><dt>Edit root</dt><dd>${escapeHtml(workspace.edit_root)}</dd><dt>Publish root</dt><dd>${escapeHtml(workspace.publish_root)}</dd><dt>Controlled documents</dt><dd>${escapeHtml(workspace.document_count)}</dd></dl><form class="configuration-form" data-configuration-form="review-interval"><label>Default review interval (months)<input name="months" type="number" min="1" required value="${escapeHtml(snapshot.default_review_interval_months)}"></label><button class="button" type="submit">Save review interval</button></form></section><section class="card configuration-card"><span class="badge">Personal Library table layout</span><h3>Table column widths</h3><p>${configuredWidths ? `${configuredWidths} custom column ${configuredWidths === 1 ? "width is" : "widths are"} shared across your libraries.` : "Default column widths are in use for every library you open."}</p><p>Resetting restores only the eight Library table column widths for this OS user. It does not change workspace metadata, saved views, sidebar, pane widths, or session state.</p><button class="button secondary" type="button" data-library-table-layout-reset>Reset Library table layout</button></section>${assistancePolicyMarkup(assistancePolicy)}</div>`;
 }
 
 function policyFolderLabel(folder) {
@@ -416,7 +417,7 @@ function unavailableRouteMarkup(route) {
   return `<section class="card configuration-card"><span class="badge">Unavailable</span><h2>${escapeHtml(label)}</h2><p>This configuration route is not available in this build.</p></section>`;
 }
 
-export function configurationMarkup(state, assistancePolicy) {
+export function configurationMarkup(state, assistancePolicy, preferences = {}) {
   const navigation = routeNavigation(state.route);
   if (!state.snapshot) {
     return `${navigation}<section class="card configuration-card"><p>${escapeHtml(state.error || "Loading workspace configuration…")}</p></section>`;
@@ -431,7 +432,7 @@ export function configurationMarkup(state, assistancePolicy) {
     : state.secondary === "confidentiality-types"
       ? confidentialityTypesMarkup(state)
       : state.route === "workspace"
-        ? workspaceMarkup(state.snapshot, assistancePolicy)
+        ? workspaceMarkup(state.snapshot, assistancePolicy, preferences)
         : state.route === "document-defaults"
           ? documentDefaultsMarkup(state)
           : state.route === "workflow"

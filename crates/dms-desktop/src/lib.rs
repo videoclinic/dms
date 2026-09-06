@@ -23,7 +23,7 @@ use dms_core::{
     METADATA_DIRECTORY,
 };
 use lettre::message::Mailbox;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::DialogExt;
@@ -167,6 +167,8 @@ pub struct Preferences {
     pub saved_views: Vec<SavedView>,
     #[serde(default)]
     pub recent_libraries: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_library_table_column_widths")]
+    pub library_table_column_widths: BTreeMap<String, u32>,
 }
 
 impl Default for Preferences {
@@ -175,6 +177,7 @@ impl Default for Preferences {
             sidebar_expanded: true,
             saved_views: Vec::new(),
             recent_libraries: Vec::new(),
+            library_table_column_widths: BTreeMap::new(),
         }
     }
 }
@@ -3136,7 +3139,49 @@ fn normalize_preferences(mut preferences: Preferences) -> Preferences {
         .filter(|path| !path.is_empty() && seen.insert(path.clone()))
         .take(RECENT_LIBRARIES_LIMIT)
         .collect();
+    preferences.library_table_column_widths = preferences
+        .library_table_column_widths
+        .into_iter()
+        .filter(|(key, width)| {
+            library_table_column_minimum_width(key)
+                .is_some_and(|minimum_width| *width >= minimum_width)
+        })
+        .collect();
     preferences
+}
+
+fn library_table_column_minimum_width(key: &str) -> Option<u32> {
+    match key {
+        "col-name"
+        | "col-title"
+        | "col-lib-state"
+        | "col-next-review"
+        | "col-editor"
+        | "col-approver"
+        | "col-confidentiality" => Some(80),
+        "col-lifecycle" => Some(70),
+        _ => None,
+    }
+}
+
+fn deserialize_library_table_column_widths<'de, D>(
+    deserializer: D,
+) -> Result<BTreeMap<String, u32>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(value
+        .as_object()
+        .into_iter()
+        .flat_map(|entries| entries.iter())
+        .filter_map(|(key, value)| {
+            value
+                .as_u64()
+                .and_then(|width| u32::try_from(width).ok())
+                .map(|width| (key.clone(), width))
+        })
+        .collect())
 }
 
 fn resolve_registered_permalink_from(
@@ -4933,6 +4978,7 @@ mod tests {
         let preferences = Preferences {
             sidebar_expanded: false,
             recent_libraries: vec!["/Users/name/DMS/Edit".into()],
+            library_table_column_widths: [("col-name".into(), 260)].into_iter().collect(),
             saved_views: vec![SavedView {
                 id: "ws-1:Library".into(),
                 workspace_id: "ws-1".into(),
@@ -4961,6 +5007,7 @@ mod tests {
             sidebar_expanded: true,
             saved_views: Vec::new(),
             recent_libraries,
+            library_table_column_widths: BTreeMap::new(),
         };
 
         save_preferences_at(&path, &preferences).unwrap();
@@ -4981,6 +5028,25 @@ mod tests {
 
         assert!(!loaded.sidebar_expanded);
         assert!(loaded.recent_libraries.is_empty());
+    }
+
+    #[test]
+    fn preferences_normalize_library_table_widths_and_keep_legacy_files_readable() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("preferences.json");
+        fs::write(
+            &path,
+            r#"{"sidebar_expanded":false,"saved_views":[],"library_table_column_widths":{"col-name":260,"col-lifecycle":69,"col-title":"bad","unknown":999}}"#,
+        )
+        .unwrap();
+
+        let loaded = load_preferences_at(&path).unwrap();
+
+        assert!(!loaded.sidebar_expanded);
+        assert_eq!(
+            loaded.library_table_column_widths,
+            [("col-name".to_owned(), 260)].into_iter().collect()
+        );
     }
 
     #[test]

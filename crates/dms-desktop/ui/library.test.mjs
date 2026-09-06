@@ -24,6 +24,7 @@ import {
   libraryOpenRequest,
   membershipKind,
   normalizeLibraryPath,
+  normalizeLibraryTableColumnWidths,
   paginateLibraryEntries,
   previewTargetVersions,
   resizeLibraryDetailWidth,
@@ -32,7 +33,9 @@ import {
   reviewScheduleIsDirty,
   selectedEntries,
   setSelectionSectionOpen,
+  setColumnWidth,
   selectionSectionOpen,
+  resetLibraryTableColumnWidths,
   sortLibraryEntries,
   toggleLibraryPaneFold,
   toggleLibrarySelection,
@@ -358,6 +361,37 @@ test("registered membership keeps the stable document ID and supports control-da
     "Access.md",
     "Handbook.md",
   ]);
+});
+
+test("Library sort direction reverses values within folders and files without mixing groups", () => {
+  const entries = [
+    { name: "Alpha", relative_path: "Alpha", kind: "folder" },
+    { name: "Bravo", relative_path: "Bravo", kind: "folder" },
+    file("Alpha.md", "not_in_library", { control: { title: "Same" } }),
+    file("Bravo.md", "not_in_library", { control: { title: "Same" } }),
+  ];
+  const library = { ...createLibraryState(), sort: "title", sort_direction: "descending" };
+
+  assert.deepEqual(
+    sortLibraryEntries(entries, library.sort, library.sort_direction).map((entry) => entry.name),
+    ["Bravo", "Alpha", "Bravo.md", "Alpha.md"],
+  );
+  assert.match(
+    libraryMarkup({ edit_root: "/srv/Edit", workspace_id: "ws-1" }, { route_state: { folder: "." } }, library),
+    /data-library-sort-direction[^>]*><option value="ascending"[^>]*>Ascending<\/option><option value="descending" selected>Descending/,
+  );
+});
+
+test("Library table widths accept only known usable columns and reset without changing session layout", () => {
+  let library = createLibraryState({ "col-name": 260, "col-lifecycle": 69, unknown: 999 });
+  assert.deepEqual(library.column_widths, { "col-name": 260 });
+  assert.deepEqual(normalizeLibraryTableColumnWidths({ "col-title": 180, unknown: 999 }), { "col-title": 180 });
+
+  library = { ...setColumnWidth(library, "col-title", 205), detail_width: 512 };
+  assert.deepEqual(library.column_widths, { "col-name": 260, "col-title": 205 });
+  library = resetLibraryTableColumnWidths(library);
+  assert.deepEqual(library.column_widths, {});
+  assert.equal(library.detail_width, 512);
 });
 
 test("filter results paginate after sorting with only supported page sizes", () => {

@@ -805,3 +805,13 @@ test("configuration mutations map forms to narrow desktop commands", () => {
     },
   );
 });
+
+test("Workspace configuration scopes Library table layout reset to OS-user preferences", () => {
+  const state = applyConfigurationSnapshot(createConfigurationState(), snapshot);
+  const markup = configurationMarkup(state, assistancePolicy, { library_table_column_widths: { "col-name": 260 } });
+
+  assert.match(markup, /Personal Library table layout/);
+  assert.match(markup, /Reset Library table layout/);
+  assert.match(markup, /workspace metadata, saved views, sidebar, pane widths, or session state/);
+  assert.match(markup, /data-library-table-layout-reset/);
+});

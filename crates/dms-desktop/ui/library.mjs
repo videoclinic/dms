@@ -69,7 +69,7 @@ export function setSelectionSectionOpen(library, key, isOpen) {
   };
 }
 
-export function createLibraryState() {
+export function createLibraryState(columnWidths = {}) {
   return {
     tree: [],
     folder: { relative_path: ".", parent: null, entries: [] },
@@ -84,6 +84,8 @@ export function createLibraryState() {
     query: "",
     entire_library: false,
     sort: "name",
+    sort_direction: "ascending",
+    column_widths: normalizeLibraryTableColumnWidths(columnWidths),
     page_size: 25,
     page: 0,
     back: [],
@@ -755,7 +757,11 @@ export function breadcrumbSegments(path, rootLabel = "Library") {
   return segments;
 }
 
-export function sortLibraryEntries(entries, sort) {
+export function normalizeLibrarySortDirection(direction) {
+  return direction === "descending" ? "descending" : "ascending";
+}
+
+export function sortLibraryEntries(entries, sort, direction = "ascending") {
   const value = (entry) => {
     if (sort === "title") return entry.document?.control?.title ?? "";
     if (sort === "number") return entry.document?.control?.document_number ?? "";
@@ -764,7 +770,9 @@ export function sortLibraryEntries(entries, sort) {
   };
   return [...entries].sort((left, right) => {
     if (left.kind !== right.kind) return left.kind === "folder" ? -1 : 1;
-    return value(left).localeCompare(value(right), undefined, { sensitivity: "base", numeric: true });
+    const comparison = value(left).localeCompare(value(right), undefined, { sensitivity: "base", numeric: true })
+      || String(left.name ?? "").localeCompare(String(right.name ?? ""), undefined, { sensitivity: "base", numeric: true });
+    return normalizeLibrarySortDirection(direction) === "descending" ? -comparison : comparison;
   });
 }
 
@@ -863,7 +871,7 @@ function treeMarkup(tree, currentPath, expandedFolders) {
   return `<ul class="tree-root" role="tree">${buildFolderTree(tree).map((node) => nodeMarkup(node, 1)).join("")}</ul>`;
 }
 
-const LIBRARY_COLUMNS = [
+export const LIBRARY_COLUMNS = [
   { key: "col-name", label: "Name", defaultWidth: 220, minWidth: 80 },
   { key: "col-title", label: "Title", defaultWidth: 180, minWidth: 80 },
   { key: "col-lib-state", label: "Library state", defaultWidth: 130, minWidth: 80 },
@@ -874,6 +882,16 @@ const LIBRARY_COLUMNS = [
   { key: "col-confidentiality", label: "Confidentiality", defaultWidth: 130, minWidth: 80 },
 ];
 
+export function normalizeLibraryTableColumnWidths(widths) {
+  const values = widths && typeof widths === "object" ? widths : {};
+  return Object.fromEntries(LIBRARY_COLUMNS.flatMap((column) => {
+    const width = Number(values[column.key]);
+    return Number.isFinite(width) && width >= column.minWidth
+      ? [[column.key, Math.round(width)]]
+      : [];
+  }));
+}
+
 function libraryTableHeaders(library) {
   const widths = library.column_widths ?? {};
   return LIBRARY_COLUMNS.map((col) => {
@@ -883,14 +901,22 @@ function libraryTableHeaders(library) {
 }
 
 export function setColumnWidth(library, colKey, newWidth) {
-  const widths = { ...library.column_widths };
-  widths[colKey] = newWidth;
-  return { ...library, column_widths: widths };
+  return {
+    ...library,
+    column_widths: normalizeLibraryTableColumnWidths({
+      ...library.column_widths,
+      [colKey]: newWidth,
+    }),
+  };
+}
+
+export function resetLibraryTableColumnWidths(library) {
+  return { ...library, column_widths: {} };
 }
 
 function rowsMarkup(library, entries, emptyMessage) {
   const filteredEntries = filterLibraryEntries(entries, library);
-  const allEntries = sortLibraryEntries(filteredEntries, library.sort);
+  const allEntries = sortLibraryEntries(filteredEntries, library.sort, library.sort_direction);
   const page = paginateLibraryEntries(allEntries, library.page_size, library.page);
   const rows = page.entries.length === 0
     ? `<tr><td colspan="8" class="empty-table">${escapeHtml(entries.length > 0 ? "No entries match Show in folder." : emptyMessage)}</td></tr>`
@@ -1257,6 +1283,7 @@ export function libraryMarkup(workspace, activity, library, error = "") {
     .join(`<span class="breadcrumb-chevron">${libraryIcon("chevron_right")}</span>`);
   const searchScope = library.entire_library ? "Entire library" : "Current folder";
   const sortOptions = `<option value="name" ${library.sort === "name" ? "selected" : ""}>Name</option><option value="title" ${library.sort === "title" ? "selected" : ""}>Title</option><option value="number" ${library.sort === "number" ? "selected" : ""}>Document number</option><option value="lifecycle" ${library.sort === "lifecycle" ? "selected" : ""}>Lifecycle</option>`;
+  const sortDirectionOptions = `<option value="ascending" ${library.sort_direction === "ascending" ? "selected" : ""}>Ascending</option><option value="descending" ${library.sort_direction === "descending" ? "selected" : ""}>Descending</option>`;
   const entries = library.results ?? library.folder.entries ?? [];
   const visibleTotal = filterLibraryEntries(entries, library).length;
   const heading = library.results === null ? (folder === "." ? "Library root" : folder.split("/").at(-1)) : "Search results";
@@ -1300,7 +1327,7 @@ export function libraryMarkup(workspace, activity, library, error = "") {
         <label><input type="checkbox" name="entireLibrary" ${library.entire_library ? "checked" : ""}> Entire library</label>
         <button class="button secondary" type="submit">Search</button>
       </form>
-      <label class="sort-control">Sort <select data-library-sort>${sortOptions}</select></label>
+      <label class="sort-control">Sort by <select data-library-sort>${sortOptions}</select></label><label class="sort-control">Direction <select data-library-sort-direction>${sortDirectionOptions}</select></label>
     </div>
     ${error ? `<p class="library-error" role="alert">${escapeHtml(error)}</p>` : ""}
     <div class="library-grid${treeFolded ? " tree-folded" : ""}${detailFolded ? " detail-folded" : ""}">
