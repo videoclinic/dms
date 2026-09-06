@@ -1,0 +1,5 @@
+[advisories]
+# Tauri v2.11.5's Linux GTK3 stack requires glib ^0.18. Tauri closed
+# tauri-apps/tauri#12048 as not planned; GTK4 migration #7335 is still open.
+# Revisit when an upstream Tauri release moves this stack to glib >= 0.20.0.
+ignore = ["RUSTSEC-2024-0429"]
