@@ -104,7 +104,11 @@ macOS.
 - Keep open activities in frontend session state only.
 - Saved document targets use workspace ID + document ID, never source paths.
 - Library navigation keeps one session activity while saved Library views retain
-  edit-root-relative folder, sort, and at most one stable document target.
+  edit-root-relative folder, sort key and direction, and at most one stable
+  document target. The eight Library table column widths are one normalized
+  OS-user preference shared across libraries; Configuration → Workspace resets
+  only that width map, never `.dms`, saved views, sidebar state, pane widths, or
+  session state.
 - Render the Library folder surface as a nested tree with independent branch
   toggles. Navigating expands the current folder's ancestor chain without
   resetting unrelated session branch state. A folder row's primary click or

@@ -303,6 +303,7 @@ tr:last-child td { border-bottom: 0; }
           <div class="layer"><strong>Collapsed group flyouts</strong><p class="muted">Star and pane icons in the collapsed rail open only their Saved views or Open panes flyout; they do not expand the full left menu. Each flyout retains full labels plus open/remove or focus/close actions.</p></div>
           <div class="layer"><strong>Open activity panes/tabs</strong><p class="muted">Automatic, session-only quicklinks. Labels state task + target: Audit · HR Data Privacy Policy · DOC-014 for a document or Library · policies/HR for a folder. Opening the same task + document focuses its existing pane; × closes that activity only.</p></div>
           <div class="layer"><strong>Saved views</strong><p class="muted">Use ☆ Bookmark this view in the header. ★ Bookmarked is an explicit, per-user shortcut restored after relaunch; it is not a .dms workflow record.</p></div>
+          <div class="layer"><strong>Personal Library table layout</strong><p class="muted">Configuration → Workspace stores one OS-user width map shared by every Library. Reset Library table layout restores only its eight default widths; .dms, saved views, sidebar, pane widths, and session state stay unchanged.</p></div>
           <div class="layer"><strong>Viewport-contained scrolling</strong><p class="muted">The sidebar and activity header stay available. Normal activities scroll inside main content; multi-pane workspaces give navigation, lists, and exhaustive details separate scroll regions.</p></div>
           <div class="layer"><strong>Configuration → Document defaults</strong><p class="muted">One reusable Markdown Word template is chosen with the native .docx picker. Its exact edit-root-relative path and validation state stay visible with distinct Replace and confirmed Remove actions.</p></div>
           <div class="layer"><strong>Permalink handler</strong><p class="muted">OS-registered dms:// URI resolves workspace + document IDs (CAP-0020); opens/focuses matching activity tab.</p></div>
@@ -390,6 +391,13 @@ tr:last-child td { border-bottom: 0; }
           </div>
         </section>
       </div>
+      <section class="card">
+        <h3 class="card-title">Configuration · Workspace</h3>
+        <div class="grid-2">
+          <div><span class="badge">Personal Library table layout</span><h4 style="margin:0.55rem 0 0.25rem">Table column widths</h4><p class="hint">Eight custom widths are shared by every library opened by this OS user.</p></div>
+          <div><p class="hint">Reset restores only these widths. Workspace metadata, saved views, sidebar, pane widths, and session state are unchanged.</p><button class="btn outline">Reset Library table layout</button></div>
+        </div>
+      </section>
       <section class="card">
         <h3 class="card-title">Backend command surface</h3>
         <div class="tags">

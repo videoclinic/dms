@@ -59,6 +59,10 @@ When implemented, the following must hold:
     removal of the workspace's reusable Markdown Word-template asset. The picker
     accepts one `.docx` below the edit root; the surface shows its exact relative
     path and whether it currently satisfies CAP-0007's template contract.
+    Workspace also exposes **Personal Library table layout** for the current OS
+    user. **Reset Library table layout** restores only the eight shared Library
+    table column widths to their defaults; it never changes `.dms`, saved views,
+    sidebar state, pane widths, or session state.
     Before a workspace is open, the app exposes only **Set up workspace** for
     choosing the roots; workspace-bound routes are unavailable with an explicit
     explanation, never presented as empty or broken pages.
@@ -113,7 +117,8 @@ When implemented, the following must hold:
     action. Saved views appear in their own **Saved views** group above Open
     panes, use a star rather than the `×` close affordance, and persist across
     relaunch for that OS user. A saved-view target contains the stable workspace
-    ID, primary destination, and compatible route state; a document target uses
+    ID, primary destination, and compatible route state. A Library route retains
+    its folder plus sort key and direction; a document target uses
     the stable document ID, never a path, file name, or version label. Activating
     a saved view opens its target and creates or focuses the matching open
     activity under the reuse rules above.

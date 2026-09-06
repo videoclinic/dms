@@ -243,6 +243,7 @@ const CAPS = [
           ${layer("Collapsed group flyouts", "Star and pane icons in the collapsed rail open only their Saved views or Open panes flyout; they do not expand the full left menu. Each flyout retains full labels plus open/remove or focus/close actions.")}
           ${layer("Open activity panes/tabs", "Automatic, session-only quicklinks. Labels state task + target: Audit · HR Data Privacy Policy · DOC-014 for a document or Library · policies/HR for a folder. Opening the same task + document focuses its existing pane; × closes that activity only.")}
           ${layer("Saved views", "Use ☆ Bookmark this view in the header. ★ Bookmarked is an explicit, per-user shortcut restored after relaunch; it is not a .dms workflow record.")}
+          ${layer("Personal Library table layout", "Configuration → Workspace stores one OS-user width map shared by every Library. Reset Library table layout restores only its eight default widths; .dms, saved views, sidebar, pane widths, and session state stay unchanged.")}
           ${layer("Viewport-contained scrolling", "The sidebar and activity header stay available. Normal activities scroll inside main content; multi-pane workspaces give navigation, lists, and exhaustive details separate scroll regions.")}
           ${layer("Configuration → Document defaults", "One reusable Markdown Word template is chosen with the native .docx picker. Its exact edit-root-relative path and validation state stay visible with distinct Replace and confirmed Remove actions.")}
           ${layer("Permalink handler", "OS-registered dms:// URI resolves workspace + document IDs (CAP-0020); opens/focuses matching activity tab.")}
@@ -330,6 +331,13 @@ const CAPS = [
           </div>
         </section>
       </div>
+      <section class="card">
+        <h3 class="card-title">Configuration · Workspace</h3>
+        <div class="grid-2">
+          <div><span class="badge">Personal Library table layout</span><h4 style="margin:0.55rem 0 0.25rem">Table column widths</h4><p class="hint">Eight custom widths are shared by every library opened by this OS user.</p></div>
+          <div><p class="hint">Reset restores only these widths. Workspace metadata, saved views, sidebar, pane widths, and session state are unchanged.</p><button class="btn outline">Reset Library table layout</button></div>
+        </div>
+      </section>
       <section class="card">
         <h3 class="card-title">Backend command surface</h3>
         <div class="tags">
@@ -433,9 +441,10 @@ const CAPS = [
             <button class="btn outline" aria-pressed="true">(Re-)Moved documents</button>
             <span class="muted grow" style="text-align:right">All on · also applies to search results</span>
           </div>
+          <div class="row gap-2 mb" style="justify-content:flex-end;font-size:0.75rem"><label>Sort by <select><option>Name</option><option>Title</option><option>Document number</option><option>Lifecycle</option></select></label><label>Direction <select><option>Ascending</option><option selected>Descending</option></select></label><span class="muted">Folders stay first</span></div>
           <div class="table-wrap"><table>
             <thead><tr>
-              <th></th><th>Name</th><th>Library</th><th>Title</th><th>State</th><th>Released</th>
+              <th></th><th>Name ↔</th><th>Library ↔</th><th>Title ↔</th><th>State ↔</th><th>Released ↔</th>
             </tr></thead>
             <tbody>
               <tr>

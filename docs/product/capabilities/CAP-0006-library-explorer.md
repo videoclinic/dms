@@ -121,9 +121,12 @@
    confidentiality, current release effective date when recorded, next review
    due with overdue highlight, and a **draft newer than last
    release** indicator when known (CAP-0015). Non-library and unsupported file
-   rows show their filesystem name and membership/support state instead. File
-   rows are for selection only — they do not host per-row action menus (no
-   per-row hamburger / overflow menu). Folder rows navigate as defined above.
+   rows show their filesystem name and membership/support state instead. The
+   eight table columns are resizable and persist as one validated OS-user
+   preference shared by every Library; **Reset Library table layout** restores
+   only those widths through Configuration. File rows are for selection only —
+   they do not host per-row action menus (no per-row hamburger / overflow menu).
+   Folder rows navigate as defined above.
 6. **Selecting exactly one document** keeps the operator on the same page and
    shows an **on-page selection pane** (right column) that combines:
    - the selected document’s DMS-managed **title** and document number
@@ -238,7 +241,9 @@
    the document. Returning from Document Notes with **Back to Library** focuses
    this singleton activity with the same stable document selected. An unchanged
    in-memory Library view retains its folder, search, sort, history, scroll, and
-   selection state without reloading. If the activity was closed or its
+   selection state without reloading. Its selected sort key and ascending or
+   descending direction remain part of the Library view state and saved views.
+   If the activity was closed or its
    selection changed, the stable document ID resolves its current folder and
    selection detail. A Lost source selection retains document detail and lost-source state;
    the centre list keeps the stored-name row under the last known folder so the
@@ -272,8 +277,9 @@
     with an explicit **Entire library** scope. It matches registered-document
     title and document number plus every file's exact source file name and
     relative path case-insensitively. Results retain their relative path and can
-    be sorted by title, document number, lifecycle state, latest release, or
-    next-review-due date. Search is an explicit result state whose matching rows
+    be sorted ascending or descending by Name, Title, Document number, or
+    Lifecycle; folders remain before files in either direction. Search is an
+    explicit result state whose matching rows
     use the same session-wide file-visibility controls before CAP-0005's
     growing-table sorting and pagination; clearing search restores the complete
     current-folder listing without resetting those controls.

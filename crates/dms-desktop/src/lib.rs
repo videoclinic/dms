@@ -3139,14 +3139,12 @@ fn normalize_preferences(mut preferences: Preferences) -> Preferences {
         .filter(|path| !path.is_empty() && seen.insert(path.clone()))
         .take(RECENT_LIBRARIES_LIMIT)
         .collect();
-    preferences.library_table_column_widths = preferences
+    preferences
         .library_table_column_widths
-        .into_iter()
-        .filter(|(key, width)| {
+        .retain(|key, width| {
             library_table_column_minimum_width(key)
                 .is_some_and(|minimum_width| *width >= minimum_width)
-        })
-        .collect();
+        });
     preferences
 }
 
