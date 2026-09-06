@@ -136,6 +136,7 @@ ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
 | Root `README.md` | Public project overview and current concept state; it summarizes but does not replace CAP, CHG, or architecture records |
 | Root `LICENSE` | MIT license for project source and documentation |
 | `Cargo.toml`, `Cargo.lock`, `crates/` | Rust workspace: shared `dms-core`, standalone `dms` CLI, and Tauri `dms-desktop` adapter |
+| `.cargo/audit.toml` | Narrow RustSec advisory dispositions. `RUSTSEC-2024-0429` remains an explicit Tauri GTK3 limitation until an upstream Tauri release moves the Linux desktop stack to `glib` ≥ 0.20.0. |
 | `rust-toolchain.toml` | Exact Rust 1.88.0 toolchain with `clippy` and `rustfmt`; `Cargo.toml` retains the 1.88 MSRV |
 | `scripts/` | Operator and release support scripts. `Get-OneDriveM365Group.ps1` is a standalone diagnostic that maps local OneDrive Business paths to backing Microsoft 365 Groups through interactive delegated Graph access; it is outside the DMS application's Graph permission boundary. |
 | Native Windows desktop development | Requires the MSVC Rust toolchain selected by `rust-toolchain.toml`, Visual Studio Build Tools with Desktop development with C++, and the WebView2 Evergreen Runtime; WSL is not a Windows desktop-integration substitute |
