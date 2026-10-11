@@ -464,6 +464,99 @@ test("in-review documents still expose Unregister in Actions", () => {
   assert.match(markup, /data-library-unregister/);
 });
 
+function documentTypeLibrary() {
+  const control = { title: "Handbook", document_type: "procedure" };
+  const registered = file("Handbook.md", { in_library: { document_id: "doc-1" } }, {
+    id: "doc-1", lifecycle: "draft", control,
+  });
+  return {
+    ...createLibraryState(),
+    ...snapshot("Policies", [registered]),
+    selection: ["Policies/Handbook.md"],
+    detail: {
+      document_id: "doc-1",
+      source_name: "Handbook.md",
+      relative_path: "Policies/Handbook.md",
+      source_exists: true,
+      source_state: "registered",
+      lifecycle: "draft",
+      control,
+      document_types: [
+        { id: "procedure", label: "Procedure", enabled: true, replacement_type_id: "policy" },
+        { id: "policy", label: "Policy", enabled: true },
+        { id: "retired", label: "Retired", enabled: false },
+      ],
+      eligible_people: [{ object_id: "owner-1", display_name: "Owner", email: "owner@example.test" }],
+      workflow_events: [],
+      lifecycle_actions: {},
+      current_release: {
+        version: "1.0",
+        relative_pdf_path: "Policies/Handbook_V1.0_internal.pdf",
+        pdf_exists: true,
+        profile: { title: "Released handbook", document_type: "procedure" },
+      },
+    },
+  };
+}
+
+test("Library resolves retained IDs through current labels without following future-candidate mappings", () => {
+  const library = documentTypeLibrary();
+  const render = () => libraryMarkup({ edit_root: "/srv/Edit" }, { route_state: { folder: "Policies" } }, library);
+  const before = structuredClone(library);
+  const markup = render();
+  assert.equal((markup.match(/<dt>Document type<\/dt><dd>Procedure \(procedure\)<\/dd>/g) ?? []).length, 2);
+  assert.match(markup, /<option value="procedure" selected>Procedure \(procedure\)<\/option>/);
+  assert.match(markup, /<option value="policy" >Policy \(policy\)<\/option>/);
+  assert.doesNotMatch(markup, /<option value="retired"/);
+  assert.deepEqual(library, before);
+
+  library.detail.document_types[0].label = "Renamed & <procedure>";
+  const renamedBefore = structuredClone(library);
+  const renamed = render();
+  assert.equal((renamed.match(/<dt>Document type<\/dt><dd>Renamed &amp; &lt;procedure&gt; \(procedure\)<\/dd>/g) ?? []).length, 2);
+  assert.match(renamed, /<option value="procedure" selected>Renamed &amp; &lt;procedure&gt; \(procedure\)<\/option>/);
+  assert.doesNotMatch(renamed, /Procedure \(procedure\)|<procedure>/);
+  assert.match(renamed, /Policies\/Handbook_V1\.0_internal\.pdf/);
+  assert.deepEqual(library, renamedBefore);
+  assert.deepEqual(documentControlUpdateRequest(new Map([
+    ["title", "Handbook"], ["documentType", "procedure"], ["ownerObjectId", "owner-1"],
+  ]), library.detail).arguments, {
+    documentId: "doc-1", title: "Handbook", documentNumber: "", documentType: "procedure", ownerObjectId: "owner-1",
+  });
+
+  library.detail.current_release.profile.document_type = "policy";
+  const later = render();
+  assert.match(later, /data-library-section="control"[\s\S]*?<dt>Document type<\/dt><dd>Renamed &amp; &lt;procedure&gt; \(procedure\)<\/dd>/);
+  assert.match(later, /Immutable release snapshot[\s\S]*?<dt>Document type<\/dt><dd>Policy \(policy\)<\/dd>/);
+
+  library.detail.control.document_type = "retired";
+  library.detail.current_release.profile.document_type = "retired";
+  const disabled = render();
+  assert.equal((disabled.match(/<dt>Document type<\/dt><dd>Retired \(retired\)<\/dd>/g) ?? []).length, 2);
+  assert.match(disabled, /<option value="retired" selected>Retired \(retired\)<\/option>/);
+});
+
+test("Library keeps missing catalogue IDs visible and selected without inventing a label", () => {
+  for (const catalogue of [undefined, null, [], [{ id: "policy", label: "Policy", enabled: true }]]) {
+    const library = documentTypeLibrary();
+    library.detail.document_types = catalogue;
+    const before = structuredClone(library);
+    const markup = libraryMarkup({ edit_root: "/srv/Edit" }, null, library);
+    assert.equal((markup.match(/<dt>Document type<\/dt><dd>procedure<\/dd>/g) ?? []).length, 2);
+    assert.match(markup, /<option value="procedure" selected>procedure<\/option>/);
+    assert.doesNotMatch(markup, /undefined|procedure \(procedure\)/);
+    assert.deepEqual(library, before);
+  }
+  const library = documentTypeLibrary();
+  library.detail.control.document_type = null;
+  library.detail.current_release.profile = null;
+  const markup = libraryMarkup({ edit_root: "/srv/Edit" }, null, library);
+  assert.match(markup, /<dt>Document type<\/dt><dd>Not set<\/dd>/);
+  assert.match(markup, /Immutable release snapshot[\s\S]*?<dt>Document type<\/dt><dd>Unrecorded<\/dd>/);
+  library.detail.current_release.document_control_snapshot = { document_type: "policy" };
+  assert.match(libraryMarkup({ edit_root: "/srv/Edit" }, null, library), /Immutable release snapshot[\s\S]*?<dt>Document type<\/dt><dd>Policy \(policy\)<\/dd>/);
+});
+
 test("library markup separates source Name from DMS Title and keeps actions in the selection pane", () => {
   const registered = file("Handbook.md", { in_library: { document_id: "doc-1" } }, {
     id: "doc-1",
@@ -692,7 +785,7 @@ test("library markup separates source Name from DMS Title and keeps actions in t
   assert.match(markup, /Update review schedule<\/button>/);
   assert.match(markup, /type="submit" disabled/);
   assert.match(markup, /Next review due: 2027-02-11/);
-  assert.match(markup, /<option value="procedure" selected>Procedure<\/option>/);
+  assert.match(markup, /<option value="procedure" selected>Procedure \(procedure\)<\/option>/);
   assert.match(markup, /id="library-confidentiality-form"/);
   assert.match(markup, /<option value="restricted" selected>Restricted<\/option>/);
   assert.match(markup, /data-library-lifecycle-form="mark_obsolete"/);

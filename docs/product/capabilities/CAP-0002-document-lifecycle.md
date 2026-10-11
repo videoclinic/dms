@@ -83,7 +83,14 @@
      otherwise-unused values.
    The candidate snapshots the changelog, effective date, target-version mode,
    label, mutable document profile, effective confidentiality, and resolved
-   workflow people. It may also stage a newly selected eligible Owner and Editor
+   workflow people. For document types, candidate creation resolves the retained
+   replacement chain into the candidate profile's type ID; successful release
+   keeps that ID in its immutable profile. Current document control and earlier
+   candidate, review, release, and audit evidence retain their stored IDs. A
+   mapping change that alters an active candidate's resolved type invalidates
+   that candidate rather than rewriting its snapshot. Document-type migration
+   does not change PDF filenames, Markdown frontmatter, or confidentiality.
+   The candidate may also stage a newly selected eligible Owner and Editor
    for application only by the same successful release commit. The candidate is
    not a reservation. `V1.0` and every candidate whose major component is greater
    than the current released major component require approval. A manual target

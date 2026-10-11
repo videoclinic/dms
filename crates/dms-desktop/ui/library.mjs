@@ -1216,12 +1216,21 @@ function selectionMarkup(library, workspace) {
   const sourceLost = detail.source_state === "registered" && !detail.source_exists;
   const release = detail.current_release;
   const releaseProfile = release?.profile ?? release?.document_control_snapshot ?? null;
+  const documentTypes = detail.document_types ?? [];
+  const documentTypeLabel = (id, fallback) => {
+    const type = documentTypes.find((candidate) => candidate.id === id);
+    return type ? `${type.label} (${type.id})` : id ?? fallback;
+  };
   const currentReleaseIdentity = release
-    ? `<div class="current-release-profile"><strong>Current released PDF · V${escapeHtml(release.version)}</strong><span>${escapeHtml(release.relative_pdf_path)}</span><small>${release.pdf_exists ? "Available" : "Missing PDF"}</small><h4>Immutable release snapshot</h4><dl class="selection-details"><dt>Effective date</dt><dd>${escapeHtml(release.effective_date ?? releaseProfile?.effective_date ?? "Unrecorded")}</dd><dt>Title</dt><dd>${escapeHtml(releaseProfile?.title ?? "Unrecorded")}</dd><dt>Document number</dt><dd>${escapeHtml(releaseProfile?.document_number ?? "Unrecorded")}</dd><dt>Document type</dt><dd>${escapeHtml(releaseProfile?.document_type ?? "Unrecorded")}</dd><dt>Owner at release</dt><dd>${escapeHtml(identityLabel(releaseProfile?.owner, "Unrecorded"))}</dd><dt>Requested by</dt><dd>${escapeHtml(identityLabel(release.requester, "Unrecorded"))}</dd><dt>Responsible editor at release</dt><dd>${escapeHtml(identityLabel(release.editor, "Unrecorded"))}</dd><dt>Approval</dt><dd>${escapeHtml(!release.approval_required ? "Not required" : release.approval_recorded && release.approver ? `Approved by ${identityLabel(release.approver, "Unrecorded")}` : "Unrecorded")}</dd></dl></div>`
+    ? `<div class="current-release-profile"><strong>Current released PDF · V${escapeHtml(release.version)}</strong><span>${escapeHtml(release.relative_pdf_path)}</span><small>${release.pdf_exists ? "Available" : "Missing PDF"}</small><h4>Immutable release snapshot</h4><dl class="selection-details"><dt>Effective date</dt><dd>${escapeHtml(release.effective_date ?? releaseProfile?.effective_date ?? "Unrecorded")}</dd><dt>Title</dt><dd>${escapeHtml(releaseProfile?.title ?? "Unrecorded")}</dd><dt>Document number</dt><dd>${escapeHtml(releaseProfile?.document_number ?? "Unrecorded")}</dd><dt>Document type</dt><dd>${escapeHtml(documentTypeLabel(releaseProfile?.document_type, "Unrecorded"))}</dd><dt>Owner at release</dt><dd>${escapeHtml(identityLabel(releaseProfile?.owner, "Unrecorded"))}</dd><dt>Requested by</dt><dd>${escapeHtml(identityLabel(release.requester, "Unrecorded"))}</dd><dt>Responsible editor at release</dt><dd>${escapeHtml(identityLabel(release.editor, "Unrecorded"))}</dd><dt>Approval</dt><dd>${escapeHtml(!release.approval_required ? "Not required" : release.approval_recorded && release.approver ? `Approved by ${identityLabel(release.approver, "Unrecorded")}` : "Unrecorded")}</dd></dl></div>`
     : '<div class="current-release-profile"><strong>Current released PDF</strong><span>No active release</span></div>';
-  const documentTypeOptions = (detail.document_types ?? [])
+  const missingDocumentType = detail.control.document_type
+    && !documentTypes.some((type) => type.id === detail.control.document_type);
+  const documentTypeOptions = (missingDocumentType
+    ? `<option value="${escapeHtml(detail.control.document_type)}" selected>${escapeHtml(detail.control.document_type)}</option>`
+    : "") + documentTypes
     .filter((type) => type.enabled || type.id === detail.control.document_type)
-    .map((type) => `<option value="${escapeHtml(type.id)}" ${type.id === detail.control.document_type ? "selected" : ""}>${escapeHtml(type.label)}</option>`)
+    .map((type) => `<option value="${escapeHtml(type.id)}" ${type.id === detail.control.document_type ? "selected" : ""}>${escapeHtml(documentTypeLabel(type.id))}</option>`)
     .join("");
   const confidentialityOptions = (detail.confidentiality_types ?? [])
     .filter((type) => type.enabled || type.id === detail.confidentiality_override)
@@ -1248,7 +1257,7 @@ function selectionMarkup(library, workspace) {
   const openAttr = (key) => (selectionSectionOpen(library, key) ? " open" : "");
   const section = (key, title, body, extraClass = "") =>
     `<details class="selection-section${extraClass ? ` ${extraClass}` : ""}" data-library-section="${key}"${openAttr(key)}><summary><span class="selection-section-chevron" aria-hidden="true"></span><span class="selection-section-title">${title}</span><span class="selection-section-hint" aria-hidden="true"></span></summary><div class="selection-section-body">${body}</div></details>`;
-  const controlSummary = `<dl class="selection-details"><dt>Document type</dt><dd>${escapeHtml(detail.control.document_type ?? "Not set")}</dd><dt>Owner</dt><dd>${escapeHtml(identityLabel(currentOwner, "Not set"))}</dd><dt>Confidentiality</dt><dd>${escapeHtml(confidentiality?.label ?? "Not configured")}${confidentiality ? ` · ${escapeHtml(confidentiality.document_override ? "override" : `from ${confidentiality.source_folder}`)}` : ""}</dd><dt>Editor</dt><dd>${escapeHtml(role(roles?.editor, "<editor>"))}</dd><dt>Approver</dt><dd>${escapeHtml(role(roles?.approver, "Not configured"))}</dd></dl>`;
+  const controlSummary = `<dl class="selection-details"><dt>Document type</dt><dd>${escapeHtml(documentTypeLabel(detail.control.document_type, "Not set"))}</dd><dt>Owner</dt><dd>${escapeHtml(identityLabel(currentOwner, "Not set"))}</dd><dt>Confidentiality</dt><dd>${escapeHtml(confidentiality?.label ?? "Not configured")}${confidentiality ? ` · ${escapeHtml(confidentiality.document_override ? "override" : `from ${confidentiality.source_folder}`)}` : ""}</dd><dt>Editor</dt><dd>${escapeHtml(role(roles?.editor, "<editor>"))}</dd><dt>Approver</dt><dd>${escapeHtml(role(roles?.approver, "Not configured"))}</dd></dl>`;
   const controlBody = `${controlSummary}${editor}`;
   const reassociatePath = library.reassociate_path || detail.relative_path;
   const reassociateMarkup = sourceLost

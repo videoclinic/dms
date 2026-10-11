@@ -770,9 +770,40 @@ const CAPS = [
     id: "CAP-0013",
     file: "CAP-0013-library-maintenance",
     title: "Library maintenance",
-    nav: "maintenance",
-    subtitle: "Lost source rows and reassociate recovery, rename/move with preserved ID, rescan, catalogues, withdraw. Microsoft Entra owns workflow people.",
+    nav: "config",
+    configSection: "document-defaults",
+    subtitle: "Document-type catalogue slice in Document defaults. The broader maintenance capability remains not implemented; its separate surface is retained below as a folded reference.",
     body: `
+      <section class="card" style="margin-bottom:1rem">
+        <p class="label">Configuration → Document defaults · implemented catalogue slice</p>
+        <h3 class="card-title">Document types</h3>
+        <p class="muted">IDs stay in current document control and existing candidate, review, release, and audit evidence. Only future candidates resolve the replacement; affected active candidates are invalidated.</p>
+        <div class="grid-2">
+          <div class="stack">
+            <div class="row gap-2"><strong>Procedure (procedure)</strong>${badge("Enabled", "ok")}</div>
+            <label class="label">Display label <input value="Procedure"></label>
+            <div class="row gap-2"><code>procedure</code><button class="btn outline">Save label</button></div>
+            <label class="label">Future release type
+              <select name="replacementTypeId"><option value="policy" selected>Policy (policy)</option><option value="record">Record (record)</option></select>
+            </label>
+            <button class="btn outline">Update future-candidate migration</button>
+            <p class="hint">Saved mapping: procedure → policy. Both IDs remain enabled; neither side of this mapping can be disabled.</p>
+          </div>
+          <div class="stack">
+            <div class="row gap-2"><strong>Record (record)</strong>${badge("Enabled", "ok")}</div>
+            <label class="label">Display label <input value="Record"></label>
+            <div class="row gap-2"><code>record</code><button class="btn outline">Save label</button></div>
+            <label class="label">Future release type
+              <select name="replacementTypeId"><option value="" selected disabled>Choose a replacement type</option><option value="policy">Policy (policy)</option><option value="procedure">Procedure (procedure)</option></select>
+            </label>
+            <button class="btn outline">Migrate future candidates</button>
+            <p class="hint">Only other enabled types are offered. No eligible target disables the selector and action; invalid or cyclic mappings report an error without saving.</p>
+          </div>
+        </div>
+        <p class="hint">Current control: Procedure (procedure). A later candidate and its successful release: Policy (policy). Label renames change presentation only. PDF filenames, Markdown frontmatter, and confidentiality are unchanged.</p>
+      </section>
+      <details class="card">
+        <summary>Separate Maintenance surface · contract reference</summary>
       <div class="grid-explorer">
         <aside class="card">
           <h3 class="card-title">Actions</h3>
@@ -782,7 +813,7 @@ const CAPS = [
             <button class="btn outline">Rescan library</button>
             <button class="btn outline">Workflow identity source</button>
             <button class="btn outline">Confidentiality catalogue</button>
-            <button class="btn outline">Document-type catalogue</button>
+            <button class="btn outline">Configuration → Document defaults</button>
             <button class="btn danger">Withdraw release</button>
             <button class="btn danger">Reject / request changes</button>
           </div>
@@ -804,7 +835,7 @@ const CAPS = [
           })}
           <p class="hint">Desktop Actions refuse an already-registered target. Core and CLI still absorb when the target's events are entirely later with no timestamp overlap; the target then leaves the library.</p>
         </section>
-      </div>`,
+      </div></details>`,
   },
   {
     id: "CAP-0014",
@@ -855,9 +886,10 @@ const CAPS = [
     id: "CAP-0015",
     file: "CAP-0015-document-control-data",
     title: "Document control data",
+    status: "implemented",
     nav: "library",
     activity: "document-home-doc-77a12bce",
-    subtitle: "Source file facts come from the filesystem. Exhaustive DMS-managed control data scrolls in the right-pane detail region; a bottom-docked foldable Actions footer stays in view.",
+    subtitle: "Retained current-control ID beside a release made from a later replacement-type candidate. Document control data is expanded for comparison; fold choices are session-only.",
     actions: [],
     body: `
       ${viewportScrollStyles("CAP-0015", `
@@ -865,6 +897,9 @@ const CAPS = [
         .app[data-cap="CAP-0015"] .document-control-panes { min-height: 0; flex: 1; align-items: stretch; }
         .app[data-cap="CAP-0015"] .document-control-panes > .card:not(.detail-pane) { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
         .app[data-cap="CAP-0015"] .document-control-panes > .detail-pane { min-height: 0; overflow: hidden; }
+        .app[data-cap="CAP-0015"] .selection-scroll .stack { gap: 0.5rem; }
+        .app[data-cap="CAP-0015"] .selection-scroll .stack > .hint { margin-top: 0; }
+        .app[data-cap="CAP-0015"] .selection-actions-footer .btn { height: auto; min-height: 2rem; padding: 0.125rem 0.375rem; font-size: 0.75rem; line-height: 1.1; }
         .app[data-cap="CAP-0015"] .source-identity-plain { margin: 0.55rem 0 0.35rem; padding: 0.35rem 0; }
         .app[data-cap="CAP-0015"] .source-identity-plain .label { font-size: 0.75rem; color: var(--muted-foreground); }
         .app[data-cap="CAP-0015"] .list-card table { table-layout: fixed; }
@@ -913,8 +948,8 @@ const CAPS = [
                 <td><span class="check on">☑</span></td>
                 <td>Handbook.docx</td>
                 <td>HR Data Privacy Policy · DOC-014</td>
-                <td>${badge("Pending approval", "info")}</td>
-                <td>V1.3 ${badge("draft newer", "warn")}</td>
+                <td>${badge("Released", "ok")}</td>
+                <td>V1.3</td>
               </tr>
               <tr>
                 <td><span class="check">☐</span></td>
@@ -928,7 +963,7 @@ const CAPS = [
           ${tablePagination({ ariaLabel: "Document rows per page", count: 2 })}
         </section>
         <div role="separator" aria-label="Resize document details" aria-orientation="vertical" style="cursor:col-resize;background:var(--border);border-radius:999px" title="Session-only width · 280–640 px"></div>
-        ${documentControlDataSelectionPane()}
+        ${documentTypeMigrationSelectionPane()}
       </div>`,
   },
   {
@@ -1354,6 +1389,65 @@ function lostSourceSelectionPane() {
         <button class="btn">Reassociate source</button>
       </div>
     </details>`;
+}
+function documentTypeMigrationSelectionPane() {
+  return `<aside class="card detail-pane selection-pane-layout" aria-label="Document selection details">
+    <div class="selection-scroll">
+      <div class="row between mb"><div class="row gap-2">${badge("In library", "muted")}${badge("Released", "ok")}</div><button class="btn outline">Clear</button></div>
+      <h3 class="card-title" style="margin:0">HR Data Privacy Policy</h3>
+      <p class="muted">Document number: <span class="mono">DOC-014</span></p>
+      <div class="source-identity-plain">
+        <div class="label">Source file · from filesystem</div>
+        <div class="mono">Handbook.docx</div>
+        <div class="muted">Folder: policies/HR</div>
+      </div>
+      <details class="selection-section" open>
+        <summary><span class="selection-section-title">Document control data</span><span class="selection-section-meta">Mutable · managed in DMS Desktop</span></summary>
+        <div class="selection-section-body stack">
+          ${kv([["Document type", "Procedure (procedure)"], ["Owner", "Alex Morgan"], ["Confidentiality", "Internal · from policies/HR"]])}
+          <p class="hint">Current control retains <code>procedure</code>, even after a release using the mapped type.</p>
+          <strong>Edit document control data</strong>
+          <label class="label">Title <input value="HR Data Privacy Policy"></label>
+          <label class="label">Document number <input value="DOC-014"></label>
+          <label class="label">Document type <select name="documentType"><option value="procedure" selected>Procedure (procedure)</option><option value="policy">Policy (policy)</option><option value="record">Record (record)</option></select></label>
+          <label class="label">Owner <select><option>Alex Morgan · alex@example.test</option></select></label>
+          <button class="btn">Save document control</button>
+        </div>
+      </details>
+      <details class="selection-section">
+        <summary><span class="selection-section-title">Document review schedule</span></summary>
+        <div class="selection-section-body">Next review due: 2026-08-01</div>
+      </details>
+      <details class="selection-section">
+        <summary><span class="selection-section-title">Revision cycle</span></summary>
+        <div class="selection-section-body">Draft bytes match the current release. A source change starts a new draft; there is no active candidate.</div>
+      </details>
+      <details class="selection-section">
+        <summary><span class="selection-section-title">Version history &amp; changes</span></summary>
+        <div class="selection-section-body">Earlier candidate, review, release, and audit type IDs remain unchanged.</div>
+      </details>
+      <details class="selection-section" open>
+        <summary><span class="selection-section-title">Releases</span><span class="selection-section-meta">4 recorded</span></summary>
+        <div class="selection-section-body stack">
+          <strong>Current released PDF · V1.3</strong>
+          <span class="mono" style="overflow-wrap:anywhere">policies/HR/Handbook_V1.3_internal.pdf</span>
+          <strong>Immutable release snapshot</strong>
+          ${kv([["Document type", "Policy (policy)"], ["Effective date", "2025-08-01"], ["Owner at release", "Alex Morgan"], ["Requested by", "Alex Morgan"], ["Responsible editor at release", "Alex Morgan"], ["Approval", "Not required"]])}
+          <p class="hint">V1.3 was created from a candidate prepared after the procedure → policy mapping. That candidate snapshotted <code>policy</code>; successful release retained it.</p>
+          <p class="hint">Earlier V1.2 snapshot: <strong>Procedure (procedure)</strong>. Every label comes from the current catalogue; renaming a label changes presentation, not stored IDs.</p>
+          <button class="btn outline">Open latest released PDF</button>
+        </div>
+      </details>
+    </div>
+    <details class="selection-section selection-actions-footer" open>
+      <summary><span class="selection-section-title">Actions</span></summary>
+      <div class="selection-section-body selection-actions">
+        <button class="btn outline">Open source draft</button><button class="btn outline">Open current released PDF</button>
+        <button class="btn outline">Open notes</button><button class="btn outline">Evaluate changes with Claude</button>
+        <button class="btn outline">Copy permalink</button><button class="btn danger">Unregister</button>
+      </div>
+    </details>
+  </aside>`;
 }
 function documentControlDataSelectionPane() {
   // CAP-0015 owns this shared selection-pane content; CAP-0006 owns its placement.

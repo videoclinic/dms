@@ -30,7 +30,8 @@
 7. If `.dms` is missing under a chosen edit root, the app initializes it only
    after an explicit confirm, including choosing or confirming the publish root.
 8. `.dms` stores the workspace confidentiality catalogue, document-type
-   catalogue, Microsoft Entra group binding, read-only identity display cache,
+   catalogue with retained source-to-replacement type-ID mappings, Microsoft
+   Entra group binding, read-only identity display cache,
    relative folder policies that reference Entra user object IDs, one optional
    Markdown export-template record (stable ID, edit-root-relative `.docx` path,
    validation digest, and template-contract version), and document-control-data

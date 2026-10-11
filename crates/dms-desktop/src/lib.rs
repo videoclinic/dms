@@ -1004,6 +1004,19 @@ fn configure_document_type(
 }
 
 #[tauri::command]
+fn migrate_document_type(
+    edit_root: String,
+    source_type_id: String,
+    replacement_type_id: String,
+) -> Result<WorkspaceConfiguration, String> {
+    mutate_workspace_configuration(Path::new(&edit_root), |workspace| {
+        workspace
+            .migrate_document_type(&source_type_id, &replacement_type_id)
+            .map(|_| ())
+    })
+}
+
+#[tauri::command]
 fn configure_confidentiality_type(
     edit_root: String,
     id: String,
@@ -4291,6 +4304,7 @@ pub fn run() {
             open_external_url,
             configure_default_review_interval,
             configure_document_type,
+            migrate_document_type,
             configure_confidentiality_type,
             migrate_confidentiality_type,
             set_confidentiality_policy,
@@ -5224,6 +5238,26 @@ mod tests {
             configure_document_type(root.clone(), "procedure".into(), "Procedure".into(), true)
                 .unwrap();
         assert_eq!(catalogue.document_types[0].id, "procedure");
+        configure_document_type(root.clone(), "policy".into(), "Policy".into(), true).unwrap();
+        let migrated =
+            migrate_document_type(root.clone(), "procedure".into(), "policy".into()).unwrap();
+        assert_eq!(
+            migrated
+                .document_types
+                .iter()
+                .find(|document_type| document_type.id == "procedure")
+                .and_then(|document_type| document_type.replacement_type_id.as_deref()),
+            Some("policy")
+        );
+        let reopened = Workspace::open(edit_root.path()).unwrap();
+        assert_eq!(
+            reopened
+                .document_types()
+                .into_iter()
+                .cloned()
+                .collect::<Vec<_>>(),
+            migrated.document_types
+        );
 
         let policy =
             set_confidentiality_policy(root.clone(), "Policies/HR".into(), "restricted".into())
@@ -5238,6 +5272,51 @@ mod tests {
             .confidentiality_policies
             .iter()
             .any(|entry| entry.folder == "Policies/HR"));
+    }
+
+    #[test]
+    fn desktop_document_type_migration_is_registered_and_preserves_saved_state_on_error() {
+        let handlers = include_str!("lib.rs")
+            .split_once(".invoke_handler(tauri::generate_handler![")
+            .unwrap()
+            .1
+            .split_once("])")
+            .unwrap()
+            .0;
+        assert!(handlers
+            .lines()
+            .any(|line| line.trim() == "migrate_document_type,"));
+
+        let edit_root = tempfile::tempdir().unwrap();
+        let publish_root = tempfile::tempdir().unwrap();
+        let mut workspace = Workspace::init(edit_root.path(), publish_root.path()).unwrap();
+        workspace
+            .configure_document_type("procedure", "Procedure", true)
+            .unwrap();
+        workspace
+            .configure_document_type("policy", "Policy", true)
+            .unwrap();
+        workspace
+            .configure_document_type("retired", "Retired", false)
+            .unwrap();
+        workspace.save().unwrap();
+        let root = edit_root.path().to_string_lossy().into_owned();
+        migrate_document_type(root.clone(), "procedure".into(), "policy".into()).unwrap();
+        let metadata = edit_root.path().join(".dms/workspace.json");
+        let saved = fs::read(&metadata).unwrap();
+
+        for (source, target) in [
+            ("missing", "policy"),
+            ("procedure", "missing"),
+            ("procedure", "retired"),
+            ("procedure", "procedure"),
+            ("policy", "procedure"),
+        ] {
+            let error =
+                migrate_document_type(root.clone(), source.into(), target.into()).unwrap_err();
+            assert!(!error.is_empty(), "{source} -> {target}");
+            assert_eq!(fs::read(&metadata).unwrap(), saved, "{source} -> {target}");
+        }
     }
 
     #[test]

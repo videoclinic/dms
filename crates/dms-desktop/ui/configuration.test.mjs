@@ -578,6 +578,80 @@ test("confidentiality catalogue is a secondary surface that returns to document 
   assert.match(markup, /Create confidentiality type/);
 });
 
+test("document-type migrations stay in Document defaults and offer only other enabled IDs", () => {
+  const documentTypes = [
+    { id: "procedure", label: "Procedure", enabled: true },
+    { id: "policy", label: "Policy & <rules>", enabled: true },
+    { id: "record", label: "Record", enabled: false },
+  ];
+  const state = setConfigurationRoute(applyConfigurationSnapshot(createConfigurationState(), {
+    ...snapshot,
+    document_types: documentTypes,
+  }), "document-defaults");
+  const markup = configurationMarkup(state, assistancePolicy);
+  const forms = [...markup.matchAll(/<form[^>]*data-configuration-form="document-type-migration"[^>]*>(.*?)<\/form>/g)]
+    .map((match) => match[1]);
+  assert.equal(forms.length, documentTypes.length);
+  for (const [index, type] of documentTypes.entries()) {
+    const form = forms[index];
+    assert.ok(form.includes(`type="hidden" name="sourceTypeId" value="${type.id}"`));
+    assert.ok(form.includes(`<code>${type.id}</code>`));
+    assert.match(form, /Future release type<select name="replacementTypeId" required/);
+    assert.match(form, /value="" disabled selected>Choose a replacement type/);
+    const offered = [...form.matchAll(/<option value="([^"]+)"/g)].map((match) => match[1]);
+    assert.deepEqual(offered, documentTypes.filter((target) => target.enabled && target.id !== type.id).map((target) => target.id));
+    assert.match(form, />Migrate future candidates<\/button>/);
+    assert.doesNotMatch(form, /type="submit" disabled/);
+  }
+  assert.match(forms[0], />Policy &amp; &lt;rules&gt; \(policy\)<\/option>/);
+  assert.match(markup, /keeps the source ID in current document control data and existing candidate, release, and audit evidence/);
+  assert.match(markup, /only future candidates use the replacement type/);
+  assert.match(markup, /Affected active candidates are invalidated/);
+  assert.match(markup, /PDF filenames and Markdown frontmatter are unchanged/);
+  assert.doesNotMatch(markup, /data-configuration-secondary="document-types"/);
+
+  const refreshed = applyConfigurationSnapshot({ ...state, error: "Previous failure" }, {
+    ...state.snapshot,
+    document_types: documentTypes.map((type) => type.id === "procedure"
+      ? { ...type, replacement_type_id: "policy" } : type),
+  }, "Configuration saved.");
+  const updatedMarkup = configurationMarkup(refreshed, assistancePolicy);
+  const updated = updatedMarkup.match(/data-configuration-form="document-type-migration"[^>]*>(.*?)<\/form>/)[1];
+  assert.match(updated, /name="sourceTypeId" value="procedure"/);
+  assert.match(updated, /<option value="policy" selected>Policy &amp; &lt;rules&gt; \(policy\)/);
+  assert.match(updated, />Update future-candidate migration<\/button>/);
+  assert.equal(refreshed.route, "document-defaults");
+  assert.equal(refreshed.secondary, null);
+  assert.equal(refreshed.error, "");
+  assert.equal(refreshed.notice, "Configuration saved.");
+  assert.equal(state.snapshot.document_types[0].replacement_type_id, undefined);
+  assert.match(configurationMarkup({ ...state, error: "Core rejected mapping" }, assistancePolicy), /role="alert">Core rejected mapping/);
+});
+
+test("document-type migration disables selection and submission without an eligible target", () => {
+  const state = setConfigurationRoute(applyConfigurationSnapshot(createConfigurationState(), snapshot), "document-defaults");
+  const markup = configurationMarkup(state, assistancePolicy);
+  const policyForm = markup.match(/data-configuration-form="document-type-migration"[^>]*>(.*?)<\/form>/)[1];
+  assert.match(policyForm, /name="sourceTypeId" value="policy"/);
+  assert.match(policyForm, /name="replacementTypeId" required disabled/);
+  assert.match(policyForm, /type="submit" disabled>Migrate future candidates/);
+  assert.doesNotMatch(policyForm, /<option value="(?:policy|record)"/);
+});
+
+test("document-type migration submits only trimmed explicit IDs and leaves validation to core", () => {
+  for (const [source, target] of [[" procedure ", " policy "], ["policy", "policy"], ["unknown", "disabled"], ["", ""]]) {
+    assert.deepEqual(configurationMutationRequest("document-type-migration", new Map([
+      ["sourceTypeId", source],
+      ["replacementTypeId", target],
+      ["label", "Not an identifier"],
+      ["enabled", "on"],
+    ]), "Policies/HR"), {
+      command: "migrate_document_type",
+      arguments: { sourceTypeId: source.trim(), replacementTypeId: target.trim() },
+    });
+  }
+});
+
 test("document defaults exposes confidentiality setup before the folder and document-type editors", () => {
   let state = applyConfigurationSnapshot(createConfigurationState(), {
     ...snapshot,

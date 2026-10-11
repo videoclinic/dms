@@ -76,6 +76,20 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .cap-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; }
 .cap-head h2 { margin: 0; font-size: 1.25rem; font-weight: 700; }
 .subtitle { margin: 0; color: var(--muted-foreground); font-size: 0.875rem; max-width: 60rem; }
+.configuration-nav { display: flex; flex-direction: column; gap: 0.75rem; padding: 0.85rem 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.config-nav-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.config-nav-head > div { min-width: 0; }
+.config-nav-head h3 { margin: 0; font-size: 0.95rem; }
+.config-nav-head p { margin: 0.2rem 0 0; color: var(--muted-foreground); font-size: 0.78rem; }
+.config-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.45rem; }
+.config-tab { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; padding: 0.55rem 0.65rem; border: 1px solid var(--border); border-radius: calc(var(--radius) - 2px); background: var(--background); }
+.config-tab strong { font-size: 0.8rem; }
+.config-tab span { color: var(--muted-foreground); font-size: 0.68rem; line-height: 1.3; }
+.config-tab.active { border-color: color-mix(in oklch, var(--info) 38%, var(--border)); background: color-mix(in oklch, var(--info) 10%, white); color: var(--info); }
+.config-tab.active span { color: color-mix(in oklch, var(--info) 75%, var(--muted-foreground)); }
+.config-secondary { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; color: var(--muted-foreground); font-size: 0.78rem; }
+.config-secondary strong { color: var(--foreground); }
+.config-back { height: 1.75rem; margin-left: 0.25rem; font-size: 0.72rem; }
 .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; }
 .card-title { margin: 0 0 0.6rem; font-size: 0.95rem; font-weight: 600; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
@@ -254,11 +268,11 @@ tr:last-child td { border-bottom: 0; }
       <span>DMS Desktop</span>
       <div class="brand-actions"><button class="fold-ctl" title="Collapse left menu">«</button></div>
     </div>
-    <nav class="nav"><a class="nav-item" href="#">📚 <span>Library</span></a><a class="nav-item" href="#">📦 <span>Releases</span></a><a class="nav-item" href="#">📋 <span>Audit & Reports</span></a><a class="nav-item active" href="#">🧰 <span>Maintenance</span></a><a class="nav-item" href="#">⚙️ <span>Configuration</span></a></nav>
+    <nav class="nav"><a class="nav-item" href="#">📚 <span>Library</span></a><a class="nav-item" href="#">📦 <span>Releases</span></a><a class="nav-item" href="#">📋 <span>Audit & Reports</span></a><a class="nav-item" href="#">🧰 <span>Maintenance</span></a><a class="nav-item active" href="#">⚙️ <span>Configuration</span></a></nav>
     <div class="pane-sec">Saved views</div>
     <div class="pane-tabs"><div class="pane-tab saved-view"><span class="bookmark-mark">★</span><span class="pane-label" title="Library · policies/HR">Library · policies/HR</span><span class="pane-remove" title="Remove saved view">−</span></div></div>
     <div class="pane-sec">Open panes</div>
-    <div class="pane-tabs"><div class="pane-tab"><span class="pane-label" title="Library · policies/HR">Library · policies/HR</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Audit · HR Data Privacy Policy · DOC-014">Audit · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Review · HR Data Privacy Policy · DOC-014">Review · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Notes · HR Data Privacy Policy · DOC-014">Notes · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab active"><span class="pane-label" title="Maintenance">Maintenance</span><span class="pane-close">×</span></div></div>
+    <div class="pane-tabs"><div class="pane-tab"><span class="pane-label" title="Library · policies/HR">Library · policies/HR</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Audit · HR Data Privacy Policy · DOC-014">Audit · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Review · HR Data Privacy Policy · DOC-014">Review · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Notes · HR Data Privacy Policy · DOC-014">Notes · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab active"><span class="pane-label" title="Configuration">Configuration</span><span class="pane-close">×</span></div></div>
     <div class="sidebar-foot">
       <span class="foot-label">Changes recorded as</span>
       <strong>Lukas Roth</strong>
@@ -270,7 +284,7 @@ tr:last-child td { border-bottom: 0; }
   <div class="main">
     <header class="header">
       <button class="ham-btn" title="Open left menu when folded">☰</button>
-      <h1>Maintenance</h1>
+      <h1>Configuration</h1>
       <div class="grow"></div>
       <span class="ham-note">☰ when menu folded</span>
       <span class="badge ok">Workspace healthy</span>
@@ -283,8 +297,42 @@ tr:last-child td { border-bottom: 0; }
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Lost source rows and reassociate recovery, rename/move with preserved ID, rescan, catalogues, withdraw. Microsoft Entra owns workflow people.</p>
+      <p class="subtitle">Document-type catalogue slice in Document defaults. The broader maintenance capability remains not implemented; its separate surface is retained below as a folded reference.</p>
+      <section class="configuration-nav" aria-label="Configuration navigation">
+    <div class="config-nav-head"><div><h3>Configuration</h3><p>Set up the workspace once, then choose the task that matches the setting you need.</p></div><span class="badge info">Current: Document defaults</span></div>
+    <nav class="config-tabs" aria-label="Configuration sections"><a class="config-tab" href="#"><strong>Workspace</strong><span>Roots and local metadata</span></a><a class="config-tab active" href="#" aria-current="page"><strong>Document defaults</strong><span>Classification and catalogues</span></a><a class="config-tab" href="#"><strong>Workflow</strong><span>People and role routing</span></a><a class="config-tab" href="#"><strong>Notifications</strong><span>Review and release email</span></a></nav>
+  </section>
       
+      <section class="card" style="margin-bottom:1rem">
+        <p class="label">Configuration → Document defaults · implemented catalogue slice</p>
+        <h3 class="card-title">Document types</h3>
+        <p class="muted">IDs stay in current document control and existing candidate, review, release, and audit evidence. Only future candidates resolve the replacement; affected active candidates are invalidated.</p>
+        <div class="grid-2">
+          <div class="stack">
+            <div class="row gap-2"><strong>Procedure (procedure)</strong><span class="badge ok">Enabled</span></div>
+            <label class="label">Display label <input value="Procedure"></label>
+            <div class="row gap-2"><code>procedure</code><button class="btn outline">Save label</button></div>
+            <label class="label">Future release type
+              <select name="replacementTypeId"><option value="policy" selected>Policy (policy)</option><option value="record">Record (record)</option></select>
+            </label>
+            <button class="btn outline">Update future-candidate migration</button>
+            <p class="hint">Saved mapping: procedure → policy. Both IDs remain enabled; neither side of this mapping can be disabled.</p>
+          </div>
+          <div class="stack">
+            <div class="row gap-2"><strong>Record (record)</strong><span class="badge ok">Enabled</span></div>
+            <label class="label">Display label <input value="Record"></label>
+            <div class="row gap-2"><code>record</code><button class="btn outline">Save label</button></div>
+            <label class="label">Future release type
+              <select name="replacementTypeId"><option value="" selected disabled>Choose a replacement type</option><option value="policy">Policy (policy)</option><option value="procedure">Procedure (procedure)</option></select>
+            </label>
+            <button class="btn outline">Migrate future candidates</button>
+            <p class="hint">Only other enabled types are offered. No eligible target disables the selector and action; invalid or cyclic mappings report an error without saving.</p>
+          </div>
+        </div>
+        <p class="hint">Current control: Procedure (procedure). A later candidate and its successful release: Policy (policy). Label renames change presentation only. PDF filenames, Markdown frontmatter, and confidentiality are unchanged.</p>
+      </section>
+      <details class="card">
+        <summary>Separate Maintenance surface · contract reference</summary>
       <div class="grid-explorer">
         <aside class="card">
           <h3 class="card-title">Actions</h3>
@@ -294,7 +342,7 @@ tr:last-child td { border-bottom: 0; }
             <button class="btn outline">Rescan library</button>
             <button class="btn outline">Workflow identity source</button>
             <button class="btn outline">Confidentiality catalogue</button>
-            <button class="btn outline">Document-type catalogue</button>
+            <button class="btn outline">Configuration → Document defaults</button>
             <button class="btn danger">Withdraw release</button>
             <button class="btn danger">Reject / request changes</button>
           </div>
@@ -313,7 +361,7 @@ tr:last-child td { border-bottom: 0; }
   </div>
           <p class="hint">Desktop Actions refuse an already-registered target. Core and CLI still absorb when the target's events are entirely later with no timestamp overlap; the target then leaves the library.</p>
         </section>
-      </div>
+      </div></details>
     </main>
   </div>
 </div>

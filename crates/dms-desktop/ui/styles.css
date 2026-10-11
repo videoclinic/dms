@@ -550,7 +550,7 @@ button { cursor: pointer; }
 .configuration-type-row.create { grid-template-columns: minmax(130px, .7fr) minmax(180px, 1fr) auto auto; }
 .configuration-type-row.confidentiality { grid-template-columns: minmax(180px, 1fr) minmax(120px, .6fr) auto auto auto; }
 .configuration-type-row.confidentiality.create { grid-template-columns: minmax(130px, .7fr) minmax(180px, 1fr) auto auto auto; }
-.configuration-type-row.confidentiality.migration { grid-template-columns: minmax(120px, .6fr) minmax(240px, 1fr) auto; }
+.configuration-type-row.migration { grid-template-columns: minmax(120px, .6fr) minmax(240px, 1fr) auto; }
 .configuration-enabled { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 13px; }
 .configuration-enabled input { width: auto; height: auto; }
 .configuration-secondary { display: grid; gap: 14px; }
@@ -578,5 +578,5 @@ button { cursor: pointer; }
   .configuration-routes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .configuration-grid, .configuration-defaults-grid { grid-template-columns: 1fr; }
   .configuration-notification-form > .configuration-grid { grid-template-columns: 1fr; }
-  .configuration-type-row, .configuration-type-row.create, .configuration-type-row.confidentiality, .configuration-type-row.confidentiality.create, .configuration-type-row.confidentiality.migration { grid-template-columns: 1fr; }
+  .configuration-type-row, .configuration-type-row.create, .configuration-type-row.confidentiality, .configuration-type-row.confidentiality.create, .configuration-type-row.migration { grid-template-columns: 1fr; }
 }

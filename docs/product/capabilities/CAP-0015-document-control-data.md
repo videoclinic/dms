@@ -13,8 +13,8 @@
    `<edit-root>/.dms/`, separate from the source file:
    - **title** (required operator-editable display name; defaults to draft stem)
    - **document number** (optional control identifier, unique in the workspace)
-   - **document type** (from a workspace catalogue, e.g. policy, procedure,
-     form, record, other)
+   - **document type** (a stable workspace-catalogue ID, e.g. `policy`,
+     `procedure`, `form`, `record`, `other`; never a stored display label)
    - **owner** (the selected eligible person's current-group binding and immutable
      Entra object ID; refreshed name/email are presentation only)
    These values are not imported from Office built-in or custom document
@@ -74,9 +74,18 @@
    applicable folder policy or document override (CAP-0019). Changing the
    effective approver while a request is open invalidates that request; a new
    review request is required. There is no silent mid-flight approver swap.
-9. Workspace catalogues for **document type** support add/rename/disable with
-   the same reference-protection rule as confidentiality types (CAP-0008 /
-   CAP-0013): types referenced by documents or history cannot be hard-deleted.
+9. Workspace **document types** support add, display-label rename, disabling
+   unused types, and explicit retained-ID migration in Configuration → Document
+   defaults (CAP-0013). Stable IDs are never renamed or deleted; current-control
+   references and both sides of a retained mapping prevent disabling a type.
+   Migration preserves current document control and the IDs in existing
+   candidate, review, release, and audit evidence. Candidates created afterward
+   snapshot the enabled replacement reached through the non-cyclic mapping
+   chain; a successful release retains that candidate's type ID in its immutable
+   profile without replacing the current-control ID. Changing a mapping
+   invalidates an active candidate whose resolved type changes, rather than
+   rewriting its snapshot. Document-type migration does not change source
+   files, Markdown controlled frontmatter, PDF filenames, or confidentiality.
 10. Document-profile edits are recorded as
     `document_control_data_changed` events with before/after values. Changing
     title, document number, document type, or owner while
@@ -123,7 +132,15 @@
     **Requested by**, **Responsible editor at release**, and **Approval**;
     current effective Editor/Approver values never fill these fields. Missing
     historic values are **Unrecorded**, and an approval-optional release is
-    **Not required**.
+    **Not required**. Every Document control data view, including the current
+    summary, edit selector, and immutable release profile, resolves its own
+    stored document-type ID through the current catalogue as
+    **Display label (type-id)**. Presentation never follows replacement
+    mappings. A catalogue-label rename changes presentation only; it does not
+    rewrite control, candidate, release, or audit data or add label snapshots.
+    If a corrupt or legacy detail response lacks the catalogue entry, its
+    retained ID remains visible, including in the edit selector. Form values
+    remain IDs, never labels.
 12. Title, document type, a resolved eligible owner, and a candidate effective
     date are required before review submission.
     Document number, when set, is trimmed and case-insensitively unique across

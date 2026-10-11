@@ -103,8 +103,8 @@
       "title": "Library maintenance",
       "html": "html/CAP-0013-library-maintenance.html",
       "png": "exports/CAP-0013-library-maintenance.png",
-      "nav": "maintenance",
-      "configSection": null
+      "nav": "config",
+      "configSection": "document-defaults"
     },
     {
       "id": "CAP-0014",

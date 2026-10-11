@@ -5,11 +5,13 @@
 | ID | CAP-0013 |
 | Status | not implemented |
 | Storage | `<edit-root>/.dms/` |
-| Tests | none |
+| Tests | Document-type catalogue slice only: [retained mappings, reference protection, and schema migration](../../../crates/dms-core/tests/policies.rs), [candidate/release snapshots](../../../crates/dms-core/tests/lifecycle.rs), [desktop adapter](../../../crates/dms-desktop/src/lib.rs), [Document defaults controls](../../../crates/dms-desktop/ui/configuration.test.mjs) |
 
-## Outcomes (contract — not yet true in runtime)
+## Outcomes (contract — capability not fully implemented)
 
-When implemented, the following must hold:
+The document-type catalogue slice in outcome 12 is implemented; the broader
+maintenance capability retains its `not implemented` status. The following
+defines the full contract:
 
 1. **Rename inside the edit root.** Rename/move performed through the app
    updates the relative locator while preserving stable document ID and
@@ -82,8 +84,23 @@ When implemented, the following must hold:
 11. **Office lock/temp sidecars.** Files matching Office lock/temp patterns
     (e.g. `~$…`) are never offered as library candidates and are ignored by
     rescan.
-12. **Document-type catalogue maintenance.** Same add/rename/disable rules as
-    confidentiality types (CAP-0015).
+12. **Document-type catalogue maintenance (implemented slice).** Configuration
+    → Document defaults supports adding types, renaming their display labels,
+    and disabling unused types. Stable IDs are never renamed or deleted. A
+    type referenced by current document control or either side of a retained
+    migration cannot be disabled. Each source row offers **Future release
+    type**, listing other enabled types as `Display label (type-id)`, and
+    **Migrate future candidates** (or **Update future-candidate migration**
+    for an existing mapping). With no eligible target, migration is disabled.
+    Core validation rejects missing, disabled, identical, or cyclic targets;
+    errors stay visible and successful saves refresh the catalogue.
+    The mapping retains current control and existing candidate, review, release,
+    and audit IDs; only later candidates resolve the replacement chain and
+    successful releases retain that candidate snapshot (CAP-0015). A changed
+    mapping invalidates affected active candidates without rewriting their
+    evidence. Display-label edits preserve the mapping. Document types have no
+    folder policies, PDF filename segment, or Markdown controlled frontmatter
+    key; confidentiality behaviour is unchanged.
 13. The **Drafts requiring attention** rescan-result table follows CAP-0005's
     growing-table interaction; its text filter case-insensitively matches DMS
     title, old path, finding status, and reassociation suggestion before

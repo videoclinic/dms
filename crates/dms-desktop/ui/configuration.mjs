@@ -220,8 +220,18 @@ function selectedPolicyMarkup(state) {
 function documentTypesMarkup(snapshot) {
   const rows = snapshot.document_types.length === 0
     ? '<p class="subtle">No document types configured.</p>'
-    : snapshot.document_types.map((type) => `<form class="configuration-type-row" data-configuration-form="document-type"><input type="hidden" name="id" value="${escapeHtml(type.id)}"><label><span class="visually-hidden">Label for ${escapeHtml(type.id)}</span><input name="label" required value="${escapeHtml(type.label)}"></label><code>${escapeHtml(type.id)}</code><label class="configuration-enabled"><input type="checkbox" name="enabled" ${type.enabled ? "checked" : ""}> Enabled</label><button class="button secondary" type="submit">Save</button></form>`).join("");
-  return `<section class="card configuration-card configuration-catalogue"><div class="configuration-card-heading"><div><h3>Document types</h3><p>Add, rename, or disable workspace document types.</p></div></div>${rows}<form class="configuration-type-row create" data-configuration-form="document-type"><label><span class="visually-hidden">New document type ID</span><input name="id" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="type-id"></label><label><span class="visually-hidden">New document type label</span><input name="label" required placeholder="Display label"></label><label class="configuration-enabled"><input type="checkbox" name="enabled" checked> Enabled</label><button class="button" type="submit">Create document type</button></form></section>`;
+    : snapshot.document_types.map((type) => {
+      const replacements = snapshot.document_types
+        .filter((candidate) => candidate.enabled && candidate.id !== type.id);
+      const canMigrate = replacements.length > 0;
+      const replacementOptions = [
+        `<option value="" disabled ${type.replacement_type_id ? "" : "selected"}>Choose a replacement type</option>`,
+        ...replacements.map((candidate) => `<option value="${escapeHtml(candidate.id)}" ${candidate.id === type.replacement_type_id ? "selected" : ""}>${escapeHtml(candidate.label)} (${escapeHtml(candidate.id)})</option>`),
+      ].join("");
+      const migrationLabel = type.replacement_type_id ? "Update future-candidate migration" : "Migrate future candidates";
+      return `<form class="configuration-type-row" data-configuration-form="document-type"><input type="hidden" name="id" value="${escapeHtml(type.id)}"><label><span class="visually-hidden">Label for ${escapeHtml(type.id)}</span><input name="label" required value="${escapeHtml(type.label)}"></label><code>${escapeHtml(type.id)}</code><label class="configuration-enabled"><input type="checkbox" name="enabled" ${type.enabled ? "checked" : ""}> Enabled</label><button class="button secondary" type="submit">Save</button></form><form class="configuration-type-row migration" data-configuration-form="document-type-migration"><input type="hidden" name="sourceTypeId" value="${escapeHtml(type.id)}"><code>${escapeHtml(type.id)}</code><label>Future release type<select name="replacementTypeId" required ${canMigrate ? "" : "disabled"}>${replacementOptions}</select></label><button class="button secondary" type="submit" ${canMigrate ? "" : "disabled"}>${migrationLabel}</button></form>`;
+    }).join("");
+  return `<section class="card configuration-card configuration-catalogue"><div class="configuration-card-heading"><div><h3>Document types</h3><p>Add, rename, or disable workspace document types. IDs are retained metadata keys. A migration keeps the source ID in current document control data and existing candidate, release, and audit evidence; only future candidates use the replacement type. Affected active candidates are invalidated. PDF filenames and Markdown frontmatter are unchanged.</p></div></div>${rows}<form class="configuration-type-row create" data-configuration-form="document-type"><label><span class="visually-hidden">New document type ID</span><input name="id" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="type-id"></label><label><span class="visually-hidden">New document type label</span><input name="label" required placeholder="Display label"></label><label class="configuration-enabled"><input type="checkbox" name="enabled" checked> Enabled</label><button class="button" type="submit">Create document type</button></form></section>`;
 }
 
 function markdownTemplateMarkup(snapshot) {
@@ -470,6 +480,15 @@ export function configurationMutationRequest(kind, values, selectedFolder) {
         id: formValue(values, "id"),
         label: formValue(values, "label"),
         enabled: values.has("enabled"),
+      },
+    };
+  }
+  if (kind === "document-type-migration") {
+    return {
+      command: "migrate_document_type",
+      arguments: {
+        sourceTypeId: formValue(values, "sourceTypeId"),
+        replacementTypeId: formValue(values, "replacementTypeId"),
       },
     };
   }
