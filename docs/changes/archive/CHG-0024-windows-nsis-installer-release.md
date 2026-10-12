@@ -5,12 +5,12 @@
 **Depends on:** none (CAP-0005 Phase 5 packaging slice)
 **Context sources:** `docs/product/capabilities/CAP-0005-desktop-shell.md`, `crates/dms-desktop/tauri.conf.json`, `.github/workflows/desktop-platform-smoke.yml`, `docs/changes/archive/CHG-0023-os-level-dms-uri-registration.md`, `docs/design-decisions.md` (ADR-0002 platform targets), `docs/architecture.md`
 **Produces:** On `v*` tag push, a `windows-latest` GitHub Actions run builds the NSIS installer (`crates/dms-desktop/tauri build --bundles nsis`), signs it with the Authenticode cert, uploads it to a GitHub Release alongside its SHA-256, and records the run id + size + hash in this CHG. The README's Windows install story is now "download the signed installer, run it".
-**Status:** in-progress
+**Status:** done — closed 2026-10-11
 
 | Field | Value |
 | --- | --- |
 | ID | CHG-0024 |
-| Status | in-progress |
+| Status | done |
 | External request | Direct operator request: "proceed as recommended with NSIS for Windows -- if I got it right. The release should be published on GitHub so using GitHub Actions is prefered" |
 | Affected CAPs | CAP-0005 |
 | Decision records | ADR-0027 (Windows installer distribution = signed NSIS on GitHub Releases, tag-driven workflow) |
@@ -35,12 +35,14 @@
 | 1 | `release-windows.yml` tag-driven workflow + first tagged release | done (2026-08-18) | Workflow file committed; tag `v0.1.0` published (run 32183590595); assets `DMS_Desktop_0.1.0_x64-setup.exe` (4.87 MB, sha256 `ed2ab70c…b91b59`) and `.sha256` sidecar; operator confirmed install + `dms://` URI on a real Windows host |
 | 2 | README install story + ADR-0027 + CAP-0005 update | done (2026-08-18) | README Windows install section present; ADR-0027 in `docs/design-decisions.md`; CAP-0005 outcome 5 references the workflow; `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `node --test crates/dms-desktop/ui/app.test.mjs` all green |
 | 3 | Smoke integration: release workflow runs do not regress the existing matrix | done (2026-08-18) | Non-tag push `f5ecc8e` triggered `Desktop platform smoke` runs 32138172649 + 32138171263, both `success`; zero `Release Windows installer` runs from the same push; `gh workflow list` shows both workflows active; `desktop-platform-smoke.yml` unmodified by this commit |
-| 4 | Records closeout: archive this CHG, refresh `docs/changes/README.md` | pending | CHG moved to `archive/`, status `done`, README active index updated, archive entry present |
-| 5 | Winget submission kit: `Build-WingetKit.ps1` + workflow step + operator runbook | in-progress (upstream validation) | Run 32248202153 passed the stable-tag build/sign/release/render/upload path; its `winget-bundle` artifact (9363474625) has all three header-bearing 1.12 manifests and `SUBMIT.md`, and its installer hash matches the published `v0.1.0` sidecar. The same final bundle is attached to the release. Upstream PR [microsoft/winget-pkgs#420554](https://github.com/microsoft/winget-pkgs/pull/420554) is open with exactly those three manifests; the personal CLA and validations 01–07 passed. Gate: upstream installation validation, installer metadata validation, final completion, and review must pass; then `winget install Videoclinic.DMSDesktop --version 0.1.0` must work from the public source. |
+| 4 | Records closeout: archive this CHG, refresh `docs/changes/README.md` | done (2026-10-11) | CHG moved to `archive/`, status `done`, README active index updated, archive entry present |
+| 5 | Winget submission kit: `Build-WingetKit.ps1` + workflow step + operator runbook | done (upstream merge and Windows install verified) | Run 32248202153 passed the stable-tag build/sign/release/render/upload path; its `winget-bundle` artifact (9363474625) has all three header-bearing 1.12 manifests and `SUBMIT.md`, and its installer hash matches the published `v0.1.0` sidecar. The same final bundle is attached to the release. Upstream PR [microsoft/winget-pkgs#420554](https://github.com/microsoft/winget-pkgs/pull/420554) merged at `2026-09-21T20:09:31Z`, with review approved and all validation checks successful. Windows public-source lookup confirmed version `0.1.0` and the expected installer URL/hash; installation exited 0 with `Successfully installed` after installer hash verification. Exact commands and handoff provenance are recorded under Phase 5. |
 
 Mark a phase `in-progress` while running it, `done` once its gate passes (record evidence), `pending` otherwise.
 
 Evidence (phase 1, partial):
+
+The following evidence is retained as recorded, including the pre-merge Phase 5 snapshot. Final Phase 5 closure evidence appears under Phase 5 below.
 
 - `release-windows.yml` committed; `gh act workflow_dispatch --dryrun` resolves the workflow and lists all 11 steps. Local Linux `gh act` cannot host `windows-latest`, so the CI run is the source of truth.
 - `gh-vault workflow check --env-file <empty>` reports exactly the three `WINDOWS_CERT_*` references and no other issues; the repo declares them in `.env` (2 secrets, 1 variable) and `gh-vault secret check` passes after sync.
@@ -85,6 +87,13 @@ Steps:
 ## Phase 5 — Winget submission kit
 
 **Goal:** Every stable release ships a ready-to-submit bundle of winget-pkgs manifests so the operator can publish to `winget install` in one `wingetcreate submit` call — without granting the release workflow write access to the operator's `winget-pkgs` fork.
+
+Final evidence (verified external results supplied in the closeout handoff; not re-executed during this documentation-only closeout):
+
+- Upstream PR [microsoft/winget-pkgs#420554](https://github.com/microsoft/winget-pkgs/pull/420554) is `MERGED` at `2026-09-21T20:09:31Z`, with review approved and all validation checks successful.
+- On the Windows host, `winget show --id Videoclinic.DMSDesktop --version 0.1.0 --source winget --accept-source-agreements` returned the public package with the expected v0.1.0 installer URL and SHA-256 `d78de0ca7d5f3e720b550f83499c48fb1af151f56fb42c83daafb111969e8690`.
+- On the Windows host, `winget install --id Videoclinic.DMSDesktop --version 0.1.0 --source winget --accept-source-agreements --accept-package-agreements --disable-interactivity` exited 0 and reported `Successfully installed` after installer hash verification.
+- The handoff does not specify the Windows probe timestamp; the upstream merge timestamp is not an installation timestamp. These results satisfy the remaining Phase 5 publication and public-source installation gate.
 
 Steps:
 

@@ -216,7 +216,7 @@ jobs:
           body: |
             Signed NSIS installer for Windows. Verify the SHA-256 sidecar next to the binary before installing.
             `dms-desktop-admx.zip` is the Group Policy / Intune administrative template; it is not required on endpoints.
-            See `docs/windows-entra-deployment.md` for deployment and `docs/changes/active/CHG-0024-windows-nsis-installer-release.md` for the installer contract.
+            See `docs/windows-entra-deployment.md` for deployment and `docs/changes/archive/CHG-0024-windows-nsis-installer-release.md` for the installer contract.
           files: |
             target/release/bundle/nsis/*.exe
             target/release/bundle/nsis/*.sha256
