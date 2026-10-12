@@ -5,7 +5,7 @@
 
 ## Goal and constraints
 
-Complete CHG-0040 Phase 2, as defined in [the task packet](task-packet-CHG-0040-phase-2.md) and [the active CHG](CHG-0040-document-type-id-migration.md). Implement the DMS Desktop adapter/configuration/Library presentation slice only. Preserve retained IDs and core-owned validation. Do not commit, push, deploy, access secrets, alter external state, or begin Phase 3.
+Complete CHG-0040 Phase 2, as defined in [the task packet](task-packet-CHG-0040-phase-2.md) and [the active CHG](../archive/CHG-0040-document-type-id-migration.md). Implement the DMS Desktop adapter/configuration/Library presentation slice only. Preserve retained IDs and core-owned validation. Do not commit, push, deploy, access secrets, alter external state, or begin Phase 3.
 
 ## Workspace and baseline
 

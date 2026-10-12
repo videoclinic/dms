@@ -2,7 +2,7 @@
 
 **Prepared:** 2026-10-11T16:57:18+02:00
 **Status:** implementation, independent verification, and configured reviewer-model review complete; Phase 2 integrated without a commit
-**Progress authority:** [CHG-0040](CHG-0040-document-type-id-migration.md), Phase 2
+**Progress authority:** [CHG-0040](../archive/CHG-0040-document-type-id-migration.md), Phase 2
 
 ## Outcome
 
