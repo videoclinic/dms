@@ -6255,7 +6255,7 @@ mod tests {
         assert!(load_periodic_reviews(root.clone()).unwrap().is_empty());
         let archive = directory.path().join("workspace.zip");
         let outcome = backup_workspace(root, archive.to_string_lossy().into_owned()).unwrap();
-        assert_eq!(outcome.entry_count, 1);
+        assert_eq!(outcome.entry_count, 2);
         assert_eq!(outcome.manifest_digest.len(), 64);
         assert!(archive.is_file());
     }

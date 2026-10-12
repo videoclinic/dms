@@ -7,6 +7,7 @@ use std::{
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -34,9 +35,11 @@ pub use policies::*;
 pub use source_history::*;
 pub use template::*;
 
-pub const SCHEMA_VERSION: u32 = 19;
+pub const SCHEMA_VERSION: u32 = 20;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
+const AGENT_INSTRUCTIONS_FILENAME: &str = "AGENTS.md";
+const AGENT_INSTRUCTIONS_REVISION: u32 = 1;
 
 pub type Result<T> = std::result::Result<T, DmsError>;
 
@@ -331,6 +334,15 @@ pub struct Workspace {
     pub(crate) lock_stale_after_hours: u32,
     #[serde(default)]
     pub(crate) markdown_template: Option<MarkdownTemplateAsset>,
+    #[serde(default)]
+    agent_instructions: Option<AgentInstructions>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct AgentInstructions {
+    revision: u32,
+    content_sha256: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -446,7 +458,7 @@ impl Workspace {
             source,
         })?;
 
-        let workspace = Self {
+        let mut workspace = Self {
             schema_version: SCHEMA_VERSION,
             workspace_id: Uuid::new_v4(),
             edit_root,
@@ -464,7 +476,9 @@ impl Workspace {
             workspace_events: Vec::new(),
             lock_stale_after_hours: default_lock_stale_after_hours(),
             markdown_template: None,
+            agent_instructions: None,
         };
+        workspace.synchronize_agent_instructions()?;
         workspace.save()?;
         Ok(workspace)
     }
@@ -489,7 +503,7 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = matches!(found, 1..=18);
+        let migrated = matches!(found, 1..=19);
         if found == 1 {
             migrate_v1_catalogues(&mut value)?;
         }
@@ -517,6 +531,9 @@ impl Workspace {
         if found <= 18 {
             migrate_v19_document_type_replacements(&mut value);
         }
+        if found <= 19 {
+            migrate_v20_agent_instructions(&mut value);
+        }
         if migrated {
             value["schema_version"] = serde_json::Value::from(SCHEMA_VERSION);
         } else if found != SCHEMA_VERSION {
@@ -525,7 +542,7 @@ impl Workspace {
                 found,
             });
         }
-        let workspace: Self =
+        let mut workspace: Self =
             serde_json::from_value(value).map_err(|source| DmsError::InvalidMetadata {
                 path: workspace_metadata_path(&requested_edit_root),
                 source,
@@ -537,6 +554,7 @@ impl Workspace {
             });
         }
         workspace.validate()?;
+        let instructions_changed = workspace.synchronize_agent_instructions()?;
         if migrated {
             let serialized = serde_json::to_vec_pretty(&workspace).map_err(|source| {
                 DmsError::InvalidMetadata {
@@ -554,6 +572,9 @@ impl Workspace {
             retain_migration_backup(&metadata_path, found, content.as_bytes())?;
             verified.save()?;
             return Ok(verified);
+        }
+        if instructions_changed {
+            workspace.save()?;
         }
         Ok(workspace)
     }
@@ -943,6 +964,58 @@ impl Workspace {
         Ok((absolute_path, relative_path))
     }
 
+    fn synchronize_agent_instructions(&mut self) -> Result<bool> {
+        let path = agent_instructions_path(&self.edit_root);
+        let current = agent_instructions_content();
+        let current_fingerprint = AgentInstructions {
+            revision: AGENT_INSTRUCTIONS_REVISION,
+            content_sha256: content_sha256(current.as_bytes()),
+        };
+        let existing = match fs::read(&path) {
+            Ok(content) => Some(content),
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => None,
+            Err(source) => {
+                return Err(DmsError::Io { path, source });
+            }
+        };
+
+        match existing {
+            None => write_agent_instructions(&path, current.as_bytes())?,
+            Some(existing) if existing == current.as_bytes() => {}
+            Some(_)
+                if self
+                    .agent_instructions
+                    .as_ref()
+                    .is_some_and(|recorded| recorded.revision == AGENT_INSTRUCTIONS_REVISION) =>
+            {
+                return Ok(false);
+            }
+            Some(existing)
+                if self.agent_instructions.as_ref().is_some_and(|recorded| {
+                    recorded.content_sha256 == content_sha256(&existing)
+                }) =>
+            {
+                write_agent_instructions(&path, current.as_bytes())?;
+            }
+            Some(_) => {
+                fs::rename(&path, agent_instructions_backup_path(&self.edit_root)?).map_err(
+                    |source| DmsError::Io {
+                        path: path.clone(),
+                        source,
+                    },
+                )?;
+                write_agent_instructions(&path, current.as_bytes())?;
+            }
+        }
+
+        if self.agent_instructions.as_ref() == Some(&current_fingerprint) {
+            Ok(false)
+        } else {
+            self.agent_instructions = Some(current_fingerprint);
+            Ok(true)
+        }
+    }
+
     fn ensure_document_number_available(
         &self,
         document_id: Uuid,
@@ -969,6 +1042,95 @@ impl Workspace {
 
 fn workspace_metadata_path(edit_root: &Path) -> PathBuf {
     edit_root.join(METADATA_DIRECTORY).join(METADATA_FILENAME)
+}
+
+fn agent_instructions_path(edit_root: &Path) -> PathBuf {
+    edit_root
+        .join(METADATA_DIRECTORY)
+        .join(AGENT_INSTRUCTIONS_FILENAME)
+}
+
+fn agent_instructions_backup_path(edit_root: &Path) -> Result<PathBuf> {
+    let directory = edit_root.join(METADATA_DIRECTORY);
+    let stamp = Utc::now().format("%Y%m%dT%H%M%S%.3fZ");
+    for suffix in 0_u32.. {
+        let filename = if suffix == 0 {
+            format!("AGENTS-{stamp}.md")
+        } else {
+            format!("AGENTS-{stamp}-{suffix}.md")
+        };
+        let candidate = directory.join(filename);
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    unreachable!("u32 sequence is finite")
+}
+
+fn write_agent_instructions(path: &Path, content: &[u8]) -> Result<()> {
+    fs::write(path, content).map_err(|source| DmsError::Io {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
+fn content_sha256(content: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(content))
+}
+
+fn agent_instructions_content() -> &'static str {
+    r#"# DMS library agent instructions
+
+This file is generated and versioned by DMS. It explains how an agent can make
+controlled changes to this library. Do not edit `workspace.json` directly.
+
+## Start safely
+
+1. Run `dms --json workspace verify --edit-root <edit-root>` before a change.
+2. Use `dms --json document list --edit-root <edit-root>` to obtain stable
+   document IDs and source-relative paths. Use `document show` for one ID.
+3. Make source edits only to files under the edit root. DMS never discovers or
+   registers a source automatically.
+4. After a metadata mutation, rerun `workspace verify` and inspect the JSON
+   result. Use `--json` for automation; it returns structured metadata, not
+   source document bytes.
+
+## CLI mutations
+
+- Initialize a new library once: `dms workspace init --edit-root <edit-root>
+  --publish-root <publish-root> --confirm`.
+- Register an existing in-root `.md`, `.docx`, `.xlsx`, or `.pptx` draft:
+  `dms --json document add --edit-root <edit-root> --path <source-path>`.
+- Change DMS-managed control data with the returned UUID: `dms --json document
+  update-control --edit-root <edit-root> --document <document-id> --title
+  <title>`. Do not change the document ID or source-relative path in metadata.
+- Use `dms --json note add`, `note edit`, and `note remove` for document notes;
+  use the `workspace lock-*`, `backup`, and `restore` commands only with their
+  explicit confirmation options when required.
+
+## workspace.json
+
+`<edit-root>/.dms/workspace.json` is the DMS-owned, versioned workspace store.
+It contains `schema_version`, the stable `workspace_id`, canonical edit/publish
+roots, and documents keyed by stable IDs. Each document records an edit-root-
+relative source locator separately from DMS-managed control data, lifecycle,
+notes, policies, and audit evidence. It contains no source-document bytes or
+credentials.
+
+DMS validates this file on every open. A newer DMS can migrate an older schema,
+retaining the prior file as `.dms/workspace.v<version>.json.bak`. Make durable
+metadata changes through the CLI so validation, audit evidence, controlled
+Markdown frontmatter projection, and atomic persistence remain intact.
+
+## Updating these instructions
+
+`workspace.json` records the exact generated instruction revision and SHA-256
+fingerprint. When DMS upgrades its instruction template, it replaces only a file
+whose bytes still match that recorded original. If an existing `.dms/AGENTS.md`
+has local changes, DMS first moves it to `.dms/AGENTS-<STAMP>.md`, writes the
+current original here, and leaves the timestamped file for the operator to merge
+manually. DMS never parses or applies that merge.
+"#
 }
 
 fn retain_migration_backup(metadata_path: &Path, from: u32, content: &[u8]) -> Result<()> {
@@ -1095,6 +1257,15 @@ fn migrate_v19_document_type_replacements(value: &mut serde_json::Value) {
             .entry("replacement_type_id".to_owned())
             .or_insert(serde_json::Value::Null);
     }
+}
+
+fn migrate_v20_agent_instructions(value: &mut serde_json::Value) {
+    let Some(workspace) = value.as_object_mut() else {
+        return;
+    };
+    workspace
+        .entry("agent_instructions".to_owned())
+        .or_insert(serde_json::Value::Null);
 }
 
 fn migrate_v11_release_bound_control(value: &mut serde_json::Value) {

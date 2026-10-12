@@ -9,7 +9,7 @@ persistence.
 
 | Path | Owns |
 | --- | --- |
-| `src/lib.rs` | Versioned workspace store, migration boundary, document-control data, and notes API |
+| `src/lib.rs` | Versioned workspace store, migration boundary, DMS-managed agent instructions, document-control data, and notes API |
 | `src/assistance.rs` | Optional Claude Desktop policy, released-PDF/source comparison payloads, and assistance evidence |
 | `src/audit.rs` | Filtered deterministic CSV/PDF audit reports, report-file integrity, and workspace report evidence |
 | `src/catalogues.rs` | Document-type catalogue primitives plus shared stable-ID and label validation |
@@ -58,6 +58,10 @@ persistence.
   release record cannot be reported independently.
 - Schema migrations retain the source metadata backup and verify the migrated
   shape before atomically replacing `workspace.json`.
+- `.dms/AGENTS.md` is a versioned DMS artifact. Workspace metadata fingerprints
+  its generated original; an instruction-template revision preserves modified
+  operator guidance as `AGENTS-<STAMP>.md` for manual merge before writing the
+  new original.
 - Folder policies target only existing edit-root-relative directories, exclude
   `.dms`, and retain non-removable root defaults once configured.
 - Microsoft Entra workspace metadata contains tenant/group identifiers and a
@@ -194,6 +198,9 @@ persistence.
   `v18.json.bak`. Mappings retain the current document-control ID, invalidate
   affected active candidates, and resolve only into later candidate/release
   snapshots.
+- Schema v20 records the DMS-generated agent-instruction revision and SHA-256
+  fingerprint. Its v19 migration preserves any pre-existing `.dms/AGENTS.md`
+  as manual merge input before installing the generated original.
 
 ## Verification
 

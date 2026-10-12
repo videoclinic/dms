@@ -175,6 +175,10 @@ fn cli_initializes_registers_and_lists_a_document_as_json() {
     );
     let workspace: Value = serde_json::from_slice(&init.stdout).expect("workspace JSON");
     assert!(workspace["workspace_id"].is_string());
+    let instructions =
+        fs::read_to_string(edit_root.path().join(".dms/AGENTS.md")).expect("agent instructions");
+    assert!(instructions.contains("dms --json workspace verify"));
+    assert!(instructions.contains("workspace.json"));
 
     let add = dms()
         .arg("--json")

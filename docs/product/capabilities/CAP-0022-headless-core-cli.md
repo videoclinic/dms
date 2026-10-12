@@ -12,9 +12,11 @@
 
 The CLI provides explicit, local operations over the shared `dms-core` library:
 
-1. `dms workspace init` requires `--confirm`, creates `.dms/workspace.json`,
-   records canonical edit and publish roots plus a stable workspace ID, and
-   refuses to overwrite an existing workspace.
+1. `dms workspace init` requires `--confirm`, creates `.dms/workspace.json`
+   plus the DMS-managed `.dms/AGENTS.md`, records canonical edit and publish
+   roots plus a stable workspace ID, and refuses to overwrite an existing
+   workspace. The generated instructions describe JSON-oriented agent use and
+   the workspace store without exposing source bytes or credentials.
 2. `dms workspace status` and `dms workspace verify` reopen and validate the
    stored schema and metadata without a Tauri or WebView runtime.
 3. `dms document add` accepts only regular `.md`, `.docx`, `.xlsx`, and `.pptx`

@@ -2738,7 +2738,7 @@ fn backup_archive_contains_metadata_controlled_sources_releases_and_verified_man
         .join("workspace.zip");
 
     let backup = fixture.workspace.backup_workspace(&archive_path).unwrap();
-    assert_eq!(backup.entry_count, 3);
+    assert_eq!(backup.entry_count, 4);
     assert_eq!(backup.manifest_digest.len(), 64);
     let file = fs::File::open(&archive_path).unwrap();
     let mut archive = zip::ZipArchive::new(file).unwrap();
@@ -2755,6 +2755,7 @@ fn backup_archive_contains_metadata_controlled_sources_releases_and_verified_man
         .map(|entry| entry.archive_path.as_str())
         .collect::<Vec<_>>();
     assert!(paths.contains(&"edit/.dms/workspace.json"));
+    assert!(paths.contains(&"edit/.dms/AGENTS.md"));
     assert!(paths.contains(&"edit/Policies/Handbook.md"));
     let pdf_archive =
         format!("publish/{}", outcome.release.relative_pdf_path.display()).replace('\\', "/");

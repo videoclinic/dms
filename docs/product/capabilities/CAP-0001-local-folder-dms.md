@@ -40,12 +40,19 @@
    no Entra tenant/client ID, SMTP password, OAuth token, or other credential.
    The non-secret Entra public-client and tenant IDs are OS-user app-global
    settings shared by local libraries.
-9. **Workspace** is the first route inside CAP-0005's Configuration workspace.
+9. Every initialized workspace has a DMS-managed `.dms/AGENTS.md` for agents
+   operating the library. It documents the safe `dms --json` workflow and the
+   DMS-owned `workspace.json` model. Workspace metadata records the generated
+   instruction revision and SHA-256 fingerprint. When a newer instruction
+   revision opens a library, DMS replaces only an unchanged generated original;
+   it moves a locally changed file to `.dms/AGENTS-<STAMP>.md`, writes the
+   current original, and leaves the timestamped file for operator merging.
+10. **Workspace** is the first route inside CAP-0005's Configuration workspace.
    When no workspace is open, the same route is the sole **Set up workspace**
    entry point; it guides the operator through edit-root and publish-root
    selection and the explicit `.dms` initialization confirmation. Other
    Configuration routes remain unavailable until that workspace exists.
-10. The setup page lists at most the ten most recently opened edit roots in
+11. The setup page lists at most the ten most recently opened edit roots in
     most-recent-first order. The list is stored in per-user app preferences,
     not `.dms`; reopening promotes the library to the first position, and
     removing an entry changes only this history. A failed reopen reports its
@@ -53,10 +60,10 @@
     explicit open form, where stale-only takeover or overriding any existing
     lock remains an explicit operator choice. The latter warns that another
     application instance may still be writing workspace metadata.
-11. Every field that selects a directory has a native **Browse…** action. The
+12. Every field that selects a directory has a native **Browse…** action. The
     picker starts at the OS user's home directory and writes the selected local
     filesystem path into the field; cancelling it leaves the field unchanged.
-12. On Windows, a successful workspace initialization or explicit open writes
+13. On Windows, a successful workspace initialization or explicit open writes
     `<edit-root>/Open in DMS.lnk`. Activating it sends
     `dms://open?workspace=<workspace-id>` through the registered handler and
     opens that registered accessible workspace at `Library · /` with no

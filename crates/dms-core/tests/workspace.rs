@@ -53,6 +53,80 @@ fn workspace_init_persists_canonical_roots_and_stable_id() {
 }
 
 #[test]
+fn workspace_init_writes_versioned_agent_instructions() {
+    let (edit_root, _publish_root, _workspace) = initialized_workspace();
+    let instructions_path = edit_root.path().join(".dms/AGENTS.md");
+    let instructions = fs::read_to_string(&instructions_path).expect("agent instructions");
+    assert!(instructions.contains("dms --json workspace verify"));
+    assert!(instructions.contains("workspace.json"));
+    assert!(instructions.contains("AGENTS-<STAMP>.md"));
+
+    let metadata: serde_json::Value = serde_json::from_slice(
+        &fs::read(edit_root.path().join(".dms/workspace.json")).expect("metadata"),
+    )
+    .expect("metadata JSON");
+    assert_eq!(metadata["agent_instructions"]["revision"], 1);
+    assert!(metadata["agent_instructions"]["content_sha256"]
+        .as_str()
+        .is_some_and(|digest| digest.len() == 64));
+}
+
+#[test]
+fn workspace_upgrade_preserves_modified_agent_instructions_for_merge() {
+    let (edit_root, _publish_root, _workspace) = initialized_workspace();
+    let metadata_path = edit_root.path().join(".dms/workspace.json");
+    let mut metadata: serde_json::Value =
+        serde_json::from_slice(&fs::read(&metadata_path).expect("metadata"))
+            .expect("metadata JSON");
+    metadata["agent_instructions"]["revision"] = serde_json::Value::from(0);
+    fs::write(
+        &metadata_path,
+        serde_json::to_vec_pretty(&metadata).unwrap(),
+    )
+    .unwrap();
+
+    let instructions_path = edit_root.path().join(".dms/AGENTS.md");
+    fs::write(&instructions_path, "# Local operator additions\n").expect("local instructions");
+    Workspace::open(edit_root.path()).expect("upgrade workspace");
+
+    let current = fs::read_to_string(&instructions_path).expect("current instructions");
+    assert!(current.contains("DMS library agent instructions"));
+    let backups = fs::read_dir(edit_root.path().join(".dms"))
+        .expect("metadata directory")
+        .map(|entry| entry.expect("metadata entry").file_name())
+        .filter(|name| name.to_string_lossy().starts_with("AGENTS-"))
+        .collect::<Vec<_>>();
+    assert_eq!(backups.len(), 1);
+    assert_eq!(
+        fs::read_to_string(edit_root.path().join(".dms").join(&backups[0]))
+            .expect("preserved instructions"),
+        "# Local operator additions\n"
+    );
+}
+
+#[test]
+fn workspace_open_leaves_current_revision_agent_customizations_in_place() {
+    let (edit_root, _publish_root, _workspace) = initialized_workspace();
+    let instructions_path = edit_root.path().join(".dms/AGENTS.md");
+    fs::write(&instructions_path, "# Local operator additions\n").expect("local instructions");
+
+    Workspace::open(edit_root.path()).expect("open workspace");
+
+    assert_eq!(
+        fs::read_to_string(&instructions_path).expect("local instructions"),
+        "# Local operator additions\n"
+    );
+    assert_eq!(
+        fs::read_dir(edit_root.path().join(".dms"))
+            .expect("metadata directory")
+            .map(|entry| entry.expect("metadata entry").file_name())
+            .filter(|name| name.to_string_lossy().starts_with("AGENTS-"))
+            .count(),
+        0
+    );
+}
+
+#[test]
 fn document_control_is_persisted_independently_from_source_locator() {
     let (edit_root, _publish_root, mut workspace) = initialized_workspace();
     workspace
@@ -275,6 +349,53 @@ fn schema_v17_group_binding_migrates_without_inferring_a_tenant() {
         )),
         Err(DmsError::UnverifiedEntraIdentitySource)
     ));
+}
+
+#[test]
+fn schema_v19_migration_preserves_existing_agent_instructions_for_merge() {
+    let (edit_root, _publish_root, workspace) = initialized_workspace();
+    workspace.save().expect("current workspace");
+
+    let metadata_path = edit_root.path().join(".dms/workspace.json");
+    let mut metadata: serde_json::Value =
+        serde_json::from_slice(&fs::read(&metadata_path).expect("metadata"))
+            .expect("metadata JSON");
+    metadata["schema_version"] = serde_json::Value::from(19);
+    metadata
+        .as_object_mut()
+        .expect("workspace metadata")
+        .remove("agent_instructions");
+    fs::write(
+        &metadata_path,
+        serde_json::to_vec_pretty(&metadata).expect("metadata JSON"),
+    )
+    .expect("legacy metadata");
+    fs::write(
+        edit_root.path().join(".dms/AGENTS.md"),
+        "# Existing library guidance\n",
+    )
+    .expect("existing instructions");
+
+    let migrated = Workspace::open(edit_root.path()).expect("v19 migration");
+    assert_eq!(migrated.schema_version, SCHEMA_VERSION);
+    assert!(edit_root
+        .path()
+        .join(".dms/workspace.v19.json.bak")
+        .is_file());
+    assert!(fs::read_to_string(edit_root.path().join(".dms/AGENTS.md"))
+        .expect("current instructions")
+        .contains("DMS library agent instructions"));
+    let backups = fs::read_dir(edit_root.path().join(".dms"))
+        .expect("metadata directory")
+        .map(|entry| entry.expect("metadata entry").file_name())
+        .filter(|name| name.to_string_lossy().starts_with("AGENTS-"))
+        .collect::<Vec<_>>();
+    assert_eq!(backups.len(), 1);
+    assert_eq!(
+        fs::read_to_string(edit_root.path().join(".dms").join(&backups[0]))
+            .expect("preserved instructions"),
+        "# Existing library guidance\n"
+    );
 }
 
 #[test]
