@@ -101,10 +101,13 @@
 3. Selecting one or more **Not in library** supported source files
    shows their names, relative paths, and membership state in the right selection
    pane. For exactly one file, that pane exposes **Add to library**. For two or
-   more selected files, it exposes **Add _N_ documents to library** only when
+   more selected files, it exposes **Execute: Add _N_ documents to library** only when
    every selected row is a supported in-root source file that is not already
-   registered. Add fails for a path outside the edit root or an already
-   registered file. There is no header-level `Add documents` picker: the
+   registered. The explicit batch action opens or focuses CAP-0005's **Batch
+   execution** activity and dispatches one atomic batch-add command for the
+   captured selection, not one command per file. Add fails for a path outside
+   the edit root or an already registered file. There is no header-level
+   `Add documents` picker: the
    selection makes every action target explicit.
 4. Operator can **unregister** a document from the active library. Unregister
    sets membership to `unregistered` and preserves the stable ID, document
@@ -183,13 +186,27 @@
    subsection provides no edit, delete, approval, release, or version control.
 7. **Multi-select** of two or more file rows uses the **same selection pane**.
    It provides a batch summary (count, short identity list, clear) and
-   **multi-applicable actions only**. A homogeneous selection of **Not in
-   library** supported source files exposes **Add _N_ documents to library**.
-   A homogeneous selection of **In library** documents replaces document
-   control data with its applicable batch actions. Mixed selections and
-   unsupported files expose no action that cannot apply to every selected row. Single-document
-   actions are hidden until the selection returns to exactly one document. There
-   is no separate hamburger or list-embedded action strip for batch work.
+   **only the two implemented homogeneous batch actions**. A selection entirely
+   of **Not in library** supported in-root source files exposes **Execute: Add
+   _N_ documents to library**. A selection entirely of registered documents
+   (**In library** or **Lost source**) exposes **Execute: Unregister _N_
+   documents** instead of document control data. Mixed membership, folders, and
+   unsupported files have no executable batch action. Single-document actions
+   are hidden until exactly one document is selected. There is no separate
+   hamburger, list-embedded action strip, or generic command picker for batch work.
+
+   Execution captures the action and source names/document IDs, retains the
+   Library selection until the result is known, and opens or focuses **Batch
+   execution**. Each execution dispatches its existing atomic batch command
+   once and records one operation-level success or error for the whole captured
+   selection, never fabricated per-file results. Before unregister dispatch, a
+   warning states that only membership is removed; source files, stable IDs,
+   document control data, workflow/release history, and checksums are preserved.
+   Success refreshes the Library. Rejection retains the selection and reports
+   that success was not confirmed, without claiming partial success or
+   filesystem rollback. A refresh failure after success is a separate refresh
+   error, not a rejected mutation. There are no per-file retries or
+   continue-on-error execution.
 8. Selection-pane actions invoke capabilities owned elsewhere; they do not
    redefine those contracts. With one document selected, actions include at
    least:
@@ -219,10 +236,11 @@
    Mark obsolete, Start periodic review, Claude change assistance, and any other
    action that requires the draft bytes. Open latest released PDF (when the PDF
    exists), Notes, Copy permalink, Reassociate source, Unregister, and read-only
-   workflow evidence remain available. Multi-select exposes only multi-applicable
-   actions (including batch add for a homogeneous selection of unregistered
-   supported source files, plus bulk verify where defined and multi-unregister
-   of registered selections). Copy permalink is single-selection only.
+   workflow evidence remain available. Multi-select exposes only homogeneous
+   batch add and unregister through the explicit **Execute:** actions and
+   operation-level **Batch execution** results in Outcome 7. Integrity
+   verification, release, review, reassociation, and permalink actions are not
+   batch actions. Copy permalink is single-selection only.
    Per-document actions such as Submit for review, Mark obsolete, Start periodic
    review, and Copy permalink are not exposed as batch actions — "Send reminder"
    is a per-document periodic reminder action (CAP-0017) and is also not a batch

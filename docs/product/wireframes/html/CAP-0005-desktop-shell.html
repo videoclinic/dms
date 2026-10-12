@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>CAP-0005 — Desktop shell overview · DMS Desktop</title>
+<title>CAP-0005 — Desktop shell · Batch execution · DMS Desktop</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -256,9 +256,9 @@ tr:last-child td { border-bottom: 0; }
     </div>
     <nav class="nav"><a class="nav-item active" href="#">📚 <span>Library</span></a><a class="nav-item" href="#">📦 <span>Releases</span></a><a class="nav-item" href="#">📋 <span>Audit & Reports</span></a><a class="nav-item" href="#">🧰 <span>Maintenance</span></a><a class="nav-item" href="#">⚙️ <span>Configuration</span></a></nav>
     <div class="pane-sec">Saved views</div>
-    <div class="pane-tabs"><div class="pane-tab saved-view"><span class="bookmark-mark">★</span><span class="pane-label" title="Library · policies/HR">Library · policies/HR</span><span class="pane-remove" title="Remove saved view">−</span></div><div class="pane-tab saved-view"><span class="bookmark-mark">★</span><span class="pane-label" title="Shell chrome">Shell chrome</span><span class="pane-remove" title="Remove saved view">−</span></div></div>
+    <div class="pane-tabs"><div class="pane-tab saved-view"><span class="bookmark-mark">★</span><span class="pane-label" title="Library · policies/HR">Library · policies/HR</span><span class="pane-remove" title="Remove saved view">−</span></div></div>
     <div class="pane-sec">Open panes</div>
-    <div class="pane-tabs"><div class="pane-tab"><span class="pane-label" title="Library · policies/HR">Library · policies/HR</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Audit · HR Data Privacy Policy · DOC-014">Audit · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Review · HR Data Privacy Policy · DOC-014">Review · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Notes · HR Data Privacy Policy · DOC-014">Notes · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab active"><span class="pane-label" title="Shell chrome">Shell chrome</span><span class="pane-close">×</span></div></div>
+    <div class="pane-tabs"><div class="pane-tab"><span class="pane-label" title="Library · policies/HR">Library · policies/HR</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Audit · HR Data Privacy Policy · DOC-014">Audit · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Review · HR Data Privacy Policy · DOC-014">Review · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab"><span class="pane-label" title="Notes · HR Data Privacy Policy · DOC-014">Notes · HR Data Privacy Policy · DOC-014</span><span class="pane-close">×</span></div><div class="pane-tab active"><span class="pane-label" title="Batch execution">Batch execution</span><span class="pane-close">×</span></div></div>
     <div class="sidebar-foot">
       <span class="foot-label">Changes recorded as</span>
       <strong>Lukas Roth</strong>
@@ -270,16 +270,16 @@ tr:last-child td { border-bottom: 0; }
   <div class="main">
     <header class="header">
       <button class="ham-btn" title="Open left menu when folded">☰</button>
-      <h1>Shell chrome</h1>
+      <h1>Batch execution</h1>
       <div class="grow"></div>
       <span class="ham-note">☰ when menu folded</span>
       <span class="badge ok">Workspace healthy</span>
-      <div class="header-actions"><button class="btn outline bookmark-btn saved" title="Remove bookmark" aria-pressed="true">★ Bookmarked</button></div>
+      <div class="header-actions"></div>
     </header>
     <main class="content">
       <div class="cap-head">
         <span class="badge info">CAP-0005</span>
-        <h2>Desktop shell overview</h2>
+        <h2>Desktop shell · Batch execution</h2>
         <span class="badge muted">Status: not implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
@@ -295,6 +295,60 @@ tr:last-child td { border-bottom: 0; }
     .app[data-cap="CAP-0005"] .content { min-height: 0; overflow: auto; overscroll-behavior: contain; }
 
   </style>
+      <section class="card" aria-label="Batch execution normal state">
+    <div class="row between mb"><h3 class="card-title" style="margin:0">Batch execution</h3><span class="badge info">Session only</span></div>
+    <p class="muted">One reusable activity for this workspace. Later batches retain earlier messages and select All. Closing this pane or leaving the workspace discards the log, not an already-dispatched operation.</p>
+    <div class="row gap-2" style="flex-wrap:wrap">
+    <div class="row gap-2" role="group" aria-label="Filter batch messages" style="flex-wrap:wrap">
+    <button class="btn" aria-pressed="true">All</button><button class="btn outline" aria-pressed="false">Success</button><button class="btn outline" aria-pressed="false">Warning</button><button class="btn outline" aria-pressed="false">Error</button>
+    </div>
+    <button class="btn outline">Delete shown messages</button>
+  </div>
+    <div class="stack" role="log" aria-label="Batch execution messages" aria-live="polite" style="margin-top:0.75rem">
+      <article class="layer"><div class="row gap-2"><span class="badge ok">Success</span><strong>Add 2 documents to library</strong></div><p>The complete selected batch succeeded.</p><p class="muted">Risk assessment.md · Employee onboarding.docx</p></article>
+      <article class="layer"><div class="row gap-2"><span class="badge warn">Warning</span><strong>Unregister 2 documents</strong></div><p>Unregister removes library membership only. It does not delete source files, stable IDs, document control data, workflow/release history, or checksums.</p><p class="muted">Handbook.docx · doc-77a12bce; Code_of_conduct.docx · doc-18b46dae</p></article>
+      <article class="layer"><div class="row gap-2"><span class="badge danger">Error</span><strong>Unregister 2 documents</strong></div><p>Batch request failed; success was not confirmed. The selection is retained. Check the selected files and workspace access before trying again.</p><p class="muted">Handbook.docx · doc-77a12bce; Code_of_conduct.docx · doc-18b46dae</p></article>
+    </div>
+    <p class="hint">Synthetic operation-level examples, not per-file results. Warning precedes unregister dispatch. This log is not audit evidence, notification history, a saved view, or workspace metadata.</p>
+  </section>
+  <div class="grid-2" aria-label="Alternative batch log states">
+    <section class="card" aria-label="Success filter state">
+      <h3 class="card-title">Filtered · Success</h3>
+      <div class="row gap-2" style="flex-wrap:wrap">
+    <div class="row gap-2" role="group" aria-label="Filter batch messages" style="flex-wrap:wrap">
+    <button class="btn outline" aria-pressed="false">All</button><button class="btn" aria-pressed="true">Success</button><button class="btn outline" aria-pressed="false">Warning</button><button class="btn outline" aria-pressed="false">Error</button>
+    </div>
+    <button class="btn outline">Delete shown messages</button>
+  </div>
+      <div style="margin-top:0.75rem"><article class="layer"><div class="row gap-2"><span class="badge ok">Success</span><strong>Add 2 documents to library</strong></div><p>The complete selected batch succeeded.</p><p class="muted">Risk assessment.md · Employee onboarding.docx</p></article></div>
+      <p class="hint">Only success is shown. Delete shown messages removes this entry, leaving the warning and error untouched.</p>
+    </section>
+    <section class="card" aria-label="Empty Error filter after deletion">
+      <h3 class="card-title">After deleting shown Error messages</h3>
+      <div class="row gap-2" style="flex-wrap:wrap">
+    <div class="row gap-2" role="group" aria-label="Filter batch messages" style="flex-wrap:wrap">
+    <button class="btn outline" aria-pressed="false">All</button><button class="btn outline" aria-pressed="false">Success</button><button class="btn outline" aria-pressed="false">Warning</button><button class="btn" aria-pressed="true">Error</button>
+    </div>
+    <button class="btn outline" disabled style="opacity:0.5">Delete shown messages</button>
+  </div>
+      <p style="margin:1.25rem 0"><strong>No messages shown.</strong></p>
+      <p class="hint">Success and warning remain in session memory. Select All to see them. Deletion is local only; no workspace command is sent.</p>
+    </section>
+  </div>
+  <section class="card" aria-label="Empty log after All deletion">
+    <h3 class="card-title">After deleting All messages</h3>
+    <div class="row gap-2" style="flex-wrap:wrap">
+    <div class="row gap-2" role="group" aria-label="Filter batch messages" style="flex-wrap:wrap">
+    <button class="btn" aria-pressed="true">All</button><button class="btn outline" aria-pressed="false">Success</button><button class="btn outline" aria-pressed="false">Warning</button><button class="btn outline" aria-pressed="false">Error</button>
+    </div>
+    <button class="btn outline" disabled style="opacity:0.5">Delete shown messages</button>
+  </div>
+    <p><strong>No messages shown.</strong></p>
+    <p class="hint">No entries remain. The same empty state appears when a fresh Batch execution activity has no messages. Nothing is restored from preferences, saved views, or .dms.</p>
+  </section>
+      <details class="card">
+        <summary style="cursor:pointer;font-weight:600">Other shell states and chrome contracts · Expand</summary>
+        <div class="stack" style="margin-top:1rem">
       <section class="card">
         <h3 class="card-title">Chrome contract</h3>
         <div class="stack">
@@ -404,6 +458,8 @@ tr:last-child td { border-bottom: 0; }
           <span class="tag">Configure roots</span><span class="tag">Select/replace/remove Word template</span><span class="tag">Open workspace</span><span class="tag">Library add/remove</span><span class="tag">Lifecycle transitions</span><span class="tag">Release + verify</span><span class="tag">Copy/resolve permalink</span><span class="tag">Audit export</span><span class="tag">Backup/restore</span><span class="tag">Claude handoff</span>
         </div>
       </section>
+        </div>
+      </details>
     </main>
   </div>
 </div>

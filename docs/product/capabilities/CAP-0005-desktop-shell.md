@@ -102,6 +102,23 @@ When implemented, the following must hold:
     task + normalized edit-root-relative folder path to reuse an already-open
     matching pane.
 
+    **Batch execution** uses one reusable **workspace ID + task** activity,
+    labelled only `Batch execution`. CAP-0006's explicit homogeneous batch add
+    or unregister action focuses that pane and retains its prior operation-level
+    messages. Each new execution selects **All**, so a previous filter cannot
+    hide unregister's pre-dispatch safety warning. **All**, **Success**,
+    **Warning**, and **Error** controls expose their pressed state; filtering
+    changes visibility only. **Delete shown messages** removes exactly the
+    entries matching the active filter (all entries for All), retains other
+    types, and never calls a workspace mutation. With no matches, the pane
+    shows **No messages shown.** and disables deletion. The log is in-memory
+    session state only: closing the tab or leaving/closing the workspace
+    discards it. Closing the tab does not cancel an already-dispatched operation.
+    The activity cannot be bookmarked; its log never enters saved views,
+    OS-user preferences, `.dms`, workflow evidence, audit reports, or notification
+    history. Focused coverage: [batch log tests](../../../crates/dms-desktop/ui/batch-execution.test.mjs)
+    and [shell execution/session tests](../../../crates/dms-desktop/ui/app.test.mjs).
+
     Exactly one open activity is current: its tab has the selected treatment
     and its label matches the main-header activity label. Activating a tab
     brings that surface forward without losing unrelated open tabs. Closing a
@@ -112,7 +129,8 @@ When implemented, the following must hold:
     recreates the singleton Library activity for the same stable document ID;
     it leaves Notes open and does not create global cross-activity history.
 13. An operator can explicitly save the current surface as a **saved view**.
-    The main header always exposes `☆ Bookmark this view`; after saving it,
+    Except for the non-bookmarkable Batch execution activity, the main header
+    exposes `☆ Bookmark this view`; after saving it,
     that control shows `★ Bookmarked` and exposes an explicit remove-bookmark
     action. Saved views appear in their own **Saved views** group above Open
     panes, use a star rather than the `×` close affordance, and persist across

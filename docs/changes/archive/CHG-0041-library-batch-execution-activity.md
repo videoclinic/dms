@@ -9,12 +9,12 @@ DMS Desktop will let an operator execute the already-applicable homogeneous Libr
 **Entry checkpoint:** CAP-0006 and the desktop currently support modifier-assisted file multi-selection plus atomic batch add/unregister IPC commands, but surface their outcome only as a refresh or one global error.
 **Context sources:** `AGENTS.md` (Architectural decisions, Application records); `docs/AGENTS.md` (Local Contracts, Work Guidance); `docs/changes/AGENTS.md`; `docs/product/AGENTS.md`; `docs/product/wireframes/AGENTS.md`; `docs/product/capabilities/CAP-0005-desktop-shell.md` (open-activity identity and session-only state); `docs/product/capabilities/CAP-0006-library-explorer.md` (Outcomes 2, 3, 6–10); `crates/AGENTS.md`; `crates/dms-desktop/AGENTS.md`; `crates/dms-desktop/ui/app.mjs` (`activityKey`, `openActivity`, `activityMarkup`, Library batch click handlers); `crates/dms-desktop/ui/library.mjs` (`toggleLibrarySelection`, `selectedEntries`, `selectionMarkup`); `crates/dms-desktop/src/lib.rs` (`add_library_documents`, `unregister_library_documents`); `crates/dms-core/src/library.rs` (`Workspace::add_documents`, `Workspace::unregister_documents`); `crates/dms-desktop/ui/app.test.mjs`; `crates/dms-desktop/ui/library.test.mjs`; `docs/product/wireframes/generate.mjs` (`batchSelectionPane`).
 **Produces:** An explicit, reusable session-only Batch execution activity for the existing all-or-nothing Add-to-library and Unregister multi-selection operations; an accessible success/warning/error log with type filtering and filtered deletion; focused frontend evidence; and matching CAP/wireframe contracts.
-**Status:** in-progress — Phase 1 verified; Phases 2 and 3 remain pending.
+**Status:** done — all three phases verified; the complete Phase 3 gate passes after the user-authorized repair of two pre-existing CHG-0040 Markdown links.
 
 | Field | Value |
 | --- | --- |
 | ID | CHG-0041 |
-| Status | in-progress |
+| Status | done |
 | External request | Direct operator request: "Add the ability to multiselect files and execution action on the multiselection. If it's not an overkill this is a batch execution where in a new pane the actions are logged with success/error/warning messages. Because it's a new pane the should also be a filter for the type of success/error/warning and an ability to delete the logged messages, based on the selected filter." |
 | Affected CAPs | CAP-0005, CAP-0006 |
 | Decision records | No new ADR. This is a session-only desktop activity for existing Library operations; it neither creates durable audit evidence nor changes the core metadata transaction boundary. |
@@ -41,8 +41,8 @@ The activity log is session-only presentation state. It must never enter `<edit-
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
 | 1 | Implement the reusable Batch execution activity and atomic operation logging | done (Phase 1 node gate: 110 passed, 0 failed; `git diff --check` exit 0) | `node --test crates/dms-desktop/ui/app.test.mjs crates/dms-desktop/ui/library.test.mjs crates/dms-desktop/ui/batch-execution.test.mjs` exits 0 with homogeneous action eligibility, activity reuse, atomic dispatch, success/error/warning entries, filter visibility, filtered deletion, and session-only cleanup coverage. |
-| 2 | Publish Library/shell contracts and matching wireframe states | pending | `node docs/product/wireframes/generate.mjs` and a 1600×1600 headless-Chrome render of `CAP-0005-desktop-shell.html` and `CAP-0006-library-explorer.html` exit 0 with both generated PNGs non-empty and visibly showing the Batch execution and typed-log controls. |
-| 3 | Run the workspace gate and close the record | pending | `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `node --test crates/dms-desktop/ui/*.test.mjs`, the repository Markdown-link check, and `git diff --check` exit 0; CAP/CHG indexes and DOX contracts agree, and CHG-0041 is archived. |
+| 2 | Publish Library/shell contracts and matching wireframe states | done (four review corrections verified; exact generation/render and syntax gates exit 0; both 1600×1600 PNGs visually inspected; focused Node suite 110 passed; `git diff --check` exit 0) | `node docs/product/wireframes/generate.mjs` and a 1600×1600 headless-Chrome render of `CAP-0005-desktop-shell.html` and `CAP-0006-library-explorer.html` exit 0 with both generated PNGs non-empty and visibly showing the Batch execution and typed-log controls. |
+| 3 | Run the workspace gate and close the record | done (all six gates exit 0 after authorized link repair; Rust 188 passed; Node 160 passed; Markdown links 0 issues; archived and index updated) | `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `node --test crates/dms-desktop/ui/*.test.mjs`, the repository Markdown-link check, and `git diff --check` exit 0; CAP/CHG indexes and DOX contracts agree, and CHG-0041 is archived. |
 
 Mark a phase `in-progress` while running it, `done (<evidence>)` once its gate passes, and `pending` otherwise.
 
@@ -84,6 +84,58 @@ Steps:
 
 **Verification gate:** `(cd docs/product/wireframes && node generate.mjs && google-chrome --headless=new --hide-scrollbars --window-size=1600,1600 --screenshot=exports/CAP-0005-desktop-shell.png "file://$PWD/html/CAP-0005-desktop-shell.html" && google-chrome --headless=new --hide-scrollbars --window-size=1600,1600 --screenshot=exports/CAP-0006-library-explorer.png "file://$PWD/html/CAP-0006-library-explorer.html" && test -s exports/CAP-0005-desktop-shell.png && test -s exports/CAP-0006-library-explorer.png)` exits 0, and the rendered PNGs visibly show the Batch execution and typed-log controls without overlap or clipping.
 
+### Phase 2 evidence and bounded decisions
+
+- The four review corrections are verified: a visible single-document pane
+  remains alongside the homogeneous batch states; Batch execution has no bookmark
+  control; batch Source files contain exact names only, with the preservation
+  warning confined to the execution log; deletion sits outside each filter group.
+- The exact Phase 2 verification command above exits 0. Final exports:
+  [`CAP-0005-desktop-shell.png`](../../product/wireframes/exports/CAP-0005-desktop-shell.png)
+  is 234684 bytes; [`CAP-0006-library-explorer.png`](../../product/wireframes/exports/CAP-0006-library-explorer.png)
+  is 328500 bytes. Both PNG headers confirm 1600×1600 dimensions. SHA-256 checks
+  before and after final visual inspection confirm the inspected files stayed unchanged.
+- Visual inspection of those final PNGs passes: CAP-0005 shows the matching
+  active tab/header, typed operation entries, All/Success/Warning/Error controls,
+  Success-only filtering, Error-filter deletion with other types retained, and
+  All-empty deletion; both empty states disable deletion. CAP-0006 shows two
+  selected registered rows matching the right pane, explicit unregister/add
+  execution, and a mixed-selection no-action state. Its single-document alternative
+  shows title, number, Source file, document-control topic, action feedback, and
+  all six bottom-docked actions. Required controls and state copy are legible
+  without overlap or accidental clipping.
+- A local headless-CDP layout probe confirms both selected Library rows fit
+  inside the table viewport, the alternative-state panels fit inside 1600×1600,
+  and the table and action buttons have no horizontal content overflow. It also
+  confirms exact batch names, no batch warning, no header bookmark, four filter-only
+  role groups with sibling deletion controls, and both disabled empty-state deletions.
+  Unselected lower rows and exhaustive document topics retain their normal scrollers.
+  The CAP-0006-only
+  layout uses the full render width; CAP-0005 retains other shell examples in a
+  collapsed disclosure so the batch states remain visible together.
+- `node --check docs/product/wireframes/generate.mjs` and `git diff --check`
+  exit 0. A second generator run reproduces all 23 HTML/index/manifest outputs
+  byte-for-byte; inventory checks confirm 21 unique screens with matching
+  non-empty HTML/PNG pairs and index links. Only the two affected CAP pages,
+  their PNGs, and the generated index/manifest differ.
+- The focused regression command
+  `node --test crates/dms-desktop/ui/app.test.mjs crates/dms-desktop/ui/library.test.mjs crates/dms-desktop/ui/batch-execution.test.mjs`
+  exits 0: 110 passed, 0 failed, skipped, or cancelled. Runtime code and tests
+  are unchanged. Phase 1 evidence is preserved verbatim.
+- CAP-0005 retains its bounded `not implemented` status. Its saved-view outcome
+  explicitly excludes Batch execution to avoid contradicting the activity
+  contract. CAP-0006 removes bulk verification and describes only the existing
+  atomic homogeneous add/unregister commands, with no filesystem-rollback claim.
+  No ADR or new persistence boundary is needed.
+- DOX pass: `crates/dms-desktop/AGENTS.md` owns the updated activity, selection,
+  and module responsibilities; that existing Phase 2 edit and both CAP edits are
+  unchanged by the review corrections. Root, parent, product, change, and wireframe
+  AGENTS files and CAP/CHG indexes remain unchanged because ownership, record
+  lifecycle, and child boundaries are unchanged. Generated outputs were not
+  hand-edited. No commit, push, deployment, secret access, or external-state
+  mutation was performed. Independent read-only review remains the next handoff
+  gate; the Phase 3 workspace gate and record closure remain pending.
+
 ## Phase 3 — Workspace gate and record close
 
 **Goal:** The runtime, tests, product records, generated visual evidence, and active-change lifecycle agree before the progress record is archived.
@@ -95,6 +147,53 @@ Steps:
 3. After every gate passes, record phase evidence, mark phases done, set the CHG status done, move this file to `docs/changes/archive/`, and update `docs/changes/README.md` so CHG-0041 appears only in Archive. Do not change unrelated active records.
 
 **Verification gate:** `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `node --test crates/dms-desktop/ui/*.test.mjs`, `python3 "$HOME/.hermes/profiles/hermes-vc/skills/software-development/check-md-links/scripts/check-md-links.py" --format summary .`, and `git diff --check` exit 0; `docs/changes/README.md` lists CHG-0041 only in Archive and `docs/changes/active/CHG-0041-library-batch-execution-activity.md` no longer exists.
+
+### Phase 3 evidence and authorized blocker repair
+
+Initial gate in the designated `dms-chg-0041-phase2` worktree after marking
+Phase 3 `in-progress`, before authorization to repair the unrelated links:
+
+| Command | Outcome |
+| --- | --- |
+| `cargo fmt --all -- --check` | Exit 0. |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Exit 0. |
+| `cargo test --workspace` | Exit 0; 188 passed, 0 failed, 0 ignored. |
+| `node --test crates/dms-desktop/ui/*.test.mjs` | Exit 0; 160 passed, 0 failed, skipped, or cancelled. |
+| `python3 "$HOME/.hermes/profiles/hermes-vc/skills/software-development/check-md-links/scripts/check-md-links.py" --format summary .` | Exit 1; two `file_missing` issues in unrelated CHG-0040 records. |
+| `git diff --check` | Exit 0. |
+
+- Link blockers: `docs/changes/active/handoff-CHG-0040-phase-2.md:8` and
+  `docs/changes/active/task-packet-CHG-0040-phase-2.md:5` link to the absent
+  `active/CHG-0040-document-type-id-migration.md`. At HEAD
+  `0850913a22775f1ee3478543305413e89c11e605`, both links already exist and the
+  target is under `archive/`; all three files were unchanged from HEAD at the
+  initial gate.
+  No CHG-0041 link issue was reported.
+- The initial gate left those unrelated links untouched and Phase 3
+  `in-progress`. The user then explicitly authorized changing only the two
+  link targets to `../archive/CHG-0040-document-type-id-migration.md` and
+  rerunning the complete gate before closure. Both target-only repairs are
+  applied; link labels and all other CHG-0040 record content are unchanged.
+
+Complete gate rerun after the authorized repair:
+
+| Command | Outcome |
+| --- | --- |
+| `cargo fmt --all -- --check` | Exit 0. |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Exit 0. |
+| `cargo test --workspace` | Exit 0; 188 passed, 0 failed, 0 ignored. |
+| `node --test crates/dms-desktop/ui/*.test.mjs` | Exit 0; 160 passed, 0 failed, skipped, or cancelled. |
+| `python3 "$HOME/.hermes/profiles/hermes-vc/skills/software-development/check-md-links/scripts/check-md-links.py" --format summary .` | Exit 0; strict mode, 0 issues, 0 files with issues. |
+| `git diff --check` | Exit 0. |
+
+- Phase 3 and the CHG status are `done`. The record is at
+  `docs/changes/archive/CHG-0041-library-batch-execution-activity.md`, its active
+  path is absent, and `docs/changes/README.md` lists CHG-0041 only in Archive.
+- DOX closure check: this gate evidence changes no runtime contract, ownership,
+  or child boundary. Root, documentation, and change AGENTS files and their
+  child indexes need no edits. Existing Phase 2 CAP, desktop DOX, and wireframe
+  edits are preserved; the declined review nit is not reopened. No runtime
+  changes, commit, push, deployment, or secret access were performed.
 
 ## Out of scope
 

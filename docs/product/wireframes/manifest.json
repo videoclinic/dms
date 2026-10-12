@@ -36,7 +36,7 @@
     },
     {
       "id": "CAP-0005",
-      "title": "Desktop shell overview",
+      "title": "Desktop shell · Batch execution",
       "html": "html/CAP-0005-desktop-shell.html",
       "png": "exports/CAP-0005-desktop-shell.png",
       "nav": "library",

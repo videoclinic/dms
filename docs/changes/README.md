@@ -20,7 +20,6 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
-| [CHG-0041](active/CHG-0041-library-batch-execution-activity.md) | Library batch execution activity | in-progress | CAP-0005, CAP-0006 |
 | [CHG-0042](active/CHG-0042-publish-root-released-document-index.md) | Publish-root released-document index | pending | CAP-0005, CAP-0016 |
 | [CHG-0045](active/CHG-0045-operator-library-name.md) | Operator-defined library name | pending | CAP-0001, CAP-0005 |
 
@@ -29,6 +28,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
+| [CHG-0041](archive/CHG-0041-library-batch-execution-activity.md) | Library batch execution activity | done | CAP-0005, CAP-0006 |
 | [CHG-0024](archive/CHG-0024-windows-nsis-installer-release.md) | Windows NSIS installer and signed GitHub Release | done | CAP-0005 |
 | [CHG-0040](archive/CHG-0040-document-type-id-migration.md) | Document type-ID migration | done | CAP-0001, CAP-0002, CAP-0013, CAP-0015 |
 | [CHG-0039](archive/CHG-0039-library-table-sort-and-user-layout.md) | Library table sort direction and user layout | done | CAP-0005, CAP-0006 |

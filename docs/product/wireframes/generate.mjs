@@ -228,13 +228,16 @@ const CAPS = [
   {
     id: "CAP-0005",
     file: "CAP-0005-desktop-shell",
-    title: "Desktop shell overview",
+    title: "Desktop shell · Batch execution",
     nav: "library",
-    activity: "shell",
-    bookmarked: true,
+    activity: "batch-execution",
     subtitle: "Tauri 2 shell on Windows and macOS. Foldable left menu, icon-rail flyouts, session-only activities, explicit saved views, and viewport-contained activity scrolling.",
     body: `
       ${viewportScrollStyles("CAP-0005")}
+      ${batchExecutionStates()}
+      <details class="card">
+        <summary style="cursor:pointer;font-weight:600">Other shell states and chrome contracts · Expand</summary>
+        <div class="stack" style="margin-top:1rem">
       <section class="card">
         <h3 class="card-title">Chrome contract</h3>
         <div class="stack">
@@ -345,32 +348,40 @@ const CAPS = [
             .map((t) => `<span class="tag">${t}</span>`)
             .join("")}
         </div>
-      </section>`,
+      </section>
+        </div>
+      </details>`,
   },
   {
     id: "CAP-0006",
     file: "CAP-0006-library-explorer",
     title: "Folder-first library explorer",
+    status: "implemented",
     nav: "library",
-    subtitle: "Persistent folder tree + Explorer-like path controls + exact source file names. The toolbar stays fixed while tree, list, and the selection-detail scroller move independently of the bottom-docked Actions footer.",
+    subtitle: "Folder-first Library with two registered documents selected. Explicit execution opens the reusable Batch execution activity; single-document actions are hidden. Alternative single-document, add, and mixed-selection states appear below.",
     actions: [],
     body: `
       ${viewportScrollStyles("CAP-0006", `
+        .app[data-cap="CAP-0006"] { width: 1600px; }
         .app[data-cap="CAP-0006"] .list-card th,
-        .app[data-cap="CAP-0006"] .list-card td { padding: 0.55rem 0.45rem; font-size: 0.75rem; }
+        .app[data-cap="CAP-0006"] .list-card td { padding: 0.55rem 0.45rem; font-size: 0.75rem; overflow-wrap: anywhere; }
+        .app[data-cap="CAP-0006"] .list-card .badge { white-space: normal; }
         .app[data-cap="CAP-0006"] .explorer-toolbar { position: sticky; z-index: 4; top: 0; }
-        .app[data-cap="CAP-0006"] .explorer-panes { height: min(40rem, calc(100vh - 11rem)); min-height: 26rem; align-items: stretch; }
+        .app[data-cap="CAP-0006"] .explorer-panes { height: 40rem; min-height: 26rem; flex-shrink: 0; align-items: stretch; }
         .app[data-cap="CAP-0006"] .explorer-panes > .card:not(.detail-pane) { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
         .app[data-cap="CAP-0006"] .explorer-panes > .detail-pane { min-height: 0; overflow: hidden; }
         .app[data-cap="CAP-0006"] .explorer-panes .list-card { display: flex; flex-direction: column; }
         .app[data-cap="CAP-0006"] .explorer-panes .table-wrap { min-height: 0; flex: 1; }
         .app[data-cap="CAP-0006"] .list-card table { table-layout: fixed; }
         .app[data-cap="CAP-0006"] .list-card th:nth-child(1) { width: 1.4rem; }
-        .app[data-cap="CAP-0006"] .list-card th:nth-child(2) { width: 5.3rem; }
-        .app[data-cap="CAP-0006"] .list-card th:nth-child(3) { width: 4.3rem; }
-        .app[data-cap="CAP-0006"] .list-card th:nth-child(4) { width: 5.6rem; }
-        .app[data-cap="CAP-0006"] .list-card th:nth-child(5),
-        .app[data-cap="CAP-0006"] .list-card th:nth-child(6) { width: 3.5rem; }
+        .app[data-cap="CAP-0006"] .list-card th:nth-child(2) { width: 9rem; }
+        .app[data-cap="CAP-0006"] .list-card th:nth-child(3) { width: 5.5rem; }
+        .app[data-cap="CAP-0006"] .list-card th:nth-child(4) { width: 8rem; }
+        .app[data-cap="CAP-0006"] .list-card th:nth-child(5) { width: 6rem; }
+        .app[data-cap="CAP-0006"] .list-card th:nth-child(6) { width: 5rem; }
+        .app[data-cap="CAP-0006"] .selection-alternatives { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
+        .app[data-cap="CAP-0006"] .selection-alternatives .selection-pane-layout { height: 36rem; }
+        .app[data-cap="CAP-0006"] .selection-alternatives .selection-actions .btn { height: auto; min-height: 2rem; padding: 0.4rem; }
       `)}
       <section class="card explorer-toolbar" style="padding:0.75rem 0.9rem">
         <div class="row gap-2">
@@ -385,7 +396,7 @@ const CAPS = [
         </div>
         <p class="hint" style="margin-top:0.45rem">Back / Forward / Up and clickable breadcrumbs stay synchronized and remain available while any pane scrolls.</p>
       </section>
-      <div class="grid-explorer-detail explorer-panes" style="grid-template-columns:17.5rem minmax(22.5rem,1fr) 0.45rem 20rem;align-items:stretch">
+      <div class="grid-explorer-detail explorer-panes" style="grid-template-columns:15rem minmax(22.5rem,1fr) 0.45rem 20rem;align-items:stretch">
         <aside class="card tree">
           <div class="row between mb">
             <h3 class="card-title" style="margin:0">Folders</h3>
@@ -429,7 +440,7 @@ const CAPS = [
           <div class="row between mb">
             <div>
               <h3 class="card-title" style="margin:0">HR</h3>
-              <span class="muted" style="font-size:0.74rem">2 folders · 6 files · 3 in library</span>
+              <span class="muted" style="font-size:0.74rem">2 folders · 7 files · 2 selected</span>
             </div>
             <button class="btn outline">Details view</button>
           </div>
@@ -461,8 +472,8 @@ const CAPS = [
                 <td>${badge("Pending approval", "info")}</td>
                 <td>V1.3 ${badge("newer", "warn")}</td>
               </tr>
-              <tr>
-                <td><span class="check">☐</span></td>
+              <tr class="selected">
+                <td><span class="check on">☑</span></td>
                 <td>Code_of_conduct.docx</td>
                 <td>${badge("In library", "ok")}</td>
                 <td>Code of Conduct · DOC-018</td>
@@ -511,13 +522,32 @@ const CAPS = [
               </tr>
             </tbody>
           </table></div>
-          ${tablePagination({ ariaLabel: "Library rows per page", count: 8 })}
+          ${tablePagination({ ariaLabel: "Library rows per page", count: 9 })}
           <p class="hint"><strong>Name is the source file:</strong> it always shows the exact filesystem name, including the extension. Registered files show the independent DMS title and number under Document. The configured Markdown Word template is managed only under Configuration, so it never appears in these rows, counters, selections, or actions.</p>
         </section>
         <div role="separator" aria-label="Resize document details" aria-orientation="vertical" style="cursor:col-resize;background:var(--border);border-radius:999px" title="Drag or use Left/Right; Escape cancels"></div>
-        ${documentControlDataSelectionPane()}
+        ${batchSelectionPane()}
       </div>
-      ${batchSelectionPane()}`,
+      <div class="grid-2 selection-alternatives" aria-label="Alternative selection states">
+        <section aria-label="Single-document selection state">
+          <h3 class="card-title">Alternative: one registered document</h3>
+          ${documentControlDataSelectionPane()}
+        </section>
+        <section>
+          <h3 class="card-title">Alternative: supported files not in library</h3>
+          ${batchSelectionPane("add")}
+        </section>
+        <section class="card">
+          <h3 class="card-title">Alternative: mixed selection</h3>
+          <div class="row between mb"><strong>2 selected</strong><button class="btn outline">Clear</button></div>
+          <ul class="list"><li>Handbook.docx · In library</li><li>Risk assessment.md · Not in library</li></ul>
+          <p class="callout warn">No common batch action. Select only supported files not in library to add, or only registered / lost-source documents to unregister.</p>
+          <p class="hint">Folders and unsupported files also prevent execution. No batch integrity, lifecycle, release, review, reassociation, or permalink action.</p>
+          <h3 class="card-title" style="margin-top:1rem">Result opens in Batch execution</h3>
+          <p class="muted">One existing atomic command, one operation-level result — never a per-file progress queue. Unregister logs its preservation warning before dispatch.</p>
+          <p class="hint">Success refreshes Library. A rejected request retains the selection without claiming success or filesystem rollback.</p>
+        </section>
+      </div>`,
   },
   {
     id: "CAP-0007",
@@ -1577,35 +1607,67 @@ function documentControlDataSelectionPane() {
     </details>
   </aside>`;
 }
-function batchSelectionPane() {
-  return `<section class="batch-selection-demo">
-    <div>
-      <h3 class="card-title">In-library multi-select state</h3>
-      <p class="muted" style="margin:0">Checking two or more in-library documents replaces the single-document sections in this same right pane.</p>
-    </div>
-    <aside class="card detail-pane batch-detail-pane">
+function batchSelectionPane(action = "unregister") {
+  const adding = action === "add";
+  const names = adding
+    ? ["Risk assessment.md", "Employee onboarding.docx"]
+    : ["Handbook.docx", "Code_of_conduct.docx"];
+  return `<aside class="card detail-pane batch-detail-pane">
       <div class="row between mb">
         <h3 class="card-title" style="margin:0">2 selected</h3>
         <button class="btn outline">Clear</button>
       </div>
-      <details class="selection-section" open>
-        <summary>Batch summary</summary>
-        <div class="selection-section-body">
-          <ul class="list">
-            <li>HR Data Privacy Policy (DOC-014)</li>
-            <li>Code of Conduct (DOC-018)</li>
-          </ul>
-        </div>
-      </details>
-      <details class="selection-section" open>
-        <summary>Batch actions <span>2 available</span></summary>
-        <div class="selection-section-body stack-btns">
-          <button class="btn outline">Verify integrity</button>
-          <button class="btn danger">Unregister…</button>
-        </div>
-      </details>
-      <p class="hint">Batch actions only. Single-document actions remain hidden until exactly one document is selected.</p>
-    </aside>
+      ${badge(adding ? "Not in library · supported files" : "In library · registered documents", adding ? "warn" : "ok")}
+      <h4 style="margin:1rem 0 0.5rem">Source files</h4>
+      <ul class="list" style="overflow-wrap:anywhere">${names.map((name) => `<li>${name}</li>`).join("")}</ul>
+      <h4 style="margin:1rem 0 0.5rem">Batch action</h4>
+      <button class="btn ${adding ? "" : "danger"}" style="height:auto;min-height:2rem;padding:0.5rem 0.75rem;width:100%">Execute: ${adding ? "Add 2 documents to library" : "Unregister 2 documents"}</button>
+      <p class="hint">Opens or focuses <strong>Batch execution</strong>. One atomic command for this captured selection; one operation-level result.</p>
+      <p class="hint">Single-document actions stay hidden. No generic action picker, per-file retries, or continue-on-error mode.</p>
+    </aside>`;
+}
+
+function batchLogControls(filter, empty = false) {
+  return `<div class="row gap-2" style="flex-wrap:wrap">
+    <div class="row gap-2" role="group" aria-label="Filter batch messages" style="flex-wrap:wrap">
+    ${["All", "Success", "Warning", "Error"].map((type) => `<button class="btn${type === filter ? "" : " outline"}" aria-pressed="${type === filter}">${type}</button>`).join("")}
+    </div>
+    <button class="btn outline"${empty ? ' disabled style="opacity:0.5"' : ""}>Delete shown messages</button>
+  </div>`;
+}
+
+function batchExecutionStates() {
+  const success = `<article class="layer"><div class="row gap-2">${badge("Success", "ok")}<strong>Add 2 documents to library</strong></div><p>The complete selected batch succeeded.</p><p class="muted">Risk assessment.md · Employee onboarding.docx</p></article>`;
+  return `<section class="card" aria-label="Batch execution normal state">
+    <div class="row between mb"><h3 class="card-title" style="margin:0">Batch execution</h3>${badge("Session only", "info")}</div>
+    <p class="muted">One reusable activity for this workspace. Later batches retain earlier messages and select All. Closing this pane or leaving the workspace discards the log, not an already-dispatched operation.</p>
+    ${batchLogControls("All")}
+    <div class="stack" role="log" aria-label="Batch execution messages" aria-live="polite" style="margin-top:0.75rem">
+      ${success}
+      <article class="layer"><div class="row gap-2">${badge("Warning", "warn")}<strong>Unregister 2 documents</strong></div><p>Unregister removes library membership only. It does not delete source files, stable IDs, document control data, workflow/release history, or checksums.</p><p class="muted">Handbook.docx · doc-77a12bce; Code_of_conduct.docx · doc-18b46dae</p></article>
+      <article class="layer"><div class="row gap-2">${badge("Error", "danger")}<strong>Unregister 2 documents</strong></div><p>Batch request failed; success was not confirmed. The selection is retained. Check the selected files and workspace access before trying again.</p><p class="muted">Handbook.docx · doc-77a12bce; Code_of_conduct.docx · doc-18b46dae</p></article>
+    </div>
+    <p class="hint">Synthetic operation-level examples, not per-file results. Warning precedes unregister dispatch. This log is not audit evidence, notification history, a saved view, or workspace metadata.</p>
+  </section>
+  <div class="grid-2" aria-label="Alternative batch log states">
+    <section class="card" aria-label="Success filter state">
+      <h3 class="card-title">Filtered · Success</h3>
+      ${batchLogControls("Success")}
+      <div style="margin-top:0.75rem">${success}</div>
+      <p class="hint">Only success is shown. Delete shown messages removes this entry, leaving the warning and error untouched.</p>
+    </section>
+    <section class="card" aria-label="Empty Error filter after deletion">
+      <h3 class="card-title">After deleting shown Error messages</h3>
+      ${batchLogControls("Error", true)}
+      <p style="margin:1.25rem 0"><strong>No messages shown.</strong></p>
+      <p class="hint">Success and warning remain in session memory. Select All to see them. Deletion is local only; no workspace command is sent.</p>
+    </section>
+  </div>
+  <section class="card" aria-label="Empty log after All deletion">
+    <h3 class="card-title">After deleting All messages</h3>
+    ${batchLogControls("All", true)}
+    <p><strong>No messages shown.</strong></p>
+    <p class="hint">No entries remain. The same empty state appears when a fresh Batch execution activity has no messages. Nothing is restored from preferences, saved views, or .dms.</p>
   </section>`;
 }
 function defaultsFirstStyles() {
@@ -1652,6 +1714,7 @@ function shell(cap) {
     { id: "review-doc-77a12bce", label: "Review · HR Data Privacy Policy · DOC-014" },
     { id: "notes-doc-77a12bce", label: "Notes · HR Data Privacy Policy · DOC-014" },
     { id: "shell", label: "Shell chrome" },
+    { id: "batch-execution", label: "Batch execution" },
     { id: "releases", label: "Releases" },
     { id: "audit", label: "Audit" },
     { id: "maintenance", label: "Maintenance" },
@@ -1662,7 +1725,9 @@ function shell(cap) {
     label: cap.title,
   };
   const isBookmarked = cap.bookmarked === true;
-  const bookmarkControl = `<button class="btn outline bookmark-btn${isBookmarked ? " saved" : ""}" title="${isBookmarked ? "Remove bookmark" : "Bookmark this view"}" aria-pressed="${isBookmarked}">${isBookmarked ? "★ Bookmarked" : "☆ Bookmark this view"}</button>`;
+  const bookmarkControl = activityKey === "batch-execution"
+    ? ""
+    : `<button class="btn outline bookmark-btn${isBookmarked ? " saved" : ""}" title="${isBookmarked ? "Remove bookmark" : "Bookmark this view"}" aria-pressed="${isBookmarked}">${isBookmarked ? "★ Bookmarked" : "☆ Bookmark this view"}</button>`;
   const savedViews = [
     { label: "Library · policies/HR" },
     ...(isBookmarked ? [{ label: activeActivity.label }] : []),

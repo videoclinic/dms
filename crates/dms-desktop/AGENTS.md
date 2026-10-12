@@ -15,6 +15,7 @@ macOS.
 | `ui/index.html` | Static shell |
 | `ui/app.mjs` | Workspace setup, static shell, session activities, saved-view persistence, and IPC orchestration |
 | `ui/library.mjs` | Folder-first explorer state, markup, selection rules, search, and sorting |
+| `ui/batch-execution.mjs` | Session-only operation log, typed visibility filters, and filtered message deletion |
 | `ui/notes.mjs` | Per-document note activity state, create/edit/delete markup, and confirmation flow |
 | `ui/maintenance.mjs` | Releases, periodic-review, advisory-lock status/configuration, full backup, and confirmed restore panes |
 | `ui/reports.mjs` | Audit-report generation filters, recent-report history, verification state, paging, and host actions |
@@ -102,6 +103,15 @@ macOS.
   desktop adapter. Start its picker at the OS user's home directory and leave
   the field unchanged when selection is cancelled.
 - Keep open activities in frontend session state only.
+- **Batch execution** is one reusable workspace/task-keyed activity, not a
+  Library column or saved view. Later executions focus it, retain prior entries,
+  and select All. All/Success/Warning/Error filters change visibility only;
+  **Delete shown messages** deletes exactly the active filter's entries without
+  IPC. Empty results show **No messages shown.** and disable deletion. Tab close
+  or workspace-session teardown discards the log; late results cannot recreate
+  it or restore a replaced workspace. Closing the tab does not cancel an
+  already-dispatched command. Never persist the log in `.dms`, preferences,
+  saved views, workflow evidence, audit reports, or notifications.
 - Saved document targets use workspace ID + document ID, never source paths.
 - Library navigation keeps one session activity while saved Library views retain
   edit-root-relative folder, sort key and direction, and at most one stable
@@ -203,6 +213,18 @@ macOS.
   returns to the singleton Library activity with the same stable document
   selected, preserves an unchanged Library view without reloading, and retains
   Notes drafts and confirmation state when restoration succeeds or fails.
+- Library multi-selection exposes only **Execute: Add N documents to library**
+  for supported not-in-library in-root files or **Execute: Unregister N
+  documents** for registered/lost-source documents. Mixed membership, folders,
+  and unsupported files have no executable batch action. Capture names/document
+  IDs, open/focus Batch execution, and invoke the existing core-owned atomic
+  batch command once; never split it into per-file calls or retries. Log one
+  operation-level outcome, plus unregister's pre-dispatch membership-only
+  preservation warning. Success refreshes Library; rejection retains selection
+  and says success was not confirmed, without asserting filesystem rollback.
+  A post-success refresh failure is distinct from mutation rejection. Log only
+  safe fixed messages and captured identities, never raw backend payloads,
+  source content, credentials, or absolute edit-root paths.
 - Document-profile editing submits an eligible owner object ID and never edits an
   effective date. Candidate creation owns the required effective date and may
   stage eligible owner/editor replacements that apply only with a successful

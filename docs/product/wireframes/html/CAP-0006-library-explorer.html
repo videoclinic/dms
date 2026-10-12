@@ -280,10 +280,10 @@ tr:last-child td { border-bottom: 0; }
       <div class="cap-head">
         <span class="badge info">CAP-0006</span>
         <h2>Folder-first library explorer</h2>
-        <span class="badge muted">Status: not implemented</span>
+        <span class="badge muted">Status: implemented</span>
         <span class="wire-meta">Wireframe · shadcn-admin 2.2.0 visual base</span>
       </div>
-      <p class="subtitle">Persistent folder tree + Explorer-like path controls + exact source file names. The toolbar stays fixed while tree, list, and the selection-detail scroller move independently of the bottom-docked Actions footer.</p>
+      <p class="subtitle">Folder-first Library with two registered documents selected. Explicit execution opens the reusable Batch execution activity; single-document actions are hidden. Alternative single-document, add, and mixed-selection states appear below.</p>
       
       <style>
     html, body { height: 100%; }
@@ -293,21 +293,26 @@ tr:last-child td { border-bottom: 0; }
     .app[data-cap="CAP-0006"] .main { min-height: 0; overflow: hidden; }
     .app[data-cap="CAP-0006"] .header { flex: 0 0 auto; }
     .app[data-cap="CAP-0006"] .content { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+    .app[data-cap="CAP-0006"] { width: 1600px; }
     .app[data-cap="CAP-0006"] .list-card th,
-    .app[data-cap="CAP-0006"] .list-card td { padding: 0.55rem 0.45rem; font-size: 0.75rem; }
+    .app[data-cap="CAP-0006"] .list-card td { padding: 0.55rem 0.45rem; font-size: 0.75rem; overflow-wrap: anywhere; }
+    .app[data-cap="CAP-0006"] .list-card .badge { white-space: normal; }
     .app[data-cap="CAP-0006"] .explorer-toolbar { position: sticky; z-index: 4; top: 0; }
-    .app[data-cap="CAP-0006"] .explorer-panes { height: min(40rem, calc(100vh - 11rem)); min-height: 26rem; align-items: stretch; }
+    .app[data-cap="CAP-0006"] .explorer-panes { height: 40rem; min-height: 26rem; flex-shrink: 0; align-items: stretch; }
     .app[data-cap="CAP-0006"] .explorer-panes > .card:not(.detail-pane) { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
     .app[data-cap="CAP-0006"] .explorer-panes > .detail-pane { min-height: 0; overflow: hidden; }
     .app[data-cap="CAP-0006"] .explorer-panes .list-card { display: flex; flex-direction: column; }
     .app[data-cap="CAP-0006"] .explorer-panes .table-wrap { min-height: 0; flex: 1; }
     .app[data-cap="CAP-0006"] .list-card table { table-layout: fixed; }
     .app[data-cap="CAP-0006"] .list-card th:nth-child(1) { width: 1.4rem; }
-    .app[data-cap="CAP-0006"] .list-card th:nth-child(2) { width: 5.3rem; }
-    .app[data-cap="CAP-0006"] .list-card th:nth-child(3) { width: 4.3rem; }
-    .app[data-cap="CAP-0006"] .list-card th:nth-child(4) { width: 5.6rem; }
-    .app[data-cap="CAP-0006"] .list-card th:nth-child(5),
-    .app[data-cap="CAP-0006"] .list-card th:nth-child(6) { width: 3.5rem; }
+    .app[data-cap="CAP-0006"] .list-card th:nth-child(2) { width: 9rem; }
+    .app[data-cap="CAP-0006"] .list-card th:nth-child(3) { width: 5.5rem; }
+    .app[data-cap="CAP-0006"] .list-card th:nth-child(4) { width: 8rem; }
+    .app[data-cap="CAP-0006"] .list-card th:nth-child(5) { width: 6rem; }
+    .app[data-cap="CAP-0006"] .list-card th:nth-child(6) { width: 5rem; }
+    .app[data-cap="CAP-0006"] .selection-alternatives { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
+    .app[data-cap="CAP-0006"] .selection-alternatives .selection-pane-layout { height: 36rem; }
+    .app[data-cap="CAP-0006"] .selection-alternatives .selection-actions .btn { height: auto; min-height: 2rem; padding: 0.4rem; }
   </style>
       <section class="card explorer-toolbar" style="padding:0.75rem 0.9rem">
         <div class="row gap-2">
@@ -322,7 +327,7 @@ tr:last-child td { border-bottom: 0; }
         </div>
         <p class="hint" style="margin-top:0.45rem">Back / Forward / Up and clickable breadcrumbs stay synchronized and remain available while any pane scrolls.</p>
       </section>
-      <div class="grid-explorer-detail explorer-panes" style="grid-template-columns:17.5rem minmax(22.5rem,1fr) 0.45rem 20rem;align-items:stretch">
+      <div class="grid-explorer-detail explorer-panes" style="grid-template-columns:15rem minmax(22.5rem,1fr) 0.45rem 20rem;align-items:stretch">
         <aside class="card tree">
           <div class="row between mb">
             <h3 class="card-title" style="margin:0">Folders</h3>
@@ -366,7 +371,7 @@ tr:last-child td { border-bottom: 0; }
           <div class="row between mb">
             <div>
               <h3 class="card-title" style="margin:0">HR</h3>
-              <span class="muted" style="font-size:0.74rem">2 folders · 6 files · 3 in library</span>
+              <span class="muted" style="font-size:0.74rem">2 folders · 7 files · 2 selected</span>
             </div>
             <button class="btn outline">Details view</button>
           </div>
@@ -398,8 +403,8 @@ tr:last-child td { border-bottom: 0; }
                 <td><span class="badge info">Pending approval</span></td>
                 <td>V1.3 <span class="badge warn">newer</span></td>
               </tr>
-              <tr>
-                <td><span class="check">☐</span></td>
+              <tr class="selected">
+                <td><span class="check on">☑</span></td>
                 <td>Code_of_conduct.docx</td>
                 <td><span class="badge ok">In library</span></td>
                 <td>Code of Conduct · DOC-018</td>
@@ -450,12 +455,29 @@ tr:last-child td { border-bottom: 0; }
           </table></div>
           <div class="row between" style="margin-top:0.75rem;flex-wrap:wrap;gap:0.75rem">
     <label class="muted" style="display:flex;align-items:center;gap:0.45rem">Rows per page <select aria-label="Library rows per page" style="height:2rem;border:1px solid var(--input);border-radius:calc(var(--radius) - 2px);padding:0 0.45rem;font:inherit;color:var(--foreground);background:var(--background)"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
-    <div class="row gap-2"><span class="muted">1–8 of 8</span><button class="btn outline" disabled>Previous</button><button class="btn outline" disabled>Next</button></div>
+    <div class="row gap-2"><span class="muted">1–9 of 9</span><button class="btn outline" disabled>Previous</button><button class="btn outline" disabled>Next</button></div>
   </div>
           <p class="hint"><strong>Name is the source file:</strong> it always shows the exact filesystem name, including the extension. Registered files show the independent DMS title and number under Document. The configured Markdown Word template is managed only under Configuration, so it never appears in these rows, counters, selections, or actions.</p>
         </section>
         <div role="separator" aria-label="Resize document details" aria-orientation="vertical" style="cursor:col-resize;background:var(--border);border-radius:999px" title="Drag or use Left/Right; Escape cancels"></div>
-        <aside class="card detail-pane selection-pane-layout" aria-label="Document selection details">
+        <aside class="card detail-pane batch-detail-pane">
+      <div class="row between mb">
+        <h3 class="card-title" style="margin:0">2 selected</h3>
+        <button class="btn outline">Clear</button>
+      </div>
+      <span class="badge ok">In library · registered documents</span>
+      <h4 style="margin:1rem 0 0.5rem">Source files</h4>
+      <ul class="list" style="overflow-wrap:anywhere"><li>Handbook.docx</li><li>Code_of_conduct.docx</li></ul>
+      <h4 style="margin:1rem 0 0.5rem">Batch action</h4>
+      <button class="btn danger" style="height:auto;min-height:2rem;padding:0.5rem 0.75rem;width:100%">Execute: Unregister 2 documents</button>
+      <p class="hint">Opens or focuses <strong>Batch execution</strong>. One atomic command for this captured selection; one operation-level result.</p>
+      <p class="hint">Single-document actions stay hidden. No generic action picker, per-file retries, or continue-on-error mode.</p>
+    </aside>
+      </div>
+      <div class="grid-2 selection-alternatives" aria-label="Alternative selection states">
+        <section aria-label="Single-document selection state">
+          <h3 class="card-title">Alternative: one registered document</h3>
+          <aside class="card detail-pane selection-pane-layout" aria-label="Document selection details">
     <div class="selection-scroll">
     <div class="row between mb">
       <div class="row gap-2"><span class="badge muted">In library</span><span class="badge info">Pending approval</span></div>
@@ -561,36 +583,34 @@ tr:last-child td { border-bottom: 0; }
       </div>
     </details>
   </aside>
-      </div>
-      <section class="batch-selection-demo">
-    <div>
-      <h3 class="card-title">In-library multi-select state</h3>
-      <p class="muted" style="margin:0">Checking two or more in-library documents replaces the single-document sections in this same right pane.</p>
-    </div>
-    <aside class="card detail-pane batch-detail-pane">
+        </section>
+        <section>
+          <h3 class="card-title">Alternative: supported files not in library</h3>
+          <aside class="card detail-pane batch-detail-pane">
       <div class="row between mb">
         <h3 class="card-title" style="margin:0">2 selected</h3>
         <button class="btn outline">Clear</button>
       </div>
-      <details class="selection-section" open>
-        <summary>Batch summary</summary>
-        <div class="selection-section-body">
-          <ul class="list">
-            <li>HR Data Privacy Policy (DOC-014)</li>
-            <li>Code of Conduct (DOC-018)</li>
-          </ul>
-        </div>
-      </details>
-      <details class="selection-section" open>
-        <summary>Batch actions <span>2 available</span></summary>
-        <div class="selection-section-body stack-btns">
-          <button class="btn outline">Verify integrity</button>
-          <button class="btn danger">Unregister…</button>
-        </div>
-      </details>
-      <p class="hint">Batch actions only. Single-document actions remain hidden until exactly one document is selected.</p>
+      <span class="badge warn">Not in library · supported files</span>
+      <h4 style="margin:1rem 0 0.5rem">Source files</h4>
+      <ul class="list" style="overflow-wrap:anywhere"><li>Risk assessment.md</li><li>Employee onboarding.docx</li></ul>
+      <h4 style="margin:1rem 0 0.5rem">Batch action</h4>
+      <button class="btn " style="height:auto;min-height:2rem;padding:0.5rem 0.75rem;width:100%">Execute: Add 2 documents to library</button>
+      <p class="hint">Opens or focuses <strong>Batch execution</strong>. One atomic command for this captured selection; one operation-level result.</p>
+      <p class="hint">Single-document actions stay hidden. No generic action picker, per-file retries, or continue-on-error mode.</p>
     </aside>
-  </section>
+        </section>
+        <section class="card">
+          <h3 class="card-title">Alternative: mixed selection</h3>
+          <div class="row between mb"><strong>2 selected</strong><button class="btn outline">Clear</button></div>
+          <ul class="list"><li>Handbook.docx · In library</li><li>Risk assessment.md · Not in library</li></ul>
+          <p class="callout warn">No common batch action. Select only supported files not in library to add, or only registered / lost-source documents to unregister.</p>
+          <p class="hint">Folders and unsupported files also prevent execution. No batch integrity, lifecycle, release, review, reassociation, or permalink action.</p>
+          <h3 class="card-title" style="margin-top:1rem">Result opens in Batch execution</h3>
+          <p class="muted">One existing atomic command, one operation-level result — never a per-file progress queue. Unregister logs its preservation warning before dispatch.</p>
+          <p class="hint">Success refreshes Library. A rejected request retains the selection without claiming success or filesystem rollback.</p>
+        </section>
+      </div>
     </main>
   </div>
 </div>
