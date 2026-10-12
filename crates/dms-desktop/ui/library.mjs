@@ -269,6 +269,20 @@ export function selectedEntries(library) {
     .filter(Boolean);
 }
 
+export function libraryBatchAction(library) {
+  const selected = selectedEntries(library);
+  if (selected.length < 2 || selected.length !== library.selection.length
+    || !selected.every((entry) => entry.kind === "file")) return null;
+  if (selected.every((entry) => membershipKind(entry) === "not_in_library")) {
+    return { action: "add", label: `Add ${selected.length} documents to library` };
+  }
+  if (selected.every((entry) => ["in_library", "lost_source"].includes(membershipKind(entry))
+    && entryDocumentId(entry))) {
+    return { action: "unregister", label: `Unregister ${selected.length} documents` };
+  }
+  return null;
+}
+
 export function libraryOpenRequest(detail, target) {
   const command = {
     source: "open_document_source",
@@ -1186,13 +1200,9 @@ function selectionMarkup(library, workspace) {
     return selectionScroll('<div class="selection-empty"><h3>Selection</h3><p>Select a folder or file to see its identity and available actions.</p></div>');
   }
   if (selected.length > 1) {
-    const allAddable = selected.every((entry) => membershipKind(entry) === "not_in_library");
-    const allRegistered = selected.every((entry) => {
-      const membership = membershipKind(entry);
-      return membership === "in_library" || membership === "lost_source";
-    });
+    const batch = libraryBatchAction(library);
     const identities = selected.slice(0, 5).map((entry) => `<li>${escapeHtml(entry.name)}</li>`).join("");
-    return selectionScroll(`<div class="selection-header"><span class="badge">${selected.length} selected</span><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><ul class="identity-list">${identities}</ul><div class="selection-actions">${allAddable ? `<button class="button" type="button" data-library-add>Add ${selected.length} documents to library</button>` : ""}${allRegistered ? `<button class="button danger" type="button" data-library-unregister>Unregister ${selected.length} documents</button>` : ""}${!allAddable && !allRegistered ? "<p>Mixed selections have no common action.</p>" : ""}</div>`);
+    return selectionScroll(`<div class="selection-header"><span class="badge">${selected.length} selected</span><button class="text-button" type="button" data-library-clear-selection>Clear</button></div><ul class="identity-list">${identities}</ul><div class="selection-actions">${batch ? `<button class="button${batch.action === "unregister" ? " danger" : ""}" type="button" data-library-batch="${batch.action}">Execute: ${batch.label}</button>` : "<p>Mixed selections have no common action.</p>"}</div>`);
   }
   const entry = selected[0];
   if (entry.kind === "folder") {

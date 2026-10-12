@@ -9,6 +9,7 @@ import {
   entryDocumentId,
   historyTarget,
   lifecycleActionRequest,
+  libraryBatchAction,
   libraryMarkup,
   libraryOpenRequest,
   membershipKind,
@@ -70,6 +71,14 @@ import {
   auditReportsMarkup,
   createAuditReportState,
 } from "./reports.mjs";
+import {
+  appendBatchEntry,
+  BATCH_FAILURE,
+  batchExecutionClick,
+  batchExecutionMarkup,
+  createBatchExecutionState,
+  UNREGISTER_WARNING,
+} from "./batch-execution.mjs";
 
 const DESTINATIONS = [
   ["Library", "📚"],
@@ -197,6 +206,8 @@ export function createInitialState(preferences = defaultPreferences()) {
     activities: [],
     current_key: null,
     workspace: null,
+    workspace_session: Symbol("workspace session"),
+    batch_execution: createBatchExecutionState(),
     library: createLibraryState(libraryTableColumnWidths),
     note_documents: {},
     assistance_documents: {},
@@ -228,6 +239,7 @@ function normalizedFolder(folder) {
 }
 
 export function activityKey(activity) {
+  if (activity.task === "Batch execution") return `${activity.workspace_id}:Batch execution`;
   if (activity.task === "Library") {
     return `${activity.workspace_id}:Library`;
   }
@@ -366,14 +378,19 @@ export function applyNotesLibraryRestoration(state, notesActivity, priorActivity
 }
 
 export function closeActivity(state, key) {
+  const closingBatch = state.activities.some((activity) => activity.key === key && activity.task === "Batch execution");
   const activities = state.activities.filter((activity) => activity.key !== key);
   const current_key = state.current_key === key
     ? activities.at(-1)?.key ?? null
     : state.current_key;
-  return { ...state, activities, current_key };
+  return {
+    ...state, activities, current_key,
+    batch_execution: closingBatch ? createBatchExecutionState() : state.batch_execution,
+  };
 }
 
 export function toggleSavedView(preferences, activity) {
+  if (!activity || activity.task === "Batch execution") return preferences;
   const id = savedViewId(activity);
   const savedViews = preferences.saved_views ?? [];
   const existing = savedViews.some((view) => view.id === id);
@@ -588,6 +605,7 @@ function currentActivity(state) {
 
 export function bookmarkActivity(state) {
   const activity = currentActivity(state);
+  if (activity?.task === "Batch execution") return null;
   if (!activity || activity.task !== "Library") return activity;
   const selected = selectedEntries(state.library);
   const documentId = selected.length === 1 && membershipKind(selected[0]) === "in_library"
@@ -631,6 +649,67 @@ export async function refreshLibrarySnapshot(invoke, editRoot, folder) {
     folder: normalizeLibraryPath(folder),
   });
   return { workspace, snapshot };
+}
+
+export async function executeLibraryBatch(action, { getState, setState, invoke }) {
+  const initial = getState();
+  const eligible = libraryBatchAction(initial.library);
+  if (!initial.workspace || currentActivity(initial)?.task !== "Library"
+    || !eligible || eligible.action !== action) return false;
+  const selected = selectedEntries(initial.library);
+  const operation = {
+    ...eligible,
+    targets: selected.map((entry) => ({
+      name: String(entry.name).split(/[\\/]/).at(-1),
+      document_id: entryDocumentId(entry),
+    })),
+  };
+  const editRoot = initial.workspace.edit_root;
+  const arguments_ = action === "add"
+    ? { editRoot, paths: selected.map((entry) => normalizeLibraryPath(entry.relative_path)) }
+    : { editRoot, documentIds: selected.map(entryDocumentId) };
+  const command = action === "add" ? "add_library_documents" : "unregister_library_documents";
+  const session = initial.workspace_session;
+  const logSession = initial.batch_execution.session;
+  const sameWorkspace = () => getState().workspace_session === session;
+  const append = (type, message) => {
+    const state = getState();
+    if (sameWorkspace() && state.batch_execution.session === logSession) {
+      setState({ ...state, batch_execution: appendBatchEntry(state.batch_execution, type, operation, message) });
+    }
+  };
+  setState(openActivity({
+    ...initial,
+    error: "",
+    batch_execution: { ...initial.batch_execution, filter: "all" },
+  }, {
+    workspace_id: initial.workspace.workspace_id,
+    destination: "Library",
+    task: "Batch execution",
+    label: "Batch execution",
+    document_id: null,
+    route_state: {},
+  }));
+  if (action === "unregister") append("warning", UNREGISTER_WARNING);
+  try {
+    await invoke(command, arguments_);
+  } catch {
+    append("error", BATCH_FAILURE);
+    return true;
+  }
+  append("success", "The complete selected batch succeeded.");
+  if (!sameWorkspace()) return true;
+  const library = getState().library;
+  const folder = normalizeLibraryPath(library.folder.relative_path);
+  try {
+    const { workspace, snapshot } = await refreshLibrarySnapshot(invoke, editRoot, folder);
+    if (sameWorkspace() && getState().library === library) {
+      setState({ ...getState(), workspace, library: applyLibrarySnapshot(library, snapshot, folder, "replace") });
+    }
+  } catch {
+    append("error", "The batch succeeded, but the Library could not refresh. Use Refresh in Library to reload its state.");
+  }
+  return true;
 }
 
 function persistPreferences(state) {
@@ -1079,7 +1158,7 @@ export function dismissLibrarySwitcher(state) {
   };
 }
 
-function activityMarkup(state, activity) {
+export function activityMarkup(state, activity) {
   if (!activity) {
     return setupMarkup(
       state.error,
@@ -1089,6 +1168,7 @@ function activityMarkup(state, activity) {
     );
   }
   const workspace = state.workspace;
+  if (activity.task === "Batch execution") return batchExecutionMarkup(state.batch_execution);
   if (activity.task === "Notes") {
     return documentNotesMarkup(activity, noteDocumentState(state.note_documents, activity.document_id));
   }
@@ -1199,7 +1279,7 @@ function render(state) {
   const bookmarkTarget = bookmarkActivity(state);
   const bookmarked = bookmarkTarget
     && state.preferences.saved_views.some((view) => view.id === savedViewId(bookmarkTarget));
-  bookmark.hidden = !activity;
+  bookmark.hidden = !bookmarkTarget;
   bookmark.textContent = bookmarked ? "★ Bookmarked" : "☆ Bookmark this view";
   bookmark.classList.toggle("bookmarked", Boolean(bookmarked));
   bookmark.setAttribute("aria-pressed", String(Boolean(bookmarked)));
@@ -1294,17 +1374,20 @@ export async function switchWorkspaceSession(
   return { kind: "activated", activation };
 }
 
-async function applyWorkspaceActivation(activation, openLibrary = true) {
+export function workspaceActivationState(state, activation) {
   const workspace = activation.workspace;
-  const preferences = rememberRecentLibrary(appState.preferences, workspace.edit_root);
-  const sidebarOverlay = appState.sidebar_overlay;
+  const preferences = rememberRecentLibrary(state.preferences, workspace.edit_root);
   const initial = createInitialState(preferences);
-  appState = {
+  return {
     ...initial,
     workspace,
     maintenance: { ...initial.maintenance, lock_status: activation.lock_status },
-    sidebar_overlay: sidebarOverlay,
+    sidebar_overlay: state.sidebar_overlay,
   };
+}
+
+async function applyWorkspaceActivation(activation, openLibrary = true) {
+  appState = workspaceActivationState(appState, activation);
   await persistPreferences(appState);
   if (openLibrary) openDestination("Library");
 }
@@ -1932,6 +2015,13 @@ function handleLibraryToggle(event) {
 
 async function handleLibraryClick(event) {
   if (currentActivity(appState)?.destination !== "Library") return false;
+  if (currentActivity(appState)?.task === "Batch execution") {
+    const batch = batchExecutionClick(appState.batch_execution, event.target);
+    if (batch === appState.batch_execution) return false;
+    appState = { ...appState, batch_execution: batch };
+    render(appState);
+    return true;
+  }
   const treeToggle = event.target.closest("[data-library-tree-toggle]")?.dataset.libraryTreeToggle;
   if (treeToggle) {
     appState = { ...appState, library: toggleTreeFolder(appState.library, treeToggle) };
@@ -2018,7 +2108,17 @@ async function handleLibraryClick(event) {
     }
     return true;
   }
+  const batchAction = event.target.closest("[data-library-batch]")?.dataset.libraryBatch;
+  if (batchAction) {
+    await executeLibraryBatch(batchAction, {
+      getState: () => appState,
+      setState: (state) => { appState = state; render(appState); },
+      invoke: invokeCommand,
+    });
+    return true;
+  }
   if (event.target.closest("[data-library-add]")) {
+    if (appState.library.selection.length !== 1) return true;
     const paths = selectedEntries(appState.library).map((entry) => normalizeLibraryPath(entry.relative_path));
     try {
       await invokeCommand("add_library_documents", {
@@ -2033,6 +2133,7 @@ async function handleLibraryClick(event) {
     return true;
   }
   if (event.target.closest("[data-library-unregister]")) {
+    if (appState.library.selection.length !== 1) return true;
     const documentIds = selectedEntries(appState.library).map(entryDocumentId).filter(Boolean);
     try {
       await invokeCommand("unregister_library_documents", {
@@ -3451,6 +3552,8 @@ let appState = createInitialState();
 
 export async function closeWorkspaceSession(state, invoke, destroy) {
   if (!state.workspace) return false;
+  state.batch_execution = createBatchExecutionState();
+  state.workspace_session = Symbol("closed workspace session");
   const owner = state.maintenance.lock_status?.lock;
   if (!owner) {
     await destroy();

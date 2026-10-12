@@ -9,12 +9,12 @@ DMS Desktop will let an operator execute the already-applicable homogeneous Libr
 **Entry checkpoint:** CAP-0006 and the desktop currently support modifier-assisted file multi-selection plus atomic batch add/unregister IPC commands, but surface their outcome only as a refresh or one global error.
 **Context sources:** `AGENTS.md` (Architectural decisions, Application records); `docs/AGENTS.md` (Local Contracts, Work Guidance); `docs/changes/AGENTS.md`; `docs/product/AGENTS.md`; `docs/product/wireframes/AGENTS.md`; `docs/product/capabilities/CAP-0005-desktop-shell.md` (open-activity identity and session-only state); `docs/product/capabilities/CAP-0006-library-explorer.md` (Outcomes 2, 3, 6–10); `crates/AGENTS.md`; `crates/dms-desktop/AGENTS.md`; `crates/dms-desktop/ui/app.mjs` (`activityKey`, `openActivity`, `activityMarkup`, Library batch click handlers); `crates/dms-desktop/ui/library.mjs` (`toggleLibrarySelection`, `selectedEntries`, `selectionMarkup`); `crates/dms-desktop/src/lib.rs` (`add_library_documents`, `unregister_library_documents`); `crates/dms-core/src/library.rs` (`Workspace::add_documents`, `Workspace::unregister_documents`); `crates/dms-desktop/ui/app.test.mjs`; `crates/dms-desktop/ui/library.test.mjs`; `docs/product/wireframes/generate.mjs` (`batchSelectionPane`).
 **Produces:** An explicit, reusable session-only Batch execution activity for the existing all-or-nothing Add-to-library and Unregister multi-selection operations; an accessible success/warning/error log with type filtering and filtered deletion; focused frontend evidence; and matching CAP/wireframe contracts.
-**Status:** pending — implementation has not begun.
+**Status:** in-progress — Phase 1 verified; Phases 2 and 3 remain pending.
 
 | Field | Value |
 | --- | --- |
 | ID | CHG-0041 |
-| Status | pending |
+| Status | in-progress |
 | External request | Direct operator request: "Add the ability to multiselect files and execution action on the multiselection. If it's not an overkill this is a batch execution where in a new pane the actions are logged with success/error/warning messages. Because it's a new pane the should also be a filter for the type of success/error/warning and an ability to delete the logged messages, based on the selected filter." |
 | Affected CAPs | CAP-0005, CAP-0006 |
 | Decision records | No new ADR. This is a session-only desktop activity for existing Library operations; it neither creates durable audit evidence nor changes the core metadata transaction boundary. |
@@ -40,7 +40,7 @@ The activity log is session-only presentation state. It must never enter `<edit-
 
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
-| 1 | Implement the reusable Batch execution activity and atomic operation logging | pending | `node --test crates/dms-desktop/ui/app.test.mjs crates/dms-desktop/ui/library.test.mjs crates/dms-desktop/ui/batch-execution.test.mjs` exits 0 with homogeneous action eligibility, activity reuse, atomic dispatch, success/error/warning entries, filter visibility, filtered deletion, and session-only cleanup coverage. |
+| 1 | Implement the reusable Batch execution activity and atomic operation logging | done (Phase 1 node gate: 110 passed, 0 failed; `git diff --check` exit 0) | `node --test crates/dms-desktop/ui/app.test.mjs crates/dms-desktop/ui/library.test.mjs crates/dms-desktop/ui/batch-execution.test.mjs` exits 0 with homogeneous action eligibility, activity reuse, atomic dispatch, success/error/warning entries, filter visibility, filtered deletion, and session-only cleanup coverage. |
 | 2 | Publish Library/shell contracts and matching wireframe states | pending | `node docs/product/wireframes/generate.mjs` and a 1600×1600 headless-Chrome render of `CAP-0005-desktop-shell.html` and `CAP-0006-library-explorer.html` exit 0 with both generated PNGs non-empty and visibly showing the Batch execution and typed-log controls. |
 | 3 | Run the workspace gate and close the record | pending | `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `node --test crates/dms-desktop/ui/*.test.mjs`, the repository Markdown-link check, and `git diff --check` exit 0; CAP/CHG indexes and DOX contracts agree, and CHG-0041 is archived. |
 
@@ -61,6 +61,14 @@ Steps:
 7. Add focused unit and interaction tests. Cover modifier multi-selection and no-action mixed selections; correct action labels; one task-keyed tab reused for later batches; captured target identity; one IPC dispatch; no dispatch of an inapplicable action; add success refresh; unregister warning then success; error without false success or refresh; filter semantics; delete-only-filtered semantics; and activity/workspace close cleanup. Assert that source content, credentials, and absolute edit-root paths are absent from log markup.
 
 **Verification gate:** `node --test crates/dms-desktop/ui/app.test.mjs crates/dms-desktop/ui/library.test.mjs crates/dms-desktop/ui/batch-execution.test.mjs` exits 0 with homogeneous action eligibility, activity reuse, atomic dispatch, success/error/warning entries, filter visibility, filtered deletion, and session-only cleanup coverage.
+
+### Phase 1 evidence and bounded decisions
+
+- The exact Phase 1 node gate exits 0: 110 tests passed, none failed, skipped, or cancelled. `git diff --check` exits 0. Coverage includes late mutation/refresh completions after activity close, workspace activation, and window close.
+- Each eligible execution captures source names/document IDs and dispatches one existing batch command. Single-document actions and the Rust core/adapter are unchanged. New executions select All so prior filtering cannot hide unregister's pre-dispatch preservation warning.
+- Log messages use fixed safe copy, not raw backend errors or response payloads. Mutation rejection retains selection without asserting success or rollback; a post-success refresh failure is explicitly a refresh error, not a rejected mutation.
+- Session identity checks discard late log entries after tab close and prevent old results from restoring a replaced workspace. Closing the log does not cancel an already-dispatched operation.
+- DOX pass: parent ownership/indexes are unchanged. Desktop AGENTS, CAP-0005/CAP-0006, and wireframes remain untouched because their coordinated updates belong to pending Phase 2. No unrelated CHG is changed. The independent read-only review remains a handoff gate, not claimed here.
 
 ## Phase 2 — Library/shell contracts and wireframe evidence
 
@@ -98,4 +106,5 @@ Steps:
 ## Risks & open questions
 
 - The term “pane” is implemented as an activity tab/pane, not a fourth persistent Library column. This reuses the shell’s session-only activity model and avoids shrinking the already bounded Library selection pane.
-- Warning entries are deliberately limited to concrete non-fatal safety information (currently unregister’s preservation boundary). The plan does not invent warning states for atomic command failures; failures are errors and leave the workspace unchanged.
+- Warning entries are deliberately limited to concrete non-fatal safety information (currently unregister’s preservation boundary). A rejected command produces an error, never a warning or a frontend success claim.
+- Existing backend limitation, outside this frontend phase: `Workspace::add_documents` validates the batch before replacing its candidate state, but then projects Markdown frontmatter; the adapter saves afterward. Projection/save errors do not establish filesystem rollback. Phase 1 preserves these commands and reports only that success was not confirmed when IPC rejects.

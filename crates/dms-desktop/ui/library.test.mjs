@@ -19,6 +19,7 @@ import {
   filterLibraryEntries,
   historyTarget,
   lifecycleActionRequest,
+  libraryBatchAction,
   libraryIcon,
   libraryMarkup,
   libraryOpenRequest,
@@ -341,6 +342,42 @@ test("multi-selection exposes homogeneous membership without losing exact identi
 
   assert.deepEqual(selectedEntries(library).map((entry) => entry.name), ["Handbook.md", "Policy.docx"]);
   assert.ok(selectedEntries(library).every((entry) => membershipKind(entry) === "not_in_library"));
+  assert.deepEqual(libraryBatchAction(library), { action: "add", label: "Add 2 documents to library" });
+  assert.match(libraryMarkup({ edit_root: "/DMS/Edit" }, {}, library), /data-library-batch="add">Execute: Add 2 documents to library/);
+  library = toggleLibrarySelection(library, "Policies/Policy.docx", true);
+  assert.deepEqual(library.selection, ["Policies/Handbook.md"]);
+  assert.equal(libraryBatchAction(library), null);
+  library = toggleLibrarySelection(library, "Policies/Policy.docx");
+  assert.deepEqual(library.selection, ["Policies/Policy.docx"]);
+  assert.match(libraryMarkup({ edit_root: "/DMS/Edit" }, {}, library), /data-library-add>Add to library/);
+});
+
+test("batch eligibility accepts registered and lost-source documents but refuses incomplete or mixed selections", () => {
+  const available = file("Available.md", "not_in_library");
+  const registered = file("Registered.md", { in_library: { document_id: "doc-a" } });
+  const lost = file("Lost.docx", { lost_source: { document_id: "doc-b" } });
+  const select = (entries) => ({
+    ...createLibraryState(),
+    folder: snapshot("Policies", entries).folder,
+    selection: entries.map((entry) => entry.relative_path),
+  });
+  const eligible = select([registered, lost]);
+  assert.deepEqual(libraryBatchAction(eligible), { action: "unregister", label: "Unregister 2 documents" });
+  assert.match(libraryMarkup({ edit_root: "/DMS/Edit" }, {}, eligible), /data-library-batch="unregister">Execute: Unregister 2 documents/);
+  for (const entries of [
+    [available, registered],
+    [available, file("Image.png", "unsupported")],
+    [available, { ...file("Folder", "not_in_library"), kind: "folder" }],
+    [registered, file("Unknown.md", "in_library")],
+    [available, file("Unknown.md", null)],
+  ]) {
+    const library = select(entries);
+    assert.equal(libraryBatchAction(library), null);
+    assert.doesNotMatch(libraryMarkup({ edit_root: "/DMS/Edit" }, {}, library), /data-library-batch|data-library-add|data-library-unregister/);
+  }
+  assert.equal(libraryBatchAction({ ...eligible, selection: [...eligible.selection, "Policies/Stale.md"] }), null);
+  const search = { ...eligible, folder: snapshot("Policies").folder, results: [registered, lost] };
+  assert.equal(libraryBatchAction(search).action, "unregister");
 });
 
 test("registered membership keeps the stable document ID and supports control-data sorting", () => {
@@ -426,6 +463,7 @@ test("mixed and unsupported selections expose no incompatible batch action", () 
   assert.match(markup, /Mixed selections have no common action/);
   assert.doesNotMatch(markup, /data-library-add/);
   assert.doesNotMatch(markup, /data-library-unregister/);
+  assert.doesNotMatch(markup, /data-library-batch/);
 });
 
 test("in-review documents still expose Unregister in Actions", () => {

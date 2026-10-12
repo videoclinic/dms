@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 import {
   activityKey,
+  activityMarkup,
   applyLibrarySort,
   applyNotesLibraryRestoration,
   applyPermalinkDocumentSelection,
@@ -14,6 +15,7 @@ import {
   createInitialState,
   currentDeepLinks,
   defaultPreferences,
+  executeLibraryBatch,
   finishFormSubmission,
   lifecycleFailureLibraryState,
   lifecycleSuccessLibraryState,
@@ -51,9 +53,256 @@ import {
   startupAuthorizationMarkup,
   startupAuthorizationPollDelayMs,
   workspaceFootMarkup,
+  workspaceActivationState,
 } from "./app.mjs";
 
 const workspaceId = "5ef3db10-8f6d-4ae4-9d68-ecb1eaac8235";
+
+function batchHarness(action = "add") {
+  const entries = ["Policy.md", "Guide.docx"].map((name, index) => ({
+    name, kind: "file", relative_path: `Policies/${name}`,
+    membership: action === "add" ? "not_in_library" : {
+      [index ? "lost_source" : "in_library"]: { document_id: `doc-${index}` },
+    },
+    content: "SYNTHETIC SOURCE CONTENT",
+    credential: "SYNTHETIC CREDENTIAL",
+  }));
+  const activity = {
+    workspace_id: workspaceId, destination: "Library", task: "Library",
+    label: "Library · Policies", route_state: { folder: "Policies" },
+  };
+  let state = createInitialState();
+  state = openActivity({
+    ...state,
+    workspace: { workspace_id: workspaceId, edit_root: "/private/Edit" },
+    library: {
+      ...state.library,
+      folder: { relative_path: "Policies", parent: ".", entries },
+      selection: entries.map((entry) => entry.relative_path),
+    },
+  }, activity);
+  const calls = [];
+  const renders = [];
+  return {
+    activity, entries, calls, renders,
+    getState: () => state,
+    setState: (next) => {
+      state = next;
+      renders.push(activityMarkup(state, state.activities.find((item) => item.key === state.current_key)));
+    },
+    invoke: async (command, arguments_) => {
+      calls.push({ command, arguments_ });
+      if (command === "open_workspace") return state.workspace;
+      if (command === "load_library") return { tree: [], folder: state.library.folder };
+      return [];
+    },
+  };
+}
+
+test("batch add captures identities, dispatches once, refreshes, and reuses one unsaveable activity", async () => {
+  const harness = batchHarness();
+  const initial = harness.getState();
+  const pending = executeLibraryBatch("add", harness);
+  assert.equal(harness.getState().library, initial.library);
+  assert.equal(harness.getState().current_key, `${workspaceId}:Batch execution`);
+  harness.entries[0].name = "Changed after dispatch.md";
+  await pending;
+  assert.deepEqual(harness.calls, [
+    { command: "add_library_documents", arguments_: { editRoot: "/private/Edit", paths: ["Policies/Policy.md", "Policies/Guide.docx"] } },
+    { command: "open_workspace", arguments_: { editRoot: "/private/Edit" } },
+    { command: "load_library", arguments_: { editRoot: "/private/Edit", folder: "Policies" } },
+  ]);
+  const result = harness.getState();
+  assert.deepEqual(result.batch_execution.entries.map((entry) => entry.type), ["success"]);
+  assert.equal(result.batch_execution.entries[0].action, "Add 2 documents to library");
+  assert.deepEqual(result.batch_execution.entries[0].targets, [
+    { name: "Policy.md", document_id: null }, { name: "Guide.docx", document_id: null },
+  ]);
+  assert.deepEqual(result.library.selection, []);
+  assert.equal(result.current_key, `${workspaceId}:Batch execution`);
+  assert.equal(bookmarkActivity(result), null);
+  assert.equal(toggleSavedView(result.preferences, result.activities.at(-1)), result.preferences);
+  assert.deepEqual(result.preferences, initial.preferences);
+  assert.doesNotMatch(harness.renders.join(""), /SYNTHETIC SOURCE CONTENT|SYNTHETIC CREDENTIAL|\/private\/Edit/);
+  assert.match(harness.renders.at(-1), /Batch execution messages/);
+  harness.setState(openActivity({ ...result, library: initial.library }, harness.activity));
+  await executeLibraryBatch("add", harness);
+  assert.equal(harness.getState().activities.filter((item) => item.task === "Batch execution").length, 1);
+  assert.deepEqual(harness.getState().batch_execution.entries.map((entry) => entry.id), [1, 2]);
+  assert.equal(activityKey({ workspace_id: workspaceId, task: "Batch execution", document_id: "ignored", route_state: { folder: "Other" } }), `${workspaceId}:Batch execution`);
+});
+
+test("unregister renders its preservation warning before dispatch and logs one operation success", async () => {
+  const harness = batchHarness("unregister");
+  harness.getState().batch_execution.filter = "success";
+  const invoke = harness.invoke;
+  harness.invoke = async (command, arguments_) => {
+    if (command === "unregister_library_documents") {
+      assert.deepEqual(harness.getState().batch_execution.entries.map((entry) => entry.type), ["warning"]);
+      assert.equal(harness.getState().batch_execution.filter, "all");
+      assert.match(harness.renders.at(-1), /does not delete source files, stable IDs, document control data, workflow\/release history, or checksums/);
+      assert.deepEqual(arguments_.documentIds, ["doc-0", "doc-1"]);
+      harness.entries[0].membership.in_library.document_id = "changed-after-dispatch";
+    }
+    return invoke(command, arguments_);
+  };
+  await executeLibraryBatch("unregister", harness);
+  assert.deepEqual(harness.getState().batch_execution.entries.map((entry) => entry.type), ["warning", "success"]);
+  assert.equal(harness.getState().batch_execution.entries[1].targets[0].document_id, "doc-0");
+  assert.equal(harness.calls.filter((call) => call.command === "unregister_library_documents").length, 1);
+  assert.equal(harness.calls.length, 3);
+});
+
+test("rejected batches retain selection, emit no success or refresh, and never expose raw failures", async () => {
+  for (const action of ["add", "unregister"]) {
+    const harness = batchHarness(action);
+    const initial = harness.getState();
+    harness.invoke = async (command) => {
+      harness.calls.push(command);
+      throw new Error("/private/Edit/Policy.md C:\\Private\\Edit SYNTHETIC SOURCE CONTENT SYNTHETIC CREDENTIAL");
+    };
+    await executeLibraryBatch(action, harness);
+    assert.deepEqual(harness.calls, [action === "add" ? "add_library_documents" : "unregister_library_documents"]);
+    assert.equal(harness.getState().library, initial.library);
+    assert.deepEqual(harness.getState().batch_execution.entries.map((entry) => entry.type), action === "add" ? ["error"] : ["warning", "error"]);
+    const markup = harness.renders.at(-1);
+    assert.match(markup, /success was not confirmed/);
+    assert.doesNotMatch(markup, /SYNTHETIC|\/private\/Edit|C:|complete selected batch succeeded/);
+    assert.equal(harness.getState().error, "");
+  }
+});
+
+test("inapplicable batch actions never open an activity or dispatch IPC", async () => {
+  for (const variant of ["mixed", "unsupported", "folder", "stale", "single", "wrong-action", "unknown-action", "no-workspace"]) {
+    const harness = batchHarness();
+    const initial = harness.getState();
+    if (variant === "mixed") harness.entries[1].membership = { in_library: { document_id: "doc-x" } };
+    if (variant === "unsupported") harness.entries[1].membership = "unsupported";
+    if (variant === "folder") harness.entries[1].kind = "folder";
+    if (variant === "stale") initial.library.selection.push("Missing.md");
+    if (variant === "single") initial.library.selection.pop();
+    if (variant === "no-workspace") initial.workspace = null;
+    const action = variant === "wrong-action" ? "unregister" : variant === "unknown-action" ? "verify" : "add";
+    assert.equal(await executeLibraryBatch(action, harness), false, variant);
+    assert.equal(harness.getState(), initial);
+    assert.deepEqual(harness.calls, []);
+    assert.deepEqual(harness.renders, []);
+  }
+});
+
+test("activity close discards only the batch log, while workspace activation discards the entire session", async () => {
+  const harness = batchHarness();
+  await executeLibraryBatch("add", harness);
+  const logged = harness.getState();
+  const libraryClosed = closeActivity(logged, activityKey(harness.activity));
+  assert.equal(libraryClosed.batch_execution, logged.batch_execution);
+  const batchClosed = closeActivity(logged, `${workspaceId}:Batch execution`);
+  assert.deepEqual(batchClosed.batch_execution.entries, []);
+  assert.equal(batchClosed.batch_execution.filter, "all");
+  assert.equal(batchClosed.library, logged.library);
+  assert.notEqual(batchClosed.batch_execution.session, logged.batch_execution.session);
+  const reopened = openActivity(batchClosed, logged.activities.at(-1));
+  assert.deepEqual(reopened.batch_execution.entries, []);
+  for (const id of [workspaceId, "other-workspace"]) {
+    const activated = workspaceActivationState(logged, {
+      workspace: { workspace_id: id, edit_root: "/other/Edit" }, lock_status: { lock: {} },
+    });
+    assert.deepEqual(activated.batch_execution.entries, []);
+    assert.deepEqual(activated.activities, []);
+    assert.notEqual(activated.workspace_session, logged.workspace_session);
+  }
+  assert.deepEqual(createInitialState(logged.preferences).batch_execution.entries, []);
+});
+
+test("closing the workspace clears batch state before destroying the window, even on lock-release failure", async () => {
+  const harness = batchHarness();
+  await executeLibraryBatch("add", harness);
+  const state = harness.getState();
+  const session = state.workspace_session;
+  state.maintenance.lock_status = { lock: { process_id: 1 } };
+  let destroyed = false;
+  await assert.rejects(closeWorkspaceSession(state, async () => { throw new Error("release failed"); }, async () => {
+    assert.deepEqual(state.batch_execution.entries, []);
+    assert.notEqual(state.workspace_session, session);
+    destroyed = true;
+  }), /release failed/);
+  assert.equal(destroyed, true);
+});
+
+test("late batch results cannot repopulate a closed activity or switched workspace", async () => {
+  for (const boundary of ["activity", "workspace", "close"]) {
+    for (const succeeds of [true, false]) {
+      const harness = batchHarness();
+      let settle;
+      const invoke = harness.invoke;
+      harness.invoke = (command, arguments_) => command === "add_library_documents"
+        ? new Promise((resolve, reject) => { settle = () => succeeds ? resolve([]) : reject(new Error("rejected")); })
+        : invoke(command, arguments_);
+      const pending = executeLibraryBatch("add", harness);
+      if (boundary === "activity") {
+        harness.setState(closeActivity(harness.getState(), `${workspaceId}:Batch execution`));
+      } else if (boundary === "workspace") {
+        harness.setState(workspaceActivationState(harness.getState(), {
+          workspace: { workspace_id: "new", edit_root: "/new/Edit" }, lock_status: null,
+        }));
+      } else {
+        await closeWorkspaceSession(harness.getState(), async () => {}, async () => {});
+      }
+      settle();
+      await pending;
+      assert.deepEqual(harness.getState().batch_execution.entries, []);
+      assert.equal(harness.calls.length, boundary === "activity" && succeeds ? 2 : 0);
+      if (boundary === "workspace") assert.equal(harness.getState().workspace.workspace_id, "new");
+    }
+  }
+});
+
+test("refresh failure remains distinct from a successful mutation and leaks no backend error", async () => {
+  const harness = batchHarness();
+  const invoke = harness.invoke;
+  harness.invoke = (command, arguments_) => {
+    if (command === "open_workspace") throw new Error("/private/Edit SYNTHETIC CREDENTIAL");
+    return invoke(command, arguments_);
+  };
+  await executeLibraryBatch("add", harness);
+  assert.deepEqual(harness.getState().batch_execution.entries.map((entry) => entry.type), ["success", "error"]);
+  assert.match(harness.renders.at(-1), /batch succeeded, but the Library could not refresh/);
+  assert.doesNotMatch(harness.renders.at(-1), /SYNTHETIC CREDENTIAL|\/private\/Edit/);
+});
+
+test("batch controls and modifier selection are wired into the existing Library click path", () => {
+  const application = readFileSync(new URL("./app.mjs", import.meta.url), "utf8");
+  assert.match(application, /toggleLibrarySelection\(\s+appState\.library,\s+row\.dataset\.libraryEntry,\s+event\.ctrlKey \|\| event\.metaKey,/);
+  assert.match(application, /dataset\.libraryBatch;\s+if \(batchAction\) \{\s+await executeLibraryBatch\(batchAction/);
+  assert.match(application, /batchExecutionClick\(appState\.batch_execution, event\.target\)/);
+  assert.match(application, /if \(batch === appState\.batch_execution\) return false/);
+  assert.match(application, /bookmark\.hidden = !bookmarkTarget/);
+});
+
+test("a refresh completing after workspace activation cannot restore the old workspace or Library", async () => {
+  const harness = batchHarness();
+  let resolveSnapshot;
+  let startedRefresh;
+  const refreshing = new Promise((resolve) => { startedRefresh = resolve; });
+  const invoke = harness.invoke;
+  harness.invoke = (command, arguments_) => {
+    if (command === "load_library") {
+      startedRefresh();
+      return new Promise((resolve) => { resolveSnapshot = resolve; });
+    }
+    return invoke(command, arguments_);
+  };
+  const pending = executeLibraryBatch("add", harness);
+  await refreshing;
+  const next = workspaceActivationState(harness.getState(), {
+    workspace: { workspace_id: "new", edit_root: "/new/Edit" }, lock_status: null,
+  });
+  harness.setState(next);
+  resolveSnapshot({ tree: [], folder: { relative_path: "Old", entries: [] } });
+  await pending;
+  assert.equal(harness.getState(), next);
+  assert.deepEqual(harness.getState().batch_execution.entries, []);
+});
 
 test("application module does not import a classic deep-link IIFE", () => {
   const shell = readFileSync(new URL("./index.html", import.meta.url), "utf8");
