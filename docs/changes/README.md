@@ -20,6 +20,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
+| [CHG-0050](active/CHG-0050-uuid-msrv-ceiling.md) | UUID dependency MSRV ceiling | planned | none |
 | [CHG-0042](active/CHG-0042-publish-root-released-document-index.md) | Publish-root released-document index | pending | CAP-0005, CAP-0016 |
 | [CHG-0045](active/CHG-0045-operator-library-name.md) | Operator-defined library name | pending | CAP-0001, CAP-0005 |
 
