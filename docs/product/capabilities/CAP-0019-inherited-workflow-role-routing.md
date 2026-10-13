@@ -39,6 +39,11 @@
    assignment. A document may explicitly override either role; clearing that
    override restores inheritance for that role without copying a policy into the
    document record.
+   First Markdown registration may create either document override by matching
+   flat `editor` or `approver` text to one eligible person: exact normalized
+   display name/email wins, otherwise a unique case-insensitive substring is
+   accepted. No or ambiguous matches reject registration; later source edits do
+   not remap roles.
 5. The CAP-0006 library navigator (row metadata and selection pane) shows the
    effective editor and approver, their Entra display name/email, and whether
    each is inherited or explicitly overridden. It also exposes an unresolved

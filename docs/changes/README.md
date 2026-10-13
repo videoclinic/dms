@@ -28,6 +28,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
+| [CHG-0052](archive/CHG-0052-markdown-frontmatter-initial-import.md) | Markdown frontmatter initial import | done | CAP-0002, CAP-0015, CAP-0017, CAP-0019 |
 | [CHG-0051](archive/CHG-0051-library-agent-instructions.md) | Library agent instructions | done | CAP-0001, CAP-0022 |
 | [CHG-0041](archive/CHG-0041-library-batch-execution-activity.md) | Library batch execution activity | done | CAP-0005, CAP-0006 |
 | [CHG-0024](archive/CHG-0024-windows-nsis-installer-release.md) | Windows NSIS installer and signed GitHub Release | done | CAP-0005 |

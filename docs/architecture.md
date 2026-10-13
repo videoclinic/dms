@@ -44,6 +44,10 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
 - Source filename and relative path are filesystem-derived locator facts.
   Renaming or reassociating the draft updates that locator only; DMS-managed
   document control data and history remain keyed to the stable document ID.
+- First registration of a Markdown member may seed selected flat frontmatter
+  values into DMS document control, review schedule, workflow overrides, and an
+  uncommitted first-release target. This is a one-time import boundary; later
+  source edits, re-addition, and reassociation never update `.dms`.
 - On release, the app: snapshots the effective confidentiality type ID, confirms
   the approved target version label → ensures the relative parent path exists under the
   publish root → builds one export chrome map from `.dms` → exports Office

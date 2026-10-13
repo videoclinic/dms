@@ -69,7 +69,7 @@ const CAPS = [
     file: "CAP-0002-document-lifecycle",
     title: "Document lifecycle",
     nav: "library",
-    subtitle: "Next minor is the default target and is labeled approval optional. Major changes require approval; minor changes release directly and notify the assigned approver after publication.",
+    subtitle: "Next minor is the default target and is labeled approval optional. An imported Markdown baseline is the first target and still requires approval. Major changes require approval; minor changes release directly and notify the assigned approver after publication.",
     actions: ["Create release candidate", "Release V1.4 minor version"],
     body: `
       <section class="card">
@@ -107,6 +107,7 @@ const CAPS = [
             ["Owner *", "Lukas Roth · lukas@vc.de · object ID 8a1f…"],
             ["Requesting editor *", "Lukas Roth · object ID 8a1f… <span class=\"muted\">(signed-in Entra actor default)</span>"],
             ["Approval route", "Anna Berg · object ID 41c2… <span class=\"muted\">(read-only workflow assignment)</span>"],
+            ["Initial Markdown baseline", "V2.3 <span class=\"muted\">(first DMS target; first-release approval required)</span>"],
             ["Target version *", "Next minor V1.4 <span class=\"muted\">(default · approval optional)</span> · Next major V2.0 <span class=\"muted\">(approval required)</span> · Manual V&lt;major&gt;.&lt;minor&gt;"],
             ["Manual validation", "<span class=\"muted\">Greater unused target required when manual is selected</span>"],
             ["Candidate", "V1.4 <span class=\"muted\">(minor release; no approval required)</span>"],

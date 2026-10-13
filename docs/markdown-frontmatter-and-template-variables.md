@@ -41,6 +41,28 @@ Review and release content checks for Markdown compare those controlled keys to
 the candidate snapshot (title/number when present; version; confidentiality
 **type ID**).
 
+## Initial library import
+
+On the **first** registration of a Markdown source, DMS imports these optional
+flat scalar keys once into `.dms`. Re-addition, reassociation, later source
+edits, and Office source files never repeat the import.
+
+| Key | Imported destination | Validation |
+| --- | --- | --- |
+| `title` | DMS title | Non-empty text |
+| `document_number` | DMS document number | Case-insensitively unique in the workspace |
+| `version` | First DMS release target | `MAJOR.MINOR` without `V`; creates neither a release nor a reservation |
+| `document_type` | DMS document type | Enabled configured type ID |
+| `review_interval_months` | Document review-schedule override | Positive integer |
+| `editor` | Document Editor override | Exact eligible display name/email, or one unique case-insensitive substring match |
+| `approver` | Document Approver override | Exact eligible display name/email, or one unique case-insensitive substring match |
+
+An editor or approver match with zero or multiple eligible people rejects the
+entire add; DMS never guesses an identity. The imported version is the exact
+target of the first successful DMS release and still requires first-release
+approval. Once registration succeeds, DMS owns the imported values; only the
+four controlled keys above are projected back into source frontmatter.
+
 ## Optional frontmatter → Word template variables
 
 Any other flat ASCII-identifier frontmatter key is treated as a template

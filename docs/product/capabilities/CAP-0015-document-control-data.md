@@ -26,8 +26,11 @@
    confidentiality type-ID migration leaves the current draft on its source ID
    until candidate preparation writes the replacement ID for that future
    release. Frontmatter `confidentiality` holds the catalogue type ID (not the
-   display label). Frontmatter never mutates `.dms`
-   control data. The draft filename stem supplies the title's one-time default only
+   display label). Outside first Markdown registration, frontmatter never mutates
+   `.dms` control data. First registration may import supported flat title,
+   document number, first-release baseline, enabled document type, positive
+   review-interval override, and uniquely matched eligible Editor/Approver
+   overrides. The draft filename stem supplies the title's one-time default only
    when the document is added; it is not a continuing metadata source.
    First Office registration may separately retain bounded unverified source
    provenance: original-source SHA-256, scan outcome, and at most three
@@ -154,8 +157,8 @@
     schedule, lifecycle state,
     or history. Office document properties are not authoritative for document
     control data. Registered Markdown drafts receive controlled frontmatter keys
-    written from DMS (CAP-0002 / CAP-0007); that one-way projection never imports
-    frontmatter into `.dms`. The application restores draft content only from an
+    written from DMS (CAP-0002 / CAP-0007); after first registration, that
+    one-way projection never imports frontmatter into `.dms`. The application restores draft content only from an
     operator workspace backup; released PDFs and their evidence remain the
     durable application-managed version history.
 14. **Create release candidate** (when the document is an idle draft with no

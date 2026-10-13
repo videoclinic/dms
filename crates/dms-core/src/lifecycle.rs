@@ -1913,26 +1913,36 @@ impl Workspace {
             .iter()
             .map(|release| release.version)
             .max();
-        let target = match (latest_committed, selection) {
-            (None, TargetSelection::NextMinor | TargetSelection::NextMajor) => Version::V1_0,
-            (None, TargetSelection::Manual(version)) if version == Version::V1_0 => version,
-            (None, TargetSelection::Manual(_)) => return Err(DmsError::InvalidTargetVersion),
-            (Some(current), TargetSelection::NextMinor) => Version {
+        let imported_initial = self.document(document_id)?.initial_version;
+        let target = match (latest_committed, imported_initial, selection) {
+            (None, Some(initial), TargetSelection::NextMinor | TargetSelection::NextMajor) => {
+                initial
+            }
+            (None, Some(initial), TargetSelection::Manual(version)) if version == initial => {
+                version
+            }
+            (None, Some(_), TargetSelection::Manual(_)) => {
+                return Err(DmsError::InvalidTargetVersion)
+            }
+            (None, None, TargetSelection::NextMinor | TargetSelection::NextMajor) => Version::V1_0,
+            (None, None, TargetSelection::Manual(version)) if version == Version::V1_0 => version,
+            (None, None, TargetSelection::Manual(_)) => return Err(DmsError::InvalidTargetVersion),
+            (Some(current), _, TargetSelection::NextMinor) => Version {
                 major: current.major,
                 minor: current
                     .minor
                     .checked_add(1)
                     .ok_or(DmsError::InvalidTargetVersion)?,
             },
-            (Some(current), TargetSelection::NextMajor) => Version {
+            (Some(current), _, TargetSelection::NextMajor) => Version {
                 major: current
                     .major
                     .checked_add(1)
                     .ok_or(DmsError::InvalidTargetVersion)?,
                 minor: 0,
             },
-            (Some(current), TargetSelection::Manual(version)) if version > current => version,
-            (Some(_), TargetSelection::Manual(_)) => return Err(DmsError::InvalidTargetVersion),
+            (Some(current), _, TargetSelection::Manual(version)) if version > current => version,
+            (Some(_), _, TargetSelection::Manual(_)) => return Err(DmsError::InvalidTargetVersion),
         };
         if self
             .document(document_id)?

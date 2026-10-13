@@ -202,6 +202,77 @@ fn document_control_is_persisted_independently_from_source_locator() {
 }
 
 #[test]
+fn initial_markdown_frontmatter_imports_control_schedule_and_unique_roles() {
+    let (edit_root, _publish_root, mut workspace) = initialized_workspace();
+    workspace
+        .configure_document_type("procedure", "Procedure", true)
+        .expect("document type");
+    let editor_id = Uuid::new_v4();
+    let approver_id = Uuid::new_v4();
+    workspace
+        .replace_identity_source(
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            "DMS group",
+            vec![
+                EntraPerson::eligible(editor_id, "Ada Editor", "ada@example.test"),
+                EntraPerson::eligible(approver_id, "Bob Approver", "bob@example.test"),
+            ],
+        )
+        .expect("identity source");
+    workspace
+        .update_workflow_policy(
+            ".",
+            RoleUpdate::replace(editor_id),
+            RoleUpdate::replace(approver_id),
+        )
+        .expect("root workflow policy");
+    let source = edit_root.path().join("Imported.md");
+    fs::write(
+        &source,
+        "---\ntitle: Imported handbook\ndocument_number: HB-001\nversion: 2.3\ndocument_type: procedure\nreview_interval_months: 18\neditor: Ada\napprover: bob@example.test\n---\n# Draft\n",
+    )
+    .expect("source");
+
+    let document = workspace.add_document(&source).expect("import document");
+    assert_eq!(document.control.title, "Imported handbook");
+    assert_eq!(document.control.document_number.as_deref(), Some("HB-001"));
+    assert_eq!(document.control.document_type.as_deref(), Some("procedure"));
+    assert_eq!(document.initial_version.unwrap().major, 2);
+    assert_eq!(document.initial_version.unwrap().minor, 3);
+    assert_eq!(
+        workspace
+            .document_review_schedule(document.id)
+            .expect("review schedule")
+            .interval_months,
+        Some(18)
+    );
+    let roles = workspace
+        .effective_workflow_roles(document.id)
+        .expect("effective roles");
+    assert_eq!(roles.editor.unwrap().object_id, editor_id);
+    assert_eq!(roles.approver.unwrap().object_id, approver_id);
+    assert!(fs::read_to_string(source)
+        .expect("frontmatter")
+        .contains("version: 2.3"));
+    workspace
+        .unregister_document(document.id)
+        .expect("unregister document");
+    fs::write(
+        edit_root.path().join("Imported.md"),
+        "---\ntitle: Changed after first registration\nversion: 7.8\n---\n# Draft\n",
+    )
+    .expect("changed source");
+    let readded = workspace
+        .add_document(&edit_root.path().join("Imported.md"))
+        .expect("re-add document");
+    assert_eq!(readded.id, document.id);
+    assert_eq!(readded.control.title, "Imported handbook");
+    assert_eq!(readded.initial_version.unwrap().major, 2);
+    assert_eq!(readded.initial_version.unwrap().minor, 3);
+}
+
+#[test]
 fn group_bound_control_events_require_matching_entra_principal() {
     let (edit_root, _publish_root, mut workspace) = initialized_workspace();
     let document = add_markdown_document(&mut workspace, &edit_root, "bound.md");
@@ -396,6 +467,40 @@ fn schema_v19_migration_preserves_existing_agent_instructions_for_merge() {
             .expect("preserved instructions"),
         "# Existing library guidance\n"
     );
+}
+
+#[test]
+fn schema_v20_migration_defaults_markdown_initial_versions() {
+    let (edit_root, _publish_root, mut workspace) = initialized_workspace();
+    let document = add_markdown_document(&mut workspace, &edit_root, "Legacy.md");
+    workspace.save().expect("current metadata");
+
+    let metadata_path = edit_root.path().join(".dms/workspace.json");
+    let mut metadata: serde_json::Value =
+        serde_json::from_slice(&fs::read(&metadata_path).expect("metadata"))
+            .expect("metadata JSON");
+    metadata["schema_version"] = serde_json::Value::from(20);
+    metadata["documents"][document.id.to_string()]
+        .as_object_mut()
+        .expect("document metadata")
+        .remove("initial_version");
+    fs::write(
+        &metadata_path,
+        serde_json::to_vec_pretty(&metadata).expect("metadata JSON"),
+    )
+    .expect("legacy metadata");
+
+    let migrated = Workspace::open(edit_root.path()).expect("v20 migration");
+    assert_eq!(migrated.schema_version, SCHEMA_VERSION);
+    assert!(migrated
+        .document(document.id)
+        .unwrap()
+        .initial_version
+        .is_none());
+    assert!(edit_root
+        .path()
+        .join(".dms/workspace.v20.json.bak")
+        .is_file());
 }
 
 #[test]

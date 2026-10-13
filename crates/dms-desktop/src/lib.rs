@@ -387,6 +387,7 @@ pub struct DocumentSelection {
     pub confidentiality_override: Option<String>,
     pub effective_confidentiality: Option<EffectiveConfidentiality>,
     pub effective_workflow_roles: Option<EffectiveWorkflowRoles>,
+    pub initial_version: Option<String>,
     pub current_release: Option<CurrentReleaseSelection>,
     pub active_candidate: Option<ReleaseCandidate>,
     pub retryable_decision_candidate: Option<ReleaseCandidate>,
@@ -3963,6 +3964,9 @@ fn document_selection(edit_root: &Path, document_id: Uuid) -> Result<DocumentSel
             .map(str::to_owned),
         effective_confidentiality: workspace.effective_confidentiality(document_id).ok(),
         effective_workflow_roles,
+        initial_version: document
+            .initial_version
+            .map(|version| format!("{}.{}", version.major, version.minor)),
         current_release,
         active_candidate,
         retryable_decision_candidate,

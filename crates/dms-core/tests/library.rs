@@ -1,8 +1,8 @@
 use std::{fs, path::Path};
 
 use dms_core::{
-    ControlUpdate, DmsError, LibraryEntryKind, LibraryMembership, Lifecycle, PermalinkTarget,
-    SourceState, Workspace,
+    ControlUpdate, DmsError, EntraPerson, LibraryEntryKind, LibraryMembership, Lifecycle,
+    PermalinkTarget, RoleUpdate, SourceState, Workspace,
 };
 
 fn initialized_workspace() -> (tempfile::TempDir, Workspace) {
@@ -309,6 +309,46 @@ fn batch_add_is_atomic_and_unregister_reassociate_preserve_document_identity() {
     assert_eq!(notes_target.document_id, Some(document.id));
     assert_eq!(notes_target.target, PermalinkTarget::Notes);
     assert_eq!(notes_target.review_id, None);
+}
+
+#[test]
+fn batch_import_refuses_an_ambiguous_frontmatter_role_without_registering_any_document() {
+    let (_temp, mut workspace) = initialized_workspace();
+    let first = workspace.edit_root.join("Policies/First.md");
+    let ambiguous = workspace.edit_root.join("Policies/Ambiguous.md");
+    fs::create_dir_all(first.parent().unwrap()).expect("folder");
+    let first_id = uuid::Uuid::new_v4();
+    let second_id = uuid::Uuid::new_v4();
+    workspace
+        .replace_identity_source(
+            uuid::Uuid::new_v4(),
+            uuid::Uuid::new_v4(),
+            "DMS workflow",
+            vec![
+                EntraPerson::eligible(first_id, "Ada Adams", "ada.adams@example.test"),
+                EntraPerson::eligible(second_id, "Ada Brown", "ada.brown@example.test"),
+            ],
+        )
+        .expect("identity source");
+    workspace
+        .update_workflow_policy(
+            ".",
+            RoleUpdate::replace(first_id),
+            RoleUpdate::replace(second_id),
+        )
+        .expect("root workflow policy");
+    fs::write(&first, "---\ntitle: First\nversion: 1.0\n---\n# First\n").expect("first");
+    fs::write(
+        &ambiguous,
+        "---\ntitle: Ambiguous\nversion: 1.0\neditor: Ada\n---\n# Ambiguous\n",
+    )
+    .expect("ambiguous");
+
+    assert!(matches!(
+        workspace.add_documents(&[first, ambiguous]),
+        Err(DmsError::InvalidMarkdownFrontmatter(message)) if message.contains("matches multiple eligible people")
+    ));
+    assert!(workspace.documents().is_empty());
 }
 
 #[test]

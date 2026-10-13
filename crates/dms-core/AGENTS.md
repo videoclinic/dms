@@ -85,8 +85,11 @@ persistence.
   to the checked digest, target, confidentiality, and phase in the workflow
   chain. For registered Markdown members, DMS prefills and overwrites those
   controlled frontmatter keys from document control, effective confidentiality
-  type ID, and candidate target version (one-way; never imports frontmatter into
-  `.dms`). Sync is skipped until a confidentiality policy exists; policy/type/label
+  type ID, and candidate target version. First registration of a Markdown member
+  alone may import flat `title`, `document_number`, `version`, `document_type`,
+  `review_interval_months`, `editor`, and `approver` values into `.dms`; it never
+  repeats on re-addition, reassociation, or later source edits. Sync is skipped
+  until a confidentiality policy exists; policy/type/label
   changes re-sync all registered Markdown members. A retained type-ID migration
   leaves current policy/override references and idle drafts unchanged, invalidates
   an affected active candidate, then projects the enabled non-cyclic replacement
@@ -201,6 +204,9 @@ persistence.
 - Schema v20 records the DMS-generated agent-instruction revision and SHA-256
   fingerprint. Its v19 migration preserves any pre-existing `.dms/AGENTS.md`
   as manual merge input before installing the generated original.
+- Schema v21 adds optional per-document Markdown initial versions. Its v20
+  migration defaults the field to `None`, retaining existing first-target and
+  release history behaviour.
 
 ## Verification
 

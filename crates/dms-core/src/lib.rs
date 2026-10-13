@@ -35,7 +35,7 @@ pub use policies::*;
 pub use source_history::*;
 pub use template::*;
 
-pub const SCHEMA_VERSION: u32 = 20;
+pub const SCHEMA_VERSION: u32 = 21;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 const AGENT_INSTRUCTIONS_FILENAME: &str = "AGENTS.md";
@@ -358,6 +358,8 @@ pub struct Document {
     pub source_history: Option<SourceHistory>,
     pub control: DocumentControl,
     #[serde(default)]
+    pub initial_version: Option<Version>,
+    #[serde(default)]
     pub(crate) confidentiality_override: Option<String>,
     #[serde(default)]
     pub(crate) workflow_overrides: DocumentWorkflowOverrides,
@@ -414,6 +416,7 @@ pub(crate) struct PreparedDocumentAdd {
     existing_id: Option<Uuid>,
     title: Option<String>,
     source_history: Option<SourceHistory>,
+    markdown_initial_import: Option<MarkdownInitialImport>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -503,7 +506,7 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = matches!(found, 1..=19);
+        let migrated = matches!(found, 1..=20);
         if found == 1 {
             migrate_v1_catalogues(&mut value)?;
         }
@@ -727,13 +730,28 @@ impl Workspace {
                 existing_id: Some(existing_id),
                 title: None,
                 source_history: None,
+                markdown_initial_import: None,
             });
         }
+        let markdown_initial_import = if absolute_path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
+        {
+            let source = fs::read_to_string(&absolute_path).map_err(|source| DmsError::Io {
+                path: absolute_path.clone(),
+                source,
+            })?;
+            Some(parse_markdown_initial_import(&source)?)
+        } else {
+            None
+        };
         Ok(PreparedDocumentAdd {
             title: Some(source_title(&absolute_path)?),
             source_history: capture_source_history(&absolute_path)?,
             relative_path,
             existing_id: None,
+            markdown_initial_import,
         })
     }
 
@@ -747,6 +765,7 @@ impl Workspace {
             existing_id,
             title,
             source_history,
+            markdown_initial_import,
         } = prepared;
         if let Some(existing_id) = existing_id {
             let existing = self
@@ -770,27 +789,60 @@ impl Workspace {
         {
             return Err(DmsError::DocumentAlreadyRegistered(relative_path));
         }
+        let id = Uuid::new_v4();
+        let initial_title = markdown_initial_import
+            .as_ref()
+            .and_then(|frontmatter| frontmatter.title.as_deref())
+            .map(|title| normalized_required(title, "title"))
+            .transpose()?
+            .or(title)
+            .expect("new document preparation provides a title");
+        let document_number = markdown_initial_import
+            .as_ref()
+            .and_then(|frontmatter| normalized_optional(frontmatter.document_number.as_deref()));
+        self.ensure_document_number_available(id, document_number.as_deref())?;
+        let document_type = markdown_initial_import
+            .as_ref()
+            .and_then(|frontmatter| normalized_optional(frontmatter.document_type.as_deref()));
+        if let Some(type_id) = document_type.as_deref() {
+            self.require_enabled_document_type(type_id)?;
+        }
+        let editor = markdown_initial_import
+            .as_ref()
+            .and_then(|frontmatter| frontmatter.editor.as_deref())
+            .map(|value| self.resolve_initial_workflow_person("editor", value))
+            .transpose()?;
+        let approver = markdown_initial_import
+            .as_ref()
+            .and_then(|frontmatter| frontmatter.approver.as_deref())
+            .map(|value| self.resolve_initial_workflow_person("approver", value))
+            .transpose()?;
         let document = Document {
-            id: Uuid::new_v4(),
+            id,
             relative_path,
             lifecycle: Lifecycle::Draft,
             source_state: SourceState::Registered,
             control: DocumentControl {
-                title: title.expect("new document preparation provides a title"),
-                document_number: None,
-                document_type: None,
+                title: initial_title,
+                document_number,
+                document_type,
                 owner: None,
                 legacy_owner_label: None,
             },
+            initial_version: markdown_initial_import
+                .as_ref()
+                .and_then(|frontmatter| frontmatter.version),
             source_history,
             confidentiality_override: None,
-            workflow_overrides: DocumentWorkflowOverrides::default(),
+            workflow_overrides: DocumentWorkflowOverrides { editor, approver },
             notes: Vec::new(),
             candidates: Vec::new(),
             active_candidate_id: None,
             releases: Vec::new(),
             workflow_events: Vec::new(),
-            review_interval_months: None,
+            review_interval_months: markdown_initial_import
+                .as_ref()
+                .and_then(|frontmatter| frontmatter.review_interval_months),
             review_exemption_reason: None,
             next_review_due: None,
             periodic_reviews: Vec::new(),
@@ -1037,6 +1089,47 @@ impl Workspace {
             return Err(DmsError::DuplicateDocumentNumber(candidate));
         }
         Ok(())
+    }
+
+    fn resolve_initial_workflow_person(&self, role: &str, value: &str) -> Result<WorkflowRoleRef> {
+        let source = self.identity_source.as_ref().ok_or_else(|| {
+            DmsError::InvalidMarkdownFrontmatter(format!(
+                "{role} requires a configured identity source"
+            ))
+        })?;
+        let value = value.trim();
+        let exact = self
+            .eligible_people()
+            .into_iter()
+            .filter(|person| {
+                person.display_name.trim().eq_ignore_ascii_case(value)
+                    || person.email.trim().eq_ignore_ascii_case(value)
+            })
+            .collect::<Vec<_>>();
+        let matches = if exact.is_empty() {
+            let needle = value.to_lowercase();
+            self.eligible_people()
+                .into_iter()
+                .filter(|person| {
+                    person.display_name.to_lowercase().contains(&needle)
+                        || person.email.to_lowercase().contains(&needle)
+                })
+                .collect::<Vec<_>>()
+        } else {
+            exact
+        };
+        match matches.as_slice() {
+            [person] => Ok(WorkflowRoleRef {
+                binding_id: source.binding_id,
+                object_id: person.object_id,
+            }),
+            [] => Err(DmsError::InvalidMarkdownFrontmatter(format!(
+                "{role} {value:?} does not match an eligible person"
+            ))),
+            _ => Err(DmsError::InvalidMarkdownFrontmatter(format!(
+                "{role} {value:?} matches multiple eligible people"
+            ))),
+        }
     }
 }
 

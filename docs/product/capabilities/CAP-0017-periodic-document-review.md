@@ -17,6 +17,8 @@
    interval override and **Exemption reason** only for exemption; **Update
    review schedule** stays disabled until the form differs from the document's
    saved schedule.
+   First Markdown registration may set the document override from positive flat
+   `review_interval_months`; later source edits never change the schedule.
 2. A successful release computes the next-review-due date from the candidate's
    required effective date captured by that release and the document interval.
    Completing a periodic review

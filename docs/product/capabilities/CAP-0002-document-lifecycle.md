@@ -71,7 +71,9 @@
    Any candidate validation or delivery error is a visible selected-document
    alert, and **Revision cycle** opens so the operator can correct or retry the
    action without discovering an error behind another folded section.
-   The first release proposes `V1.0`.
+   The first release proposes `V1.0` unless first Markdown registration imported
+   a `version: MAJOR.MINOR` baseline; that baseline is the first DMS target and
+   still requires approval.
    For every later release, the editor selects exactly one target-version mode:
    - **Minor version change** proposes the next minor version of the current
      release (`V1.3` → `V1.4`; never-released → `V1.0`).
@@ -226,9 +228,14 @@
     changes. A retained confidentiality type-ID migration leaves the current
     draft unchanged until a new candidate is prepared; candidate preparation
     resolves the replacement type and writes its ID before content checking.
+    First Markdown registration may import flat `title`, `document_number`,
+    `version`, `document_type`, `review_interval_months`, `editor`, and
+    `approver` values into DMS after validating configured catalogue entries and
+    a unique eligible-person match. It is never repeated after registration.
     Frontmatter `confidentiality` stores the catalogue **type ID**; the display
-    label is used for Office markers and export chrome only. Frontmatter never
-    supplies authoritative values into `.dms`. Additional flat
+    label is used for Office markers and export chrome only. After that initial
+    import, frontmatter never supplies authoritative values
+    into `.dms`. Additional flat
     frontmatter scalars may fill non-controlled Word-template `{KEY}` variables
     under CAP-0007 during temporary DOCX assembly only. Other draft formats may
     not enter review or release until equivalent visible-content coverage is

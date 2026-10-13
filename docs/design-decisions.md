@@ -134,7 +134,11 @@ Capability-local rules stay in their CAP files.
   DOCX release. DMS title, document number, candidate version, and effective
   confidentiality remain authoritative in `.dms`. For registered Markdown
   library members DMS also projects those values into controlled frontmatter
-  keys (one-way overwrite; never an import into `.dms`). Frontmatter
+  keys. On first Markdown registration only, flat source frontmatter may seed
+  DMS title, document number, first-release target version, document type,
+  review interval, and uniquely resolved eligible editor/approver overrides;
+  thereafter DMS overwrites controlled keys and never re-imports source data.
+  Frontmatter
   `confidentiality` stores the catalogue type ID; Word chrome
   `{CONFIDENTIALITY}` still uses the display label. Extra flat frontmatter
   scalars may define optional non-controlled Word-template `{KEY}` variables

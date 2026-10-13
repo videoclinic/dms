@@ -179,7 +179,8 @@ macOS.
   whether approval is skipped or required, always includes **Review
   content-check override reason (only when needed)**, shows the resolved
   effective target version, labels later Next minor options **approval
-  optional**, keeps Manual major/minor disabled until Manual target is
+  optional**, shows a first-registration Markdown baseline as the first target
+  when present (and still requires approval), keeps Manual major/minor disabled until Manual target is
   selected. Its target-sensitive **What happens next** message states whether
   submission starts approval or remains a direct Draft release path; incomplete
   Manual values state that their approval outcome is not yet resolved. The

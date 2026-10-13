@@ -2143,14 +2143,14 @@ fn marker_scanners_ignore_non_rendered_markdown_scan_docx_surfaces_and_fail_clos
 #[test]
 fn markdown_frontmatter_is_rewritten_from_dms_control_before_review() {
     let mut fixture = Fixture::new(
-        "---\ntitle: Wrong title\ndocument_number: WRONG-9\nversion: 9.9\nconfidentiality: internal\n---\n# Handbook\n",
+        "---\ntitle: Wrong title\nversion: 9.9\nconfidentiality: internal\n---\n# Handbook\n",
         NotificationTransport::Smtp,
     );
     let source = fs::read_to_string(&fixture.source_path).unwrap();
     assert!(source.contains("title: Employee handbook"));
     assert!(!source.contains("Wrong title"));
-    assert!(!source.contains("WRONG-9"));
-    assert!(source.contains("version: 1.0"));
+
+    assert!(source.contains("version: 9.9"));
     assert!(source.contains("confidentiality: internal"));
     assert!(source.contains("# Handbook"));
 
@@ -2172,8 +2172,28 @@ fn markdown_frontmatter_is_rewritten_from_dms_control_before_review() {
         .expect("submit after DMS frontmatter resync");
     let source = fs::read_to_string(&fixture.source_path).unwrap();
     assert!(source.contains("title: Employee handbook"));
-    assert!(source.contains("version: 1.0"));
+    assert!(source.contains("version: 9.9"));
     assert!(!source.contains("Drifted"));
+}
+
+#[test]
+fn imported_markdown_version_is_the_first_dms_release_target() {
+    let mut fixture = Fixture::new(
+        "---\ntitle: Employee handbook\nversion: 2.3\nconfidentiality: internal\n---\n# Handbook\n",
+        NotificationTransport::Smtp,
+    );
+    let mut graph = fixture.graph();
+    let submission = fixture
+        .workspace
+        .submit_candidate(
+            fixture.candidate_request(TargetSelection::NextMinor),
+            &mut graph,
+            &mut FakeNotifier::accepted(),
+            &fixture.editor_principal(),
+        )
+        .expect("candidate");
+    assert_eq!(submission.version, Version { major: 2, minor: 3 });
+    assert!(submission.approval_required);
 }
 
 #[test]

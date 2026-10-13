@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, fs, path::Path};
 use uuid::Uuid;
 
 use super::{
-    DmsError, MarkerStatus, MarkerVerdict, Result, SourceState, TargetSelection, Workspace,
+    DmsError, MarkerStatus, MarkerVerdict, Result, SourceState, TargetSelection, Version, Workspace,
 };
 
 /// Controlled export-chrome tokens. Frontmatter may validate these fields but
@@ -49,6 +49,62 @@ pub struct MarkdownFrontmatterCheck {
     pub document_number: Option<MarkerVerdict>,
     pub version: MarkerVerdict,
     pub confidentiality: MarkerVerdict,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct MarkdownInitialImport {
+    pub title: Option<String>,
+    pub document_number: Option<String>,
+    pub version: Option<Version>,
+    pub document_type: Option<String>,
+    pub review_interval_months: Option<u32>,
+    pub editor: Option<String>,
+    pub approver: Option<String>,
+}
+
+pub(crate) fn parse_markdown_initial_import(markdown: &str) -> Result<MarkdownInitialImport> {
+    let (values, _) = split_frontmatter_map(markdown)?;
+    let version = values
+        .get("version")
+        .map(|value| parse_initial_version(value))
+        .transpose()?;
+    let review_interval_months = values
+        .get("review_interval_months")
+        .map(|value| {
+            value
+                .parse::<u32>()
+                .ok()
+                .filter(|months| *months > 0)
+                .ok_or_else(|| {
+                    DmsError::InvalidMarkdownFrontmatter(
+                        "review_interval_months must be a positive integer".to_owned(),
+                    )
+                })
+        })
+        .transpose()?;
+    Ok(MarkdownInitialImport {
+        title: values.get("title").cloned(),
+        document_number: values.get("document_number").cloned(),
+        version,
+        document_type: values.get("document_type").cloned(),
+        review_interval_months,
+        editor: values.get("editor").cloned(),
+        approver: values.get("approver").cloned(),
+    })
+}
+
+fn parse_initial_version(value: &str) -> Result<Version> {
+    let Some((major, minor)) = value.trim().split_once('.') else {
+        return Err(DmsError::InvalidMarkdownFrontmatter(
+            "version must use MAJOR.MINOR without a V prefix".to_owned(),
+        ));
+    };
+    match (major.parse::<u32>(), minor.parse::<u32>()) {
+        (Ok(major), Ok(minor)) => Ok(Version { major, minor }),
+        _ => Err(DmsError::InvalidMarkdownFrontmatter(
+            "version must use MAJOR.MINOR without a V prefix".to_owned(),
+        )),
+    }
 }
 
 impl MarkdownFrontmatterCheck {

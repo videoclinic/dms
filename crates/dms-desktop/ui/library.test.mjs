@@ -1524,6 +1524,12 @@ test("previewTargetVersions follows CAP-0002 first release and next-minor steps"
     next_major: { major: 1, minor: 0 },
     first_release: true,
   });
+  assert.deepEqual(previewTargetVersions({ initial_version: "2.3" }), {
+    current: null,
+    next_minor: { major: 2, minor: 3 },
+    next_major: { major: 2, minor: 3 },
+    first_release: true,
+  });
   assert.deepEqual(previewTargetVersions({ current_release: { version: "1.0" } }), {
     current: { major: 1, minor: 0 },
     next_minor: { major: 1, minor: 1 },

@@ -505,6 +505,14 @@ export function parseCurrentReleaseVersion(detail) {
   return { major: Number(match[1]), minor: Number(match[2]) };
 }
 
+export function parseInitialVersion(detail) {
+  const raw = detail?.initial_version;
+  if (raw == null || raw === "") return null;
+  const match = String(raw).trim().match(/^(\d+)\.(\d+)$/);
+  if (!match) return null;
+  return { major: Number(match[1]), minor: Number(match[2]) };
+}
+
 export function formatVersionLabel(version) {
   if (!version || !Number.isInteger(version.major) || !Number.isInteger(version.minor)) return "";
   return `V${version.major}.${version.minor}`;
@@ -512,16 +520,18 @@ export function formatVersionLabel(version) {
 
 /**
  * Preview versions for Next minor / Next major per CAP-0002.
- * Never-released documents resolve both modes to V1.0 (first release).
+ * Never-released documents resolve both modes to imported `initial_version`,
+ * when present, or V1.0 (first release).
  * Later next-minor advances the minor component by 1 (V1.0 → V1.1).
  */
 export function previewTargetVersions(detail) {
   const current = parseCurrentReleaseVersion(detail);
   if (!current) {
+    const initial = parseInitialVersion(detail) ?? { major: 1, minor: 0 };
     return {
       current: null,
-      next_minor: { major: 1, minor: 0 },
-      next_major: { major: 1, minor: 0 },
+      next_minor: initial,
+      next_major: initial,
       first_release: true,
     };
   }
@@ -557,8 +567,8 @@ export function candidateTargetHelpText(detail, targetMode, manualMajor, manualM
   }
   const label = formatVersionLabel(target);
   const current = preview.current;
-  const approvalRequired = !current
-    ? target.major === 1 && target.minor === 0
+  const approvalRequired = preview.first_release
+    ? true
     : target.major > current.major;
   if (approvalRequired) {
     return `What happens next: Approval is required. Creating this candidate starts approval and sends the request to the assigned approver. The document becomes Pending approval after delivery succeeds. Effective target: ${label}.`;
@@ -590,6 +600,7 @@ export function syncCandidateTargetForm(form) {
     current_release: form.dataset.currentReleaseVersion
       ? { version: form.dataset.currentReleaseVersion }
       : null,
+    initial_version: form.dataset.initialVersion || null,
   };
   label.textContent = candidateTargetHelpText(detail, mode, majorInput?.value, minorInput?.value);
 }
@@ -1149,6 +1160,7 @@ function externalLifecycleMarkup(library, detail, workspace) {
   const currentReleaseVersion = preview.current
     ? `${preview.current.major}.${preview.current.minor}`
     : "";
+  const initialVersion = detail.initial_version ?? "";
   const nextMinorOption = preview.first_release
     ? `Next minor · ${nextMinorLabel} (first release)`
     : `Next minor · ${nextMinorLabel} (approval optional)`;
@@ -1162,7 +1174,7 @@ function externalLifecycleMarkup(library, detail, workspace) {
   );
   const approvalRoute = `<div class="source-path" data-candidate-approval-route><strong>Approval route</strong><br>Approval-required targets use ${escapeHtml(effectiveApprover)}. Change this in Configuration → Workflow; candidate creation cannot change the approver.</div>`;
   const submit = detail.lifecycle === "draft" && !candidate
-    ? `<form class="lifecycle-action" data-library-lifecycle-form="submit_candidate" data-current-release-version="${escapeHtml(currentReleaseVersion)}" data-first-release="${preview.first_release ? "1" : "0"}" novalidate><strong>Create release candidate</strong><p class="source-path">Records target version, effective date, and changelog for this draft in the workspace. It does not send a file elsewhere. Next minor stays in draft so you can export the PDF next. Next major and first release open approver review after the notification is sent.</p>${placeholderBlock}<label>Target version<select name="targetMode"><option value="next_minor" selected>${escapeHtml(nextMinorOption)}</option><option value="next_major">${escapeHtml(nextMajorOption)}</option><option value="manual">Manual target</option></select></label><p class="source-path" data-candidate-effective-target>${escapeHtml(effectiveHelp)}</p>${approvalRoute}<label data-candidate-manual-field hidden>Manual major<input name="manualMajor" inputmode="numeric" disabled></label><label data-candidate-manual-field hidden>Manual minor<input name="manualMinor" inputmode="numeric" disabled></label><label>Effective date<input name="effectiveDate" type="date" required></label>${placeholderRequestingEditor}${handover}<label>Changelog<textarea name="changelog" required></textarea></label><label>Review content-check override reason (only when needed)<textarea name="reviewOverrideReason"></textarea></label><button class="button" type="submit" ${detail.requires_identity_handover && !peopleAvailable ? "disabled" : ""}>Create release candidate</button></form>`
+    ? `<form class="lifecycle-action" data-library-lifecycle-form="submit_candidate" data-current-release-version="${escapeHtml(currentReleaseVersion)}" data-initial-version="${escapeHtml(initialVersion)}" data-first-release="${preview.first_release ? "1" : "0"}" novalidate><strong>Create release candidate</strong><p class="source-path">Records target version, effective date, and changelog for this draft in the workspace. It does not send a file elsewhere. Next minor stays in draft so you can export the PDF next. Next major and first release open approver review after the notification is sent.</p>${placeholderBlock}<label>Target version<select name="targetMode"><option value="next_minor" selected>${escapeHtml(nextMinorOption)}</option><option value="next_major">${escapeHtml(nextMajorOption)}</option><option value="manual">Manual target</option></select></label><p class="source-path" data-candidate-effective-target>${escapeHtml(effectiveHelp)}</p>${approvalRoute}<label data-candidate-manual-field hidden>Manual major<input name="manualMajor" inputmode="numeric" disabled></label><label data-candidate-manual-field hidden>Manual minor<input name="manualMinor" inputmode="numeric" disabled></label><label>Effective date<input name="effectiveDate" type="date" required></label>${placeholderRequestingEditor}${handover}<label>Changelog<textarea name="changelog" required></textarea></label><label>Review content-check override reason (only when needed)<textarea name="reviewOverrideReason"></textarea></label><button class="button" type="submit" ${detail.requires_identity_handover && !peopleAvailable ? "disabled" : ""}>Create release candidate</button></form>`
     : "";
   const reviewRetry = candidate?.status === "review_delivery_failed"
     ? `<form class="lifecycle-action" data-library-lifecycle-form="retry_review_notification"><strong>Confirm review request delivery</strong><small>The host mail handler opened without advancing the review.</small>${mailConfirmation("the review request")}<button class="button" type="submit">Confirm review message sent</button></form>`
