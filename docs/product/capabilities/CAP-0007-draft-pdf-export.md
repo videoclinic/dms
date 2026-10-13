@@ -1,11 +1,37 @@
 # CAP-0007 — Application-driven source draft → PDF export
 
+**Primary surface:** human
+
 | Field | Value |
 | --- | --- |
 | ID | CAP-0007 |
 | Status | not implemented |
 | Mechanism | Installed Microsoft Word for Office drafts and Markdown converted into a temporary DOCX from the workspace Word-template asset |
 | Tests | Partial phase-5 and CHG-0004 evidence: [`dms-desktop` adapter/unit tests](../../../crates/dms-desktop/src/export.rs) cover template-backed temporary DOCX assembly, controlled-field fill, installed-Office dispatch through a test double, valid-PDF enforcement, Win32-safe Word COM paths, and unchanged source/template bytes; [core lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs) cover fail-closed missing, changed, invalid, and unconfigured template states without export or release evidence; [desktop Configuration tests](../../../crates/dms-desktop/src/lib.rs) and [frontend tests](../../../crates/dms-desktop/ui/configuration.test.mjs) cover template selection, validation display, removal confirmation, and Library exclusion; [core template tests](../../../crates/dms-core/tests/markdown_template.rs) cover strict custom properties, temporary DOCX assembly, and template-package preservation. A retained Windows installed-Word smoke released the controlled A.8.29 Markdown as a four-page A4 PDF with refreshed title, table of contents, version, and confidentiality, no unresolved template markers, matching SHA-256 release evidence, and unchanged source/template bytes. Windows/macOS CI runs the fake-backed pipeline; installed-Word evidence on macOS remains pending, so this CAP is not promoted. |
+
+## Bounded implemented behavior
+
+The shared Markdown assembler supports two-, three-, four- and five-column
+policy tables, including German version histories, long text, empty cells,
+escaped punctuation and Unicode. It retains cell order, paragraph/cell styling
+and template run properties while rendering inline emphasis and code. Multiple
+tables remain separate and preserve their cell text.
+
+The template still requires exactly two prototype cells and no new markers.
+Two-column tables keep their existing layout. Other column counts clone the
+second-cell styling for columns after the first and receive equal fixed widths
+from the body section's page width minus left/right margins and gutter. Missing
+or invalid dimensions fail rather than guessing a page size. Assembly preserves
+source/template bytes, section properties and non-body package parts (apart
+from the existing optional-variable substitution).
+
+Evidence: `assembler_preserves_two_three_four_and_five_column_table_fidelity`
+and `assembler_sizes_wide_tables_without_grid_or_cell_widths` in the
+[core template tests](../../../crates/dms-core/tests/markdown_template.rs).
+This is OOXML assembly evidence, not full-corpus Word/PDF layout verification.
+Image embedding, standalone batch conversion and retained final DOCX remain
+pending under [CHG-0053](../../changes/active/CHG-0053-markdown-batch-conversion-retained-docx.md).
+The overall CAP remains `not implemented` while the platform gaps above remain.
 
 ## Outcomes (contract — not yet true in runtime)
 

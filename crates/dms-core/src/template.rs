@@ -909,7 +909,7 @@ fn render_blocks(blocks: &[Block], template: &LoadedTemplate) -> Result<String> 
                     None,
                 )?);
             }
-            Block::Table(rows) => output.push_str(&render_table(&template.table, rows)?),
+            Block::Table(rows) => output.push_str(&render_table(template, rows)?),
         }
     }
     Ok(output)
@@ -970,34 +970,283 @@ fn render_run(inline: &Inline) -> String {
     }
 }
 
-fn render_table(prototype: &str, rows: &[Vec<Vec<Inline>>]) -> Result<String> {
+fn render_table(template: &LoadedTemplate, rows: &[Vec<Vec<Inline>>]) -> Result<String> {
+    let prototype = &template.table;
     let row_span = element_span(prototype, "<w:tr", "</w:tr>")?;
     let row_prototype = &prototype[row_span.0..row_span.1];
     let cells = all_element_spans(row_prototype, "<w:tc", "</w:tc>")?;
-    if cells.len() != 2 {
-        return Err(DmsError::InvalidMarkdownTemplate(format!(
-            "table prototype must contain exactly two cells; found {}",
-            cells.len()
-        )));
+    let columns = rows.first().map_or(0, Vec::len);
+    if columns == 0 || rows.iter().any(|row| row.len() != columns) {
+        return Err(DmsError::InvalidMarkdownTemplate(
+            "Markdown table rows must have a consistent nonzero column count".to_owned(),
+        ));
     }
+    // Two-column tables retain the operator's existing grid and cell widths.
+    let width = (columns != 2)
+        .then(|| table_printable_width(template))
+        .transpose()?;
+    if width.is_some_and(|width| columns > width as usize) {
+        return Err(DmsError::InvalidMarkdownTemplate(
+            "Markdown table has too many columns for the template's printable width".to_owned(),
+        ));
+    }
+    let widths = width.map(|width| {
+        (0..columns)
+            .map(|column| {
+                width / columns as u32 + u32::from((column as u32) < width % columns as u32)
+            })
+            .collect::<Vec<_>>()
+    });
     let mut rendered_rows = String::new();
     for row in rows {
-        if row.len() != 2 {
-            return Err(DmsError::InvalidMarkdownTemplate(format!(
-                "Markdown tables must contain exactly two columns; found {}",
-                row.len()
-            )));
+        rendered_rows.push_str(&row_prototype[..cells[0].0]);
+        for (column, inlines) in row.iter().enumerate() {
+            if column == 1 {
+                rendered_rows.push_str(&row_prototype[cells[0].1..cells[1].0]);
+            }
+            let prototype_column = usize::from(column != 0);
+            let span = cells[prototype_column];
+            let token = if prototype_column == 0 {
+                TABLE_COLUMN_1
+            } else {
+                TABLE_COLUMN_2
+            };
+            let mut cell = render_table_cell(&row_prototype[span.0..span.1], token, inlines)?;
+            if let Some(widths) = &widths {
+                let properties = xml_child(&cell, "w:tcPr")?.unwrap_or("<w:tcPr/>");
+                let properties = set_xml_child(
+                    properties,
+                    "w:tcW",
+                    &format!("<w:tcW w:w=\"{}\" w:type=\"dxa\"/>", widths[column]),
+                    &["w:cnfStyle"],
+                )?;
+                cell = set_xml_child(&cell, "w:tcPr", &properties, &[])?;
+            }
+            rendered_rows.push_str(&cell);
         }
-        let mut rendered = row_prototype.to_owned();
-        rendered = rendered.replace(TABLE_COLUMN_1, &plain_inline_text(&row[0]));
-        rendered = rendered.replace(TABLE_COLUMN_2, &plain_inline_text(&row[1]));
-        rendered_rows.push_str(&rendered);
+        rendered_rows.push_str(&row_prototype[cells[1].1..]);
     }
-    Ok(format!(
+    let mut output = format!(
         "{}{}{}",
         &prototype[..row_span.0],
         rendered_rows,
         &prototype[row_span.1..]
+    );
+    if let (Some(width), Some(widths)) = (width, widths) {
+        let properties = xml_child(&output, "w:tblPr")?.unwrap_or("<w:tblPr/>");
+        let properties = set_xml_child(
+            properties,
+            "w:tblW",
+            &format!("<w:tblW w:w=\"{width}\" w:type=\"dxa\"/>"),
+            &[
+                "w:tblStyle",
+                "w:tblpPr",
+                "w:tblOverlap",
+                "w:bidiVisual",
+                "w:tblStyleRowBandSize",
+                "w:tblStyleColBandSize",
+            ],
+        )?;
+        let properties = set_xml_child(
+            &properties,
+            "w:tblLayout",
+            "<w:tblLayout w:type=\"fixed\"/>",
+            &[
+                "w:tblStyle",
+                "w:tblpPr",
+                "w:tblOverlap",
+                "w:bidiVisual",
+                "w:tblStyleRowBandSize",
+                "w:tblStyleColBandSize",
+                "w:tblW",
+                "w:jc",
+                "w:tblCellSpacing",
+                "w:tblInd",
+                "w:tblBorders",
+                "w:shd",
+            ],
+        )?;
+        output = set_xml_child(&output, "w:tblPr", &properties, &[])?;
+        let grid = widths
+            .iter()
+            .map(|width| format!("<w:gridCol w:w=\"{width}\"/>"))
+            .collect::<String>();
+        output = set_xml_child(
+            &output,
+            "w:tblGrid",
+            &format!("<w:tblGrid>{grid}</w:tblGrid>"),
+            &["w:tblPr"],
+        )?;
+    }
+    Ok(output)
+}
+
+fn render_table_cell(prototype: &str, token: &str, inlines: &[Inline]) -> Result<String> {
+    if inlines
+        .iter()
+        .all(|inline| !inline.bold && !inline.italic && !inline.code && !inline.link)
+    {
+        return Ok(prototype.replace(token, &plain_inline_text(inlines)));
+    }
+    let (start, end) = enclosing_element(prototype, token, "<w:r", "</w:r>")?;
+    let run = &prototype[start..end];
+    let properties = xml_child(run, "w:rPr")?.unwrap_or("<w:rPr/>");
+    let mut runs = String::new();
+    for inline in inlines {
+        let mut rendered = render_run(inline);
+        let mut merged = properties.to_owned();
+        if let Some(overrides) = xml_child(&rendered, "w:rPr")? {
+            for (name, span) in xml_children(overrides)? {
+                merged = set_xml_child(&merged, &name, &overrides[span.0..span.1], &[])?;
+            }
+        }
+        rendered = set_xml_child(&rendered, "w:rPr", &merged, &[])?;
+        runs.push_str(&rendered);
+    }
+    // Split the marker's text/run, keeping any surrounding template content once.
+    let position = run.find(token).expect("validated cell marker");
+    let text_start = find_last_opening_element(&run[..position], "<w:t").ok_or_else(|| {
+        DmsError::InvalidMarkdownTemplate("table marker must be inside a text run".to_owned())
+    })?;
+    let text_opening = &run[text_start..run[text_start..].find('>').unwrap() + text_start + 1];
+    let run_opening = &run[..run.find('>').unwrap() + 1];
+    Ok(format!(
+        "{}{}{}{}{}{}{}{}{}",
+        &prototype[..start],
+        &run[..position],
+        "</w:t></w:r>",
+        runs,
+        run_opening,
+        properties,
+        text_opening,
+        &run[position + token.len()..],
+        &prototype[end..]
+    ))
+}
+
+fn table_printable_width(template: &LoadedTemplate) -> Result<u32> {
+    // Section properties follow the content they govern, not the preceding cover.
+    let suffix = &template.document_xml[template.prototype_end..];
+    let span = element_span(suffix, "<w:sectPr", "</w:sectPr>")?;
+    let section = &suffix[span.0..span.1];
+    let size = xml_child(section, "w:pgSz")?.unwrap_or_default();
+    let margins = xml_child(section, "w:pgMar")?.unwrap_or_default();
+    let width = xml_dimension(size, "w:w", None)?;
+    let left = xml_dimension(margins, "w:left", None)?;
+    let right = xml_dimension(margins, "w:right", None)?;
+    let gutter = xml_dimension(margins, "w:gutter", Some(0))?;
+    width
+        .checked_sub(left)
+        .and_then(|width| width.checked_sub(right))
+        .and_then(|width| width.checked_sub(gutter))
+        .filter(|width| *width > 0)
+        .ok_or_else(|| {
+            DmsError::InvalidMarkdownTemplate(
+                "template has no positive printable table width".to_owned(),
+            )
+        })
+}
+
+fn xml_dimension(element: &str, name: &str, default: Option<u32>) -> Result<u32> {
+    let mut reader = Reader::from_str(element);
+    if let Ok(XmlEvent::Start(element) | XmlEvent::Empty(element)) = reader.read_event() {
+        for attribute in element.attributes() {
+            let attribute =
+                attribute.map_err(|error| DmsError::InvalidMarkdownTemplate(error.to_string()))?;
+            if attribute.key.as_ref() == name.as_bytes() {
+                return attribute
+                    .unescape_value()
+                    .ok()
+                    .and_then(|value| value.parse().ok())
+                    .ok_or_else(|| {
+                        DmsError::InvalidMarkdownTemplate(format!(
+                            "template dimension {name} must be an unsigned twip value"
+                        ))
+                    });
+            }
+        }
+    }
+    default.ok_or_else(|| {
+        DmsError::InvalidMarkdownTemplate(format!(
+            "template is missing page dimension {name} for table layout"
+        ))
+    })
+}
+
+fn xml_children(xml: &str) -> Result<Vec<(String, (usize, usize))>> {
+    let mut reader = Reader::from_str(xml);
+    let mut depth = 0usize;
+    let mut child = None;
+    let mut children = Vec::new();
+    loop {
+        let start = reader.buffer_position() as usize;
+        match reader
+            .read_event()
+            .map_err(|error| DmsError::InvalidMarkdownTemplate(error.to_string()))?
+        {
+            XmlEvent::Start(element) => {
+                if depth == 1 {
+                    child = Some((
+                        String::from_utf8_lossy(element.name().as_ref()).into_owned(),
+                        start,
+                    ));
+                }
+                depth += 1;
+            }
+            XmlEvent::End(_) => {
+                depth -= 1;
+                if depth == 1 {
+                    let (name, start) = child.take().expect("direct child start");
+                    children.push((name, (start, reader.buffer_position() as usize)));
+                }
+            }
+            XmlEvent::Empty(element) if depth == 1 => children.push((
+                String::from_utf8_lossy(element.name().as_ref()).into_owned(),
+                (start, reader.buffer_position() as usize),
+            )),
+            XmlEvent::Eof => break,
+            _ => {}
+        }
+    }
+    Ok(children)
+}
+
+fn xml_child<'a>(xml: &'a str, name: &str) -> Result<Option<&'a str>> {
+    Ok(xml_children(xml)?
+        .into_iter()
+        .find(|(child, _)| child == name)
+        .map(|(_, (start, end))| &xml[start..end]))
+}
+
+fn set_xml_child(
+    xml: &str,
+    name: &str,
+    replacement: &str,
+    predecessors: &[&str],
+) -> Result<String> {
+    let children = xml_children(xml)?;
+    if let Some((_, (start, end))) = children.iter().find(|(child, _)| child == name) {
+        return Ok(format!("{}{}{}", &xml[..*start], replacement, &xml[*end..]));
+    }
+    let opening_end = xml.find('>').expect("validated XML element") + 1;
+    if xml[..opening_end].ends_with("/>") {
+        let tag = xml[1..]
+            .split(|character: char| character.is_whitespace() || character == '/')
+            .next()
+            .unwrap();
+        return Ok(format!("{}>{replacement}</{tag}>", &xml[..opening_end - 2]));
+    }
+    let position = children
+        .iter()
+        .filter(|(child, _)| predecessors.contains(&child.as_str()))
+        .map(|(_, (_, end))| *end)
+        .max()
+        .unwrap_or(opening_end);
+    Ok(format!(
+        "{}{}{}",
+        &xml[..position],
+        replacement,
+        &xml[position..]
     ))
 }
 

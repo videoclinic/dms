@@ -106,6 +106,12 @@ persistence.
   frontmatter from the body and fills optional non-reserved `{KEY}` tokens from
   additional flat frontmatter scalars; reserved controlled tokens remain for
   export chrome.
+- Markdown table assembly retains the two-cell template contract and existing
+  two-column layout. Other column counts use equal fixed grid/cell widths from
+  the body section's page width minus left/right margins and gutter; absent or
+  invalid page dimensions fail explicitly. The first column uses the first-cell
+  prototype; all later columns use the second. Cell/paragraph/run styling and
+  inline emphasis/code/link text survive without modifying source or template.
 - Workflow evidence is append-only, SHA-256 predecessor-linked, newest-first at
   the public history boundary, and validated whenever workspace metadata opens
   or saves.
@@ -211,6 +217,9 @@ persistence.
 ## Verification
 
 - `cargo test -p dms-core`
+- `cargo test -p dms-core --test markdown_template` checks multi-table cell text,
+  inline styling, two/three/four/five-column layouts, deterministic assembly,
+  package XML and unchanged source/template bytes.
 
 ## Child DOX Index
 

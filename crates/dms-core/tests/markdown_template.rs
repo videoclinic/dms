@@ -468,7 +468,7 @@ fn zip_entries_from_bytes(bytes: &[u8]) -> BTreeMap<String, Vec<u8>> {
 }
 
 #[test]
-fn assembler_rejects_missing_frontmatter_and_tables_outside_the_two_column_contract() {
+fn assembler_rejects_missing_frontmatter() {
     let temp = tempfile::tempdir().unwrap();
     let template = temp.path().join("template.docx");
     fs::write(&template, FIXTURE).unwrap();
@@ -480,12 +480,315 @@ fn assembler_rejects_missing_frontmatter_and_tables_outside_the_two_column_contr
         ),
         Err(DmsError::InvalidMarkdownFrontmatter(_))
     ));
+}
 
-    let three_columns = "---\nversion: 1.0\nconfidentiality: Internal\n---\n| A | B | C |\n|---|---|---|\n| 1 | 2 | 3 |\n";
-    assert!(matches!(
-        assemble_markdown_docx(&template, three_columns, &temp.path().join("table.docx")),
-        Err(DmsError::InvalidMarkdownTemplate(message)) if message.contains("exactly two columns")
-    ));
+#[test]
+fn assembler_preserves_two_three_four_and_five_column_table_fidelity() {
+    let temp = tempfile::tempdir().unwrap();
+    let original = temp.path().join("original.docx");
+    let template = temp.path().join("styled.docx");
+    fs::write(&original, FIXTURE).unwrap();
+    rewrite_xml_part(&original, &template, "word/document.xml", |xml| {
+        xml.replace("<w:tblPr>", "<w:tblPr><w:tblStyle w:val=\"TableGrid\"/>")
+            .replace("<w:tr>", "<w:tblGrid><w:gridCol w:w=\"4500\"/><w:gridCol w:w=\"4500\"/></w:tblGrid><w:tr><w:trPr><w:cantSplit/></w:trPr>")
+            .replace("</w:tcPr>", "<w:shd w:fill=\"EEEEEE\"/><w:vAlign w:val=\"center\"/></w:tcPr>")
+            .replace("<w:p><w:r><w:t>{TABLE COLUMN 1}", "<w:p><w:pPr><w:pStyle w:val=\"FirstCell\"/></w:pPr><w:r><w:rPr><w:color w:val=\"123456\"/></w:rPr><w:t>{TABLE COLUMN 1}")
+            .replace("<w:p><w:r><w:t>{TABLE COLUMN 2}", "<w:p><w:pPr><w:pStyle w:val=\"OtherCell\"/></w:pPr><w:r><w:rPr><w:color w:val=\"654321\"/></w:rPr><w:t>{TABLE COLUMN 2}")
+            // Exercise non-divisible widths and a binding gutter.
+            .replace("w:w=\"11906\"", "w:w=\"11384\"")
+            .replace("w:left=\"1440\"", "w:left=\"1440\" w:gutter = \"501\"")
+            .replace("</w:tc><w:tc>", "</w:tc><!-- retained row annotation --><w:tc>")
+            .replace("<w:body>", "<w:body><w:p><w:pPr><w:sectPr><w:pgSz w:w=\"8000\" w:h=\"16000\"/><w:pgMar w:left=\"1000\" w:right=\"1000\"/></w:sectPr></w:pPr><w:r><w:t>Cover</w:t></w:r></w:p><w:p><w:fldSimple w:instr=\"TOC\"><w:r><w:t>Contents</w:t></w:r></w:fldSimple></w:p>")
+    });
+    let template_before = fs::read(&template).unwrap();
+    let headers = ["Version", "Datum", "Änderung", "Verfasser", "Freigabe"];
+    let long_text =
+        "Eine ausführliche Beschreibung mit Umlauten äöü, 漢字 und unverändertem Inhalt. "
+            .repeat(12);
+    let raw = [
+        "**1.0**",
+        "*13.10.2026*",
+        "A \\| B & \\*Stern\\*",
+        "`Müller`",
+        long_text.as_str(),
+    ];
+    let expected = [
+        "1.0",
+        "13.10.2026",
+        "A | B & *Stern*",
+        "Müller",
+        long_text.trim(),
+    ];
+    let mut markdown = "---\nversion: 1.0\nconfidentiality: Internal\n---\n".to_owned();
+    for columns in 2..=5 {
+        markdown.push_str(&format!(
+            "\n## Versionsverlauf {columns}\n\n| {} |\n| {} |\n| {} |\n| {} |\n",
+            headers[..columns].join(" | "),
+            vec!["---"; columns].join(" | "),
+            raw[..columns].join(" | "),
+            vec![""; columns].join(" | ")
+        ));
+    }
+    let source = temp.path().join("policy.md");
+    fs::write(&source, &markdown).unwrap();
+    let output = temp.path().join("tables.docx");
+    assemble_markdown_docx(&template, &fs::read_to_string(&source).unwrap(), &output).unwrap();
+    let second = temp.path().join("repeat.docx");
+    assemble_markdown_docx(&template, &markdown, &second).unwrap();
+    assert_eq!(fs::read(&output).unwrap(), fs::read(&second).unwrap());
+    assert_eq!(fs::read(&source).unwrap(), markdown.as_bytes());
+    assert_eq!(fs::read(&template).unwrap(), template_before);
+
+    let before = zip_entries(&template);
+    let after = zip_entries(&output);
+    assert_eq!(
+        before.keys().collect::<Vec<_>>(),
+        after.keys().collect::<Vec<_>>()
+    );
+    for (name, bytes) in &after {
+        if name.ends_with(".xml") || name.ends_with(".rels") {
+            // Parsing every part also checks matching element names and attributes.
+            xml_elements(std::str::from_utf8(bytes).unwrap(), "unused");
+        }
+        if name != "word/document.xml" {
+            assert_eq!(bytes, &before[name], "changed package part {name}");
+        }
+    }
+    let document = std::str::from_utf8(&after["word/document.xml"]).unwrap();
+    let original_document = std::str::from_utf8(&before["word/document.xml"]).unwrap();
+    assert_eq!(
+        xml_elements(document, "w:sectPr"),
+        xml_elements(original_document, "w:sectPr")
+    );
+    let tables = xml_elements(document, "w:tbl");
+    assert_eq!(
+        &xml_elements(document, "w:p")[..2],
+        &xml_elements(original_document, "w:p")[..2]
+    );
+    assert_eq!(tables.len(), 4);
+    for (table, columns) in tables.iter().zip(2..=5) {
+        assert!(table.contains("<w:tblStyle w:val=\"TableGrid\"/>"));
+        let grid = xml_elements(table, "w:gridCol");
+        assert_eq!(grid.len(), columns);
+        let widths: Vec<u32> = grid
+            .iter()
+            .map(|col| xml_attribute(col, "w:w").parse().unwrap())
+            .collect();
+        if columns == 2 {
+            assert_eq!(widths, [4500, 4500]);
+            assert_eq!(
+                xml_elements(table, "w:tblPr"),
+                xml_elements(original_document, "w:tblPr")
+            );
+        } else {
+            assert_eq!(widths.iter().sum::<u32>(), 11384 - 1440 - 1440 - 501);
+            assert!(widths.iter().all(|width| *width > 0));
+            assert!(widths.iter().max().unwrap() - widths.iter().min().unwrap() <= 1);
+            assert_eq!(
+                xml_attribute(xml_elements(table, "w:tblLayout")[0], "w:type"),
+                "fixed"
+            );
+            assert_eq!(
+                xml_attribute(xml_elements(table, "w:tblW")[0], "w:w"),
+                widths.iter().sum::<u32>().to_string()
+            );
+        }
+        let rows = xml_elements(table, "w:tr");
+        assert_eq!(rows.len(), 3);
+        for (index, row) in rows.iter().enumerate() {
+            assert!(row.contains("<w:cantSplit/>"));
+            assert_eq!(row.matches("<!-- retained row annotation -->").count(), 1);
+            let cells = xml_elements(row, "w:tc");
+            assert_eq!(cells.len(), columns);
+            for (column, cell) in cells.iter().enumerate() {
+                let text = xml_text(cell);
+                assert_eq!(
+                    text,
+                    match index {
+                        0 => headers[column],
+                        1 => expected[column],
+                        _ => "",
+                    }
+                );
+                assert_eq!(
+                    xml_attribute(xml_elements(cell, "w:tcW")[0], "w:w"),
+                    widths[column].to_string()
+                );
+                assert!(cell.contains("<w:shd w:fill=\"EEEEEE\"/>"));
+                assert!(cell.contains("<w:vAlign w:val=\"center\"/>"));
+                assert_eq!(
+                    xml_attribute(xml_elements(cell, "w:pStyle")[0], "w:val"),
+                    if column == 0 {
+                        "FirstCell"
+                    } else {
+                        "OtherCell"
+                    }
+                );
+                if index == 1 {
+                    assert!(cell.contains(if column == 0 { "123456" } else { "654321" }));
+                    match column {
+                        0 => assert!(cell.contains("<w:b/>")),
+                        1 => assert!(cell.contains("<w:i/>")),
+                        3 => assert!(cell.contains("Courier New")),
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn assembler_sizes_wide_tables_without_grid_or_cell_widths() {
+    let temp = tempfile::tempdir().unwrap();
+    let original = temp.path().join("original.docx");
+    let template = temp.path().join("no-widths.docx");
+    fs::write(&original, FIXTURE).unwrap();
+    rewrite_xml_part(&original, &template, "word/document.xml", |xml| {
+        xml.replace(
+            "<w:tcPr><w:tcW w:w=\"4500\" w:type=\"dxa\"/></w:tcPr>",
+            "<w:tcPr/>",
+        )
+        .replace(
+            "<w:tblPr><w:tblW w:w=\"0\" w:type=\"auto\"/></w:tblPr>",
+            "<w:tblPr/>",
+        )
+    });
+    let output = temp.path().join("wide.docx");
+    assemble_markdown_docx(&template, "---\nversion: 1.0\nconfidentiality: Internal\n---\n| A | B | C |\n|---|---|---|\n| 1 | 2 | 3 |\n", &output).unwrap();
+    let parts = zip_entries(&output);
+    let document = std::str::from_utf8(&parts["word/document.xml"]).unwrap();
+    let widths: Vec<u32> = xml_elements(document, "w:gridCol")
+        .iter()
+        .map(|col| xml_attribute(col, "w:w").parse().unwrap())
+        .collect();
+    assert_eq!(widths.len(), 3);
+    assert_eq!(widths.iter().sum::<u32>(), 11906 - 2880);
+    assert_eq!(xml_elements(document, "w:tcW").len(), 6);
+}
+
+#[test]
+fn assembler_preserves_mixed_inline_styles_and_surrounding_cell_content() {
+    let temp = tempfile::tempdir().unwrap();
+    let original = temp.path().join("original.docx");
+    let template = temp.path().join("mixed.docx");
+    fs::write(&original, FIXTURE).unwrap();
+    rewrite_xml_part(&original, &template, "word/document.xml", |xml| {
+        xml.replace("<w:r><w:t>{TABLE COLUMN 1}</w:t></w:r>", "<w:r><w:rPr><w:color w:val=\"123456\"/><w:b w:val=\"0\"/></w:rPr><w:t xml:space=\"preserve\">Before: {TABLE COLUMN 1} :after</w:t></w:r>")
+    });
+    let output = temp.path().join("mixed-output.docx");
+    assemble_markdown_docx(&template, "---\nversion: 1.0\nconfidentiality: Internal\n---\n| A | B |\n|---|---|\n| plain **bold** then *italic* and ***both*** <https://example.test> | {TABLE COLUMN 1} |\n", &output).unwrap();
+    let parts = zip_entries(&output);
+    let document = std::str::from_utf8(&parts["word/document.xml"]).unwrap();
+    let rows = xml_elements(document, "w:tr");
+    let cells = xml_elements(rows[1], "w:tc");
+    assert_eq!(xml_text(cells[0]), "Before: plain bold then italic and both https://example.test (https://example.test) :after");
+    assert_eq!(xml_text(cells[1]), "{TABLE COLUMN 1}");
+    let runs = xml_elements(cells[0], "w:r");
+    for (text, bold, italic) in [
+        ("plain ", false, false),
+        ("bold", true, false),
+        ("italic", false, true),
+        ("both", true, true),
+    ] {
+        let run = runs.iter().find(|run| xml_text(run) == text).unwrap();
+        assert_eq!(run.contains("<w:b/>"), bold);
+        assert_eq!(run.contains("<w:i/>"), italic);
+        assert!(run.contains("123456"));
+        assert_eq!(xml_elements(run, "w:b").len(), 1);
+    }
+}
+
+#[test]
+fn assembler_rejects_unusable_page_dimensions_before_creating_wide_table_output() {
+    let temp = tempfile::tempdir().unwrap();
+    let original = temp.path().join("original.docx");
+    fs::write(&original, FIXTURE).unwrap();
+    for bad_width in ["0", "100", "not-a-width"] {
+        let template = temp.path().join(format!("{bad_width}.docx"));
+        rewrite_xml_part(&original, &template, "word/document.xml", |xml| {
+            xml.replace("w:w=\"11906\"", &format!("w:w=\"{bad_width}\""))
+        });
+        let output = temp.path().join("must-not-exist.docx");
+        assert!(matches!(assemble_markdown_docx(&template, "---\nversion: 1.0\nconfidentiality: Internal\n---\n| A | B | C |\n|---|---|---|\n| 1 | 2 | 3 |\n", &output), Err(DmsError::InvalidMarkdownTemplate(_))));
+        assert!(!output.exists());
+    }
+}
+
+fn xml_elements<'a>(xml: &'a str, name: &str) -> Vec<&'a str> {
+    use quick_xml::{events::Event, Reader};
+    let mut reader = Reader::from_str(xml);
+    let mut stack = Vec::new();
+    let mut result = Vec::new();
+    loop {
+        let start = reader.buffer_position() as usize;
+        match reader.read_event().unwrap() {
+            Event::Start(element) => {
+                for attribute in element.attributes() {
+                    attribute.unwrap();
+                }
+                stack.push((element.name().as_ref().to_vec(), start));
+            }
+            Event::Empty(element) => {
+                for attribute in element.attributes() {
+                    attribute.unwrap();
+                }
+                if element.name().as_ref() == name.as_bytes() {
+                    result.push(&xml[start..reader.buffer_position() as usize]);
+                }
+            }
+            Event::End(element) => {
+                let (opening, start) = stack.pop().unwrap();
+                assert_eq!(opening, element.name().as_ref());
+                if opening == name.as_bytes() {
+                    result.push(&xml[start..reader.buffer_position() as usize]);
+                }
+            }
+            Event::Eof => {
+                assert!(stack.is_empty());
+                break;
+            }
+            _ => {}
+        }
+    }
+    result
+}
+
+fn xml_attribute(xml: &str, name: &str) -> String {
+    let mut reader = quick_xml::Reader::from_str(xml);
+    match reader.read_event().unwrap() {
+        quick_xml::events::Event::Start(element) | quick_xml::events::Event::Empty(element) => {
+            element
+                .attributes()
+                .map(Result::unwrap)
+                .find(|attribute| attribute.key.as_ref() == name.as_bytes())
+                .unwrap()
+                .unescape_value()
+                .unwrap()
+                .into_owned()
+        }
+        _ => panic!("expected XML element"),
+    }
+}
+
+fn xml_text(xml: &str) -> String {
+    xml_elements(xml, "w:t")
+        .iter()
+        .map(|text| {
+            let mut reader = quick_xml::Reader::from_str(text);
+            let mut output = String::new();
+            loop {
+                match reader.read_event().unwrap() {
+                    quick_xml::events::Event::Text(text) => {
+                        output.push_str(&text.unescape().unwrap())
+                    }
+                    quick_xml::events::Event::Eof => break,
+                    _ => {}
+                }
+            }
+            output
+        })
+        .collect()
 }
 
 fn validate_markdown_template_output(path: &Path) {
