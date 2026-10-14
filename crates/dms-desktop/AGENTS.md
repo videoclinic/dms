@@ -11,7 +11,7 @@ macOS.
 | --- | --- |
 | `src/` | Tauri startup, IPC commands, `dms-core` adapter, OS user preferences |
 | `src/assistance.rs` | Supported-location detection and process launch for Claude Desktop on Windows and macOS |
-| `src/export.rs` | `.docx`/Markdown PDF adapters, temporary OOXML assembly/fill, installed-Office automation, and format-specific tests |
+| `src/export.rs` | Desktop release orchestration and format-specific tests; delegates OOXML fill and installed-Word automation to `dms-export` |
 | `ui/index.html` | Static shell |
 | `ui/app.mjs` | Workspace setup, static shell, session activities, saved-view persistence, and IPC orchestration |
 | `ui/library.mjs` | Folder-first explorer state, markup, selection rules, search, and sorting |
@@ -325,6 +325,11 @@ macOS.
   template, then follows the same installed-Word PDF path as `.docx` drafts.
   Windows Word automation receives Win32 paths rather than Rust verbatim paths
   and refreshes document fields plus tables of contents before PDF export.
+- Shared placeholder/Word implementation lives in `../dms-export`, without a
+  Tauri dependency. Desktop still uses the release snapshot and temporary-copy
+  mode, retains no DOCX, and leaves atomic PDF commit/evidence to core. The
+  standalone converter's retained-DOCX mode grants no release authority and
+  introduces no desktop surface.
 
 ## Work Guidance
 

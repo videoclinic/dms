@@ -6,6 +6,8 @@
 | --- | --- | --- |
 | Draft source documents (Office and Markdown) | Edit root (operator-controlled) | Content is business documentation; app does not upload it |
 | Released versioned PDFs | Publish root (operator-controlled) | Final released artifacts (`*_VMAJOR.MINOR_<confidentiality-type-id>.pdf`); the path exposes the classification ID |
+| Standalone converted DOCX/PDF | Explicit new conversion output root | Full confidential document content, including template parts and embedded images; conversion only, not released or approved; retained DOCX requires the same access controls as PDF |
+| Conversion manifest | `manifest.json` in the conversion output root | Relative source/asset/output paths, consumed-byte SHA-256 values, template identity, effective title/number/version/classification, renderer/Word version and per-file results; no source body, workspace people cache or credentials |
 | DMS metadata, library membership, notes, approval state, checksums | `<edit-root>/.dms/` | Local only; may contain personal names in notes or approver fields |
 | First-import Office source history | `<edit-root>/.dms/` | Original-source SHA-256, sanitized scan outcome, and at most three unverified source author/date/kind/count observations. No source content, comments, raw OOXML, Office properties, PowerPoint client IDs, or inferred Entra identity is retained or displayed |
 | Microsoft Entra workflow group binding and display cache | `<edit-root>/.dms/` | Bound tenant/group object IDs, referenced user object IDs, and cached display name/email for routing; no app-managed user accounts, public-client ID, OAuth token, active actor, or local-OS-to-Entra mapping |
@@ -29,6 +31,14 @@
 ## Processing principles
 
 - No remote document store in the current architecture.
+- Standalone conversion reads only export-configuration fields and external
+  source/template/asset bytes. It does not open a workspace session, migrate or
+  save metadata, create locks, activate Entra or send notifications. Temporary
+  assembly files are locally cleaned up; retained output and any explicitly
+  reported cleanup-failure paths require operator-controlled ACLs and retention.
+  Dry-run creates no output root but uses temporary local assembly for validation.
+  Hashes describe consumed bytes, not an assertion that editable originals
+  remained unchanged after consumption. The app adds no encryption or expiry.
 - Microsoft Graph calls resolve the workspace group's direct user members and
   verify a library-session or review-decision actor. They send no document bytes,
   source or publish paths, `.dms` metadata, or approval comments to Microsoft

@@ -1,4 +1,8 @@
-use std::{fs, process::Command};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use serde_json::Value;
 use uuid::Uuid;
@@ -652,4 +656,361 @@ fn cli_generates_lists_and_verifies_filtered_audit_reports() {
     assert!(verified.status.success());
     let verification: serde_json::Value = serde_json::from_slice(&verified.stdout).unwrap();
     assert_eq!(verification["status"], "match");
+}
+
+/// The repository's synthetic template; conversion tests never touch a real
+/// operator template, corpus or workspace.
+const TEMPLATE_FIXTURE: &str = "../dms-core/tests/fixtures/markdown-template.docx";
+const TEMPLATE_RELATIVE: &str = "Vorlage.docx";
+const TEMPLATE_SHA256: &str = "9904d366848952c1719fe6d4e58a27a7e553ec2f72b403014bea1e02b38f9c68";
+const VALID_MARKDOWN: &str = "---\ntitle: Access Control Policy\nversion: 3.0\nconfidentiality: internal\n---\n\n# Access Control Policy\n\nAccess is granted by role.\n";
+
+struct ConversionLayout {
+    _temp: tempfile::TempDir,
+    config: PathBuf,
+    input: PathBuf,
+    output: PathBuf,
+}
+
+/// A throwaway edit/publish/input/output tree plus a read-only export
+/// projection. Unrelated identity, document and workflow fields are present
+/// and deliberately invalid: a correct projection must ignore them entirely.
+fn workspace_config_value(schema_version: u32, edit: &Path, publish: &Path) -> Value {
+    serde_json::json!({
+        "schema_version": schema_version,
+        "workspace_id": "11111111-1111-1111-1111-111111111111",
+        "edit_root": edit,
+        "publish_root": publish,
+        "markdown_template": {
+            "id": "22222222-2222-2222-2222-222222222222",
+            "relative_path": TEMPLATE_RELATIVE,
+            "sha256": TEMPLATE_SHA256,
+            "contract_version": 1
+        },
+        "confidentiality_types": {
+            "internal": {
+                "id": "internal",
+                "label": "Intern + Unternehmensverbund",
+                "enabled": true
+            }
+        },
+        // Unrelated and invalid: no identity, document or workflow data is a
+        // conversion input.
+        "identity_source": { "binding_id": "not-a-uuid" },
+        "identity_cache": { "also-not-a-uuid": { "display_name": 5 } },
+        "documents": "not-an-object",
+        "workflow_policies": [1, 2, 3],
+        "workspace_events": [{ "unknown": true }]
+    })
+}
+
+fn conversion_layout(schema_version: u32) -> ConversionLayout {
+    let temp = tempfile::tempdir().expect("conversion temp dir");
+    let base = temp.path().canonicalize().expect("canonical temp dir");
+    let edit = base.join("edit");
+    let publish = base.join("publish");
+    let input = base.join("input");
+    fs::create_dir_all(&edit).expect("edit root");
+    fs::create_dir_all(&publish).expect("publish root");
+    fs::create_dir_all(&input).expect("input root");
+    fs::copy(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join(TEMPLATE_FIXTURE),
+        edit.join(TEMPLATE_RELATIVE),
+    )
+    .expect("copy template fixture");
+    let metadata_dir = edit.join(".dms");
+    fs::create_dir_all(&metadata_dir).expect("metadata dir");
+    let config = metadata_dir.join("workspace.json");
+    fs::write(
+        &config,
+        serde_json::to_vec_pretty(&workspace_config_value(schema_version, &edit, &publish))
+            .expect("config JSON"),
+    )
+    .expect("write config");
+    ConversionLayout {
+        _temp: temp,
+        config,
+        input,
+        output: base.join("out"),
+    }
+}
+
+fn convert_markdown(layout: &ConversionLayout, extra: &[&str]) -> std::process::Output {
+    convert_markdown_to(layout, &layout.output, extra)
+}
+
+fn convert_markdown_to(
+    layout: &ConversionLayout,
+    output: &Path,
+    extra: &[&str],
+) -> std::process::Output {
+    let mut command = dms();
+    command
+        .arg("--json")
+        .args(["convert", "markdown", "--workspace-config"])
+        .arg(&layout.config)
+        .arg("--input-root")
+        .arg(&layout.input)
+        .arg("--output-root")
+        .arg(output);
+    for arg in extra {
+        command.arg(arg);
+    }
+    command.output().expect("run convert markdown")
+}
+
+fn result_inputs(manifest: &Value) -> Vec<String> {
+    manifest["results"]
+        .as_array()
+        .expect("results array")
+        .iter()
+        .map(|result| result["input"].as_str().expect("input path").to_owned())
+        .collect()
+}
+
+#[test]
+fn cli_convert_markdown_documents_and_requires_its_flags() {
+    let help = dms()
+        .args(["convert", "markdown", "--help"])
+        .output()
+        .expect("convert markdown help");
+    assert!(
+        help.status.success(),
+        "{}",
+        String::from_utf8_lossy(&help.stderr)
+    );
+    let help = String::from_utf8_lossy(&help.stdout);
+    for flag in [
+        "--workspace-config",
+        "--input-root",
+        "--output-root",
+        "--recursive",
+        "--dry-run",
+        "--without-toc",
+    ] {
+        assert!(help.contains(flag), "missing {flag} in {help}");
+    }
+
+    let missing = dms()
+        .args(["convert", "markdown"])
+        .output()
+        .expect("convert markdown without flags");
+    assert!(!missing.status.success());
+    let stderr = String::from_utf8_lossy(&missing.stderr);
+    assert!(stderr.contains("--workspace-config"), "{stderr}");
+    assert!(stderr.contains("--input-root"), "{stderr}");
+    assert!(stderr.contains("--output-root"), "{stderr}");
+}
+
+#[test]
+fn cli_convert_markdown_dry_run_lists_exact_selection_and_writes_nothing() {
+    let layout = conversion_layout(21);
+    fs::write(layout.input.join("policy-a.md"), VALID_MARKDOWN).unwrap();
+    fs::write(layout.input.join("policy-b.md"), VALID_MARKDOWN).unwrap();
+    fs::create_dir_all(layout.input.join("nested")).unwrap();
+    fs::write(layout.input.join("nested/deep.md"), VALID_MARKDOWN).unwrap();
+    fs::create_dir_all(layout.input.join(".dms")).unwrap();
+    fs::write(layout.input.join(".dms/hidden.md"), VALID_MARKDOWN).unwrap();
+    fs::create_dir_all(layout.input.join("assets")).unwrap();
+    fs::write(layout.input.join("assets/note.md"), VALID_MARKDOWN).unwrap();
+    fs::write(layout.input.join("assets/logo.png"), b"not used").unwrap();
+    fs::write(layout.input.join("notes.txt"), b"not markdown").unwrap();
+
+    let output = convert_markdown(&layout, &["--dry-run"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("policy-a.md"), "{stderr}");
+    assert!(stderr.contains("policy-b.md"), "{stderr}");
+    assert!(!stderr.contains("deep.md"), "{stderr}");
+    assert!(!stderr.contains("hidden.md"), "{stderr}");
+    assert!(!stderr.contains("note.md"), "{stderr}");
+
+    let manifest: Value = serde_json::from_slice(&output.stdout).expect("manifest JSON");
+    assert_eq!(manifest["dry_run"], true);
+    assert_eq!(manifest["conversion_only"], true);
+    assert_eq!(manifest["configuration_schema"], 21);
+    let inputs = result_inputs(&manifest);
+    assert_eq!(inputs.len(), 2, "{inputs:?}");
+    assert!(inputs.iter().any(|path| path.ends_with("policy-a.md")));
+    assert!(inputs.iter().any(|path| path.ends_with("policy-b.md")));
+    for result in manifest["results"].as_array().unwrap() {
+        assert_eq!(result["status"], "validated");
+        assert!(result["docx"].is_null());
+        assert!(result["pdf"].is_null());
+    }
+    assert!(
+        !layout.output.exists(),
+        "dry-run must not create the output root"
+    );
+}
+
+#[test]
+fn cli_convert_markdown_recursion_is_explicit_and_excludes_metadata_and_assets() {
+    let layout = conversion_layout(21);
+    fs::write(layout.input.join("policy-a.md"), VALID_MARKDOWN).unwrap();
+    fs::create_dir_all(layout.input.join("nested")).unwrap();
+    fs::write(layout.input.join("nested/deep.md"), VALID_MARKDOWN).unwrap();
+    fs::create_dir_all(layout.input.join(".dms")).unwrap();
+    fs::write(layout.input.join(".dms/hidden.md"), VALID_MARKDOWN).unwrap();
+    fs::create_dir_all(layout.input.join("assets")).unwrap();
+    fs::write(layout.input.join("assets/note.md"), VALID_MARKDOWN).unwrap();
+
+    let output = convert_markdown(&layout, &["--dry-run", "--recursive", "--without-toc"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("nested"), "{stderr}");
+    assert!(!stderr.contains("hidden.md"), "{stderr}");
+    assert!(!stderr.contains("note.md"), "{stderr}");
+
+    let manifest: Value = serde_json::from_slice(&output.stdout).expect("manifest JSON");
+    assert_eq!(manifest["without_toc"], true);
+    let inputs = result_inputs(&manifest);
+    assert_eq!(inputs.len(), 2, "{inputs:?}");
+    assert!(inputs.iter().any(|path| path.ends_with("policy-a.md")));
+    assert!(inputs.iter().any(|path| path.ends_with("deep.md")));
+}
+
+#[test]
+fn cli_convert_markdown_accepts_schema_18_19_and_current_and_ignores_unrelated_data() {
+    for schema_version in [18_u32, 19, 21] {
+        let layout = conversion_layout(schema_version);
+        fs::write(layout.input.join("policy.md"), VALID_MARKDOWN).unwrap();
+        let output = convert_markdown(&layout, &["--dry-run"]);
+        assert!(
+            output.status.success(),
+            "schema {schema_version}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let manifest: Value = serde_json::from_slice(&output.stdout).expect("manifest JSON");
+        assert_eq!(manifest["configuration_schema"], schema_version);
+        assert_eq!(manifest["results"].as_array().unwrap().len(), 1);
+    }
+}
+
+#[test]
+fn cli_convert_markdown_rejects_empty_input() {
+    let layout = conversion_layout(21);
+    fs::write(layout.input.join("notes.txt"), b"not markdown").unwrap();
+    fs::create_dir_all(layout.input.join("assets")).unwrap();
+    fs::write(layout.input.join("assets/logo.png"), b"not markdown").unwrap();
+
+    let output = convert_markdown(&layout, &["--dry-run"]);
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("no Markdown files"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn cli_convert_markdown_refuses_overwrite_and_output_collisions() {
+    // Existing output root: no overwrite or resume.
+    let layout = conversion_layout(21);
+    fs::write(layout.input.join("policy.md"), VALID_MARKDOWN).unwrap();
+    fs::create_dir_all(&layout.output).unwrap();
+    let existing = convert_markdown(&layout, &["--dry-run"]);
+    assert!(!existing.status.success());
+    assert!(
+        String::from_utf8_lossy(&existing.stderr).contains("already exists"),
+        "{}",
+        String::from_utf8_lossy(&existing.stderr)
+    );
+
+    // A directory named like another source's DOCX target collides with it.
+    let collision = conversion_layout(21);
+    fs::write(collision.input.join("guide.md"), VALID_MARKDOWN).unwrap();
+    fs::create_dir_all(collision.input.join("guide.docx")).unwrap();
+    fs::write(collision.input.join("guide.docx/inner.md"), VALID_MARKDOWN).unwrap();
+    let output = convert_markdown(&collision, &["--dry-run", "--recursive"]);
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("collision"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn cli_convert_markdown_refuses_output_inside_the_input_tree() {
+    let layout = conversion_layout(21);
+    fs::write(layout.input.join("policy.md"), VALID_MARKDOWN).unwrap();
+    fs::create_dir_all(layout.input.join("sub")).unwrap();
+    let nested_output = layout.input.join("sub/out");
+    let output = convert_markdown_to(&layout, &nested_output, &["--dry-run"]);
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("disjoint"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!nested_output.exists());
+}
+
+#[test]
+fn cli_convert_markdown_reports_the_manifest_then_fails_on_mixed_results() {
+    let layout = conversion_layout(21);
+    fs::write(layout.input.join("good.md"), VALID_MARKDOWN).unwrap();
+    fs::write(
+        layout.input.join("bad.md"),
+        "---\ntitle: Bad Version\nversion: 1\nconfidentiality: internal\n---\n\n# Bad\n",
+    )
+    .unwrap();
+
+    let output = convert_markdown(&layout, &["--dry-run"]);
+    assert!(!output.status.success(), "mixed results must exit nonzero");
+
+    let manifest: Value = serde_json::from_slice(&output.stdout)
+        .expect("the final manifest is still emitted on stdout");
+    assert_eq!(manifest["dry_run"], true);
+    let results = manifest["results"].as_array().unwrap();
+    assert_eq!(results.len(), 2);
+    let validated = results
+        .iter()
+        .filter(|result| result["status"] == "validated")
+        .count();
+    let failed = results
+        .iter()
+        .filter(|result| result["status"] == "failed")
+        .count();
+    assert_eq!((validated, failed), (1, 1));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("failed"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+#[test]
+fn cli_convert_markdown_rejects_a_native_host_without_word() {
+    let layout = conversion_layout(21);
+    fs::write(layout.input.join("policy.md"), VALID_MARKDOWN).unwrap();
+
+    let output = convert_markdown(&layout, &[]);
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("installed Office export is supported only on Windows and macOS"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    // The host preflight fails before any output tree is owned.
+    assert!(!layout.output.exists());
+    assert!(output.stdout.is_empty());
+    let edit = layout
+        .config
+        .parent()
+        .expect("metadata dir")
+        .parent()
+        .expect("edit root");
+    assert!(edit.join(TEMPLATE_RELATIVE).is_file());
 }

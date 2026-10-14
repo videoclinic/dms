@@ -18,7 +18,7 @@ and template run properties while rendering inline emphasis and code. Multiple
 tables remain separate and preserve their cell text.
 
 The template still requires exactly two prototype cells and no new markers.
-Two-column tables keep their existing layout. Other column counts clone the
+All column counts clone the
 second-cell styling for columns after the first and receive equal fixed widths
 from the body section's page width minus left/right margins and gutter. Missing
 or invalid dimensions fail rather than guessing a page size. Assembly preserves
@@ -66,7 +66,11 @@ Evidence: `assembler_preserves_two_three_four_and_five_column_table_fidelity`,
 `assembler_preserves_other_markdown_constructs_without_losing_content` in the
 [core template tests](../../../crates/dms-core/tests/markdown_template.rs).
 This is OOXML assembly evidence, not full-corpus Word/PDF layout verification.
-Standalone batch conversion and retained final DOCX remain pending under
+Standalone batch conversion and retained final DOCX are a separate headless
+authority under [CAP-0022](CAP-0022-headless-core-cli.md), not release evidence.
+Shared full-width layout and optional template-TOC removal are covered by the
+core template tests; desktop release retains the default TOC. Full-corpus Word
+rendering remains pending under
 [CHG-0053](../../changes/active/CHG-0053-markdown-batch-conversion-retained-docx.md).
 The overall CAP remains `not implemented` while the platform gaps above remain.
 

@@ -150,6 +150,18 @@ Capability-local rules stay in their CAP files.
   use deterministic DOCX assembly plus Office test doubles, but supported-host
   evidence must prove installed Word. No Pandoc, LibreOffice, cloud converter,
   or parallel WebView release path is part of the product.
+- **Standalone conversion:** `dms convert markdown` reuses assembly and the
+  Tauri-independent `dms-export` Word/placeholder adapter, not the release
+  transaction. Read-only schema-18/19/current configuration supplies the
+  template and confidentiality catalogue; external strict frontmatter supplies
+  conversion metadata without changing `.dms` or registered-document authority.
+  A fresh disjoint output tree retains the controlled-field-filled DOCX after
+  Word saves updated fields, TOC and pagination, then exports that same document
+  to PDF. Both artifacts are read back and hashed in a `conversion_only`
+  manifest. There is no registration, approval, release, notification, overwrite
+  or implicit WSL bridge. Default template TOC is preserved; explicit
+  `--without-toc` removes only its structured-document tag. Source-authored
+  contents remain untouched. Desktop release still owns only its final PDF.
 
 ## ADR-0009 — SMTP notification opens local-app approval
 

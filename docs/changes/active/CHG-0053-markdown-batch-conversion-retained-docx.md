@@ -14,11 +14,13 @@
 | Status | planned |
 | External request | Direct operator request: Create a CHG in /mnt/c/Users/RaphaelBossek/src/dms/ to accomplish this task; there is already a CHG that should accomplish mass export -- I'm not sure. check this first. Incorporate your findings in the CHG. Follow-on: Incorporate the findings regarding converting the markdown document in the ../dms project using the application-records skill for future improvements. Using the dms cli tool would be prefered then. |
 | Affected CAPs | CAP-0007, CAP-0022 |
-| Decision records | Implementation must amend ADR-0008 and the ADR-0023 boundary in `docs/architecture.md` for shared local Office automation and standalone non-release conversion. No architecture claim changes during planning. |
+| Decision records | ADR-0008 and ADR-0023 in `docs/architecture.md` describe the shared local Word adapter and standalone non-release conversion boundary. |
 
 ## Source request
 
 Direct operator request: with ../dms we have a tool to convert/export markdown files to pdf. can you verify how the exported markdown files in docs/reworked/iso-27001/ could be mass-converted to PDF e.g. by calling CLI and using the details from /mnt/c/Users/RaphaelBossek/dms-demo2/edit/.dms/workspace.json The goal is to use the template and keep the docx file what was used to create the PDF
+
+Follow-on direct operator request: Are the DOC-002 translation/render insights relevant for `../dms`; if so, create the corresponding change record.
 
 ## Existing change ownership
 
@@ -67,6 +69,42 @@ The probes did not modify source Markdown, the imported template, demo workspace
 - Current two-column assembly inherits the template's `w:tblW type="auto"` and a 6,041-twip grid, while the template's printable width is 9,072 twips. Every generated Markdown table must instead use fixed layout, `w:tblW` and a grid/cell-width sum equal to the printable width; this applies to two-column tables as well as three-, four- and five-column tables.
 - Microsoft Word opened a DOCX from the WSL UNC path but rejected `ExportAsFixedFormat` to that UNC destination. The CLI's native-Windows adapter remains the supported path; if a WSL bridge is intentionally supported later, it must stage the temporary PDF under the Windows user profile, copy the validated result back, and clean it up. This does not establish Linux DMS export support.
 
+### DOC-002 translation-render adaptation findings
+
+The DOC-002 local review pair confirms that these findings belong to CHG-0053;
+it already owns standalone Markdown conversion with retained final DOCX, local
+image embedding, Word field/TOC updates and native rendered-output inspection.
+No second CHG is created because that would duplicate its progress authority.
+
+1. The first external renderer invocation passed no `MarkdownAssetContext` and
+   correctly failed on the local process-map image. This validates the Phase-2
+   fail-closed contract; it is not a new `dms-core` defect. DMS release and
+   standalone conversion already pass their explicit context. Phase 4 must use
+   the built CLI rather than a wrapper that calls assembly with `None`.
+2. Word produced a valid retained DOCX and PDF from the same post-save document.
+   The rendered process map was embedded, readable and within the printable
+   width. This is a single-document adaptation observation, not the required
+   49-document native-Windows proof. Phase 4 remains responsible for counting
+   every source image occurrence separately from template media and for visual
+   inspection of image/table pages.
+3. A template that auto-numbers heading styles must not also receive source
+   headings with manual section-number prefixes. The resulting duplicate numbers
+   are a source/template composition issue, not a reason for the CLI to rewrite
+   Markdown. Phase 4 must inspect the generated TOC and headings, record the
+   operator-selected source/template convention, and fail the smoke harness on
+   duplicate heading numbers or unresolved TOC fields.
+4. The external review renderer locally translated static German footer labels.
+   That localisation is outside the standalone converter's contract: DMS
+   preserves static template text and fills only configured controlled fields.
+   Word strips trailing ordinary spaces from edited field-label runs, so any
+   template-localisation path must preserve a separator (for example a
+   non-breaking space) and verify the rendered footer. Do not add a hidden
+   English-label rewrite to `dms convert markdown`.
+5. The four-page DOC-002 pair left the final three review-criteria bullets on a
+   mostly blank page. This is layout evidence that structural DOCX/PDF checks do
+   not replace the Phase-4 visual review; it does not authorize automatic source
+   rewriting, margin changes or content removal.
+
 ## Planned behavior and safety boundary
 
 These are implementation targets, not claims about current runtime.
@@ -89,7 +127,7 @@ These are implementation targets, not claims about current runtime.
 | --- | --- | --- | --- |
 | 1 | Preserve multi-column policy tables through template assembly | done (G1: 11 tests passed on Rust 1.88.0; evidence below) | G1: `cargo test -p dms-core --test markdown_template` exits 0 with two/three/four/five-column fidelity coverage. |
 | 2 | Embed local source images without silent content loss | done (third-correction G2: 20 markdown_template + 31 lifecycle tests passed on Rust 1.88.0; evidence below) | G2: `cargo test -p dms-core --test markdown_template --test lifecycle` exits 0 with image, containment, rejection and template-preservation coverage. |
-| 3 | Deliver explicit non-release batch CLI and retained Word inputs | pending | G3: `cargo test --workspace` and `cargo run -p dms-cli -- convert markdown --help` exit 0 with schema-18/19/current read-only configuration, retained-DOCX, full-width tables, explicit TOC removal and unchanged-release coverage. |
+| 3 | Deliver explicit non-release batch CLI and retained Word inputs | done (corrected G3: 250 workspace tests and CLI help passed; review findings corrected) | G3: `cargo test --workspace --locked` and `cargo run -p dms-cli -- convert markdown --help` exit 0 with schema-18/19/current read-only configuration, retained-DOCX, full-width tables, explicit TOC removal and unchanged-release coverage. |
 | 4 | Prove full-corpus Windows Word conversion and repeatability | pending | G4: The native Windows smoke command specified below exits 0 with 49 verified PDF/DOCX pairs, all 25 image occurrences accounted for, retained source/template/config digests, and inspected rendered evidence. |
 | 5 | Integrate contracts, records and project gates | pending | G5: Full integration commands and record checks below pass; CAP/DOX/visual classifications are current; only then archive CHG-0053. |
 
@@ -162,9 +200,160 @@ Review correction scope: retain canonical in-root parent-relative assets, the es
 
 **Verification gate:** G3: `cargo test --workspace` and `cargo run -p dms-cli -- convert markdown --help` exit 0 with batch, read-only schema-18/19/current configuration, retained-DOCX, full-width-table and explicit-TOC coverage, and unchanged-release coverage.
 
+**Execution evidence:** Phase 3 in the selected isolated worktree
+`/home/raphael/.hermes/profiles/hermes-vc/cache/scratch/dms-chg0053-phase3`, branch
+`agent/chg-0053-phase3`, Rust 1.88.0 under WSL. No primary-checkout edits,
+staging, commit, push, deployment, live credentials, real corpus/configuration
+or installed Word access. Implementation workers shared only non-overlapping
+paths; the parent integrated their partial results and completed verification.
+
+- Corrected G3: `cargo test --workspace` exited 0: 250 passed, 0 failed, 0 ignored. This
+  includes 18 CLI integration, 20 conversion-domain, 23 template, 31 lifecycle,
+  91 desktop and 10 shared-export tests, plus the unchanged domain suites.
+  `cargo run -p dms-cli -- convert markdown --help` exited 0 and exposes all
+  three required paths, `--recursive`, `--dry-run`, `--without-toc` and global
+  `--json`.
+- `cargo fmt --all -- --check`,
+  `cargo clippy --workspace --all-targets --locked -- -D warnings`, and
+  `git diff --check` exited 0. Focused development runs of
+  `cargo test -p dms-core --test conversion`,
+  `cargo test -p dms-core --test conversion --test markdown_template`,
+  `cargo test -p dms-export`, and `cargo test -p dms-cli` passed. The initial
+  integration attempt exposed a missing SHA-256 test import and unfinished
+  ownership docs; both were corrected before G3. No dependency versions or
+  MSRV changed.
+- `python3 "$HOME/.hermes/profiles/hermes-vc/skills/software-development/check-md-links/scripts/check-md-links.py" --format summary .`
+  exited 0 with no issues. Read-only record checks passed: five phase rows,
+  Phases 1–3 done and 4–5 pending, no active phase, one matching CHG index entry,
+  both affected CAPs indexed with their correct primary surfaces, unchanged
+  wireframes/UI paths, selected branch and empty Git index. There is no dedicated
+  repository record validator; none is claimed.
+- Delayed review disposition: M1's PDF reservation now rejects nonempty or
+  symlink targets; private staging replaces the predictable filename. M2 clears
+  Word-version receipts on failed pairs. M3 no longer forwards native stderr.
+  M4 rejects a supplied config-file symlink before canonicalization. M5 treats
+  whitespace-only numbers as absent while preserving nonblank values exactly.
+  The two M4/M5 regressions failed before correction and passed afterward with
+  `cargo test -p dms-core --test conversion review_`; the full G3 and strict
+  Clippy gates were rerun successfully. M6's input/output-root replacement and
+  cleanup redirects are covered; residual hostile check/use races remain outside
+  the local operator-owned filesystem contract. M7's schema-20 rejection is
+  intentional: the supported set remains exactly 18, 19 and current. This is
+  parent disposition of the review, not a new independent sign-off.
+- Fresh macOS review disposition (reviewer report `20261014_145058_9ee343`,
+  final findings; source/tests re-read at unchanged HEAD
+  `0c4251dc1b7b0798b03eda311219c5dd49c59fb6`):
+  1. **High — corrected.** The script captures `open`'s result, rejects a
+     missing result or a full-name alias different from the supplied source,
+     and only then assigns the save/export/close target. No `active document`
+     lookup remains. The error handler cannot close the unverified result and
+     never saves a document. An unresolvable Word handle fails closed instead
+     of falling back to a user's active document.
+  2. **Medium — corrected.** Running state is captured before Word commands.
+     Temporary release (`retain_docx=false`) hides Word before opening the copy;
+     success and error paths quit only when Word was initially stopped and no
+     documents remain. Existing user sessions are never quit. Retained
+     conversion neither sets application visibility nor quits Word. The empty
+     document guard also preserves documents opened while the operation runs.
+  3. **Medium — not a bug; unchanged.** Preflight is exactly
+     `osascript -e 'id of application "Microsoft Word"'`, not a tell/open/run
+     command. The [AppleScript application-class reference](https://developer.apple.com/library/archive/documentation/AppleScript/Conceptual/AppleScriptLangGuide/reference/ASLR_classes.html)
+     identifies `id` as an AppleScript-handled application property;
+     [Enhanced Application Object Model](https://macosxautomation.com/applescript/features/appobject.html)
+     explicitly says retrieving it does not require the application to run.
+     No current test or documentation demonstrates launch on this path.
+     Replacing it with a launch-and-cleanup probe would add side effects rather
+     than fix a confirmed defect. This is documented-semantics evidence, not a
+     native macOS execution claim.
+- Both new static regressions first failed with
+  `cargo test -p dms-export macos_script_` (exit 101: 0 passed, 2 failed,
+  8 filtered out): active-document binding and absent running-state/lifecycle
+  handling. After correction, `cargo test -p dms-export` exited 0 (10 passed,
+  0 failed, 0 ignored; 0 doc-tests) and
+  `cargo test -p dms-desktop export::tests` exited 0 (5 passed, 0 failed,
+  86 filtered out). The assertions check validation-before-binding,
+  success/error cleanup targets, release-only hiding, guarded quitting on both
+  outcomes, retained-only saving, and retained-mode absence of visibility/quit
+  commands. Existing update/paginate/save/export ordering and no-resave
+  assertions remain intact; the former whole-script visibility/quit bans now
+  check retained mode alongside explicit release assertions.
+- Review-correction reruns also passed with exit 0:
+  `cargo fmt --all -- --check`, `cargo test --workspace`,
+  `cargo run -p dms-cli -- convert markdown --help`,
+  `cargo clippy --workspace --all-targets --locked -- -D warnings`, and
+  `git diff --check`. CLI help retains all three required paths, `--recursive`,
+  `--dry-run`, `--without-toc` and global `--json`. Counts above were summed from
+  the actual test summaries, not inferred from the added tests.
+- `conversion.rs` reads only roots/template/catalogue from schema 18, 19 or
+  current JSON. Synthetic configurations deliberately contain unusable identity
+  and document fields; existing lock/manual instructions and full workspace
+  bytes stay unchanged. There is no Workspace open/save/migration, identity,
+  notification or release call in the conversion path. Dry-run assembles
+  privately without Word preflight/calls or output creation.
+- Configuration/template mismatch, unsupported schema, strict title/version/
+  enabled-classification mapping, absent number and reserved-token precedence
+  are covered. Root checks, symlink aliases/replacements, Windows device names,
+  case-insensitive file/directory collisions, explicit recursion/exclusions,
+  empty input and no-overwrite are tested. Independent document failures
+  continue in deterministic order; existing files are never cleanup targets.
+- `dms-export` is the minimal new shared ownership boundary. CLI and desktop
+  reuse one placeholder implementation and one native script per OS, with an
+  explicit retained-versus-release mode. Controlled fill uses private staging;
+  token replacement is non-recursive and cannot cascade inserted field values.
+  Word diagnostics are sanitized. Windows uses Win32-compatible paths. macOS
+  validates its opened document before mutation/cleanup and leaves other
+  documents alone. Retained conversion leaves application visibility alone;
+  temporary release preserves hiding and guarded quit-if-started behavior.
+- The shared Word double inspects the controlled-field-filled DOCX at the exact
+  retained path, simulates a save, and proves the adapter leaves those saved
+  bytes intact. Native-script tests require field/TOC/pagination updates and
+  save before PDF export, with no later DOCX save. These are structural/port
+  tests, not execution of COM/AppleScript or proof of real pagination.
+- Final-pair validation reads ZIP entries/CRCs and XML, required OOXML roots/
+  body, split controlled tokens, PDF EOF and parsed nonempty PDF text. Tests
+  reject Word failure, incomplete/invalid PDF and invalid DOCX, remove owned
+  partial outputs and avoid false success hashes/version receipts. Manifests
+  are read back and contain conversion-only metadata and final artifact hashes.
+  Captured Markdown/template and actually embedded asset bytes supply digests;
+  mutation tests prove later original-file changes do not falsify those hashes.
+- Every generated table, including two columns, uses printable-width fixed
+  layout. Default TOC tests retain its field and English heading. Explicit TOC
+  removal is namespace-aware (including alternate prefixes and foreign-attribute
+  rejection), preserves unrelated SDTs/package parts and keeps source-authored
+  static contents. Image and desktop release regressions remain green.
+- CAP-0022 declares `Primary surface: none` and narrowly adds non-release
+  conversion. CAP-0007 retains `Primary surface: human` and its bounded release
+  status. ADR-0008, ADR-0023/architecture, privacy and root/crate DOX describe
+  the actual boundary and retained confidential DOCX. Wireframes and UI assets
+  are untouched. Documentation/product/change parent DOX and product index
+  intentionally remain unchanged: no documentation ownership, CAP ID or visual
+  surface was added. The Rust child index includes `dms-export`.
+- Correction DOX pass: `crates/dms-export/AGENTS.md` records validated macOS
+  document ownership and mode-specific lifecycle/preflight rules. Parent DOX,
+  child indexes, CAP/ADR/privacy records and desktop source/tests are unchanged
+  by these corrections: no new ownership boundary, API, capability, authority,
+  data class or UI interaction was introduced. Findings 1–2 have local
+  failing-before/passing-after evidence; Finding 3 is rejected on the cited
+  semantics. No fresh independent-review sign-off is claimed.
+- Remaining gates: native Windows full-corpus evidence and macOS installed-Word
+  verification are not claimed. Image checks remain structural, not decoding;
+  parsed output is not a visual-fidelity guarantee. Link labels are preserved,
+  but Markdown-relative links are not rewritten into PDF navigation. Concurrent
+  hostile filesystem replacement is not an OS sandbox; detected root changes
+  fail closed and may leave owned artifacts for operator inspection. Phase 4
+  and Phase 5 stay pending; this record is not archived.
+- macOS-specific residual risk: WSL has no `osascript`; these are static script
+  and Rust adapter tests, not AppleScript compilation or installed-Word runs.
+  Word's returned-handle/full-name behavior and PDF-save document identity need
+  native verification. If binding or cleanup fails, the owned Word document may
+  remain open; the script deliberately does not guess another document or force
+  quit with documents remaining. Concurrent user/process changes are not made
+  atomic by the initial running-state and final document-count checks.
+
 ## Phase 4 — Prove full-corpus Windows Word conversion and repeatability
 
 **Goal:** The unmodified real policy corpus converts completely with its template, images, version histories and final Word sources intact.
+
 
 1. Add a reproducible `scripts/Test-MarkdownBatchExport.ps1` smoke harness with explicit `-WorkspaceConfig`, `-InputRoot`, `-OutputRoot` and `-ExpectedCount` parameters. This script is a planned deliverable, not an existing command. It invokes the built CLI and independently validates the manifest, output pairs, OOXML table/image content, PDF page/text evidence, unchanged inputs/configuration/template/publish tree, and no new release evidence. Use synthetic fixtures in automated tests; do not commit internal policy documents or the workspace identity cache.
 2. From native Windows PowerShell in this repository, build `cargo build -p dms-cli --locked`, then run:
@@ -214,7 +403,11 @@ Review correction scope: retain canonical in-root parent-relative assets, the es
 
 ## Handoff
 
-Phases 1 and 2 are done in this isolated worktree, with Phase 2 supported by the third-correction G2 and bounded evidence above. Both final-review defects are corrected; no new independent-review verdict or primary-checkout integration is claimed. Phases 3–5 remain pending; no phase is in progress and the active record returns to `planned`. Image validation is structural, not full decoding or Word/PDF fidelity proof. Work remains confined to the selected isolated worktree: no external corpus/configuration/credentials/Word access, staging, commit, push or primary-checkout changes. Resume Phase 3 only on operator instruction.
+Phases 1–3 are done with their bounded evidence above. Phases 4–5 remain pending
+and no phase is in progress, so the record returns to `planned`. Native Word/full-
+corpus fidelity and final change integration remain unverified. Work remains
+uncommitted in the isolated branch without primary-checkout or real-data access.
+Start Phase 4 only on operator instruction.
 
 ## Related contracts
 

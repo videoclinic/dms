@@ -3,10 +3,12 @@ use std::{env, error::Error, fs, io, path::PathBuf, process};
 use clap::{Parser, Subcommand, ValueEnum};
 use dms_core::{
     AuditReportFilter, AuditReportFormat, AuditReportRequest, AuthenticatedActor, ControlUpdate,
-    DeliveryReceipt, Document, EntraIdentitySource, EntraPerson, GraphClient, MutationPrincipal,
-    Note, NotificationClient, NotificationMessage, NotificationSettings, OwnerReference,
-    PeriodicReviewResult, RestoreRequest, RoleUpdate, Workspace,
+    ConversionOptions, ConversionPlan, ConversionStatus, DeliveryReceipt, Document,
+    EntraIdentitySource, EntraPerson, GraphClient, MutationPrincipal, Note, NotificationClient,
+    NotificationMessage, NotificationSettings, OwnerReference, PeriodicReviewResult,
+    RestoreRequest, RoleUpdate, Workspace,
 };
+use dms_export::InstalledWord;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -57,6 +59,35 @@ enum Command {
     Report {
         #[command(subcommand)]
         command: ReportCommand,
+    },
+    Convert {
+        #[command(subcommand)]
+        command: ConvertCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ConvertCommand {
+    /// Convert external Markdown into paired DOCX/PDF without touching workspace state
+    Markdown {
+        #[arg(long, help = "Path to the workspace.json export configuration")]
+        workspace_config: PathBuf,
+        #[arg(long, help = "External directory holding the Markdown sources")]
+        input_root: PathBuf,
+        #[arg(long, help = "New directory receiving the converted pairs")]
+        output_root: PathBuf,
+        #[arg(long, help = "Recurse into subdirectories of the input root")]
+        recursive: bool,
+        #[arg(
+            long,
+            help = "Validate and assemble without invoking Word or writing output"
+        )]
+        dry_run: bool,
+        #[arg(
+            long,
+            help = "Remove the template's table-of-contents structured-document tag"
+        )]
+        without_toc: bool,
     },
 }
 
@@ -495,6 +526,71 @@ fn run(cli: Cli) -> CliResult<()> {
         Command::Library { command } => run_library(command, cli.json),
         Command::PeriodicReview { command } => run_periodic_review(command, cli.json),
         Command::Report { command } => run_report(command, cli.json),
+        Command::Convert { command } => run_convert(command, cli.json),
+    }
+}
+
+fn run_convert(command: ConvertCommand, json: bool) -> CliResult<()> {
+    match command {
+        ConvertCommand::Markdown {
+            workspace_config,
+            input_root,
+            output_root,
+            recursive,
+            dry_run,
+            without_toc,
+        } => {
+            let plan = ConversionPlan::prepare(&ConversionOptions {
+                workspace_config,
+                input_root,
+                output_root,
+                recursive,
+                dry_run,
+                without_toc,
+            })?;
+            let selected = plan.selected_paths();
+            // The exact selection is diagnostics for the operator; keep stdout
+            // clean so `--json` yields only the final manifest.
+            eprintln!(
+                "convert markdown: {} selected file(s){}",
+                selected.len(),
+                if dry_run { " (dry run)" } else { "" }
+            );
+            for path in &selected {
+                eprintln!("  {}", path.display());
+            }
+            let mut exporter = InstalledWord::new();
+            let manifest = plan.run(&mut exporter)?;
+            if !json {
+                for result in &manifest.results {
+                    if let Some(error) = &result.error {
+                        eprintln!("{}: {error}", result.input.display());
+                    }
+                }
+            }
+            let total = manifest.results.len();
+            let failed = manifest
+                .results
+                .iter()
+                .filter(|result| matches!(result.status, ConversionStatus::Failed))
+                .count();
+            let verb = if dry_run { "validated" } else { "converted" };
+            let text = if failed == 0 {
+                format!("{verb} {total} Markdown file(s) (conversion-only)")
+            } else {
+                format!(
+                    "{verb} {} of {total} Markdown file(s); {failed} failed (conversion-only)",
+                    total - failed
+                )
+            };
+            print_value(&manifest, json, text)?;
+            if manifest.has_failures() {
+                return Err(input_error(
+                    "one or more Markdown conversions failed; see per-file results for details",
+                ));
+            }
+            Ok(())
+        }
     }
 }
 

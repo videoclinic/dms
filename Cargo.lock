@@ -1051,6 +1051,7 @@ dependencies = [
  "chrono",
  "clap",
  "dms-core",
+ "dms-export",
  "serde",
  "serde_json",
  "tempfile",
@@ -1081,9 +1082,9 @@ version = "0.1.1"
 dependencies = [
  "chrono",
  "dms-core",
+ "dms-export",
  "keyring",
  "lettre",
- "quick-xml 0.37.5",
  "serde",
  "serde_json",
  "tauri",
@@ -1097,6 +1098,16 @@ dependencies = [
  "uuid",
  "windows",
  "winreg 0.56.0",
+ "zip",
+]
+
+[[package]]
+name = "dms-export"
+version = "0.1.1"
+dependencies = [
+ "dms-core",
+ "quick-xml 0.37.5",
+ "tempfile",
  "zip",
 ]
 

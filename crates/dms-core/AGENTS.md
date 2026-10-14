@@ -13,6 +13,7 @@ persistence.
 | `src/assistance.rs` | Optional Claude Desktop policy, released-PDF/source comparison payloads, and assistance evidence |
 | `src/audit.rs` | Filtered deterministic CSV/PDF audit reports, report-file integrity, and workspace report evidence |
 | `src/catalogues.rs` | Document-type catalogue primitives plus shared stable-ID and label validation |
+| `src/conversion.rs` | Read-only export-configuration projection, external batch discovery/metadata/path validation, sequential conversion port, retained-pair validation and manifest digests |
 | `src/integrity.rs` | Advisory workspace locks, backup-manifest validation, and confirmed root-safe restore |
 | `src/library.rs` | Folder/file discovery, membership, search, registration state, reassociation, and permalinks |
 | `src/lifecycle.rs` | Version candidates, Entra/notification/export ports, content conformance, review decisions, release commits, and hash-chained evidence |
@@ -106,12 +107,28 @@ persistence.
   frontmatter from the body and fills optional non-reserved `{KEY}` tokens from
   additional flat frontmatter scalars; reserved controlled tokens remain for
   export chrome.
-- Markdown table assembly retains the two-cell template contract and existing
-  two-column layout. Other column counts use equal fixed grid/cell widths from
+- Markdown table assembly retains the two-cell template contract. Every
+  column count uses equal fixed grid/cell widths from
   the body section's page width minus left/right margins and gutter; absent or
   invalid page dimensions fail explicitly. The first column uses the first-cell
   prototype; all later columns use the second. Cell/paragraph/run styling and
   inline emphasis/code/link text survive without modifying source or template.
+- Standalone conversion is separate from Workspace open/save and lifecycle
+  authority. It supports only schema 18, 19 and current read-only projections,
+  validates native configuration location and template identity, and never
+  migrates, locks, authenticates, notifies or imports workflow data. Explicit
+  config-file symlinks are rejected before canonicalization. Whitespace-only
+  external document numbers are absent; nonblank values are preserved. Explicit
+  external input and fresh disjoint output roots, portable collision checks,
+  per-file strict metadata and sequential mixed results are core-owned rules.
+  A host adapter fills/saves the retained DOCX and exports that same document;
+  core reads both artifacts, validates ZIP/XML and parsed PDF text, hashes final
+  bytes and writes the conversion-only manifest. Consumed Markdown/template and
+  embedded asset bytes determine input hashes. Dry-run assembles temporarily
+  without the host adapter or output-root writes.
+- The default assembler preserves the template TOC. The explicit options API
+  may remove only its TOC structured-document tag and returns consumed-asset
+  digests; it never removes source-authored contents. No new template markers.
 - Markdown image references resolve only through an explicit source/asset
   context of input root plus source path. Parent-relative references are allowed
   when the canonical target remains inside the input root. A reference without
@@ -239,6 +256,9 @@ persistence.
 ## Verification
 
 - `cargo test -p dms-core`
+- `cargo test -p dms-core --test conversion` checks read-only configuration,
+  metadata, paths, mixed results, retained pairs, consumed-byte digests and
+  failure cleanup through synthetic exporter doubles, not installed Word.
 - `cargo test -p dms-core --test markdown_template` checks multi-table cell text,
   inline styling, two/three/four/five-column layouts, deterministic assembly,
   package XML, unchanged source/template/asset bytes, image embedding,

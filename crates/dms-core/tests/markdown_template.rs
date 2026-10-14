@@ -6,9 +6,11 @@ use std::{
 };
 
 use dms_core::{
-    assemble_markdown_docx, validate_markdown_template, DmsError, MarkdownAssetContext,
-    MarkdownTemplateValidationState, Workspace, MARKDOWN_TEMPLATE_CONTRACT_VERSION, SCHEMA_VERSION,
+    assemble_markdown_docx, assemble_markdown_docx_with_options, validate_markdown_template,
+    DmsError, MarkdownAssetContext, MarkdownAssetDigest, MarkdownTemplateValidationState,
+    Workspace, MARKDOWN_TEMPLATE_CONTRACT_VERSION, SCHEMA_VERSION,
 };
+use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 use zip::{write::SimpleFileOptions, ZipArchive, ZipWriter};
 
@@ -586,25 +588,18 @@ fn assembler_preserves_two_three_four_and_five_column_table_fidelity() {
             .iter()
             .map(|col| xml_attribute(col, "w:w").parse().unwrap())
             .collect();
-        if columns == 2 {
-            assert_eq!(widths, [4500, 4500]);
-            assert_eq!(
-                xml_elements(table, "w:tblPr"),
-                xml_elements(original_document, "w:tblPr")
-            );
-        } else {
-            assert_eq!(widths.iter().sum::<u32>(), 11384 - 1440 - 1440 - 501);
-            assert!(widths.iter().all(|width| *width > 0));
-            assert!(widths.iter().max().unwrap() - widths.iter().min().unwrap() <= 1);
-            assert_eq!(
-                xml_attribute(xml_elements(table, "w:tblLayout")[0], "w:type"),
-                "fixed"
-            );
-            assert_eq!(
-                xml_attribute(xml_elements(table, "w:tblW")[0], "w:w"),
-                widths.iter().sum::<u32>().to_string()
-            );
-        }
+        // Every table, including two columns, now uses the fixed printable width.
+        assert_eq!(widths.iter().sum::<u32>(), 11384 - 1440 - 1440 - 501);
+        assert!(widths.iter().all(|width| *width > 0));
+        assert!(widths.iter().max().unwrap() - widths.iter().min().unwrap() <= 1);
+        assert_eq!(
+            xml_attribute(xml_elements(table, "w:tblLayout")[0], "w:type"),
+            "fixed"
+        );
+        assert_eq!(
+            xml_attribute(xml_elements(table, "w:tblW")[0], "w:w"),
+            widths.iter().sum::<u32>().to_string()
+        );
         let rows = xml_elements(table, "w:tr");
         assert_eq!(rows.len(), 3);
         for (index, row) in rows.iter().enumerate() {
@@ -1675,4 +1670,182 @@ Autolink <https://example.test> and `code span`.\n\n---\n\nx: 1\n";
             "raw inline HTML was not preserved as text: {markup:?}"
         );
     }
+}
+
+// SHA-256 of `fixtures/markdown-wide.png`, independently computed on disk.
+const WIDE_PNG_SHA256: &str = "94c9ba9d18743280297aa28d8727e9c259c330450f05ed5049bafc7e71bda064";
+
+// A synthetic template Table of Contents structured document: the
+// `Table of Contents` gallery, an English heading and a real TOC field.
+const TEMPLATE_TOC_SDT: &str = concat!(
+    "<w:sdt><w:sdtPr><w:docPartObj>",
+    "<w:docPartGallery w:val=\"Table of Contents\"/><w:docPartUnique/>",
+    "</w:docPartObj></w:sdtPr><w:sdtContent>",
+    "<w:p><w:pPr><w:pStyle w:val=\"TOCHeading\"/></w:pPr>",
+    "<w:r><w:t>Table of Contents</w:t></w:r></w:p>",
+    "<w:p><w:fldSimple w:instr=\" TOC \\o &quot;1-3&quot; \\h \\z \\u \">",
+    "<w:r><w:t>1 Scope</w:t></w:r></w:fldSimple></w:p>",
+    "</w:sdtContent></w:sdt>"
+);
+// A second, unrelated structured document that must never be removed.
+const TEMPLATE_OTHER_SDT: &str = concat!(
+    "<w:sdt><w:sdtPr><w:docPartObj>",
+    "<w:docPartGallery w:val=\"Custom Gallery\"/>",
+    "</w:docPartObj></w:sdtPr><w:sdtContent>",
+    "<w:p><w:r><w:t>Custom block</w:t></w:r></w:p>",
+    "</w:sdtContent></w:sdt>"
+);
+const TEMPLATE_TOC_FIELD: &str = "TOC \\o &quot;1-3&quot; \\h \\z \\u";
+
+fn document_xml_of(path: &Path) -> String {
+    String::from_utf8(zip_entries(path)["word/document.xml"].clone()).unwrap()
+}
+
+fn gallery_count(xml: &str, gallery: &str) -> usize {
+    xml.matches(&format!("<w:docPartGallery w:val=\"{gallery}\"/>"))
+        .count()
+}
+
+#[test]
+fn assembler_retains_template_toc_by_default_and_removes_only_matching_sdt() {
+    let temp = tempfile::tempdir().unwrap();
+    let original = temp.path().join("original.docx");
+    let template = temp.path().join("toc.docx");
+    fs::write(&original, FIXTURE).unwrap();
+    rewrite_xml_part(&original, &template, "word/document.xml", |xml| {
+        xml.replace(
+            "<w:body>",
+            &format!("<w:body>{TEMPLATE_TOC_SDT}{TEMPLATE_OTHER_SDT}"),
+        )
+    });
+    let template_before = fs::read(&template).unwrap();
+    let baseline = document_xml_of(&template);
+    let baseline_toc = gallery_count(&baseline, "Table of Contents");
+    assert!(baseline_toc >= 1, "fixture must carry the injected TOC sdt");
+    assert_eq!(gallery_count(&baseline, "Custom Gallery"), 1);
+
+    let markdown = "---\nversion: 1.0\nconfidentiality: Internal\n---\n# Policy\n\n\
+## Inhaltsverzeichnis\n\n- Scope\n- Versionsverlauf\n\n## Scope\n\nBody text.\n";
+
+    let default_output = temp.path().join("default.docx");
+    assemble_markdown_docx(&template, markdown, &default_output, None).unwrap();
+    let retained = document_xml_of(&default_output);
+    // The default assembly keeps the template TOC, its field and its heading.
+    assert_eq!(gallery_count(&retained, "Table of Contents"), baseline_toc);
+    assert_eq!(gallery_count(&retained, "Custom Gallery"), 1);
+    assert!(retained.contains(TEMPLATE_TOC_FIELD));
+    assert!(retained.contains(">Table of Contents<"));
+    assert!(retained.contains("Custom block"));
+    // A source-authored static TOC is body content and survives untouched.
+    assert!(retained.contains("Inhaltsverzeichnis"));
+
+    let without = temp.path().join("without.docx");
+    assemble_markdown_docx_with_options(&template, markdown, &without, None, true).unwrap();
+    let removed = document_xml_of(&without);
+    // Only the Table-of-Contents structured document is gone.
+    assert_eq!(gallery_count(&removed, "Table of Contents"), 0);
+    assert_eq!(gallery_count(&removed, "Custom Gallery"), 1);
+    assert!(!removed.contains(TEMPLATE_TOC_FIELD));
+    assert!(removed.contains("Custom block"));
+    assert!(removed.contains("Inhaltsverzeichnis"));
+    assert!(removed.contains("Body text."));
+    // The template is never mutated and only the body part differs.
+    assert_eq!(fs::read(&template).unwrap(), template_before);
+    let before_parts = zip_entries(&template);
+    let after_parts = zip_entries(&without);
+    assert_eq!(
+        before_parts.keys().collect::<Vec<_>>(),
+        after_parts.keys().collect::<Vec<_>>()
+    );
+    for (name, bytes) in &before_parts {
+        if name != "word/document.xml" {
+            assert_eq!(
+                after_parts.get(name),
+                Some(bytes),
+                "changed package part {name}"
+            );
+        }
+    }
+}
+
+#[test]
+fn assembler_reports_digests_of_the_asset_bytes_it_actually_embedded() {
+    let temp = tempfile::tempdir().unwrap();
+    let input_root = temp.path().join("input");
+    fs::create_dir_all(input_root.join("assets")).unwrap();
+    let template = temp.path().join("template.docx");
+    fs::write(&template, FIXTURE).unwrap();
+    let shot = WIDE_PNG.to_vec();
+    fs::write(input_root.join("assets/shot.png"), &shot).unwrap();
+
+    let source = input_root.join("policy.md");
+    // The same asset is referenced twice: one media part, one digest.
+    let markdown = "---\nversion: 1.0\nconfidentiality: Internal\n---\n# Policy\n\n\
+![one](assets/shot.png)\n\n![two](assets/shot.png)\n";
+    fs::write(&source, markdown).unwrap();
+    let context = MarkdownAssetContext::new(&input_root, &source);
+
+    let output = temp.path().join("policy.docx");
+    let digests: Vec<MarkdownAssetDigest> =
+        assemble_markdown_docx_with_options(&template, markdown, &output, Some(&context), false)
+            .unwrap();
+    assert_eq!(digests.len(), 1);
+    assert_eq!(digests[0].relative_path, Path::new("assets/shot.png"));
+    // The digest equals the hash of the bytes written into the package, which
+    // are the source bytes, exactly.
+    assert_eq!(digests[0].sha256, WIDE_PNG_SHA256);
+    let parts = zip_entries(&output);
+    assert_eq!(parts["word/media/dms-image-1.png"], shot);
+    assert_eq!(
+        format!("{:x}", Sha256::digest(&parts["word/media/dms-image-1.png"])),
+        digests[0].sha256
+    );
+
+    // An assembly without images reports no assets.
+    let empty = assemble_markdown_docx_with_options(
+        &template,
+        "---\nversion: 1.0\nconfidentiality: Internal\n---\n# T\n\nText.\n",
+        &temp.path().join("empty.docx"),
+        None,
+        false,
+    )
+    .unwrap();
+    assert!(empty.is_empty());
+
+    // The default wrapper keeps the same bytes and still returns unit.
+    let plain = temp.path().join("plain.docx");
+    assemble_markdown_docx(&template, markdown, &plain, Some(&context)).unwrap();
+    assert_eq!(fs::read(&output).unwrap(), fs::read(&plain).unwrap());
+}
+
+#[test]
+fn toc_removal_matches_word_namespaces_not_prefix_spelling_or_foreign_attributes() {
+    let temp = tempfile::tempdir().unwrap();
+    let original = temp.path().join("original.docx");
+    let template = temp.path().join("template.docx");
+    let output = temp.path().join("output.docx");
+    fs::write(&original, FIXTURE).unwrap();
+    let alternate = TEMPLATE_TOC_SDT.replace("w:", "q:").replacen(
+        "<q:sdt>",
+        "<q:sdt xmlns:q='http://schemas.openxmlformats.org/wordprocessingml/2006/main'>",
+        1,
+    );
+    let foreign = TEMPLATE_OTHER_SDT.replace(
+        "w:val=\"Custom Gallery\"",
+        "x:val='Table of Contents' xmlns:x='urn:not-word'",
+    );
+    rewrite_xml_part(&original, &template, "word/document.xml", |xml| {
+        xml.replace("<w:body>", &format!("<w:body>{alternate}{foreign}"))
+    });
+    assemble_markdown_docx_with_options(
+        &template,
+        "---\nversion: 1.0\nconfidentiality: internal\n---\nBody",
+        &output,
+        None,
+        true,
+    )
+    .unwrap();
+    let result = document_xml_of(&output);
+    assert!(!result.contains("<q:sdt"));
+    assert!(result.contains(&foreign));
 }

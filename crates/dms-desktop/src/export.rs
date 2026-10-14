@@ -1,15 +1,8 @@
-use std::{
-    fs,
-    io::{Read, Write},
-    path::Path,
-};
+use std::{fs, path::Path};
 
-#[cfg(any(windows, target_os = "macos"))]
-use std::process::Command;
+use dms_core::{assemble_markdown_docx, ExportRequest, PdfExporter};
 
-use dms_core::{assemble_markdown_docx, ExportChrome, ExportRequest, PdfExporter};
-use quick_xml::{events::Event, Reader, Writer};
-use zip::{write::SimpleFileOptions, ZipArchive, ZipWriter};
+pub use dms_export::fill_office_placeholders;
 
 pub trait OfficeAutomation {
     fn export_pdf(&mut self, source_copy: &Path, output: &Path) -> Result<(), String>;
@@ -89,299 +82,29 @@ fn validate_pdf(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-pub fn fill_office_placeholders(
-    source: &Path,
-    destination: &Path,
-    chrome: &ExportChrome,
-) -> Result<(), String> {
-    let source_file = fs::File::open(source)
-        .map_err(|error| format!("cannot open Office draft {}: {error}", source.display()))?;
-    let mut archive = ZipArchive::new(source_file).map_err(|error| {
-        format!(
-            "Office draft {} is not valid OOXML: {error}",
-            source.display()
-        )
-    })?;
-    let destination_file = fs::File::create(destination).map_err(|error| {
-        format!(
-            "cannot create temporary Office copy {}: {error}",
-            destination.display()
-        )
-    })?;
-    let mut writer = ZipWriter::new(destination_file);
-
-    for index in 0..archive.len() {
-        let mut entry = archive
-            .by_index(index)
-            .map_err(|error| format!("cannot read Office package entry: {error}"))?;
-        let name = entry.name().to_owned();
-        let options = SimpleFileOptions::default().compression_method(entry.compression());
-        if entry.is_dir() {
-            writer
-                .add_directory(name, options)
-                .map_err(|error| format!("cannot copy Office package directory: {error}"))?;
-            continue;
-        }
-        writer
-            .start_file(&name, options)
-            .map_err(|error| format!("cannot copy Office package entry {name}: {error}"))?;
-        let mut bytes = Vec::new();
-        entry
-            .read_to_end(&mut bytes)
-            .map_err(|error| format!("cannot read Office package entry {name}: {error}"))?;
-        if name.ends_with(".xml") || name.ends_with(".rels") {
-            let text = String::from_utf8(bytes)
-                .map_err(|error| format!("Office XML entry {name} is not UTF-8: {error}"))?;
-            let filled = fill_xml_placeholders(&text, chrome)
-                .map_err(|error| format!("cannot fill Office XML entry {name}: {error}"))?;
-            writer
-                .write_all(&filled)
-                .map_err(|error| format!("cannot write Office package entry {name}: {error}"))?;
-        } else {
-            writer
-                .write_all(&bytes)
-                .map_err(|error| format!("cannot write Office package entry {name}: {error}"))?;
-        }
-    }
-    writer
-        .finish()
-        .map_err(|error| format!("cannot finish temporary Office copy: {error}"))?;
-    Ok(())
-}
-
-fn fill_xml_placeholders(xml: &str, chrome: &ExportChrome) -> Result<Vec<u8>, String> {
-    let mut reader = Reader::from_str(xml);
-    let mut events = Vec::new();
-    let mut text_values = Vec::new();
-    loop {
-        let event = reader
-            .read_event()
-            .map_err(|error| format!("invalid XML: {error}"))?;
-        match &event {
-            Event::Text(text) => text_values.push(
-                text.unescape()
-                    .map_err(|error| format!("invalid XML text: {error}"))?
-                    .into_owned(),
-            ),
-            Event::Eof => {
-                events.push(event.into_owned());
-                break;
-            }
-            _ => {}
-        }
-        events.push(event.into_owned());
-    }
-
-    replace_across_text_nodes(
-        &mut text_values,
-        "{CONFIDENTIALITY}",
-        &chrome.confidentiality.label,
-    );
-    replace_across_text_nodes(&mut text_values, "{VERSION}", &chrome.version_label);
-    replace_across_text_nodes(&mut text_values, "{TITLE}", &chrome.title);
-    replace_across_text_nodes(
-        &mut text_values,
-        "{DOCUMENT_NUMBER}",
-        chrome.document_number.as_deref().unwrap_or_default(),
-    );
-
-    let mut output = Writer::new(Vec::new());
-    let mut text_index = 0;
-    for event in events {
-        let event = if matches!(&event, Event::Text(_)) {
-            let value = &text_values[text_index];
-            text_index += 1;
-            Event::Text(quick_xml::events::BytesText::new(value))
-        } else {
-            event
-        };
-        output
-            .write_event(event)
-            .map_err(|error| format!("cannot write XML: {error}"))?;
-    }
-    Ok(output.into_inner())
-}
-
-fn replace_across_text_nodes(values: &mut [String], token: &str, replacement: &str) {
-    loop {
-        let combined = values.concat();
-        let Some(start) = combined.find(token) else {
-            return;
-        };
-        let end = start + token.len();
-        let mut cursor = 0;
-        let mut start_node = None;
-        let mut end_node = None;
-        for (index, value) in values.iter().enumerate() {
-            let next = cursor + value.len();
-            if start_node.is_none() && start < next {
-                start_node = Some((index, start - cursor));
-            }
-            if end_node.is_none() && end <= next {
-                end_node = Some((index, end - cursor));
-                break;
-            }
-            cursor = next;
-        }
-        let (start_index, start_offset) = start_node.expect("token start belongs to a text node");
-        let (end_index, end_offset) = end_node.expect("token end belongs to a text node");
-        if start_index == end_index {
-            values[start_index].replace_range(start_offset..end_offset, replacement);
-            continue;
-        }
-        let prefix = values[start_index][..start_offset].to_owned();
-        let suffix = values[end_index][end_offset..].to_owned();
-        values[start_index] = format!("{prefix}{replacement}");
-        for value in &mut values[start_index + 1..end_index] {
-            value.clear();
-        }
-        values[end_index] = suffix;
-    }
-}
-
 #[derive(Default)]
 pub struct InstalledOfficeAutomation;
 
 impl OfficeAutomation for InstalledOfficeAutomation {
     fn export_pdf(&mut self, source_copy: &Path, output: &Path) -> Result<(), String> {
-        export_with_installed_office(source_copy, output)
+        dms_export::export_installed_office_pdf(source_copy, output)
     }
-}
-
-#[cfg(windows)]
-fn export_with_installed_office(source_copy: &Path, output: &Path) -> Result<(), String> {
-    const SCRIPT: &str = r#"
-$ErrorActionPreference = 'Stop'
-$word = $null
-$document = $null
-try {
-  $word = New-Object -ComObject Word.Application
-  $word.Visible = $false
-  $word.DisplayAlerts = 0
-  $document = $word.Documents.Open($env:DMS_OFFICE_SOURCE, $false, $true)
-  foreach ($tableOfContents in $document.TablesOfContents) {
-    $tableOfContents.Update() | Out-Null
-  }
-  foreach ($story in $document.StoryRanges) {
-    $range = $story
-    while ($null -ne $range) {
-      $range.Fields.Update() | Out-Null
-      $range = $range.NextStoryRange
-    }
-  }
-  $document.ExportAsFixedFormat($env:DMS_OFFICE_OUTPUT, 17)
-} finally {
-  if ($null -ne $document) { $document.Close($false) }
-  if ($null -ne $word) { $word.Quit() }
-}
-"#;
-    run_office_command(
-        Command::new("powershell.exe")
-            .args(["-NoProfile", "-NonInteractive", "-Command", SCRIPT])
-            .env("DMS_OFFICE_SOURCE", office_compatible_path(source_copy))
-            .env("DMS_OFFICE_OUTPUT", office_compatible_path(output)),
-        "Microsoft Word",
-    )
-}
-
-#[cfg(windows)]
-fn office_compatible_path(path: &Path) -> std::ffi::OsString {
-    use std::os::windows::ffi::{OsStrExt, OsStringExt};
-
-    const VERBATIM_PREFIX: &[u16] = &[b'\\' as u16, b'\\' as u16, b'?' as u16, b'\\' as u16];
-    const VERBATIM_UNC_PREFIX: &[u16] = &[
-        b'\\' as u16,
-        b'\\' as u16,
-        b'?' as u16,
-        b'\\' as u16,
-        b'U' as u16,
-        b'N' as u16,
-        b'C' as u16,
-        b'\\' as u16,
-    ];
-
-    let path = path.as_os_str().encode_wide().collect::<Vec<_>>();
-    if let Some(remainder) = path.strip_prefix(VERBATIM_UNC_PREFIX) {
-        let mut compatible = vec![b'\\' as u16, b'\\' as u16];
-        compatible.extend_from_slice(remainder);
-        std::ffi::OsString::from_wide(&compatible)
-    } else if let Some(remainder) = path.strip_prefix(VERBATIM_PREFIX) {
-        std::ffi::OsString::from_wide(remainder)
-    } else {
-        std::ffi::OsString::from_wide(&path)
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn export_with_installed_office(source_copy: &Path, output: &Path) -> Result<(), String> {
-    const SCRIPT: &str = r#"
-set sourcePath to system attribute "DMS_OFFICE_SOURCE"
-set outputPath to system attribute "DMS_OFFICE_OUTPUT"
-tell application "Microsoft Word"
-  set wasRunning to running
-  set visible to false
-  open file name sourcePath
-  set sourceDocument to active document
-  save as sourceDocument file name outputPath file format format PDF
-  close sourceDocument saving no
-  if not wasRunning then quit
-end tell
-"#;
-    run_office_command(
-        Command::new("osascript")
-            .args(["-e", SCRIPT])
-            .env("DMS_OFFICE_SOURCE", source_copy)
-            .env("DMS_OFFICE_OUTPUT", output),
-        "Microsoft Word",
-    )
-}
-
-#[cfg(not(any(windows, target_os = "macos")))]
-fn export_with_installed_office(_source_copy: &Path, _output: &Path) -> Result<(), String> {
-    Err("installed Office export is supported only on Windows and macOS".to_owned())
-}
-
-#[cfg(any(windows, target_os = "macos"))]
-fn run_office_command(command: &mut Command, application: &str) -> Result<(), String> {
-    let result = command
-        .output()
-        .map_err(|error| format!("cannot start {application} automation: {error}"))?;
-    if !result.status.success() {
-        let detail = String::from_utf8_lossy(&result.stderr).trim().to_owned();
-        return Err(if detail.is_empty() {
-            format!("{application} automation failed with {}", result.status)
-        } else {
-            format!("{application} automation failed: {detail}")
-        });
-    }
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, path::PathBuf, rc::Rc};
+    use std::{
+        cell::RefCell,
+        io::{Read, Write},
+        path::PathBuf,
+        rc::Rc,
+    };
 
     use dms_core::{ConfidentialitySnapshot, ExportChrome};
     use uuid::Uuid;
+    use zip::{write::SimpleFileOptions, ZipArchive, ZipWriter};
 
     use super::*;
-
-    #[cfg(windows)]
-    #[test]
-    fn word_automation_receives_win32_paths_instead_of_verbatim_paths() {
-        assert_eq!(
-            office_compatible_path(Path::new(r"\\?\C:\Users\Operator\release.pdf")),
-            std::ffi::OsString::from(r"C:\Users\Operator\release.pdf")
-        );
-        assert_eq!(
-            office_compatible_path(Path::new(r"\\?\UNC\server\share\release.pdf")),
-            std::ffi::OsString::from(r"\\server\share\release.pdf")
-        );
-        assert_eq!(
-            office_compatible_path(Path::new(r"C:\Users\Operator\release.pdf")),
-            std::ffi::OsString::from(r"C:\Users\Operator\release.pdf")
-        );
-    }
 
     const MARKDOWN_TEMPLATE: &[u8] =
         include_bytes!("../../dms-core/tests/fixtures/markdown-template.docx");
@@ -438,7 +161,7 @@ mod tests {
         let file = fs::File::create(path).unwrap();
         let mut archive = ZipWriter::new(file);
         for (name, content) in [
-            ("[Content_Types].xml", "<Types/>") ,
+            ("[Content_Types].xml", "<Types/>"),
             (
                 "word/document.xml",
                 "<w:document><w:body><w:p><w:r><w:t>{CONFI</w:t></w:r><w:r><w:t>DENTIALITY}</w:t></w:r><w:r><w:t>{VERSION}</w:t></w:r></w:p></w:body></w:document>",
@@ -591,18 +314,6 @@ mod tests {
                 assert!(text.contains("POL-007"));
             }
         }
-    }
-
-    #[test]
-    fn office_placeholder_fill_supports_word_document_property_values() {
-        let xml = "<Properties><property>{TITLE}</property><property>{DOCUMENT_NUMBER}</property><property>{VERSION}</property><property>{CONFIDENTIALITY}</property></Properties>";
-
-        let filled = String::from_utf8(fill_xml_placeholders(xml, &chrome()).unwrap()).unwrap();
-
-        assert_eq!(
-            filled,
-            "<Properties><property>Policy &lt;West&gt;</property><property>POL-007</property><property>2.3</property><property>Vertraulich &amp; intern</property></Properties>"
-        );
     }
 
     #[test]

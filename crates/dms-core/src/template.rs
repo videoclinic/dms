@@ -39,6 +39,9 @@ const PARAGRAPH_PROTOTYPES: &[(&str, &str)] = &[
 ];
 const TABLE_COLUMN_1: &str = "{TABLE COLUMN 1}";
 const TABLE_COLUMN_2: &str = "{TABLE COLUMN 2}";
+const WORDPROCESSINGML_MAIN_NAMESPACE: &str =
+    "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+const TABLE_OF_CONTENTS_GALLERY: &str = "Table of Contents";
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -71,6 +74,16 @@ pub struct MarkdownTemplateValidation {
 pub struct MarkdownTemplateContract {
     pub contract_version: u32,
     pub package_parts: Vec<String>,
+}
+
+/// One embedded Markdown asset: the asset path relative to the assembly input
+/// root plus the SHA-256 digest of the exact bytes written into the DOCX
+/// package. Callers use it to prove which asset bytes were actually consumed.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MarkdownAssetDigest {
+    #[serde(with = "super::relative_path_serde")]
+    pub relative_path: PathBuf,
+    pub sha256: String,
 }
 
 /// Explicit source and containment context for resolving local Markdown image
@@ -207,6 +220,28 @@ impl<'a> RenderContext<'a> {
         let width = u64::from(table_printable_width(self.template)?) * 635;
         self.printable_width_emu = Some(width);
         Ok(width)
+    }
+
+    /// SHA-256 digests of the asset bytes actually embedded into the package,
+    /// keyed by path relative to the canonical input root. Repeated references
+    /// share one digest; the result is ordered by relative path.
+    fn asset_digests(&self) -> Vec<MarkdownAssetDigest> {
+        let root = self.input_root.as_deref();
+        let mut digests = self
+            .media_by_path
+            .iter()
+            .map(|(path, index)| {
+                let relative_path = root
+                    .and_then(|root| path.strip_prefix(root).ok())
+                    .map_or_else(|| portable_relative_path(path), portable_relative_path);
+                MarkdownAssetDigest {
+                    relative_path,
+                    sha256: format!("{:x}", Sha256::digest(&self.media[*index].bytes)),
+                }
+            })
+            .collect::<Vec<_>>();
+        digests.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+        digests
     }
 
     /// Resolve one Markdown image reference to a canonical file inside the
@@ -588,12 +623,27 @@ pub fn validate_markdown_template(path: &Path) -> Result<MarkdownTemplateContrac
 /// Assemble one Markdown body into the workspace Word template. Local image
 /// references are embedded as OOXML drawings; `assets` is the explicit
 /// source/containment context and its absence rejects asset-bearing input.
+/// The template's Table of Contents is retained.
 pub fn assemble_markdown_docx(
     template: &Path,
     markdown: &str,
     destination: &Path,
     assets: Option<&MarkdownAssetContext>,
 ) -> Result<()> {
+    assemble_markdown_docx_with_options(template, markdown, destination, assets, false).map(|_| ())
+}
+
+/// Assemble one Markdown body into the workspace Word template, optionally
+/// removing the template's Table of Contents structured-document tag
+/// (`without_toc`). Returns the digests of the asset bytes actually embedded
+/// into the output package so callers can prove which bytes were consumed.
+pub fn assemble_markdown_docx_with_options(
+    template: &Path,
+    markdown: &str,
+    destination: &Path,
+    assets: Option<&MarkdownAssetContext>,
+    without_toc: bool,
+) -> Result<Vec<MarkdownAssetDigest>> {
     let loaded = load_template(template)?;
     let (frontmatter, body) = super::parse_markdown_frontmatter(markdown)?;
     let blocks = parse_markdown_blocks(body)?;
@@ -606,6 +656,12 @@ pub fn assemble_markdown_docx(
 
     let variables = frontmatter.template_variables();
     let document_xml = apply_template_variables(&document_xml, &variables);
+    let document_xml = if without_toc {
+        remove_table_of_contents_sdt(&document_xml)?
+    } else {
+        document_xml
+    };
+    let asset_digests = context.asset_digests();
     let media = std::mem::take(&mut context.media);
     let relationships = if media.is_empty() {
         None
@@ -711,7 +767,8 @@ pub fn assemble_markdown_docx(
     writer
         .finish()
         .map_err(|error| DmsError::InvalidDocx(error.to_string()))?;
-    validate_docx_package(destination)
+    validate_docx_package(destination)?;
+    Ok(asset_digests)
 }
 
 fn apply_template_variables(xml: &str, variables: &BTreeMap<String, String>) -> String {
@@ -1993,22 +2050,17 @@ fn render_table(rows: &[Vec<Vec<Inline>>], context: &mut RenderContext<'_>) -> R
             "Markdown table rows must have a consistent nonzero column count".to_owned(),
         ));
     }
-    // Two-column tables retain the operator's existing grid and cell widths.
-    let width = (columns != 2)
-        .then(|| table_printable_width(context.template))
-        .transpose()?;
-    if width.is_some_and(|width| columns > width as usize) {
+    // Every generated table spans the template's printable body width with a
+    // fixed layout, including two-column tables.
+    let width = table_printable_width(context.template)?;
+    if columns > width as usize {
         return Err(DmsError::InvalidMarkdownTemplate(
             "Markdown table has too many columns for the template's printable width".to_owned(),
         ));
     }
-    let widths = width.map(|width| {
-        (0..columns)
-            .map(|column| {
-                width / columns as u32 + u32::from((column as u32) < width % columns as u32)
-            })
-            .collect::<Vec<_>>()
-    });
+    let widths = (0..columns)
+        .map(|column| width / columns as u32 + u32::from((column as u32) < width % columns as u32))
+        .collect::<Vec<_>>();
     let mut rendered_rows = String::new();
     for row in rows {
         rendered_rows.push_str(&row_prototype[..cells[0].0]);
@@ -2025,16 +2077,14 @@ fn render_table(rows: &[Vec<Vec<Inline>>], context: &mut RenderContext<'_>) -> R
             };
             let mut cell =
                 render_table_cell(&row_prototype[span.0..span.1], token, inlines, context)?;
-            if let Some(widths) = &widths {
-                let properties = xml_child(&cell, "w:tcPr")?.unwrap_or("<w:tcPr/>");
-                let properties = set_xml_child(
-                    properties,
-                    "w:tcW",
-                    &format!("<w:tcW w:w=\"{}\" w:type=\"dxa\"/>", widths[column]),
-                    &["w:cnfStyle"],
-                )?;
-                cell = set_xml_child(&cell, "w:tcPr", &properties, &[])?;
-            }
+            let properties = xml_child(&cell, "w:tcPr")?.unwrap_or("<w:tcPr/>");
+            let properties = set_xml_child(
+                properties,
+                "w:tcW",
+                &format!("<w:tcW w:w=\"{}\" w:type=\"dxa\"/>", widths[column]),
+                &["w:cnfStyle"],
+            )?;
+            cell = set_xml_child(&cell, "w:tcPr", &properties, &[])?;
             rendered_rows.push_str(&cell);
         }
         rendered_rows.push_str(&row_prototype[cells[1].1..]);
@@ -2045,7 +2095,7 @@ fn render_table(rows: &[Vec<Vec<Inline>>], context: &mut RenderContext<'_>) -> R
         rendered_rows,
         &prototype[row_span.1..]
     );
-    if let (Some(width), Some(widths)) = (width, widths) {
+    {
         let properties = xml_child(&output, "w:tblPr")?.unwrap_or("<w:tblPr/>");
         let properties = set_xml_child(
             properties,
@@ -2339,4 +2389,99 @@ fn xml_escape(value: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&apos;")
+}
+
+/// Remove every template Table of Contents structured-document tag: an `sdt`
+/// in the WordprocessingML namespace whose `docPartGallery` value is
+/// `Table of Contents`. Namespace-aware matching leaves other structured
+/// documents, source-authored static TOC content and every other package part
+/// untouched. A document without a matching tag is returned unchanged.
+fn remove_table_of_contents_sdt(xml: &str) -> Result<String> {
+    let mut reader = NsReader::from_reader(xml.as_bytes());
+    let mut open: Vec<(usize, bool, Vec<u8>)> = Vec::new();
+    let mut spans: Vec<(usize, usize)> = Vec::new();
+    loop {
+        let start = reader.buffer_position() as usize;
+        match reader
+            .read_resolved_event()
+            .map_err(|error| DmsError::InvalidMarkdownTemplate(error.to_string()))?
+        {
+            (ResolveResult::Bound(Namespace(namespace)), XmlEvent::Start(element))
+                if namespace == WORDPROCESSINGML_MAIN_NAMESPACE.as_bytes()
+                    && element.local_name().as_ref() == b"sdt" =>
+            {
+                open.push((start, false, element.name().as_ref().to_vec()));
+            }
+            (
+                ResolveResult::Bound(Namespace(namespace)),
+                XmlEvent::Start(element) | XmlEvent::Empty(element),
+            ) if namespace == WORDPROCESSINGML_MAIN_NAMESPACE.as_bytes()
+                && element.local_name().as_ref() == b"docPartGallery" =>
+            {
+                let gallery = element.attributes().flatten().find_map(|attribute| {
+                    let (namespace, local) = reader.resolve_attribute(attribute.key);
+                    (local.as_ref() == b"val"
+                        && namespace
+                            == ResolveResult::Bound(Namespace(
+                                WORDPROCESSINGML_MAIN_NAMESPACE.as_bytes(),
+                            )))
+                    .then(|| {
+                        attribute
+                            .unescape_value()
+                            .ok()
+                            .map(|value| value.into_owned())
+                    })
+                    .flatten()
+                });
+                if gallery.as_deref() == Some(TABLE_OF_CONTENTS_GALLERY) {
+                    if let Some(tag) = open.last_mut() {
+                        tag.1 = true;
+                    }
+                }
+            }
+            (_, XmlEvent::End(element)) => {
+                let closes_open = open
+                    .last()
+                    .is_some_and(|(_, _, name)| element.name().as_ref() == name.as_slice());
+                if closes_open {
+                    let (start, matched, _) = open.pop().expect("open sdt tag");
+                    if matched {
+                        spans.push((start, reader.buffer_position() as usize));
+                    }
+                }
+            }
+            (_, XmlEvent::Eof) => break,
+            _ => {}
+        }
+    }
+    if spans.is_empty() {
+        return Ok(xml.to_owned());
+    }
+    spans.sort_unstable();
+    let mut merged: Vec<(usize, usize)> = Vec::new();
+    for (start, end) in spans {
+        match merged.last_mut() {
+            Some(last) if start <= last.1 => last.1 = last.1.max(end),
+            _ => merged.push((start, end)),
+        }
+    }
+    let mut output = xml.to_owned();
+    for (start, end) in merged.into_iter().rev() {
+        output.replace_range(start..end, "");
+    }
+    Ok(output)
+}
+
+/// Normalize a relative path to portable `/` separators, dropping any `.` or
+/// root/prefix components.
+fn portable_relative_path(path: &Path) -> PathBuf {
+    let mut relative = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::Normal(part) => relative.push(part),
+            Component::ParentDir => relative.push(".."),
+            Component::CurDir | Component::RootDir | Component::Prefix(_) => {}
+        }
+    }
+    relative
 }

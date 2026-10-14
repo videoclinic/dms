@@ -1,12 +1,14 @@
 # CAP-0022 — Headless DMS core CLI
 
+**Primary surface:** none
+
 | Field | Value |
 | --- | --- |
 | ID | CAP-0022 |
 | Status | implemented |
 | Executable | `dms` |
 | Platforms | Windows and macOS |
-| Tests | `crates/dms-core/tests/workspace.rs`; `crates/dms-cli/tests/cli.rs` |
+| Tests | `crates/dms-core/tests/workspace.rs`; `crates/dms-core/tests/conversion.rs`; `crates/dms-cli/tests/cli.rs`; `crates/dms-export/src/lib.rs` |
 
 ## Outcomes
 
@@ -31,17 +33,56 @@ The CLI provides explicit, local operations over the shared `dms-core` library:
 6. `dms note add`, `list`, `edit`, and `remove` maintain document-scoped
    plain-text notes with stable note IDs, author, and timestamps. Listing is
    newest-first.
-7. All mutating commands persist validated JSON through the workspace store.
+7. Workspace-mutating commands persist validated JSON through the workspace store.
    `--json` emits structured results suitable for automation; normal output is
    concise, human-readable command feedback.
+8. `dms convert markdown --workspace-config <workspace.json> --input-root <dir>
+   --output-root <new-dir> [--recursive] [--dry-run] [--without-toc]` is standalone
+   conversion, never Release. Global `--json` remains available. Selection is
+   explicit, deterministic and printed before execution: immediate `.md` files
+   by default; recursion excludes `.dms` and `assets` subtrees. Empty selections
+   fail. Referenced local images remain constrained to the input root.
+9. Conversion reads a schema-18/19/current configuration projection without
+   migrations, backups, saves, locks, Entra or notifications. Native-host root
+   locators, actual configuration location, template contract and SHA-256 must
+   agree; a symlink supplied as the configuration file is rejected before it
+   is resolved. External sources supply strict flat title, numeric `MAJOR.MINOR` and
+   enabled confidentiality type ID; chrome uses the configured display label.
+   Missing or whitespace-only numbers stay empty; nonblank numbers retain their
+   supplied value. Optional variables cannot override reserved tokens.
+10. Input and new output roots must be disjoint from workspace roots and output
+    must also be disjoint from input. Portable case-insensitive destination
+    collisions and existing output roots fail preflight. The output parent must
+    exist. Relative parents are mirrored into paired `<stem>.docx` / `<stem>.pdf`.
+11. Windows/macOS conversion uses installed Word through a shared non-Tauri
+    adapter. The retained DOCX is the controlled-field-filled document saved
+    after field, TOC and pagination updates and supplied to PDF export, with no
+    later DOCX edit. Default template TOC stays; `--without-toc` removes only the
+    template TOC SDT, not Markdown-authored contents. Every generated table uses
+    fixed layout spanning printable width. Linux conversion fails explicitly;
+    dry-run remains available without Word.
+12. Sequential processing continues after document-specific failures and exits
+    nonzero if any fail. Success requires readable DOCX ZIP/XML and a parsed PDF
+    with extractable text, not just a PDF signature. Owned incomplete artifacts
+    are removed or reported as diagnostics. `manifest.json` and JSON results
+    state `conversion_only`, consumed input/template/asset hashes, effective
+    metadata, final saved DOCX/PDF hashes and renderer/Word version. Dry-run
+    validates assembly privately without creating output or invoking Word.
+
+Automated evidence uses synthetic fixtures and exporter doubles. Full-corpus
+Windows rendering and installed-Word macOS fidelity are not established by these
+tests. Markdown links preserve visible labels, not guaranteed PDF navigation.
+This command creates no library membership, approval, occupied version, release
+evidence or publish-root index entry; labels and version chrome imply none.
 
 ## Non-goals
 
 - Tauri windows, WebView IPC, or desktop activity state
-- PDF export, release lifecycle, checksum verification, approval, Entra,
-  notification, confidentiality, or audit-report workflows
+- Approval/release via the conversion command, or a substitute for lifecycle
+  authorization, Entra sign-in and notification workflows
 - A Tauri plugin, sidecar, or a command that drives a running desktop app
-- Source-file mutation, automatic source discovery, or automatic library add
+- Conversion source-file mutation, implicit discovery outside its explicit
+  input root, or automatic library add
 
 ## Links
 

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/dms-core", "crates/dms-cli", "crates/dms-desktop"]
+members = ["crates/dms-core", "crates/dms-export", "crates/dms-cli", "crates/dms-desktop"]
 resolver = "2"
 
 [workspace.package]

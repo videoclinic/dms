@@ -37,6 +37,17 @@ executable.
 - Workspace integrity commands expose advisory-lock status, explicit stale
   takeover and confirmed release, lock-threshold configuration, manifest backup,
   and confirmed restore into explicit existing replacement roots.
+- `convert markdown` is standalone, non-release conversion: it reads only the
+  read-only export projection of an explicit `workspace.json` (schema 18, 19 or
+  current) and writes new paired DOCX/PDF artifacts plus a `manifest.json` into a
+  disjoint, previously nonexistent output root. It never opens, migrates or
+  writes a workspace, acquires a lock, or contacts Entra or notification
+  services, and its manifest is marked `conversion_only`.
+- `convert markdown` reports the exact selected set to stderr before converting;
+  `--json` stdout carries only the final manifest. The manifest is emitted even
+  when individual files fail, and any failure makes the command exit nonzero.
+  `--dry-run` validates and assembles into temporary locations without Word
+  preflight, Word calls or output-root writes.
 
 ## Work Guidance
 

@@ -13,10 +13,11 @@ PDFs under a **publish root**, with integrity checksums.
 | Layer | Responsibility |
 | --- | --- |
 | `dms-core` Rust library | Tauri-independent workspace metadata, library registry, document control data, notes, path validation, and future lifecycle rules shared by every application surface |
-| `dms` CLI (Rust) | Headless operator and automation access to the implemented `dms-core` workspace features; no WebView, Tauri runtime, Office automation, Entra flow, or mail transport |
+| `dms` CLI (Rust) | Headless explicit workspace operations and standalone Markdown conversion through `dms-export`; no WebView, Tauri runtime, Entra flow, or mail transport |
+| `dms-export` Rust adapter | Shared controlled OOXML placeholder fill and installed-Word automation for CLI conversion and desktop release; no Tauri dependency |
 | Tauri 2 shell (Rust) | Windowing, WebView IPC, format-specific PDF export orchestration, OS integration, registered local-app URI handler (workspace and document permalinks), Windows edit-root `Open in DMS.lnk` helper, and an adapter over `dms-core` |
 | Frontend (web UI in WebView) | Foldable left menu with hamburger when collapsed; open-activity panes/tabs as quicklinks; one Configuration workspace with persistent Workspace, Document defaults, Workflow, and Notifications routes plus contextual secondary setup; folder-dominant Library workspace with a persistent edit-root-relative tree, Windows Explorer-like Back/Forward/Up and breadcrumb navigation, current-folder child folders + exact source-file names + controlled-document data, and a selection pane that separates filesystem-derived Source file identity from CAP-0015 DMS-managed document control data and single/batch actions; add/remove control, lifecycle, change commentary, approval, release/verify, confidentiality and workflow-role policies, audit export, publish history, copy/resolve document permalinks |
-| Microsoft Office (host-installed) | PDF export engine for Office drafts and temporary Word documents assembled from Markdown plus the workspace export template |
+| Microsoft Office (host-installed) | PDF export engine for Office drafts and Word documents assembled from Markdown plus the workspace export template; standalone conversion retains the saved final DOCX |
 | Workspace Word template | One reusable `.docx` asset under the edit root supplies styles, page setup, headers, footers, media, and controlled-field locations for every Markdown release; it is configuration, not a controlled document |
 | Claude Desktop (optional host app) | Operator-mediated, consented handoff for advisory target-version mode and changelog wording; not a callable local model or lifecycle authority |
 | Microsoft Entra ID + Microsoft Graph | App-global public-client and tenant configuration plus a per-workspace group supplies eligible workflow people; delegated interactive sign-in verifies review decisions; never reads or synchronizes document content. When both effective identifiers are process-environment values, startup validates the cached delegated session or starts one non-blocking OAuth device-authorization challenge; Windows policy and saved-settings-only configuration do not |
@@ -73,9 +74,37 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
 ## Trust and control boundary
 
 - Operator chooses edit root and publish root (local or mapped filesystem).
+- Standalone `dms convert markdown` is not a release operation. Its explicit
+  external input tree and new output tree are disjoint from edit/publish trees
+  after canonical path checks. Core reads only schema 18, 19 or current export
+  configuration fields, checks the native-host config location and template
+  digest/contract, and never opens, migrates, saves or locks the workspace.
+  External flat frontmatter supplies title, numeric version and an enabled
+  confidentiality ID solely for conversion chrome; it grants no approval or
+  registered-document authority. No identity or notification adapter runs.
+- Conversion discovers immediate `.md` children, or recursive children only
+  with `--recursive`, excluding `.dms` and `assets` subtrees. Referenced images
+  may reside anywhere within the canonical input root. A new output root with
+  an existing parent is required; there is no overwrite or resume mode.
+  Case-insensitive portable path collisions fail before document processing.
+- Conversion runs sequentially and retains `<stem>.docx` / `<stem>.pdf` pairs
+  plus `manifest.json`, all marked `conversion_only`. The shared Word adapter
+  fills controlled fields, updates fields/TOC/pagination, saves DOCX and exports
+  that same document. Core reads back ZIP/XML and parses PDF text before
+  recording final artifact hashes. Consumed Markdown, template and embedded
+  asset bytes determine input digests, even if originals subsequently change.
+  Document-specific failures continue and yield a nonzero command result;
+  incomplete owned artifacts are removed or named as retained diagnostics.
+  `--dry-run` assembles privately without calling Word or creating output.
+- Template TOC is retained by default; `--without-toc` removes only the template
+  TOC structured-document tag, never a Markdown-authored contents section.
+  Generated tables of every supported column count span printable body width.
+  Link labels remain visible text; Markdown-relative links are not rewritten
+  into working PDF navigation. Automated doubles prove boundaries, not real
+  Word pagination; full-corpus Windows and macOS rendering remain host gates.
 - The app reads/writes within those roots and `.dms`, except explicit
-  user-chosen import paths that must still resolve under the edit root for
-  library membership.
+  standalone conversion inputs/outputs and user-chosen import paths that must
+  still resolve under the edit root for library membership.
 - A workspace Markdown export template is selected from a `.docx` under the edit
   root, has a stable template ID and relative locator in `.dms`, and is excluded
   from document lifecycle, notes, release history, and permalinks.
@@ -181,16 +210,19 @@ below are part of the contract every adapter honours.
 ## ADR-0023 — Shared Rust core with a first-class headless CLI
 
 - **Decision:** The repository is a Cargo workspace with a Tauri-independent
-  `dms-core` library and a separate `dms` executable. The future Tauri desktop
-  shell consumes the same library; the CLI is not a Tauri app, plugin, or
-  bundled sidecar.
+  `dms-core` library, separate `dms` executable, and Tauri desktop shell.
+  `dms-export` owns shared installed-Word and placeholder adapters, consumed
+  by both executables. The CLI is not a Tauri app, plugin or bundled sidecar.
 - **Why:** Local metadata and document-control rules must be testable and usable
   in scripted operator workflows without creating a WebView or making the CLI
   depend on desktop runtime capabilities.
-- **Consequences:** `dms-core` may not depend on Tauri or frontend packages.
-  The CLI performs only local, explicit workspace operations and does not
-  bypass future lifecycle, identity, export, or credential boundaries. Tauri
-  adapters own user-interface and OS-integration concerns.
+- **Consequences:** `dms-core` may not depend on Tauri, frontend packages or
+  Office automation. Its conversion port is independent of the release port.
+  The CLI performs explicit local operations and non-release conversion; it
+  cannot use conversion metadata to bypass lifecycle or identity boundaries.
+  Windows/macOS installed Word is required for conversion; Linux has no
+  renderer or automatic WSL bridge. Desktop release retains its approved
+  snapshot and core-owned atomic PDF/evidence transaction.
 
 ## Related
 
