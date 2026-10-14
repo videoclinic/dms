@@ -123,6 +123,14 @@ impl MarkdownFrontmatterCheck {
 }
 
 pub fn parse_markdown_frontmatter(markdown: &str) -> Result<(MarkdownFrontmatter, &str)> {
+    parse_frontmatter(markdown, false)
+}
+
+pub(crate) fn parse_conversion_frontmatter(markdown: &str) -> Result<(MarkdownFrontmatter, &str)> {
+    parse_frontmatter(markdown, true)
+}
+
+fn parse_frontmatter(markdown: &str, conversion: bool) -> Result<(MarkdownFrontmatter, &str)> {
     let markdown = markdown.strip_prefix('\u{feff}').unwrap_or(markdown);
     let (opening, rest) = split_line(markdown).ok_or_else(|| {
         DmsError::InvalidMarkdownFrontmatter("missing opening delimiter".to_owned())
@@ -167,7 +175,16 @@ pub fn parse_markdown_frontmatter(markdown: &str) -> Result<(MarkdownFrontmatter
                 "frontmatter key {key:?} is invalid"
             )));
         }
-        let value = parse_scalar(key, raw_value)?;
+        // Empty conversion dates are validated only when the template needs one.
+        // Other flat-frontmatter syntax and release parsing stay strict.
+        let value = if conversion
+            && key == "last_modified"
+            && matches!(raw_value.trim(), "" | "\"\"" | "''")
+        {
+            String::new()
+        } else {
+            parse_scalar(key, raw_value)?
+        };
         if variables.insert(key.to_owned(), value.clone()).is_some() {
             return Err(DmsError::InvalidMarkdownFrontmatter(format!(
                 "frontmatter key {key} is duplicated"

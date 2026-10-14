@@ -956,6 +956,36 @@ fn cli_convert_markdown_refuses_output_inside_the_input_tree() {
 }
 
 #[test]
+fn cli_conversion_without_date_token_accepts_missing_invalid_and_empty_dates() {
+    let layout = conversion_layout(21);
+    for (name, extra) in [
+        ("missing.md", ""),
+        ("invalid.md", "last_modified: 2023-02-29\n"),
+        ("empty.md", "last_modified:\n"),
+    ] {
+        fs::write(
+            layout.input.join(name),
+            VALID_MARKDOWN.replacen("title:", &format!("{extra}title:"), 1),
+        )
+        .unwrap();
+    }
+    let config = fs::read(&layout.config).unwrap();
+    let output = convert_markdown(&layout, &["--dry-run"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let manifest: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(manifest["conversion_only"], true);
+    let results = manifest["results"].as_array().unwrap();
+    assert_eq!(results.len(), 3);
+    assert!(results.iter().all(|r| r["status"] == "validated"));
+    assert!(!layout.output.exists());
+    assert_eq!(fs::read(&layout.config).unwrap(), config);
+}
+
+#[test]
 fn cli_convert_markdown_reports_the_manifest_then_fails_on_mixed_results() {
     let layout = conversion_layout(21);
     fs::write(layout.input.join("good.md"), VALID_MARKDOWN).unwrap();

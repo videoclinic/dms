@@ -50,6 +50,15 @@ The CLI provides explicit, local operations over the shared `dms-core` library:
    enabled confidentiality type ID; chrome uses the configured display label.
    Missing or whitespace-only numbers stay empty; nonblank numbers retain their
    supplied value. Optional variables cannot override reserved tokens.
+   When the configured template contains literal `{DATE}`, every selected source
+   supplies flat `last_modified: YYYY-MM-DD` with a real calendar date. Missing,
+   empty or invalid dates fail that document, including in dry-run. Without the
+   token, this value is optional and is not date-validated. Assembly fills the
+   token from `last_modified`, not an optional `date` key, in template XML
+   including body/header/footer; it never substitutes a blank. This source-owned
+   conversion alias adds no DMS-controlled key, workspace metadata, custom
+   property, filesystem timestamp or release authority. Source/template bytes
+   and desktop release semantics remain unchanged.
 10. Input and new output roots must be disjoint from workspace roots and output
     must also be disjoint from input. Portable case-insensitive destination
     collisions and existing output roots fail preflight. The output parent must
@@ -72,6 +81,11 @@ The CLI provides explicit, local operations over the shared `dms-core` library:
 Automated evidence uses synthetic fixtures and exporter doubles. Full-corpus
 Windows rendering and installed-Word macOS fidelity are not established by these
 tests. Markdown links preserve visible labels, not guaranteed PDF navigation.
+The DATE regressions in `crates/dms-core/tests/conversion.rs` exercise ordinary
+and leap dates, malformed/nonexistent/missing dates, no-token optionality,
+pre-export body/header/footer replacement, reserved-token precedence, input
+preservation and the unchanged release assembler through public core APIs.
+`crates/dms-cli/tests/cli.rs` also checks no-token optionality through the CLI.
 This command creates no library membership, approval, occupied version, release
 evidence or publish-root index entry; labels and version chrome imply none.
 

@@ -10,9 +10,10 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::{
-    assemble_markdown_docx_with_options, parse_markdown_frontmatter, validate_markdown_template,
-    ConfidentialitySnapshot, ConfidentialityType, ExportChrome, MarkdownAssetContext,
-    MarkdownAssetDigest, MarkdownTemplateAsset, MARKDOWN_TEMPLATE_CONTRACT_VERSION, SCHEMA_VERSION,
+    frontmatter::parse_conversion_frontmatter, template::assemble_markdown_conversion_docx,
+    validate_markdown_template, ConfidentialitySnapshot, ConfidentialityType, ExportChrome,
+    MarkdownAssetContext, MarkdownAssetDigest, MarkdownTemplateAsset,
+    MARKDOWN_TEMPLATE_CONTRACT_VERSION, SCHEMA_VERSION,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -383,11 +384,12 @@ impl ConversionPlan {
         // exporter receives the exact retained DOCX path, not the intermediate.
         let assembly = tempfile::tempdir().map_err(io_error)?;
         let assembled = assembly.path().join("assembled.docx");
-        result.assets = assemble_markdown_docx_with_options(
+        result.assets = assemble_markdown_conversion_docx(
             template, markdown, &assembled,
             Some(&MarkdownAssetContext::new(&self.options.input_root, &source)),
             self.options.without_toc,
         ).map_err(|e| match e {
+            crate::DmsError::InvalidConversionDate => ConversionError(e.to_string()),
             crate::DmsError::InvalidMarkdownImage(_) => error("Markdown image rejected: check local PNG/JPEG format, existence and input-root containment"),
             _ => error("Markdown assembly failed (unsupported content or template variable)"),
         })?;
@@ -420,7 +422,7 @@ impl ConversionPlan {
     fn metadata(&self, markdown: &str) -> Result<ConversionMetadata> {
         // The parser's detailed error can contain a source line. Do not expose
         // that line in the manifest or CLI diagnostics.
-        let (fields, _) = parse_markdown_frontmatter(markdown)
+        let (fields, _) = parse_conversion_frontmatter(markdown)
             .map_err(|_| error("invalid or missing flat conversion frontmatter"))?;
         let title = fields
             .title

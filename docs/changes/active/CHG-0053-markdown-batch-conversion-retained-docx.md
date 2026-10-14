@@ -6,12 +6,12 @@
 **Entry checkpoint:** Windows checkout `main` at `9b71542`; Phase 1 changes remain uncommitted by operator instruction.
 **Context sources:** Root/documentation/change/product DOX; CAP-0007; CAP-0022; architecture and privacy contracts; ADR-0008 and ADR-0023; CHG-0004 and CHG-0041; all three active CHGs; `crates/dms-core/src/template.rs`; `crates/dms-core/src/frontmatter.rs`; `crates/dms-desktop/src/export.rs`; `crates/dms-cli/src/main.rs`; the operator's workspace configuration and full-corpus assembly/diagnostic Word probes summarized below.
 **Produces:** An explicit headless batch command that converts external Markdown through the configured Word template into paired PDF/DOCX artifacts, preserves tables and local images, retains the exact final Word input, and never registers, approves, releases, or mutates the source workspace.
-**Status:** planned
+**Status:** in-progress
 
 | Field | Value |
 | --- | --- |
 | ID | CHG-0053 |
-| Status | planned |
+| Status | in-progress |
 | External request | Direct operator request: Create a CHG in /mnt/c/Users/RaphaelBossek/src/dms/ to accomplish this task; there is already a CHG that should accomplish mass export -- I'm not sure. check this first. Incorporate your findings in the CHG. Follow-on: Incorporate the findings regarding converting the markdown document in the ../dms project using the application-records skill for future improvements. Using the dms cli tool would be prefered then. |
 | Affected CAPs | CAP-0007, CAP-0022 |
 | Decision records | ADR-0008 and ADR-0023 in `docs/architecture.md` describe the shared local Word adapter and standalone non-release conversion boundary. |
@@ -45,14 +45,14 @@ The initial probes ran against `/home/raphael/src/vc/dms`. During planning, the 
 | `crates/dms-desktop/src/export.rs` | `9ee7e9f793110eeb2ad22c075a57954d0e5339d7e31381e9fde71f9b95ead33d` |
 | `crates/dms-cli/src/main.rs` | `489c32fa26d05fb5adce23ad39fa9d6287f0ba132fac383cebd35725eeea5a92` |
 
-- Input directory: `/home/raphael/src/vc/iso27001-documentation-rework/docs/reworked/iso-27001/`. It contains 49 root-level policy Markdown files; the 50th recursive Markdown match is `assets/README.md`, not a policy. Use exact policy selection, not an unrestricted recursive glob.
+- Input directory: `/home/raphael/src/vc/iso27001-documentation-rework/docs/reworked/iso-27001/`. It contains 48 root-level policy Markdown files; the only additional recursive Markdown match is `assets/README.md`, not a policy. Use exact policy selection, not an unrestricted recursive glob.
 - The supplied configuration is `C:\Users\RaphaelBossek\dms-demo2\edit\.dms\workspace.json` (schema 19 at inspection). Its recorded roots use Windows verbatim paths. The template locator is `Vorlage.docx`, relative to the edit root; contract version is 1.
 - Template SHA-256 is `a01d08d58a85e0a1f3ab29d225d5c8b710e7e94a506cbd72f4576ed033622fde`. The file matched the stored digest and passed `validate_markdown_template`.
 - The `internal` confidentiality ID maps to `Intern + Unternehmensverbund`. Source frontmatter supplies title/version/classification; the corpus has no invented document numbers. Workspace identities, role routing, and approvals are not conversion inputs.
 
 ### Actual failures and supported path
 
-1. Running the existing public assembler and controlled-field filler over all 49 policy files returned **0 assembled, 49 failed**. First failures were: 45 five-column tables, two three-column tables, and two four-column tables. The error is `Markdown tables must contain exactly two columns; found N`. `render_table` in `crates/dms-core/src/template.rs:973` imposes this restriction. Every policy also contains a mandatory five-column `Versionsverlauf`; removing history or flattening it to get an export is not acceptable.
+1. Running the existing public assembler and controlled-field filler over the policy corpus returned **0 assembled, all failed**. Failures included five-, three- and four-column tables. The error is `Markdown tables must contain exactly two columns; found N`. `render_table` in `crates/dms-core/src/template.rs:973` imposes this restriction. Every policy also contains a mandatory five-column `Versionsverlauf`; removing history or flattening it to get an export is not acceptable.
 2. There are **25 image references across 10 policies**. The CommonMark handler in `template.rs:680` does not render image events into drawings/media. A diagnostic excerpt preserved the image's alt text but embedded no source screenshot; the only media asset remained the template logo. Successful DOCX assembly alone is not fidelity evidence.
 3. CLI `--help` and `document --help` expose no document conversion command. `report generate --format pdf` is an audit-report operation, not a document converter. CAP-0022 currently excludes PDF export and Office integration.
 4. `LocalPdfExporter::export` in `crates/dms-desktop/src/export.rs:47` builds temporary `assembled.docx`, fills reserved chrome into temporary `release.docx`, and gives the latter to Word. The temporary directory then deletes both. Retaining `assembled.docx` would retain the wrong intermediate.
@@ -84,7 +84,7 @@ No second CHG is created because that would duplicate its progress authority.
 2. Word produced a valid retained DOCX and PDF from the same post-save document.
    The rendered process map was embedded, readable and within the printable
    width. This is a single-document adaptation observation, not the required
-   49-document native-Windows proof. Phase 4 remains responsible for counting
+   48-document native-Windows proof. Phase 4 remains responsible for counting
    every source image occurrence separately from template media and for visual
    inspection of image/table pages.
 3. A template that auto-numbers heading styles must not also receive source
@@ -112,6 +112,13 @@ These are implementation targets, not claims about current runtime.
 - Add `dms convert markdown --workspace-config <workspace.json> --input-root <directory> --output-root <new-directory> [--recursive] [--dry-run] [--without-toc]`, retaining global `--json`. This command does **conversion**, never **Release**. Default selection is immediate `.md` children; recursion is explicit. Exclude `.dms` and asset subtrees from document discovery, but allow referenced images under the explicit input root. Reject empty input and report the exact selected set before conversion.
 - Read only the export-configuration projection needed for roots, template, contract/digest, and confidentiality catalogue. Support schema 18, schema 19 and the current schema explicitly; reject unsupported schemas. Do not call an open/migration/save path that rewrites `.dms`, creates backups/instructions, acquires locks, or activates an Entra session. Validate the configured edit-root locator against the actual config location on the native host; do not silently reinterpret Windows paths on Linux.
 - This command accepts external sources outside the selected workspace edit/publish roots. Read title, numeric `MAJOR.MINOR` version and confidentiality ID from their flat frontmatter; resolve the ID to an enabled configured label. Missing/invalid values fail for that file. Leave absent document numbers empty. Use the existing optional-variable and reserved-token rules. Do not import owners, approvers, candidates or release history, infer approval from version history, or use external frontmatter to change registered-document authority.
+- The standalone converter treats flat `last_modified: YYYY-MM-DD` frontmatter as
+  source-owned conversion metadata. When the configured template contains literal
+  `{DATE}`, every selected source must provide a real calendar date in that field;
+  missing or invalid values fail that document rather than emitting a blank or an
+  unresolved token. Assembly replaces `{DATE}` from that value without changing
+  source Markdown, workspace metadata, release authority, or a DMS-controlled
+  frontmatter key.
 - Require a new output root disjoint from the input tree, workspace edit tree and publish tree after canonical path/symlink checks. No overwrite or resume mode in this change. Mirror selected relative parents and write `<stem>.docx` and `<stem>.pdf`; preflight Windows case-insensitive/path-name collisions. Mark the manifest and command output explicitly as `conversion_only`, not released. A version/classification in document chrome is not evidence of approval.
 - Preflight configuration, template SHA/contract, destinations and supported host before invoking Word. Keep deterministic sequential per-file execution; continue independent files after document-specific failure and return nonzero if any fail. Configuration/output failures stop before document work. No silent skipped files, worker queue, retries or parallel Word processes.
 - Extend the existing OOXML renderer, preserving the template contract, styles, page setup, logo, headers/footers and numbering. Retain/update the template TOC by default; `--without-toc` removes only its TOC structured-document tag. Support two-, three-, four- and five-column tables without losing text, column association or inline formatting. Every generated table uses fixed layout and table/grid/cell widths that sum to the printable body width; do not add mandatory template markers.
@@ -128,7 +135,7 @@ These are implementation targets, not claims about current runtime.
 | 1 | Preserve multi-column policy tables through template assembly | done (G1: 11 tests passed on Rust 1.88.0; evidence below) | G1: `cargo test -p dms-core --test markdown_template` exits 0 with two/three/four/five-column fidelity coverage. |
 | 2 | Embed local source images without silent content loss | done (third-correction G2: 20 markdown_template + 31 lifecycle tests passed on Rust 1.88.0; evidence below) | G2: `cargo test -p dms-core --test markdown_template --test lifecycle` exits 0 with image, containment, rejection and template-preservation coverage. |
 | 3 | Deliver explicit non-release batch CLI and retained Word inputs | done (corrected G3: 250 workspace tests and CLI help passed; review findings corrected) | G3: `cargo test --workspace --locked` and `cargo run -p dms-cli -- convert markdown --help` exit 0 with schema-18/19/current read-only configuration, retained-DOCX, full-width tables, explicit TOC removal and unchanged-release coverage. |
-| 4 | Prove full-corpus Windows Word conversion and repeatability | pending | G4: The native Windows smoke command specified below exits 0 with 49 verified PDF/DOCX pairs, all 25 image occurrences accounted for, retained source/template/config digests, and inspected rendered evidence. |
+| 4 | Prove full-corpus Windows Word conversion and repeatability | in-progress | G4: The native Windows smoke command specified below exits 0 with 48 verified PDF/DOCX pairs, all 25 image occurrences accounted for, retained source/template/config digests, and inspected rendered evidence. |
 | 5 | Integrate contracts, records and project gates | pending | G5: Full integration commands and record checks below pass; CAP/DOX/visual classifications are current; only then archive CHG-0053. |
 
 Keep at most one phase `in-progress`. Every done phase records its actual gate evidence; a fake Office exporter is not a real PDF smoke.
@@ -355,19 +362,170 @@ paths; the parent integrated their partial results and completed verification.
 **Goal:** The unmodified real policy corpus converts completely with its template, images, version histories and final Word sources intact.
 
 
-1. Add a reproducible `scripts/Test-MarkdownBatchExport.ps1` smoke harness with explicit `-WorkspaceConfig`, `-InputRoot`, `-OutputRoot` and `-ExpectedCount` parameters. This script is a planned deliverable, not an existing command. It invokes the built CLI and independently validates the manifest, output pairs, OOXML table/image content, PDF page/text evidence, unchanged inputs/configuration/template/publish tree, and no new release evidence. Use synthetic fixtures in automated tests; do not commit internal policy documents or the workspace identity cache.
+1. Add literal `{DATE}` support for standalone conversion: `last_modified` must
+   be an ISO `YYYY-MM-DD` calendar date when the configured template contains
+   `{DATE}`; it fills that token during assembly, while absent/invalid values fail
+   the affected document. Cover valid leap dates, invalid dates, missing values,
+   templates without `{DATE}`, source/template preservation and no release-side
+   authority. Update CAP-0022 and the frontmatter/template-variable reference
+   with the bounded source-owned contract. Then maintain
+   `scripts/Test-MarkdownBatchExport.ps1` with explicit `-WorkspaceConfig`,
+   `-InputRoot`, `-OutputRoot`, `-ExpectedCount` and `-PolicyManifest` parameters.
+   The policy manifest is an operator-reviewed UTF-8 JSON array of exact immediate
+   policy filenames, not an automatically accepted glob. Its count and set must
+   match both the gate and CLI discovery before any output or conversion; the CLI
+   cannot select a subset. The harness independently validates the conversion
+   manifest, output pairs, OOXML table/image content, PDF page/text evidence,
+   unchanged selection/source/configuration/template/publish snapshots, and no new
+   release evidence. Use synthetic fixtures in automated tests; do not commit
+   internal policy documents or the workspace identity cache.
 2. From native Windows PowerShell in this repository, build `cargo build -p dms-cli --locked`, then run:
 
    ```powershell
-   .\scripts\Test-MarkdownBatchExport.ps1 -WorkspaceConfig 'C:\Users\RaphaelBossek\dms-demo2\edit\.dms\workspace.json' -InputRoot 'L:\src\vc\iso27001-documentation-rework\docs\reworked\iso-27001' -OutputRoot 'C:\Users\RaphaelBossek\dms-conversion-verification\run-1' -ExpectedCount 49
+   .\scripts\Test-MarkdownBatchExport.ps1 -WorkspaceConfig 'C:\Users\RaphaelBossek\dms-demo2\edit\.dms\workspace.json' -InputRoot '\\wsl.localhost\Ubuntu\home\raphael\src\vc\iso27001-documentation-rework\docs\reworked\iso-27001' -OutputRoot 'C:\Users\RaphaelBossek\dms-conversion-verification\run-1' -ExpectedCount 48 -PolicyManifest 'C:\Users\RaphaelBossek\dms-conversion-verification\policies.json'
    ```
 
-   Preflight the mapped `L:` source location; use its actual accessible Windows/WSL UNC equivalent explicitly if the mapping is absent. Require a new empty output location and never redirect to the demo publish root. If the source corpus changes, reconcile the explicit file manifest and expected count before execution, rather than silently changing the acceptance denominator.
-3. Verify 49 policy pairs, all five-column histories and their text, and all 25 source image occurrences across 10 policies. Count source drawings separately from the repeated template logo. Inspect PDF pages containing tables/images as well as cover, TOC and footer; confirm classification, source version, no unresolved placeholders, no missing text and no clipped columns/images. Persist per-file hashes/counts and non-secret inspection findings in this CHG; do not depend on chat or scratch files for completion evidence.
+   Run the script from the Windows-local checkout `C:\Users\RaphaelBossek\src\dms`, not a WSL UNC checkout. `C:\Users\RaphaelBossek\dms-conversion-verification\policies.json` is the approved exact 48-file root-policy selection; its compact JSON-name-list SHA-256 is `11c78c2f29630126db3b186ffc7fd253df3997303499e990188d12ff8771c367`. Require a nonexistent output location and never redirect to the demo publish root.
+3. Verify 48 policy pairs, all five-column histories and their text, and all 25 source image occurrences across 10 policies. Count source drawings separately from the repeated template logo. Inspect PDF pages containing tables/images as well as cover, TOC and footer; confirm classification, source version, no unresolved placeholders, no missing text and no clipped columns/images. Persist per-file hashes/counts and non-secret inspection findings in this CHG; do not depend on chat or scratch files for completion evidence.
 4. Repeat into a second fresh output root and verify the same complete source/asset coverage and unchanged originals; do not demand byte-identical PDFs because Word metadata can vary. Verify rerunning against an existing output root refuses overwrites. Exercise one controlled failing fixture to prove nonzero exit and an honest failure entry without false success.
 5. Keep full output artifacts in the operator-selected local directory with equivalent confidentiality protection. If a review package is needed, create `docs/changes/reviews/CHG-0053/README.md` as `review-only`, link it here, add that ownership to change DOX/index, and keep sanitized evidence there at a stable path. Never place internal corpus copies or live workspace metadata in product wireframes.
 
-**Verification gate:** G4: The native Windows smoke command specified above exits 0 with 49 verified PDF/DOCX pairs, all 25 image occurrences accounted for, retained source/template/config digests, and inspected rendered evidence.
+**Verification gate:** G4: The native Windows smoke command specified above exits 0 with 48 verified PDF/DOCX pairs, all 25 image occurrences accounted for, retained source/template/config digests, and inspected rendered evidence.
+
+**Execution evidence — corrected harness; G4 blocked:** Work is confined to the
+operator-selected `dms-chg0053-phase4` worktree at `050315c`. No commit, push,
+deployment, converter change or primary-checkout edit.
+
+- Added [PowerShell entry](../../../scripts/Test-MarkdownBatchExport.ps1),
+  [independent verifier](../../../scripts/verify_markdown_batch.py) and
+  [synthetic tests](../../../scripts/test_markdown_batch.py). The entry requires
+  five mandatory parameters, including the reviewed selection manifest; optional
+  `-DmsPath` selects an already-built CLI. Native Windows `uv` supplies pinned
+  `markdown-it-py==4.0.0`, `mdit-py-plugins==0.5.0` (footnote parsing only) and
+  `PyMuPDF==1.26.5`; no product dependency or renderer fallback is added.
+- The verifier requires exact selection/manifest agreement, final pair hashes,
+  ZIP/XML/content-type/relationship health, separate template/source drawing
+  accounting, five-column history cell order/text, full-width tables, controlled
+  properties/relevant footer stories, cached TOC page numbers and no
+  source-plus-Word duplicate numbering. PDF checks require parsed pages/text,
+  controlled footer values on body pages and the template-configured cover fields,
+  no unresolved fields and page-bound text/image geometry. Every page is rendered
+  locally for the still-required visual review; this is not full OOXML XSD or
+  visual-fidelity certification.
+- It snapshots complete input/edit/publish trees plus config/template/selection bytes,
+  rejects unreadable subtrees/reparse points, rechecks snapshots even on failure,
+  and rejects unexpected output artifacts. Two fresh runs, an unchanged-output
+  refusal probe and a missing-image synthetic failure with a succeeding companion
+  are required for automated success. Real inputs are never copied into fixtures.
+  Evidence binds the complete sorted selected set, reviewed manifest and every
+  selected input to hashes even when conversion fails before a manifest exists.
+  Evidence uses generated file IDs, hashes, counts and fixed error codes; page
+  images and conversion artifacts remain confidential under the chosen parent.
+- Review dispositions, reproduced from the current public converter/assembler
+  with [direct synthetic tests](../../../crates/dms-core/tests/smoke_contract.rs):
+  1. **Selection confirmed; template comparison partly confirmed.** Unlisted
+     Markdown and same-count substitutions reached the old CLI path. Explicit
+     reviewed selection now fails closed before output. The converter emits all
+     four template fields (`id`, `relative_path`, `sha256`, `contract_version`),
+     not a reduced object; unknown template-object fields are rejected by its typed
+     contract. However, a valid uppercase UUID is serialized lowercase, and the
+     old Python raw equality rejected it. Compare the four emitted fields with
+     semantic UUID identity; changed paths/digests/contracts/IDs still fail.
+  2. **Header allegation not reproduced; footer/cover defect confirmed.** The
+     original check aggregated headers/footers rather than requiring each header.
+     This could let a correct header hide an incorrect footer. Relevant footer
+     stories now individually require their configured fields. Static/different
+     first-page stories remain valid. PDF page 1 uses the first section's active
+     footer fields; subsequent pages still require version and classification.
+     Headers are not required to repeat either. Arbitrary multi-section pagination
+     is not inferred from OOXML; rendered-page review remains mandatory.
+  3. **Smart punctuation confirmed.** Actual assembler text contains en/em dashes,
+     ellipsis and curly quotes/apostrophes. Source/body/table/PDF comparisons now
+     normalize these typographic equivalents plus existing Unicode/whitespace
+     normalization, without dropping words or cell order. Independent parsing
+     handles the reproduced strikethrough, heading-ID/class suffix, task-marker,
+     link-target and footnote mismatches; code literals remain literal. The pinned
+     verifier-only footnote plugin prevents definition bodies disappearing as
+     CommonMark link definitions. This is a bounded visible-text comparison, not
+     a claim of universal parser equivalence or pixel fidelity.
+  4. **Repeated-asset defect not reproduced; accounting retained.** Three actual
+     source references produce one manifest asset. Existing verifier logic already
+     compares unique path/digest pairs while counting occurrences and body drawings
+     separately. Added regression rejects duplicate manifest asset rows and still
+     rejects a missing body occurrence even when a template logo shares its bytes.
+  5. **Required document-number allegation disproved; behavior retained.** Actual
+     conversion accepts the missing key and maps missing/quoted-whitespace values
+     to null. Nonblank numbers retain their exact value. Explicit empty scalars
+     remain invalid. No artificial mandatory key or invented number was added.
+- Failing-before evidence: the initial new verifier suite exited 1 with three
+  failures and four errors (selection bypasses, header masking, UUID raw mismatch,
+  and not-yet-added footer/selection interfaces). The parser-focused red run
+  exited 1 with one failure and two errors: leaked heading attributes,
+  `docx_source_text_missing` on real smart-punctuation spelling, and the absent
+  normalizer. Both suites pass after correction; unsupported allegations were
+  tested without changing their runtime behavior.
+- Focused command: `uv run --no-project --with markdown-it-py==4.0.0 --with mdit-py-plugins==0.5.0 --with PyMuPDF==1.26.5 python -B -m unittest discover -s scripts -p test_markdown_batch.py -v`.
+  Native Windows: 45 passed, exit 0. Linux: 43 passed, two native-Windows tests
+  skipped, exit 0. Includes count-mismatch refusal before CLI/output, same-count
+  selection drift, sanitized exact-selection receipts and unchanged protected
+  snapshots, synthetic DOCX/PDF chrome/text, failure continuation and no false
+  success. No synthetic result is installed-Word or real-corpus evidence.
+- Native suite invocation: `powershell.exe -NoProfile -NonInteractive -Command 'Set-Location -LiteralPath "\\wsl.localhost\Ubuntu\home\raphael\.hermes\profiles\hermes-vc\cache\scratch\dms-chg0053-phase4"; uv.exe run --no-project --with markdown-it-py==4.0.0 --with mdit-py-plugins==0.5.0 --with PyMuPDF==1.26.5 python -B -m unittest discover -s scripts -p test_markdown_batch.py -v; exit $LASTEXITCODE'`.
+  The native test parses the actual harness with PowerShell 5.1 (zero errors,
+  five mandatory parameters), verifies the tested argument array matches it,
+  and runs native `uv run --quiet --no-project --script` against a synthetic
+  argv recorder. All flags, count 49, paths with spaces/ampersands and the UNC
+  script path arrive intact. It does not execute the blocked harness body,
+  instantiate Word or modify/bypass execution policy.
+- `uv run --no-project --with ruff ruff check scripts/verify_markdown_batch.py scripts/test_markdown_batch.py`,
+  native `target\debug\dms.exe convert markdown --help`, strict repository
+  `check-md-links.py --format summary .` and `git diff --check` exited 0.
+  `cargo test -p dms-core --locked --test smoke_contract --test conversion --test markdown_template`
+  passed: 4 + 20 + 23 tests. `cargo test -p dms-cli -p dms-export --locked`
+  passed: 18 CLI + 14 export tests, zero doc-tests. `cargo fmt --all -- --check`
+  and `cargo clippy -p dms-core --locked --tests -- -D warnings` exited 0.
+  No product implementation, Cargo dependency or fixture asset changed; the full
+  desktop/workspace integration gate remains Phase 5 work.
+- Native `cargo build -p dms-cli --locked` initially exited 101: the WSL UNC
+  filesystem refused an incremental-session lock (`os error -2147024895`). The
+  same command with process-local `$env:CARGO_INCREMENTAL='0'` exited 0. A transient
+  WSL interop retry returned `UtilAcceptVsock ... accept4 failed 110`; the subsequent
+  native build succeeded. No Rust settings or dependencies changed.
+- Real-path preflight found 48 immediate root-policy Markdown files; `assets/README.md`
+  is the only recursive extra and is excluded. The operator approved this exact 48-file
+  selection on 2026-10-14. The manifest at
+  `C:\Users\RaphaelBossek\dms-conversion-verification\policies.json` was read back
+  by native PowerShell with 48 entries and has compact-name-list SHA-256
+  `11c78c2f29630126db3b186ffc7fd253df3997303499e990188d12ff8771c367`.
+- Word COM and the configured workspace file exist. Run the pending G4 command from
+  `C:\Users\RaphaelBossek\src\dms`; `/home/raphael/src/vc/dms` is a WSL symlink to
+  that same checkout. Do not run the script from a UNC-hosted checkout: its prior
+  `UnauthorizedAccess` / `AuthorizationManager` failure is thereby avoided without a
+  policy change or bypass.
+- Operator-approved native execution from `C:\Users\RaphaelBossek\src\dms` built
+  `dms-cli` successfully with process-local `CARGO_INCREMENTAL=0`, then stopped
+  before conversion with `template_digest_mismatch`. The workspace records
+  `a01d08d58a85e0a1f3ab29d225d5c8b710e7e94a506cbd72f4576ed033622fde` for
+  `Vorlage.docx`; its current SHA-256 is
+  `1748686295db7c1c61aca748328ac0ca1342668419330d54c10ce096152bf074`.
+  `run-1`, `run-1-repeat` and `run-1-evidence` were read back as absent. Do not
+  alter the live workspace record or template during this phase; restore the
+  configured template bytes or have the operator intentionally revalidate the
+  template through the DMS workspace workflow before retrying G4.
+- Only the requested output parent was created. Read-back confirmed `run-1`,
+  `run-1-repeat` and `run-1-evidence` do not exist. No real conversion/manifest,
+  output pairs, image counts, rendered inspection, repeatability or real-data
+  snapshot proof is claimed. No corpus/config/template/publish content was
+  changed. G4 remains incomplete and Phase 5 remains pending.
+- Correction scope never reads the real corpus/config/template/publish contents;
+  their existing blockers above are retained rather than retried or worked around.
+  Real-data unchanged-snapshot proof is still unavailable. Synthetic tests prove
+  that all protected snapshots are compared and mutations fail closed.
+- DOX: root script guidance and core synthetic-test verification updated. Parent
+  documentation/change/crate DOX and child indexes, CAPs, architecture/privacy and
+  wireframes remain unchanged: no ownership boundary, converter semantics, desktop
+  interaction or release authority changed. Phase 4 stays `in-progress`, Phase 5
+  stays `pending`; no commit/push/deployment or fresh independent sign-off.
 
 ## Phase 5 — Integrate contracts, records and project gates
 
@@ -403,11 +561,12 @@ paths; the parent integrated their partial results and completed verification.
 
 ## Handoff
 
-Phases 1–3 are done with their bounded evidence above. Phases 4–5 remain pending
-and no phase is in progress, so the record returns to `planned`. Native Word/full-
-corpus fidelity and final change integration remain unverified. Work remains
-uncommitted in the isolated branch without primary-checkout or real-data access.
-Start Phase 4 only on operator instruction.
+Phases 1–3 are done. Phase 4 is in progress: its smoke harness has synthetic and
+native-parser coverage, but G4 is blocked by the 48-versus-49 selection drift and
+native PowerShell authorization failure above. Reconcile those host/input gates
+without modifying the corpus or weakening checks, then run the two fresh native
+conversions and review rendered evidence. Phase 5 remains pending. The isolated
+worktree is uncommitted for parent review/integration; G4 is not marked done.
 
 ## Related contracts
 

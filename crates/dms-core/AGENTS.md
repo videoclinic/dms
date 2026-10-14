@@ -126,6 +126,12 @@ persistence.
   bytes and writes the conversion-only manifest. Consumed Markdown/template and
   embedded asset bytes determine input hashes. Dry-run assembles temporarily
   without the host adapter or output-root writes.
+- Standalone conversion alone aliases flat source `last_modified` to literal
+  `{DATE}` during assembly. A template containing that token requires a real
+  `YYYY-MM-DD` date per source, including dry-run; otherwise missing/invalid dates
+  are optional. Keep this out of controlled frontmatter, workspace metadata,
+  custom properties, timestamps and release assembly. Existing reserved tokens
+  retain their authority; errors must not expose source values.
 - The default assembler preserves the template TOC. The explicit options API
   may remove only its TOC structured-document tag and returns consumed-asset
   digests; it never removes source-authored contents. No new template markers.
@@ -259,6 +265,10 @@ persistence.
 - `cargo test -p dms-core --test conversion` checks read-only configuration,
   metadata, paths, mixed results, retained pairs, consumed-byte digests and
   failure cleanup through synthetic exporter doubles, not installed Word.
+- `cargo test -p dms-core --test smoke_contract` pins actual parser text,
+  optional document numbers, unique embedded-asset receipts and serialized
+  template identity for the independent smoke verifier. Synthetic-only direct
+  public API tests do not establish installed-Word fidelity.
 - `cargo test -p dms-core --test markdown_template` checks multi-table cell text,
   inline styling, two/three/four/five-column layouts, deterministic assembly,
   package XML, unchanged source/template/asset bytes, image embedding,

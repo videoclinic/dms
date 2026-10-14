@@ -67,6 +67,29 @@ impl Fixture {
     fn dry(&mut self) {
         self.options.dry_run = true;
     }
+
+    fn date_template(&self, stories: &[&str]) {
+        let mut zip = ZipArchive::new(std::io::Cursor::new(TEMPLATE)).unwrap();
+        let mut out = ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        for index in 0..zip.len() {
+            let mut entry = zip.by_index(index).unwrap();
+            let mut bytes = Vec::new();
+            entry.read_to_end(&mut bytes).unwrap();
+            if stories.contains(&entry.name()) {
+                let xml = String::from_utf8(bytes).unwrap();
+                // Before the body prototypes, or before the story's first paragraph.
+                bytes = xml
+                    .replacen("<w:p>", "<w:p><w:r><w:t>{DATE}</w:t></w:r></w:p><w:p>", 1)
+                    .into_bytes();
+            }
+            out.start_file(entry.name(), SimpleFileOptions::default())
+                .unwrap();
+            out.write_all(&bytes).unwrap();
+        }
+        let bytes = out.finish().unwrap().into_inner();
+        fs::write(self.temp.path().join("edit/template.docx"), &bytes).unwrap();
+        self.config(|v| v["markdown_template"]["sha256"] = json!(digest(&bytes)));
+    }
 }
 
 #[derive(Default)]
@@ -76,6 +99,7 @@ struct FakeWord {
     failure: Option<&'static str>,
     changed_source: Option<PathBuf>,
     changed_asset: Option<PathBuf>,
+    expected_date: Option<String>,
 }
 impl ConversionExporter for FakeWord {
     fn preflight(&self) -> Result<(), String> {
@@ -93,6 +117,25 @@ impl ConversionExporter for FakeWord {
         assert_eq!(chrome.confidentiality.label, "Internal label");
         self.paths.push(docx.to_path_buf());
         assert!(docx.exists());
+        if let Some(date) = &self.expected_date {
+            // DATE is already filled before the controlled-field/Word adapter.
+            for story in ["word/document.xml", "word/header1.xml", "word/footer1.xml"] {
+                let text = package_text(docx, story);
+                assert!(text.contains(date), "{story}");
+                assert!(!text.contains("{DATE}"), "{story}");
+                assert!(!text.contains("WrongDate"), "{story}");
+            }
+            let custom = package_text(docx, "docProps/custom.xml");
+            for token in [
+                "{TITLE}",
+                "{DOCUMENT_NUMBER}",
+                "{VERSION}",
+                "{CONFIDENTIALITY}",
+            ] {
+                assert!(custom.contains(token), "reserved token {token}");
+            }
+            assert!(!custom.contains(date) && !custom.contains("DMS_DATE"));
+        }
         fill_and_save(docx, chrome);
         if let Some(path) = &self.changed_source {
             fs::write(path, "changed while Word ran").unwrap();
@@ -157,6 +200,16 @@ fn fill_and_save(path: &Path, chrome: &ExportChrome) {
         .unwrap();
     fs::write(path, out.finish().unwrap().into_inner()).unwrap();
 }
+fn package_text(path: &Path, part: &str) -> String {
+    let mut zip = ZipArchive::new(fs::File::open(path).unwrap()).unwrap();
+    let mut text = String::new();
+    zip.by_name(part)
+        .unwrap()
+        .read_to_string(&mut text)
+        .unwrap();
+    text
+}
+
 fn synthetic_pdf() -> Vec<u8> {
     let stream = "BT /F1 12 Tf 72 720 Td (Synthetic policy) Tj ET";
     let objects = ["<< /Type /Catalog /Pages 2 0 R >>".to_owned(), "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_owned(),
@@ -227,6 +280,170 @@ fn configuration_projection_is_read_only_for_18_19_current_and_dry_run_never_cal
         assert_eq!(tree(f.temp.path()), before);
     }
 }
+#[test]
+fn conversion_date_fills_all_stories_before_export_and_preserves_non_release_inputs() {
+    for date in ["2026-10-14", "2024-02-29", "2000-02-29"] {
+        let f = Fixture::new(SCHEMA_VERSION);
+        f.date_template(&["word/document.xml", "word/header1.xml", "word/footer1.xml"]);
+        let source = SOURCE.replacen("title:", &format!("last_modified: {date}\ndate: WrongDate\nTITLE: WrongTitle\nVERSION: 99.99\nCONFIDENTIALITY: WrongLabel\nDOCUMENT_NUMBER: invented\ntitle:"), 1);
+        let source_path = f.options.input_root.join("policy.md");
+        fs::write(&source_path, &source).unwrap();
+        fs::write(f.temp.path().join("edit/.dms/lock"), "existing lock").unwrap();
+        let before_edit = tree(&f.temp.path().join("edit"));
+        let before_input = tree(&f.options.input_root);
+        let before_publish = tree(&f.temp.path().join("publish"));
+        let source_mtime = fs::metadata(&source_path).unwrap().modified().unwrap();
+        let mut word = FakeWord {
+            expected_date: Some(date.to_owned()),
+            ..Default::default()
+        };
+        let manifest = ConversionPlan::prepare(&f.options)
+            .unwrap()
+            .run(&mut word)
+            .unwrap();
+        assert!(!manifest.has_failures());
+        assert!(manifest.conversion_only);
+        assert_eq!(word.paths.len(), 1);
+        assert_eq!(
+            manifest.results[0].input_sha256.as_deref(),
+            Some(digest(source.as_bytes()).as_str())
+        );
+        for story in ["word/document.xml", "word/header1.xml", "word/footer1.xml"] {
+            let xml = package_text(&word.paths[0], story);
+            assert!(xml.contains(date) && !xml.contains("{DATE}"));
+        }
+        assert_eq!(tree(&f.temp.path().join("edit")), before_edit);
+        assert_eq!(tree(&f.options.input_root), before_input);
+        assert_eq!(tree(&f.temp.path().join("publish")), before_publish);
+        assert_eq!(
+            fs::metadata(&source_path).unwrap().modified().unwrap(),
+            source_mtime
+        );
+    }
+}
+
+#[test]
+fn conversion_date_is_required_per_document_even_when_only_a_story_contains_it() {
+    for story in ["word/document.xml", "word/header1.xml", "word/footer1.xml"] {
+        for dry_run in [false, true] {
+            let mut f = Fixture::new(SCHEMA_VERSION);
+            f.options.dry_run = dry_run;
+            f.date_template(&[story]);
+            let invalid = [
+                None,
+                Some("2023-02-29"),
+                Some("1900-02-29"),
+                Some("2024-04-31"),
+                Some("2024-00-10"),
+                Some("2024-01-00"),
+                Some("2024-2-09"),
+                Some("2024-02-9"),
+                Some("+2024-02-09"),
+                Some("2024-02-09T00:00:00Z"),
+                Some("not-a-date"),
+                Some(""),
+                Some("\"\""),
+                Some("' '"),
+            ];
+            fs::remove_file(f.options.input_root.join("policy.md")).unwrap();
+            for (i, date) in invalid.iter().enumerate() {
+                let source = date.map_or_else(
+                    || SOURCE.to_owned(),
+                    |date| SOURCE.replacen("title:", &format!("last_modified: {date}\ntitle:"), 1),
+                );
+                fs::write(f.options.input_root.join(format!("bad-{i:02}.md")), source).unwrap();
+            }
+            fs::write(
+                f.options.input_root.join("valid.md"),
+                SOURCE.replacen("title:", "last_modified: 2024-02-29\ntitle:", 1),
+            )
+            .unwrap();
+            let before_edit = tree(&f.temp.path().join("edit"));
+            let before_input = tree(&f.options.input_root);
+            let mut word = FakeWord::default();
+            let manifest = ConversionPlan::prepare(&f.options)
+                .unwrap()
+                .run(&mut word)
+                .unwrap();
+            assert!(manifest.has_failures());
+            assert_eq!(manifest.results.len(), invalid.len() + 1);
+            for result in &manifest.results[..invalid.len()] {
+                assert!(matches!(result.status, ConversionStatus::Failed));
+                assert_eq!(result.error.as_deref(), Some("conversion template {DATE} requires last_modified as a real calendar date in YYYY-MM-DD format"));
+                assert!(
+                    result.docx.is_none() && result.pdf.is_none() && result.word_version.is_none()
+                );
+                assert!(!f
+                    .options
+                    .output_root
+                    .join(result.input.with_extension("docx"))
+                    .exists());
+            }
+            assert!(manifest.results.last().unwrap().error.is_none());
+            assert_eq!(word.paths.len(), usize::from(!dry_run));
+            if dry_run {
+                assert!(!f.options.output_root.exists());
+            }
+            assert_eq!(tree(&f.temp.path().join("edit")), before_edit);
+            assert_eq!(tree(&f.options.input_root), before_input);
+            assert!(tree(&f.temp.path().join("publish")).is_empty());
+        }
+    }
+}
+
+#[test]
+fn conversion_without_date_token_accepts_missing_invalid_and_empty_last_modified() {
+    for value in [
+        None,
+        Some("2023-02-29"),
+        Some("not-a-date"),
+        Some(""),
+        Some("\"\""),
+        Some("''"),
+    ] {
+        let mut f = Fixture::new(SCHEMA_VERSION);
+        f.dry();
+        let source = value.map_or_else(
+            || SOURCE.to_owned(),
+            |value| SOURCE.replacen("title:", &format!("last_modified: {value}\ntitle:"), 1),
+        );
+        fs::write(f.options.input_root.join("policy.md"), source).unwrap();
+        let before = tree(f.temp.path());
+        let manifest = ConversionPlan::prepare(&f.options)
+            .unwrap()
+            .run(&mut FakeWord::default())
+            .unwrap();
+        assert!(!manifest.has_failures(), "{value:?}");
+        assert_eq!(tree(f.temp.path()), before);
+    }
+}
+
+#[test]
+fn release_assembler_does_not_alias_or_require_conversion_date() {
+    let f = Fixture::new(SCHEMA_VERSION);
+    f.date_template(&["word/document.xml", "word/header1.xml", "word/footer1.xml"]);
+    let template = f.temp.path().join("edit/template.docx");
+    let output = f.temp.path().join("release-assembly.docx");
+    for extra in [
+        "",
+        "last_modified: 2024-02-29\n",
+        "last_modified: not-a-date\n",
+    ] {
+        let source = SOURCE.replacen("title:", &format!("{extra}title:"), 1);
+        dms_core::assemble_markdown_docx(&template, &source, &output, None).unwrap();
+        assert!(package_text(&output, "word/header1.xml").contains("{DATE}"));
+    }
+    let source = SOURCE.replacen("title:", "date: Existing optional value\ntitle:", 1);
+    dms_core::assemble_markdown_docx(&template, &source, &output, None).unwrap();
+    assert!(package_text(&output, "word/header1.xml").contains("Existing optional value"));
+    assert!(dms_core::parse_markdown_frontmatter(&SOURCE.replacen(
+        "title:",
+        "last_modified: \"\"\ntitle:",
+        1
+    ))
+    .is_err());
+}
+
 #[test]
 fn retained_pair_and_manifest_hash_the_exact_saved_word_input() {
     let f = Fixture::new(SCHEMA_VERSION);

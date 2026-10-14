@@ -644,8 +644,58 @@ pub fn assemble_markdown_docx_with_options(
     assets: Option<&MarkdownAssetContext>,
     without_toc: bool,
 ) -> Result<Vec<MarkdownAssetDigest>> {
+    assemble_markdown(template, markdown, destination, assets, without_toc, false)
+}
+
+pub(crate) fn assemble_markdown_conversion_docx(
+    template: &Path,
+    markdown: &str,
+    destination: &Path,
+    assets: Option<&MarkdownAssetContext>,
+    without_toc: bool,
+) -> Result<Vec<MarkdownAssetDigest>> {
+    assemble_markdown(template, markdown, destination, assets, without_toc, true)
+}
+
+fn assemble_markdown(
+    template: &Path,
+    markdown: &str,
+    destination: &Path,
+    assets: Option<&MarkdownAssetContext>,
+    without_toc: bool,
+    conversion: bool,
+) -> Result<Vec<MarkdownAssetDigest>> {
     let loaded = load_template(template)?;
-    let (frontmatter, body) = super::parse_markdown_frontmatter(markdown)?;
+    let (frontmatter, body) = if conversion {
+        super::frontmatter::parse_conversion_frontmatter(markdown)?
+    } else {
+        super::parse_markdown_frontmatter(markdown)?
+    };
+    let mut variables = frontmatter.template_variables();
+    if conversion
+        && loaded.entries.iter().any(|entry| {
+            (entry.name.ends_with(".xml") || entry.name.ends_with(".rels"))
+                && entry.bytes.windows(b"{DATE}".len()).any(|w| w == b"{DATE}")
+        })
+    {
+        let date = frontmatter
+            .variables
+            .get("last_modified")
+            .filter(|value| {
+                value.len() == 10
+                    && value.bytes().enumerate().all(|(i, b)| {
+                        if i == 4 || i == 7 {
+                            b == b'-'
+                        } else {
+                            b.is_ascii_digit()
+                        }
+                    })
+                    && chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").is_ok()
+            })
+            .ok_or(DmsError::InvalidConversionDate)?;
+        // Conversion-only alias wins over an unrelated optional `date` key.
+        variables.insert("{DATE}".to_owned(), date.clone());
+    }
     let blocks = parse_markdown_blocks(body)?;
     let mut context = RenderContext::new(&loaded, assets)?;
     let rendered = render_blocks(&blocks, &mut context)?;
@@ -654,7 +704,6 @@ pub fn assemble_markdown_docx_with_options(
     document_xml.push_str(&rendered);
     document_xml.push_str(&loaded.document_xml[loaded.prototype_end..]);
 
-    let variables = frontmatter.template_variables();
     let document_xml = apply_template_variables(&document_xml, &variables);
     let document_xml = if without_toc {
         remove_table_of_contents_sdt(&document_xml)?

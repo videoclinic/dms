@@ -1,7 +1,7 @@
 # Markdown frontmatter and Word template variables
 
-Operator reference for Markdown drafts registered in a DMS library and for the
-workspace Word template used on Markdown → PDF release.
+Operator reference for registered Markdown drafts, the workspace Word template
+used on Markdown → PDF release, and standalone external Markdown conversion.
 
 ## Controlled frontmatter (DMS-owned)
 
@@ -81,6 +81,42 @@ them):
 - `{DOCUMENT_NUMBER}`
 - `{VERSION}`
 - `{CONFIDENTIALITY}`
+
+## Standalone conversion date
+
+Only `dms convert markdown` maps the source-owned flat frontmatter scalar
+`last_modified` to literal `{DATE}` during Markdown assembly:
+
+```yaml
+last_modified: 2024-02-29
+```
+
+- If the configured template contains `{DATE}`, every selected source must
+  supply a real calendar date with exactly four year digits, two month digits
+  and two day digits (`YYYY-MM-DD`). Leap-day validation uses the calendar, not
+  just the string shape. Missing, empty and invalid values are document-specific
+  errors in normal conversion and dry-run; independent documents continue.
+- If the template has no `{DATE}`, missing or invalid `last_modified` does not
+  fail conversion. The existing flat-frontmatter syntax rules still apply;
+  this is not support for nested YAML or malformed quoted scalars.
+- Literal tokens in template XML, including preserved body, header and footer
+  text, are filled before the export adapter runs. This uses the existing
+  literal assembly replacement, not Word's DATE field or a token split across
+  XML runs. An optional `date` key cannot bypass the required `last_modified`
+  value or override its replacement when the template contains `{DATE}`.
+- The value does not become a DMS-controlled key, workspace metadata, release
+  authority, custom property or filesystem timestamp. No `DMS_DATE` property is
+  created. Source and template files are never rewritten, and the four reserved
+  export tokens retain their existing authority.
+- Desktop release does not use this alias or require `last_modified`. Its
+  existing optional-variable rules remain unchanged; `last_modified` can still
+  supply `{LAST_MODIFIED}` like any other non-controlled scalar.
+
+Synthetic public-path tests in
+[`crates/dms-core/tests/conversion.rs`](../crates/dms-core/tests/conversion.rs)
+verify the date matrix, replacement before export, unchanged bytes and the
+non-release boundary. These tests do not establish installed-Word rendering or
+real-corpus acceptance. See [CAP-0022](product/capabilities/CAP-0022-headless-core-cli.md).
 
 ## Word template / export chrome
 

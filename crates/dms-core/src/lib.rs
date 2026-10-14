@@ -207,6 +207,8 @@ pub enum DmsError {
     InvalidDocx(String),
     #[error("Markdown frontmatter is invalid: {0}")]
     InvalidMarkdownFrontmatter(String),
+    #[error("conversion template {{DATE}} requires last_modified as a real calendar date in YYYY-MM-DD format")]
+    InvalidConversionDate,
     #[error("Markdown Word template is invalid: {0}")]
     InvalidMarkdownTemplate(String),
     #[error("Markdown Word template path is a symbolic link: {0}")]
