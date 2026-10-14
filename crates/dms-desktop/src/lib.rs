@@ -6781,6 +6781,7 @@ mod tests {
             &template,
             &fs::read_to_string(&source).unwrap(),
             &assembled,
+            None,
         )
         .unwrap();
         export::fill_office_placeholders(

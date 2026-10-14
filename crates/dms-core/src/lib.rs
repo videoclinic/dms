@@ -209,6 +209,8 @@ pub enum DmsError {
     InvalidMarkdownTemplate(String),
     #[error("Markdown Word template path is a symbolic link: {0}")]
     MarkdownTemplateSymlink(PathBuf),
+    #[error("Markdown source image is unusable: {0}")]
+    InvalidMarkdownImage(String),
     #[error("Markdown Word template is registered as a controlled document: {0}")]
     TemplateIsControlledDocument(PathBuf),
     #[error("Markdown Word template cannot participate in document lifecycle: {0}")]

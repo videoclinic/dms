@@ -288,6 +288,18 @@ impl PdfExporter for FakeExporter {
             .markdown_template_path
             .as_ref()
             .is_some_and(|path| path.is_file()));
+        if request.markdown_template_path.is_some() {
+            let assets = request
+                .markdown_assets
+                .as_ref()
+                .expect("a Markdown release carries a source/asset resolution context");
+            assert_eq!(assets.source_path(), request.source_path.as_path());
+            assert!(assets.input_root().is_dir());
+            assert!(
+                request.source_path.starts_with(assets.input_root()),
+                "the asset input root must contain the Markdown source"
+            );
+        }
         if let Some(error) = self.fail.clone() {
             return Err(error);
         }

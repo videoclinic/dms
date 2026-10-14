@@ -49,7 +49,12 @@ impl<O: OfficeAutomation> PdfExporter for LocalPdfExporter<O> {
                 })?;
                 let assembled = directory.path().join("assembled.docx");
                 let filled = directory.path().join("release.docx");
-                assemble_markdown_docx(template, &markdown, &assembled)
+                assemble_markdown_docx(
+                    template,
+                    &markdown,
+                    &assembled,
+                    request.markdown_assets.as_ref(),
+                )
                     .map_err(|error| format!("cannot assemble Markdown Word document: {error}"))?;
                 fill_office_placeholders(&assembled, &filled, &request.chrome)?;
                 self.office
@@ -422,6 +427,7 @@ mod tests {
             document_id: Uuid::new_v4(),
             source_path,
             markdown_template_path,
+            markdown_assets: None,
             temporary_pdf_path: output.clone(),
             final_pdf_path: output.with_file_name("final.pdf"),
             chrome: chrome(),

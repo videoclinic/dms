@@ -13,8 +13,8 @@ use zip::ZipArchive;
 
 use super::{
     configured_text, default_author, AssistanceEvidence, DmsError, DocumentControl,
-    EffectiveWorkflowRole, EntraIdentitySource, EntraPerson, Lifecycle, PeriodicReviewResult,
-    ResolutionState, Result, SourceState, Workspace,
+    EffectiveWorkflowRole, EntraIdentitySource, EntraPerson, Lifecycle, MarkdownAssetContext,
+    PeriodicReviewResult, ResolutionState, Result, SourceState, Workspace,
 };
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -508,6 +508,9 @@ pub struct ExportRequest {
     pub document_id: Uuid,
     pub source_path: PathBuf,
     pub markdown_template_path: Option<PathBuf>,
+    /// Source/asset resolution context for local Markdown image references.
+    /// `None` means asset-bearing input must be rejected by the assembler.
+    pub markdown_assets: Option<MarkdownAssetContext>,
     pub temporary_pdf_path: PathBuf,
     pub final_pdf_path: PathBuf,
     pub chrome: ExportChrome,
@@ -1141,6 +1144,9 @@ impl Workspace {
             .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
             .then(|| self.markdown_template_path_for_export())
             .transpose()?;
+        let markdown_assets = markdown_template_path
+            .as_ref()
+            .map(|_| MarkdownAssetContext::new(&self.edit_root, &source_path));
 
         let relative_path = release_relative_path(
             &self.document(document_id)?.relative_path,
@@ -1163,6 +1169,7 @@ impl Workspace {
             document_id,
             source_path,
             markdown_template_path,
+            markdown_assets,
             temporary_pdf_path: temporary_path.clone(),
             final_pdf_path: final_path.clone(),
             chrome: ExportChrome {

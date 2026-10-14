@@ -1,12 +1,17 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs,
     io::{Read, Write},
     path::{Component, Path, PathBuf},
 };
 
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
-use quick_xml::{events::Event as XmlEvent, Reader};
+use quick_xml::{
+    events::Event as XmlEvent,
+    name::{Namespace, ResolveResult},
+    reader::NsReader,
+    Reader,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -66,6 +71,282 @@ pub struct MarkdownTemplateValidation {
 pub struct MarkdownTemplateContract {
     pub contract_version: u32,
     pub package_parts: Vec<String>,
+}
+
+/// Explicit source and containment context for resolving local Markdown image
+/// references. `input_root` is the only directory an asset may live in;
+/// `source_path` is the Markdown document the references are relative to.
+#[derive(Clone, Debug)]
+pub struct MarkdownAssetContext {
+    input_root: PathBuf,
+    source_path: PathBuf,
+}
+
+impl MarkdownAssetContext {
+    pub fn new(input_root: impl Into<PathBuf>, source_path: impl Into<PathBuf>) -> Self {
+        Self {
+            input_root: input_root.into(),
+            source_path: source_path.into(),
+        }
+    }
+
+    pub fn input_root(&self) -> &Path {
+        &self.input_root
+    }
+
+    pub fn source_path(&self) -> &Path {
+        &self.source_path
+    }
+
+    fn canonical_input_root(&self) -> Result<PathBuf> {
+        if !self.input_root.is_dir() {
+            return Err(DmsError::InvalidMarkdownImage(format!(
+                "input root {} is not a directory",
+                self.input_root.display()
+            )));
+        }
+        fs::canonicalize(&self.input_root).map_err(|source| DmsError::Io {
+            path: self.input_root.clone(),
+            source,
+        })
+    }
+
+    fn canonical_source_directory(&self) -> Result<PathBuf> {
+        let directory = self
+            .source_path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+        fs::canonicalize(directory).map_err(|source| DmsError::Io {
+            path: directory.to_path_buf(),
+            source,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ImageFormat {
+    Png,
+    Jpeg,
+}
+
+impl ImageFormat {
+    fn extension(self) -> &'static str {
+        match self {
+            Self::Png => "png",
+            Self::Jpeg => "jpeg",
+        }
+    }
+
+    fn content_type(self) -> &'static str {
+        match self {
+            Self::Png => "image/png",
+            Self::Jpeg => "image/jpeg",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct EmbeddedImage {
+    part_name: String,
+    relationship_id: String,
+    bytes: Vec<u8>,
+    format: ImageFormat,
+    width: u32,
+    height: u32,
+}
+
+/// Per-assembly image state: resolved assets, allocated package parts and
+/// drawing identity, and the printable-width limit used for sizing.
+struct RenderContext<'a> {
+    template: &'a LoadedTemplate,
+    assets: Option<&'a MarkdownAssetContext>,
+    input_root: Option<PathBuf>,
+    source_directory: Option<PathBuf>,
+    printable_width_emu: Option<u64>,
+    media: Vec<EmbeddedImage>,
+    media_by_path: BTreeMap<PathBuf, usize>,
+    taken_parts: BTreeSet<String>,
+    next_media: u32,
+    next_relationship: u32,
+    next_drawing: u64,
+}
+
+impl<'a> RenderContext<'a> {
+    fn new(template: &'a LoadedTemplate, assets: Option<&'a MarkdownAssetContext>) -> Result<Self> {
+        let mut taken_parts = BTreeSet::new();
+        for entry in &template.entries {
+            taken_parts.insert(entry.name.clone());
+        }
+        let relationships = template
+            .entries
+            .iter()
+            .find(|entry| entry.name == "word/_rels/document.xml.rels")
+            .and_then(|entry| String::from_utf8(entry.bytes.clone()).ok())
+            .unwrap_or_default();
+        Ok(Self {
+            template,
+            assets,
+            input_root: None,
+            source_directory: None,
+            printable_width_emu: None,
+            media: Vec::new(),
+            media_by_path: BTreeMap::new(),
+            taken_parts,
+            next_media: 1,
+            next_relationship: max_relationship_id(&relationships) + 1,
+            next_drawing: u64::from(max_drawing_id(&template.entries)?) + 1,
+        })
+    }
+
+    fn printable_width(&mut self) -> Result<u64> {
+        if let Some(width) = self.printable_width_emu {
+            return Ok(width);
+        }
+        // One twip is 635 EMU; a drawing may not exceed the body text column.
+        let width = u64::from(table_printable_width(self.template)?) * 635;
+        self.printable_width_emu = Some(width);
+        Ok(width)
+    }
+
+    /// Resolve one Markdown image reference to a canonical file inside the
+    /// explicit input root, or fail with the exact rejection reason.
+    fn resolve_asset(&mut self, reference: &str) -> Result<PathBuf> {
+        if self.assets.is_none() {
+            return Err(DmsError::InvalidMarkdownImage(format!(
+                "no source/asset resolution context was provided for image reference `{reference}`"
+            )));
+        }
+        let relative = Path::new(&decode_reference(reference)?).to_path_buf();
+        if relative.is_absolute() {
+            return Err(DmsError::InvalidMarkdownImage(format!(
+                "image reference `{reference}` is an absolute path"
+            )));
+        }
+        if relative
+            .components()
+            .any(|component| matches!(component, Component::RootDir | Component::Prefix(_)))
+        {
+            return Err(DmsError::InvalidMarkdownImage(format!(
+                "image reference `{reference}` is not a relative path"
+            )));
+        }
+        let root = match &self.input_root {
+            Some(root) => root.clone(),
+            None => {
+                let root = self
+                    .assets
+                    .expect("context checked")
+                    .canonical_input_root()?;
+                self.input_root = Some(root.clone());
+                root
+            }
+        };
+        let directory = match &self.source_directory {
+            Some(directory) => directory.clone(),
+            None => {
+                let directory = self
+                    .assets
+                    .expect("context checked")
+                    .canonical_source_directory()?;
+                self.source_directory = Some(directory.clone());
+                directory
+            }
+        };
+        let candidate = directory.join(&relative);
+        let canonical = fs::canonicalize(&candidate).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                DmsError::InvalidMarkdownImage(format!(
+                    "image asset {} does not exist",
+                    candidate.display()
+                ))
+            } else {
+                DmsError::Io {
+                    path: candidate.clone(),
+                    source: error,
+                }
+            }
+        })?;
+        if !canonical.starts_with(&root) {
+            return Err(DmsError::InvalidMarkdownImage(format!(
+                "image asset {} resolves outside the input root {}",
+                canonical.display(),
+                root.display()
+            )));
+        }
+        if !canonical.is_file() {
+            return Err(DmsError::InvalidMarkdownImage(format!(
+                "image asset {} is not a regular file",
+                canonical.display()
+            )));
+        }
+        Ok(canonical)
+    }
+
+    fn embed_asset(&mut self, path: &Path) -> Result<usize> {
+        if let Some(index) = self.media_by_path.get(path) {
+            return Ok(*index);
+        }
+        let bytes = fs::read(path).map_err(|source| DmsError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        let (format, width, height) = image_dimensions(path, &bytes)?;
+        let relationship_id = format!("rId{}", self.next_relationship);
+        self.next_relationship += 1;
+        let part_name = loop {
+            let candidate = format!(
+                "word/media/dms-image-{}.{}",
+                self.next_media,
+                format.extension()
+            );
+            self.next_media += 1;
+            if !self.taken_parts.contains(&candidate) {
+                break candidate;
+            }
+        };
+        self.taken_parts.insert(part_name.clone());
+        self.media.push(EmbeddedImage {
+            part_name,
+            relationship_id,
+            bytes,
+            format,
+            width,
+            height,
+        });
+        let index = self.media.len() - 1;
+        self.media_by_path.insert(path.to_path_buf(), index);
+        Ok(index)
+    }
+
+    fn image_run(&mut self, image: &ImageInline) -> Result<String> {
+        let path = self.resolve_asset(&image.reference)?;
+        let index = self.embed_asset(&path)?;
+        let limit = self.printable_width()?;
+        let drawing_id = u32::try_from(self.next_drawing).map_err(|_| {
+            DmsError::InvalidMarkdownImage(
+                "no unused drawing IDs remain in the template package".to_owned(),
+            )
+        })?;
+        self.next_drawing += 1;
+        let embedded = &self.media[index];
+        // Native size assumes 96 DPI (9525 EMU per pixel) and is never upscaled.
+        let native_width = u64::from(embedded.width) * 9525;
+        let width = native_width.min(limit);
+        let height = width * u64::from(embedded.height) / u64::from(embedded.width);
+        let description = if image.alt_text.trim().is_empty() {
+            image.reference.clone()
+        } else {
+            image.alt_text.clone()
+        };
+        Ok(render_image_run(
+            &embedded.relationship_id,
+            drawing_id,
+            width,
+            height,
+            &description,
+        ))
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -304,11 +585,20 @@ pub fn validate_markdown_template(path: &Path) -> Result<MarkdownTemplateContrac
     })
 }
 
-pub fn assemble_markdown_docx(template: &Path, markdown: &str, destination: &Path) -> Result<()> {
+/// Assemble one Markdown body into the workspace Word template. Local image
+/// references are embedded as OOXML drawings; `assets` is the explicit
+/// source/containment context and its absence rejects asset-bearing input.
+pub fn assemble_markdown_docx(
+    template: &Path,
+    markdown: &str,
+    destination: &Path,
+    assets: Option<&MarkdownAssetContext>,
+) -> Result<()> {
     let loaded = load_template(template)?;
     let (frontmatter, body) = super::parse_markdown_frontmatter(markdown)?;
     let blocks = parse_markdown_blocks(body)?;
-    let rendered = render_blocks(&blocks, &loaded)?;
+    let mut context = RenderContext::new(&loaded, assets)?;
+    let rendered = render_blocks(&blocks, &mut context)?;
     let mut document_xml = String::with_capacity(loaded.document_xml.len() + rendered.len());
     document_xml.push_str(&loaded.document_xml[..loaded.prototype_start]);
     document_xml.push_str(&rendered);
@@ -316,6 +606,44 @@ pub fn assemble_markdown_docx(template: &Path, markdown: &str, destination: &Pat
 
     let variables = frontmatter.template_variables();
     let document_xml = apply_template_variables(&document_xml, &variables);
+    let media = std::mem::take(&mut context.media);
+    let relationships = if media.is_empty() {
+        None
+    } else {
+        let current = loaded
+            .entries
+            .iter()
+            .find(|entry| entry.name == "word/_rels/document.xml.rels")
+            .expect("required part checked");
+        let text = String::from_utf8(current.bytes.clone()).map_err(|error| {
+            DmsError::InvalidMarkdownTemplate(format!(
+                "package part word/_rels/document.xml.rels is not UTF-8: {error}"
+            ))
+        })?;
+        Some(apply_template_variables(
+            &relationships_with_media(&text, &media)?,
+            &variables,
+        ))
+    };
+    let content_types = if media.is_empty() {
+        None
+    } else {
+        let current = loaded
+            .entries
+            .iter()
+            .find(|entry| entry.name == "[Content_Types].xml")
+            .expect("required part checked");
+        let text = String::from_utf8(current.bytes.clone()).map_err(|error| {
+            DmsError::InvalidMarkdownTemplate(format!(
+                "package part [Content_Types].xml is not UTF-8: {error}"
+            ))
+        })?;
+        let formats = media.iter().map(|image| image.format).collect::<Vec<_>>();
+        Some(apply_template_variables(
+            &content_types_with_media(&text, &formats)?,
+            &variables,
+        ))
+    };
 
     let output = fs::File::create(destination).map_err(|source| DmsError::Io {
         path: destination.to_path_buf(),
@@ -330,12 +658,18 @@ pub fn assemble_markdown_docx(template: &Path, markdown: &str, destination: &Pat
                 .map_err(|error| DmsError::InvalidDocx(error.to_string()))?;
             continue;
         }
+        let replaced = match entry.name.as_str() {
+            "word/document.xml" => Some(document_xml.clone()),
+            "word/_rels/document.xml.rels" => relationships.clone(),
+            "[Content_Types].xml" => content_types.clone(),
+            _ => None,
+        };
         writer
             .start_file(&entry.name, options)
             .map_err(|error| DmsError::InvalidDocx(error.to_string()))?;
-        if entry.name == "word/document.xml" {
+        if let Some(replaced) = replaced {
             writer
-                .write_all(document_xml.as_bytes())
+                .write_all(replaced.as_bytes())
                 .map_err(|source| DmsError::Io {
                     path: destination.to_path_buf(),
                     source,
@@ -362,6 +696,17 @@ pub fn assemble_markdown_docx(template: &Path, markdown: &str, destination: &Pat
                     source,
                 })?;
         }
+    }
+    for image in &media {
+        writer
+            .start_file(&image.part_name, SimpleFileOptions::default())
+            .map_err(|error| DmsError::InvalidDocx(error.to_string()))?;
+        writer
+            .write_all(&image.bytes)
+            .map_err(|source| DmsError::Io {
+                path: destination.to_path_buf(),
+                source,
+            })?;
     }
     writer
         .finish()
@@ -655,6 +1000,468 @@ fn sha256_file(path: &Path) -> Result<String> {
     Ok(format!("{:x}", Sha256::digest(bytes)))
 }
 
+/// Decode one Markdown image destination into a relative filesystem path,
+/// rejecting remote, absolute, fragment-bearing and empty references.
+fn decode_reference(reference: &str) -> Result<String> {
+    if reference.is_empty() {
+        return Err(DmsError::InvalidMarkdownImage(
+            "image reference is empty".to_owned(),
+        ));
+    }
+    if !reference.starts_with("//") {
+        if let Some(colon) = reference.find(':') {
+            let scheme = &reference[..colon];
+            let valid_scheme = !scheme.is_empty()
+                && scheme.starts_with(|character: char| character.is_ascii_alphabetic())
+                && scheme.chars().all(|character| {
+                    character.is_ascii_alphanumeric() || "+-.".contains(character)
+                });
+            if valid_scheme {
+                return Err(DmsError::InvalidMarkdownImage(format!(
+                    "image reference `{reference}` is a remote or unsupported reference"
+                )));
+            }
+        }
+    }
+    if reference.contains('#') || reference.contains('?') {
+        return Err(DmsError::InvalidMarkdownImage(format!(
+            "image reference `{reference}` carries a fragment or query and is unsupported"
+        )));
+    }
+    if !reference.contains('%') {
+        return Ok(reference.to_owned());
+    }
+    let bytes = reference.as_bytes();
+    let mut output = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 2 < bytes.len() {
+            let decoded = std::str::from_utf8(&bytes[index + 1..index + 3])
+                .ok()
+                .and_then(|pair| u8::from_str_radix(pair, 16).ok());
+            if let Some(value) = decoded {
+                output.push(value);
+                index += 3;
+                continue;
+            }
+        }
+        output.push(bytes[index]);
+        index += 1;
+    }
+    String::from_utf8(output).map_err(|_| {
+        DmsError::InvalidMarkdownImage(format!(
+            "image reference `{reference}` is not valid UTF-8 after percent decoding"
+        ))
+    })
+}
+
+/// Check PNG/JPEG structure and read pixel dimensions, independent of extension.
+/// These checks reject incomplete containers, not every invalid compressed pixel
+/// stream; they do not replace a decoder or installed-Word rendering verification.
+fn image_dimensions(path: &Path, bytes: &[u8]) -> Result<(ImageFormat, u32, u32)> {
+    if bytes.starts_with(PNG_SIGNATURE) {
+        return png_dimensions(path, bytes)
+            .map(|(width, height)| (ImageFormat::Png, width, height));
+    }
+    if bytes.starts_with(&[0xFF, 0xD8]) {
+        return jpeg_dimensions(path, bytes)
+            .map(|(width, height)| (ImageFormat::Jpeg, width, height));
+    }
+    Err(DmsError::InvalidMarkdownImage(format!(
+        "image asset {} has an unsupported image format; only PNG and JPEG are supported",
+        path.display()
+    )))
+}
+
+const PNG_SIGNATURE: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+const JPEG_END: &[u8] = &[0xFF, 0xD9];
+
+fn png_dimensions(path: &Path, bytes: &[u8]) -> Result<(u32, u32)> {
+    let corrupt = |detail: &str| {
+        DmsError::InvalidMarkdownImage(format!(
+            "image asset {} is corrupt: {detail}",
+            path.display()
+        ))
+    };
+    if bytes.len() < 33 || &bytes[8..16] != b"\0\0\0\rIHDR" {
+        return Err(corrupt("the PNG header chunk is missing"));
+    }
+    let width = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]);
+    let height = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
+    if width == 0 || height == 0 {
+        return Err(corrupt("the PNG header declares an empty image"));
+    }
+    let valid_depth = match bytes[25] {
+        0 => matches!(bytes[24], 1 | 2 | 4 | 8 | 16),
+        2 | 4 | 6 => matches!(bytes[24], 8 | 16),
+        3 => matches!(bytes[24], 1 | 2 | 4 | 8),
+        _ => false,
+    };
+    if !valid_depth || bytes[26] != 0 || bytes[27] != 0 || bytes[28] > 1 {
+        return Err(corrupt("the PNG header has invalid encoding fields"));
+    }
+    let mut offset = PNG_SIGNATURE.len();
+    let mut has_data = false;
+    while bytes.len() - offset >= 12 {
+        let length = u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
+        if length > bytes.len() - offset - 12 {
+            return Err(corrupt("a PNG chunk is truncated"));
+        }
+        let end = offset + 8 + length;
+        let kind = &bytes[offset + 4..offset + 8];
+        let expected_crc = u32::from_be_bytes(bytes[end..end + 4].try_into().unwrap());
+        if png_crc32(&bytes[offset + 4..end]) != expected_crc {
+            return Err(corrupt("a PNG chunk checksum is invalid"));
+        }
+        match kind {
+            b"IHDR" if offset != PNG_SIGNATURE.len() => {
+                return Err(corrupt("the PNG header is duplicated"));
+            }
+            b"IDAT" => has_data |= length > 0,
+            b"IEND" => {
+                if length != 0 || end + 4 != bytes.len() || !has_data {
+                    return Err(corrupt("the PNG has no image data or an invalid end chunk"));
+                }
+                return Ok((width, height));
+            }
+            _ => {}
+        }
+        offset = end + 4;
+    }
+    Err(corrupt("the PNG end-of-image chunk is missing"))
+}
+
+fn png_crc32(bytes: &[u8]) -> u32 {
+    let mut crc = u32::MAX;
+    for byte in bytes {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            crc = (crc >> 1) ^ (0xEDB8_8320 & 0u32.wrapping_sub(crc & 1));
+        }
+    }
+    !crc
+}
+
+fn jpeg_dimensions(path: &Path, bytes: &[u8]) -> Result<(u32, u32)> {
+    let corrupt = |detail: &str| {
+        DmsError::InvalidMarkdownImage(format!(
+            "image asset {} is corrupt: {detail}",
+            path.display()
+        ))
+    };
+    if !bytes.ends_with(JPEG_END) {
+        return Err(corrupt("the JPEG end-of-image marker is missing"));
+    }
+    let mut index = 2;
+    let mut dimensions = None;
+    let mut has_scan = false;
+    while index + 4 <= bytes.len() {
+        if bytes[index] != 0xFF {
+            return Err(corrupt("the JPEG segment marker is missing"));
+        }
+        let marker = bytes[index + 1];
+        if marker == 0xFF {
+            index += 1;
+            continue;
+        }
+        if marker == 0x01 || (0xD0..=0xD7).contains(&marker) {
+            index += 2;
+            continue;
+        }
+        let length = usize::from(u16::from_be_bytes([bytes[index + 2], bytes[index + 3]]));
+        if length < 2 || index + 2 + length > bytes.len() {
+            return Err(corrupt("a JPEG segment length is invalid"));
+        }
+        let is_start_of_frame = matches!(
+            marker,
+            0xC0..=0xC3 | 0xC5..=0xC7 | 0xC9..=0xCB | 0xCD..=0xCF
+        );
+        if is_start_of_frame {
+            if length < 8 || length != 8 + 3 * usize::from(bytes[index + 9]) {
+                return Err(corrupt("the JPEG frame header length is invalid"));
+            }
+            let height = u32::from(u16::from_be_bytes([bytes[index + 5], bytes[index + 6]]));
+            let width = u32::from(u16::from_be_bytes([bytes[index + 7], bytes[index + 8]]));
+            if width == 0 || height == 0 {
+                return Err(corrupt("the JPEG frame header declares an empty image"));
+            }
+            dimensions = Some((width, height));
+        }
+        index += 2 + length;
+        if marker == 0xDA {
+            let start = index - length;
+            if dimensions.is_none()
+                || length < 6
+                || bytes[start + 2] == 0
+                || length != 6 + 2 * usize::from(bytes[start + 2])
+            {
+                return Err(corrupt("the JPEG scan header is invalid"));
+            }
+            // Walk entropy-coded data through byte stuffing and restart markers,
+            // stopping at the next segment (including another progressive scan).
+            let mut has_data = false;
+            while index + 1 < bytes.len() {
+                if bytes[index] != 0xFF {
+                    has_data = true;
+                    index += 1;
+                } else if bytes[index + 1] == 0 {
+                    has_data = true;
+                    index += 2;
+                } else if (0xD0..=0xD7).contains(&bytes[index + 1]) {
+                    index += 2;
+                } else if bytes[index + 1] == 0xFF {
+                    index += 1;
+                } else {
+                    break;
+                }
+            }
+            if !has_data {
+                return Err(corrupt("the JPEG scan has no image data"));
+            }
+            has_scan = true;
+        }
+    }
+    if has_scan && bytes.get(index..) == Some(JPEG_END) {
+        return dimensions.ok_or_else(|| corrupt("no JPEG frame header was found"));
+    }
+    Err(corrupt("the JPEG image data or end marker is missing"))
+}
+
+/// One inline drawing referencing an embedded media part, sized in EMU with a
+/// description that carries the Markdown alternative text.
+fn render_image_run(
+    relationship_id: &str,
+    drawing_id: u32,
+    width: u64,
+    height: u64,
+    description: &str,
+) -> String {
+    let description = xml_escape(description);
+    format!(
+        concat!(
+            "<w:r><w:drawing><wp:inline ",
+            "xmlns:wp=\"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing\" ",
+            "distT=\"0\" distB=\"0\" distL=\"0\" distR=\"0\">",
+            "<wp:extent cx=\"{width}\" cy=\"{height}\"/>",
+            "<wp:effectExtent l=\"0\" t=\"0\" r=\"0\" b=\"0\"/>",
+            "<wp:docPr id=\"{drawing_id}\" name=\"Bild {drawing_id}\" descr=\"{description}\"/>",
+            "<wp:cNvGraphicFramePr><a:graphicFrameLocks ",
+            "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" noChangeAspect=\"1\"/>",
+            "</wp:cNvGraphicFramePr><a:graphic ",
+            "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\">",
+            "<a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/picture\">",
+            "<pic:pic xmlns:pic=\"http://schemas.openxmlformats.org/drawingml/2006/picture\">",
+            "<pic:nvPicPr><pic:cNvPr id=\"{drawing_id}\" name=\"Bild {drawing_id}\" ",
+            "descr=\"{description}\"/><pic:cNvPicPr/></pic:nvPicPr>",
+            "<pic:blipFill><a:blip ",
+            "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" ",
+            "r:embed=\"{relationship_id}\"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>",
+            "<pic:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"{width}\" cy=\"{height}\"/>",
+            "</a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></pic:spPr>",
+            "</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>"
+        ),
+        width = width,
+        height = height,
+        drawing_id = drawing_id,
+        description = description,
+        relationship_id = relationship_id
+    )
+}
+
+fn max_relationship_id(relationships: &str) -> u32 {
+    let mut maximum = 0;
+    for (position, _) in relationships.match_indices("Id=\"rId") {
+        let digits = relationships[position + "Id=\"rId".len()..]
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .collect::<String>();
+        if let Ok(value) = digits.parse::<u32>() {
+            maximum = maximum.max(value);
+        }
+    }
+    maximum
+}
+
+fn max_drawing_id(entries: &[PackageEntry]) -> Result<u32> {
+    let mut maximum = 0;
+    // Drawing identities also occur in preserved story parts, not just the body.
+    for entry in entries
+        .iter()
+        .filter(|entry| !entry.is_dir && entry.name.ends_with(".xml"))
+    {
+        let invalid = |error| {
+            DmsError::InvalidMarkdownTemplate(format!(
+                "package part {} has invalid drawing XML: {error}",
+                entry.name
+            ))
+        };
+        let mut reader = NsReader::from_reader(entry.bytes.as_slice());
+        loop {
+            match reader
+                .read_resolved_event()
+                .map_err(|error| invalid(error.to_string()))?
+            {
+                (
+                    ResolveResult::Bound(Namespace(namespace)),
+                    XmlEvent::Start(element) | XmlEvent::Empty(element),
+                ) if matches!(
+                    (namespace, element.local_name().as_ref()),
+                    (
+                        b"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
+                        b"docPr"
+                    ) | (
+                        b"http://schemas.openxmlformats.org/drawingml/2006/picture",
+                        b"cNvPr"
+                    )
+                ) =>
+                {
+                    for attribute in element.attributes() {
+                        let attribute = attribute.map_err(|error| invalid(error.to_string()))?;
+                        if attribute.key.as_ref() == b"id" {
+                            let value = attribute
+                                .unescape_value()
+                                .map_err(|error| invalid(error.to_string()))?;
+                            if let Ok(value) = value.parse::<u32>() {
+                                maximum = maximum.max(value);
+                            }
+                        }
+                    }
+                }
+                (_, XmlEvent::Eof) => break,
+                _ => {}
+            }
+        }
+    }
+    Ok(maximum)
+}
+
+fn relationships_with_media(relationships: &str, media: &[EmbeddedImage]) -> Result<String> {
+    if media.is_empty() {
+        return Ok(relationships.to_owned());
+    }
+    let mut additions = String::new();
+    for image in media {
+        let target = image
+            .part_name
+            .strip_prefix("word/")
+            .expect("media parts live below word/");
+        additions.push_str(&format!(
+            concat!(
+                "<Relationship Id=\"{id}\" ",
+                "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" ",
+                "Target=\"{target}\"/>"
+            ),
+            id = image.relationship_id,
+            target = target
+        ));
+    }
+    let end = relationships.rfind("</Relationships>").ok_or_else(|| {
+        DmsError::InvalidMarkdownTemplate(
+            "package part word/_rels/document.xml.rels has no closing Relationships element"
+                .to_owned(),
+        )
+    })?;
+    Ok(format!(
+        "{}{}{}",
+        &relationships[..end],
+        additions,
+        &relationships[end..]
+    ))
+}
+
+fn content_types_with_media(content_types: &str, formats: &[ImageFormat]) -> Result<String> {
+    if formats.is_empty() {
+        return Ok(content_types.to_owned());
+    }
+    let mut declared = BTreeMap::new();
+    let mut reader = Reader::from_str(content_types);
+    loop {
+        match reader.read_event() {
+            Ok(XmlEvent::Start(element) | XmlEvent::Empty(element))
+                if element.name().as_ref() == b"Default" =>
+            {
+                let mut extension = None;
+                let mut content_type = None;
+                for attribute in element.attributes() {
+                    let attribute = attribute.map_err(|error| {
+                        DmsError::InvalidMarkdownTemplate(format!(
+                            "package part [Content_Types].xml is invalid: {error}"
+                        ))
+                    })?;
+                    let value = attribute
+                        .unescape_value()
+                        .map_err(|error| {
+                            DmsError::InvalidMarkdownTemplate(format!(
+                                "package part [Content_Types].xml is invalid: {error}"
+                            ))
+                        })?
+                        .into_owned();
+                    match attribute.key.as_ref() {
+                        b"Extension" => extension = Some(value),
+                        b"ContentType" => content_type = Some(value),
+                        _ => {}
+                    }
+                }
+                if let (Some(extension), Some(content_type)) = (extension, content_type) {
+                    let extension = extension.to_ascii_lowercase();
+                    if let Some(previous) = declared.insert(extension.clone(), content_type.clone())
+                    {
+                        if !content_type.eq_ignore_ascii_case(&previous) {
+                            return Err(DmsError::InvalidMarkdownTemplate(format!(
+                                "package part [Content_Types].xml has conflicting declarations for extension {extension}"
+                            )));
+                        }
+                    }
+                }
+            }
+            Ok(XmlEvent::Eof) => break,
+            Ok(_) => {}
+            Err(error) => {
+                return Err(DmsError::InvalidMarkdownTemplate(format!(
+                    "package part [Content_Types].xml is invalid: {error}"
+                )))
+            }
+        }
+    }
+    let mut additions = String::new();
+    for format in formats {
+        match declared.get(format.extension()) {
+            Some(content_type) if content_type.eq_ignore_ascii_case(format.content_type()) => {}
+            Some(content_type) => {
+                return Err(DmsError::InvalidMarkdownTemplate(format!(
+                    "package part [Content_Types].xml declares extension {} as {content_type}",
+                    format.extension()
+                )))
+            }
+            None => {
+                additions.push_str(&format!(
+                    "<Default Extension=\"{}\" ContentType=\"{}\"/>",
+                    format.extension(),
+                    format.content_type()
+                ));
+                declared.insert(
+                    format.extension().to_owned(),
+                    format.content_type().to_owned(),
+                );
+            }
+        }
+    }
+    if additions.is_empty() {
+        return Ok(content_types.to_owned());
+    }
+    let end = content_types.rfind("</Types>").ok_or_else(|| {
+        DmsError::InvalidMarkdownTemplate(
+            "package part [Content_Types].xml has no closing Types element".to_owned(),
+        )
+    })?;
+    Ok(format!(
+        "{}{}{}",
+        &content_types[..end],
+        additions,
+        &content_types[end..]
+    ))
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct Inline {
     text: String,
@@ -662,6 +1469,13 @@ struct Inline {
     italic: bool,
     code: bool,
     link: bool,
+    image: Option<ImageInline>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ImageInline {
+    reference: String,
+    alt_text: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -690,19 +1504,27 @@ fn parse_markdown_blocks(markdown: &str) -> Result<Vec<Block>> {
     let mut table = None::<Vec<Vec<Vec<Inline>>>>;
     let mut row = None::<Vec<Vec<Inline>>>;
     let mut cell = None::<Vec<Inline>>;
-
-    for event in Parser::new_ext(markdown, Options::all()) {
+    let mut events = Parser::new_ext(markdown, Options::all());
+    while let Some(event) = events.next() {
         match event {
             Event::Start(Tag::Heading { level, .. }) => {
-                current.clear();
-                block_kind = Some(BlockKind::Heading(heading_number(level)));
+                start_block(
+                    &mut blocks,
+                    &mut block_kind,
+                    &mut current,
+                    BlockKind::Heading(heading_number(level)),
+                );
             }
             Event::End(TagEnd::Heading(_)) => {
                 finish_block(&mut blocks, &mut block_kind, &mut current)
             }
             Event::Start(Tag::Paragraph) if table.is_none() && block_kind.is_none() => {
-                current.clear();
-                block_kind = Some(BlockKind::Paragraph);
+                start_block(
+                    &mut blocks,
+                    &mut block_kind,
+                    &mut current,
+                    BlockKind::Paragraph,
+                );
             }
             Event::End(TagEnd::Paragraph) if table.is_none() => {
                 if !matches!(block_kind, Some(BlockKind::ListItem { .. })) {
@@ -727,8 +1549,22 @@ fn parse_markdown_blocks(markdown: &str) -> Result<Vec<Block>> {
                     );
                 }
             }
+            Event::Start(Tag::Image { dest_url, .. }) => {
+                let alt_text = collect_image_alt_text(&mut events)?;
+                push_inline(
+                    &mut current,
+                    &mut cell,
+                    Inline {
+                        image: Some(ImageInline {
+                            reference: dest_url.into_string(),
+                            alt_text,
+                        }),
+                        ..Inline::default()
+                    },
+                );
+            }
             Event::Start(Tag::CodeBlock(kind)) => {
-                current.clear();
+                start_block(&mut blocks, &mut block_kind, &mut current, BlockKind::Code);
                 if let CodeBlockKind::Fenced(language) = kind {
                     if !language.is_empty() {
                         current.push(Inline {
@@ -738,7 +1574,6 @@ fn parse_markdown_blocks(markdown: &str) -> Result<Vec<Block>> {
                         });
                     }
                 }
-                block_kind = Some(BlockKind::Code);
                 code_block = true;
             }
             Event::End(TagEnd::CodeBlock) => {
@@ -753,17 +1588,24 @@ fn parse_markdown_blocks(markdown: &str) -> Result<Vec<Block>> {
                 list_stack.pop();
             }
             Event::Start(Tag::Item) => {
-                current.clear();
-                block_kind = Some(BlockKind::ListItem {
-                    ordered: list_stack.last().is_some_and(Option::is_some),
-                    number: list_number,
-                });
+                start_block(
+                    &mut blocks,
+                    &mut block_kind,
+                    &mut current,
+                    BlockKind::ListItem {
+                        ordered: list_stack.last().is_some_and(Option::is_some),
+                        number: list_number,
+                    },
+                );
             }
             Event::End(TagEnd::Item) => {
                 finish_block(&mut blocks, &mut block_kind, &mut current);
                 list_number += 1;
             }
-            Event::Start(Tag::Table(_)) => table = Some(Vec::new()),
+            Event::Start(Tag::Table(_)) => {
+                flush_paragraph(&mut blocks, &mut block_kind, &mut current);
+                table = Some(Vec::new());
+            }
             Event::End(TagEnd::Table) => {
                 if let Some(rows) = table.take() {
                     blocks.push(Block::Table(rows));
@@ -781,28 +1623,40 @@ fn parse_markdown_blocks(markdown: &str) -> Result<Vec<Block>> {
                     cells.push(completed);
                 }
             }
-            Event::Text(text) => push_inline(
-                &mut current,
-                &mut cell,
-                Inline {
-                    text: text.into_string(),
-                    bold: bold_depth > 0,
-                    italic: italic_depth > 0,
-                    code: code_block,
-                    link: !link_stack.is_empty(),
-                },
-            ),
-            Event::Code(text) => push_inline(
-                &mut current,
-                &mut cell,
-                Inline {
-                    text: text.into_string(),
-                    bold: bold_depth > 0,
-                    italic: italic_depth > 0,
-                    code: true,
-                    link: !link_stack.is_empty(),
-                },
-            ),
+            Event::Text(text) => {
+                if block_kind.is_none() && table.is_none() {
+                    block_kind = Some(BlockKind::Paragraph);
+                }
+                push_inline(
+                    &mut current,
+                    &mut cell,
+                    Inline {
+                        text: text.into_string(),
+                        bold: bold_depth > 0,
+                        italic: italic_depth > 0,
+                        code: code_block,
+                        link: !link_stack.is_empty(),
+                        image: None,
+                    },
+                );
+            }
+            Event::Code(text) => {
+                if block_kind.is_none() && table.is_none() {
+                    block_kind = Some(BlockKind::Paragraph);
+                }
+                push_inline(
+                    &mut current,
+                    &mut cell,
+                    Inline {
+                        text: text.into_string(),
+                        bold: bold_depth > 0,
+                        italic: italic_depth > 0,
+                        code: true,
+                        link: !link_stack.is_empty(),
+                        image: None,
+                    },
+                );
+            }
             Event::SoftBreak | Event::HardBreak => push_inline(
                 &mut current,
                 &mut cell,
@@ -811,17 +1665,121 @@ fn parse_markdown_blocks(markdown: &str) -> Result<Vec<Block>> {
                     ..Inline::default()
                 },
             ),
-            Event::Rule => blocks.push(Block::Paragraph(vec![Inline {
-                text: "—".to_owned(),
-                ..Inline::default()
-            }])),
+            Event::Rule => {
+                flush_paragraph(&mut blocks, &mut block_kind, &mut current);
+                blocks.push(Block::Paragraph(vec![Inline {
+                    text: "—".to_owned(),
+                    ..Inline::default()
+                }]));
+            }
+            // Raw HTML is preserved verbatim as text so no construct is
+            // dropped silently, but a raw HTML picture is an unsupported
+            // placement and never degrades into markup or missing pixels.
+            Event::Html(html) | Event::InlineHtml(html) => {
+                let html = html.into_string();
+                if html.to_ascii_lowercase().contains("<img") {
+                    return Err(DmsError::InvalidMarkdownImage(format!(
+                        "raw HTML image markup `{html}` is not a supported placement"
+                    )));
+                }
+                if block_kind.is_none() && table.is_none() {
+                    block_kind = Some(BlockKind::Paragraph);
+                }
+                push_inline(
+                    &mut current,
+                    &mut cell,
+                    Inline {
+                        text: html,
+                        ..Inline::default()
+                    },
+                );
+            }
+            Event::InlineMath(math) | Event::DisplayMath(math) => {
+                if block_kind.is_none() && table.is_none() {
+                    block_kind = Some(BlockKind::Paragraph);
+                }
+                push_inline(
+                    &mut current,
+                    &mut cell,
+                    Inline {
+                        text: format!("${math}$"),
+                        ..Inline::default()
+                    },
+                );
+            }
+            Event::FootnoteReference(label) => {
+                if block_kind.is_none() && table.is_none() {
+                    block_kind = Some(BlockKind::Paragraph);
+                }
+                push_inline(
+                    &mut current,
+                    &mut cell,
+                    Inline {
+                        text: format!("[^{label}]"),
+                        ..Inline::default()
+                    },
+                );
+            }
+            Event::TaskListMarker(checked) => {
+                if block_kind.is_none() && table.is_none() {
+                    block_kind = Some(BlockKind::Paragraph);
+                }
+                let marker = if checked { "[x] " } else { "[ ] " };
+                push_inline(
+                    &mut current,
+                    &mut cell,
+                    Inline {
+                        text: marker.to_owned(),
+                        ..Inline::default()
+                    },
+                );
+            }
             _ => {}
         }
     }
     if block_kind.is_some() {
         finish_block(&mut blocks, &mut block_kind, &mut current);
     }
+    flush_paragraph(&mut blocks, &mut block_kind, &mut current);
     Ok(blocks)
+}
+
+/// Consume the image's complete inline subtree without changing body formatting
+/// or emitting body runs. Nested images contribute their alternative text only.
+fn collect_image_alt_text<'a>(events: &mut impl Iterator<Item = Event<'a>>) -> Result<String> {
+    let mut alt_text = String::new();
+    let mut depth = 1;
+    for event in events {
+        match event {
+            Event::Start(Tag::Image { .. }) => depth += 1,
+            Event::End(TagEnd::Image) => {
+                depth -= 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+            Event::Text(text) | Event::Code(text) => alt_text.push_str(&text),
+            Event::SoftBreak | Event::HardBreak => alt_text.push(' '),
+            Event::Html(html) | Event::InlineHtml(html) => {
+                if html.to_ascii_lowercase().contains("<img") {
+                    return Err(DmsError::InvalidMarkdownImage(format!(
+                        "raw HTML image markup `{html}` is not a supported placement"
+                    )));
+                }
+                alt_text.push_str(&html);
+            }
+            Event::InlineMath(math) | Event::DisplayMath(math) => {
+                alt_text.push_str(&format!("${math}$"));
+            }
+            Event::FootnoteReference(label) => alt_text.push_str(&format!("[^{label}]")),
+            Event::TaskListMarker(checked) => {
+                alt_text.push_str(if checked { "[x] " } else { "[ ] " })
+            }
+            Event::Rule => alt_text.push_str(" — "),
+            Event::Start(_) | Event::End(_) => {}
+        }
+    }
+    Ok(alt_text)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -849,6 +1807,38 @@ fn finish_block(blocks: &mut Vec<Block>, kind: &mut Option<BlockKind>, inlines: 
     });
 }
 
+/// Close text that arrived without an explicit block container (for example a
+/// definition-list title, metadata block, or raw HTML line) as its own
+/// paragraph so no visible content is dropped.
+fn flush_paragraph(
+    blocks: &mut Vec<Block>,
+    kind: &mut Option<BlockKind>,
+    inlines: &mut Vec<Inline>,
+) {
+    if kind.is_none() && !inlines.is_empty() {
+        *kind = Some(BlockKind::Paragraph);
+        finish_block(blocks, kind, inlines);
+    }
+}
+
+fn start_block(
+    blocks: &mut Vec<Block>,
+    kind: &mut Option<BlockKind>,
+    inlines: &mut Vec<Inline>,
+    next: BlockKind,
+) {
+    // A nested container (for example a nested list inside a list item) closes
+    // the enclosing block instead of discarding the text collected so far.
+    if !inlines.is_empty() {
+        if kind.is_none() {
+            *kind = Some(BlockKind::Paragraph);
+        }
+        finish_block(blocks, kind, inlines);
+    }
+    inlines.clear();
+    *kind = Some(next);
+}
+
 fn push_inline(current: &mut Vec<Inline>, cell: &mut Option<Vec<Inline>>, value: Inline) {
     if let Some(cell) = cell.as_mut() {
         cell.push(value);
@@ -866,56 +1856,68 @@ fn heading_number(level: HeadingLevel) -> u8 {
     }
 }
 
-fn render_blocks(blocks: &[Block], template: &LoadedTemplate) -> Result<String> {
+fn render_blocks(blocks: &[Block], context: &mut RenderContext<'_>) -> Result<String> {
     let mut output = String::new();
     for block in blocks {
+        let template = context.template;
         match block {
-            Block::Heading(level, inlines) => output.push_str(&render_paragraph(
-                template
+            Block::Heading(level, inlines) => {
+                let prototype = template
                     .paragraphs
                     .get(&format!("heading{level}"))
-                    .expect("validated heading prototype"),
-                inlines,
-                None,
-            )?),
-            Block::Paragraph(inlines) => output.push_str(&render_paragraph(
-                template
+                    .expect("validated heading prototype")
+                    .clone();
+                output.push_str(&render_paragraph(&prototype, inlines, None, context)?)
+            }
+            Block::Paragraph(inlines) => {
+                let prototype = template
                     .paragraphs
                     .get("paragraph")
-                    .expect("validated paragraph"),
-                inlines,
-                None,
-            )?),
+                    .expect("validated paragraph")
+                    .clone();
+                output.push_str(&render_paragraph(&prototype, inlines, None, context)?)
+            }
             Block::ListItem {
                 ordered,
                 number,
                 inlines,
-            } => output.push_str(&render_paragraph(
-                template.paragraphs.get("list").expect("validated list"),
-                inlines,
-                ordered.then(|| format!("{number}. ")).as_deref(),
-            )?),
+            } => {
+                let prototype = template
+                    .paragraphs
+                    .get("list")
+                    .expect("validated list")
+                    .clone();
+                output.push_str(&render_paragraph(
+                    &prototype,
+                    inlines,
+                    ordered.then(|| format!("{number}. ")).as_deref(),
+                    context,
+                )?)
+            }
             Block::Code(inlines) => {
                 let mut inlines = inlines.clone();
                 for inline in &mut inlines {
                     inline.code = true;
                 }
-                output.push_str(&render_paragraph(
-                    template
-                        .paragraphs
-                        .get("paragraph")
-                        .expect("validated paragraph"),
-                    &inlines,
-                    None,
-                )?);
+                let prototype = template
+                    .paragraphs
+                    .get("paragraph")
+                    .expect("validated paragraph")
+                    .clone();
+                output.push_str(&render_paragraph(&prototype, &inlines, None, context)?);
             }
-            Block::Table(rows) => output.push_str(&render_table(template, rows)?),
+            Block::Table(rows) => output.push_str(&render_table(rows, context)?),
         }
     }
     Ok(output)
 }
 
-fn render_paragraph(prototype: &str, inlines: &[Inline], prefix: Option<&str>) -> Result<String> {
+fn render_paragraph(
+    prototype: &str,
+    inlines: &[Inline],
+    prefix: Option<&str>,
+    context: &mut RenderContext<'_>,
+) -> Result<String> {
     let opening_end = prototype.find('>').ok_or_else(|| {
         DmsError::InvalidMarkdownTemplate("paragraph prototype has no opening tag".to_owned())
     })? + 1;
@@ -936,19 +1938,25 @@ fn render_paragraph(prototype: &str, inlines: &[Inline], prefix: Option<&str>) -
     output.push_str(&prototype[..opening_end]);
     output.push_str(properties);
     if let Some(prefix) = prefix {
-        output.push_str(&render_run(&Inline {
-            text: prefix.to_owned(),
-            ..Inline::default()
-        }));
+        output.push_str(&render_run(
+            &Inline {
+                text: prefix.to_owned(),
+                ..Inline::default()
+            },
+            context,
+        )?);
     }
     for inline in inlines {
-        output.push_str(&render_run(inline));
+        output.push_str(&render_run(inline, context)?);
     }
     output.push_str("</w:p>");
     Ok(output)
 }
 
-fn render_run(inline: &Inline) -> String {
+fn render_run(inline: &Inline, context: &mut RenderContext<'_>) -> Result<String> {
+    if let Some(image) = &inline.image {
+        return context.image_run(image);
+    }
     let mut properties = String::new();
     if inline.bold {
         properties.push_str("<w:b/>");
@@ -964,15 +1972,19 @@ fn render_run(inline: &Inline) -> String {
     }
     let text = xml_escape(&inline.text).replace('\n', "</w:t><w:br/><w:t xml:space=\"preserve\">");
     if properties.is_empty() {
-        format!("<w:r><w:t xml:space=\"preserve\">{text}</w:t></w:r>")
+        Ok(format!(
+            "<w:r><w:t xml:space=\"preserve\">{text}</w:t></w:r>"
+        ))
     } else {
-        format!("<w:r><w:rPr>{properties}</w:rPr><w:t xml:space=\"preserve\">{text}</w:t></w:r>")
+        Ok(format!(
+            "<w:r><w:rPr>{properties}</w:rPr><w:t xml:space=\"preserve\">{text}</w:t></w:r>"
+        ))
     }
 }
 
-fn render_table(template: &LoadedTemplate, rows: &[Vec<Vec<Inline>>]) -> Result<String> {
-    let prototype = &template.table;
-    let row_span = element_span(prototype, "<w:tr", "</w:tr>")?;
+fn render_table(rows: &[Vec<Vec<Inline>>], context: &mut RenderContext<'_>) -> Result<String> {
+    let prototype = context.template.table.clone();
+    let row_span = element_span(&prototype, "<w:tr", "</w:tr>")?;
     let row_prototype = &prototype[row_span.0..row_span.1];
     let cells = all_element_spans(row_prototype, "<w:tc", "</w:tc>")?;
     let columns = rows.first().map_or(0, Vec::len);
@@ -983,7 +1995,7 @@ fn render_table(template: &LoadedTemplate, rows: &[Vec<Vec<Inline>>]) -> Result<
     }
     // Two-column tables retain the operator's existing grid and cell widths.
     let width = (columns != 2)
-        .then(|| table_printable_width(template))
+        .then(|| table_printable_width(context.template))
         .transpose()?;
     if width.is_some_and(|width| columns > width as usize) {
         return Err(DmsError::InvalidMarkdownTemplate(
@@ -1011,7 +2023,8 @@ fn render_table(template: &LoadedTemplate, rows: &[Vec<Vec<Inline>>]) -> Result<
             } else {
                 TABLE_COLUMN_2
             };
-            let mut cell = render_table_cell(&row_prototype[span.0..span.1], token, inlines)?;
+            let mut cell =
+                render_table_cell(&row_prototype[span.0..span.1], token, inlines, context)?;
             if let Some(widths) = &widths {
                 let properties = xml_child(&cell, "w:tcPr")?.unwrap_or("<w:tcPr/>");
                 let properties = set_xml_child(
@@ -1081,11 +2094,15 @@ fn render_table(template: &LoadedTemplate, rows: &[Vec<Vec<Inline>>]) -> Result<
     Ok(output)
 }
 
-fn render_table_cell(prototype: &str, token: &str, inlines: &[Inline]) -> Result<String> {
-    if inlines
-        .iter()
-        .all(|inline| !inline.bold && !inline.italic && !inline.code && !inline.link)
-    {
+fn render_table_cell(
+    prototype: &str,
+    token: &str,
+    inlines: &[Inline],
+    context: &mut RenderContext<'_>,
+) -> Result<String> {
+    if inlines.iter().all(|inline| {
+        !inline.bold && !inline.italic && !inline.code && !inline.link && inline.image.is_none()
+    }) {
         return Ok(prototype.replace(token, &plain_inline_text(inlines)));
     }
     let (start, end) = enclosing_element(prototype, token, "<w:r", "</w:r>")?;
@@ -1093,14 +2110,17 @@ fn render_table_cell(prototype: &str, token: &str, inlines: &[Inline]) -> Result
     let properties = xml_child(run, "w:rPr")?.unwrap_or("<w:rPr/>");
     let mut runs = String::new();
     for inline in inlines {
-        let mut rendered = render_run(inline);
-        let mut merged = properties.to_owned();
-        if let Some(overrides) = xml_child(&rendered, "w:rPr")? {
-            for (name, span) in xml_children(overrides)? {
-                merged = set_xml_child(&merged, &name, &overrides[span.0..span.1], &[])?;
+        let mut rendered = render_run(inline, context)?;
+        // A drawing run carries no template text styling.
+        if inline.image.is_none() {
+            let mut merged = properties.to_owned();
+            if let Some(overrides) = xml_child(&rendered, "w:rPr")? {
+                for (name, span) in xml_children(overrides)? {
+                    merged = set_xml_child(&merged, &name, &overrides[span.0..span.1], &[])?;
+                }
             }
+            rendered = set_xml_child(&rendered, "w:rPr", &merged, &[])?;
         }
-        rendered = set_xml_child(&rendered, "w:rPr", &merged, &[])?;
         runs.push_str(&rendered);
     }
     // Split the marker's text/run, keeping any surrounding template content once.

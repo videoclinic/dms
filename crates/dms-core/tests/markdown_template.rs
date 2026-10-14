@@ -6,13 +6,18 @@ use std::{
 };
 
 use dms_core::{
-    assemble_markdown_docx, validate_markdown_template, DmsError, MarkdownTemplateValidationState,
-    Workspace, MARKDOWN_TEMPLATE_CONTRACT_VERSION, SCHEMA_VERSION,
+    assemble_markdown_docx, validate_markdown_template, DmsError, MarkdownAssetContext,
+    MarkdownTemplateValidationState, Workspace, MARKDOWN_TEMPLATE_CONTRACT_VERSION, SCHEMA_VERSION,
 };
 use tempfile::TempDir;
 use zip::{write::SimpleFileOptions, ZipArchive, ZipWriter};
 
 const FIXTURE: &[u8] = include_bytes!("fixtures/markdown-template.docx");
+// Synthetic solid-color images; independently decoded with FFmpeg.
+const WIDE_PNG: &[u8] = include_bytes!("fixtures/markdown-wide.png");
+const SMALL_PNG: &[u8] = include_bytes!("fixtures/markdown-small.png");
+const PHOTO_JPEG: &[u8] = include_bytes!("fixtures/markdown-photo.jpeg");
+const SECOND_JPEG: &[u8] = include_bytes!("fixtures/markdown-second.jpeg");
 
 struct FixtureWorkspace {
     _temp: TempDir,
@@ -320,8 +325,8 @@ let value = 1;
 | Beta | Two |
 "#;
 
-    assemble_markdown_docx(&template, markdown, &first).unwrap();
-    assemble_markdown_docx(&template, markdown, &second).unwrap();
+    assemble_markdown_docx(&template, markdown, &first, None).unwrap();
+    assemble_markdown_docx(&template, markdown, &second, None).unwrap();
     assert_eq!(fs::read(&first).unwrap(), fs::read(&second).unwrap());
     validate_markdown_template_output(&first);
 
@@ -413,7 +418,7 @@ department: Quality
 # Body
 "#;
 
-    assemble_markdown_docx(&template, markdown, &output).unwrap();
+    assemble_markdown_docx(&template, markdown, &output, None).unwrap();
     let parts = zip_entries(&output);
     let header = String::from_utf8(parts["word/header1.xml"].clone()).unwrap();
     assert!(header.contains("Ada &amp; Co"));
@@ -476,7 +481,8 @@ fn assembler_rejects_missing_frontmatter() {
         assemble_markdown_docx(
             &template,
             "# No frontmatter\n",
-            &temp.path().join("missing.docx")
+            &temp.path().join("missing.docx"),
+            None
         ),
         Err(DmsError::InvalidMarkdownFrontmatter(_))
     ));
@@ -532,9 +538,15 @@ fn assembler_preserves_two_three_four_and_five_column_table_fidelity() {
     let source = temp.path().join("policy.md");
     fs::write(&source, &markdown).unwrap();
     let output = temp.path().join("tables.docx");
-    assemble_markdown_docx(&template, &fs::read_to_string(&source).unwrap(), &output).unwrap();
+    assemble_markdown_docx(
+        &template,
+        &fs::read_to_string(&source).unwrap(),
+        &output,
+        None,
+    )
+    .unwrap();
     let second = temp.path().join("repeat.docx");
-    assemble_markdown_docx(&template, &markdown, &second).unwrap();
+    assemble_markdown_docx(&template, &markdown, &second, None).unwrap();
     assert_eq!(fs::read(&output).unwrap(), fs::read(&second).unwrap());
     assert_eq!(fs::read(&source).unwrap(), markdown.as_bytes());
     assert_eq!(fs::read(&template).unwrap(), template_before);
@@ -655,7 +667,13 @@ fn assembler_sizes_wide_tables_without_grid_or_cell_widths() {
         )
     });
     let output = temp.path().join("wide.docx");
-    assemble_markdown_docx(&template, "---\nversion: 1.0\nconfidentiality: Internal\n---\n| A | B | C |\n|---|---|---|\n| 1 | 2 | 3 |\n", &output).unwrap();
+    assemble_markdown_docx(
+        &template,
+        "---\nversion: 1.0\nconfidentiality: Internal\n---\n| A | B | C |\n|---|---|---|\n| 1 | 2 | 3 |\n",
+        &output,
+        None,
+    )
+    .unwrap();
     let parts = zip_entries(&output);
     let document = std::str::from_utf8(&parts["word/document.xml"]).unwrap();
     let widths: Vec<u32> = xml_elements(document, "w:gridCol")
@@ -677,7 +695,13 @@ fn assembler_preserves_mixed_inline_styles_and_surrounding_cell_content() {
         xml.replace("<w:r><w:t>{TABLE COLUMN 1}</w:t></w:r>", "<w:r><w:rPr><w:color w:val=\"123456\"/><w:b w:val=\"0\"/></w:rPr><w:t xml:space=\"preserve\">Before: {TABLE COLUMN 1} :after</w:t></w:r>")
     });
     let output = temp.path().join("mixed-output.docx");
-    assemble_markdown_docx(&template, "---\nversion: 1.0\nconfidentiality: Internal\n---\n| A | B |\n|---|---|\n| plain **bold** then *italic* and ***both*** <https://example.test> | {TABLE COLUMN 1} |\n", &output).unwrap();
+    assemble_markdown_docx(
+        &template,
+        "---\nversion: 1.0\nconfidentiality: Internal\n---\n| A | B |\n|---|---|\n| plain **bold** then *italic* and ***both*** <https://example.test> | {TABLE COLUMN 1} |\n",
+        &output,
+        None,
+    )
+    .unwrap();
     let parts = zip_entries(&output);
     let document = std::str::from_utf8(&parts["word/document.xml"]).unwrap();
     let rows = xml_elements(document, "w:tr");
@@ -710,7 +734,15 @@ fn assembler_rejects_unusable_page_dimensions_before_creating_wide_table_output(
             xml.replace("w:w=\"11906\"", &format!("w:w=\"{bad_width}\""))
         });
         let output = temp.path().join("must-not-exist.docx");
-        assert!(matches!(assemble_markdown_docx(&template, "---\nversion: 1.0\nconfidentiality: Internal\n---\n| A | B | C |\n|---|---|---|\n| 1 | 2 | 3 |\n", &output), Err(DmsError::InvalidMarkdownTemplate(_))));
+        assert!(matches!(
+            assemble_markdown_docx(
+                &template,
+                "---\nversion: 1.0\nconfidentiality: Internal\n---\n| A | B | C |\n|---|---|---|\n| 1 | 2 | 3 |\n",
+                &output,
+                None
+            ),
+            Err(DmsError::InvalidMarkdownTemplate(_))
+        ));
         assert!(!output.exists());
     }
 }
@@ -864,4 +896,783 @@ fn rewrite_xml_part(
         writer.write_all(&bytes).unwrap();
     }
     writer.finish().unwrap();
+}
+
+fn fixture_png() -> Vec<u8> {
+    zip_entries_from_bytes(FIXTURE)["word/media/fixture.png"].clone()
+}
+
+fn png_pixel_size(bytes: &[u8]) -> (u32, u32) {
+    (
+        u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]),
+        u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]),
+    )
+}
+
+/// Structural PNG fixture with a correct signature, IHDR and IEND chunk.
+fn png_header(width: u32, height: u32) -> Vec<u8> {
+    let mut bytes = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+    let mut header = Vec::from(*b"IHDR");
+    header.extend_from_slice(&width.to_be_bytes());
+    header.extend_from_slice(&height.to_be_bytes());
+    header.extend_from_slice(&[8, 2, 0, 0, 0]);
+    bytes.extend_from_slice(&13u32.to_be_bytes());
+    bytes.extend_from_slice(&header);
+    bytes.extend_from_slice(&crc32(&header).to_be_bytes());
+    bytes.extend_from_slice(&0u32.to_be_bytes());
+    bytes.extend_from_slice(b"IEND");
+    bytes.extend_from_slice(&crc32(b"IEND").to_be_bytes());
+    bytes
+}
+
+/// Structural JPEG fixture: SOI, JFIF APP0, SOF0 frame header, SOS and EOI.
+fn jpeg_stub(width: u16, height: u16) -> Vec<u8> {
+    let mut bytes = vec![0xFF, 0xD8];
+    let mut app0 = Vec::from(*b"JFIF\0");
+    app0.extend_from_slice(&[0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00]);
+    bytes.extend_from_slice(&[0xFF, 0xE0]);
+    bytes.extend_from_slice(&((app0.len() + 2) as u16).to_be_bytes());
+    bytes.extend_from_slice(&app0);
+    let mut frame = vec![8];
+    frame.extend_from_slice(&height.to_be_bytes());
+    frame.extend_from_slice(&width.to_be_bytes());
+    frame.push(3);
+    frame.extend_from_slice(&[1, 0x22, 0x00, 2, 0x11, 0x01, 3, 0x11, 0x01]);
+    bytes.extend_from_slice(&[0xFF, 0xC0]);
+    bytes.extend_from_slice(&((frame.len() + 2) as u16).to_be_bytes());
+    bytes.extend_from_slice(&frame);
+    let scan = [3u8, 1, 0x00, 2, 0x11, 3, 0x11, 0, 63, 0];
+    bytes.extend_from_slice(&[0xFF, 0xDA]);
+    bytes.extend_from_slice(&((scan.len() + 2) as u16).to_be_bytes());
+    bytes.extend_from_slice(&scan);
+    bytes.extend_from_slice(&[0xFF, 0xD9]);
+    bytes
+}
+
+fn crc32(bytes: &[u8]) -> u32 {
+    let mut crc = 0xFFFF_FFFFu32;
+    for byte in bytes {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            crc = if crc & 1 == 1 {
+                (crc >> 1) ^ 0xEDB8_8320
+            } else {
+                crc >> 1
+            };
+        }
+    }
+    !crc
+}
+
+#[test]
+fn assembler_embeds_local_source_images_as_drawings_and_package_media() {
+    let temp = tempfile::tempdir().unwrap();
+    let input_root = temp.path().join("input");
+    fs::create_dir_all(input_root.join("assets")).unwrap();
+    fs::create_dir_all(input_root.join("bilder")).unwrap();
+    let template = temp.path().join("template.docx");
+    fs::write(&template, FIXTURE).unwrap();
+
+    let logo = fixture_png();
+    let (logo_width, logo_height) = png_pixel_size(&logo);
+    let wide = WIDE_PNG.to_vec();
+    let small = SMALL_PNG.to_vec();
+    let photo = PHOTO_JPEG.to_vec();
+    fs::write(input_root.join("assets/shot.png"), &logo).unwrap();
+    fs::write(input_root.join("assets/shot copy.png"), &small).unwrap();
+    fs::write(input_root.join("bilder/diagramm mit Ümlaut.png"), &wide).unwrap();
+    fs::write(input_root.join("assets/photo.jpeg"), &photo).unwrap();
+
+    let source = input_root.join("policy.md");
+    let markdown = "---\nversion: 1.0\nconfidentiality: Internal\n---\n# Policy\n\n\
+![Screenshot](assets/shot.png)\n\n\
+Inline ![inline shot](assets/shot.png) reference.\n\n\
+![](<bilder/diagramm mit Ümlaut.png>)\n\n\
+- ![List picture](assets/photo.jpeg)\n\n\
+| A | B |\n| --- | --- |\n| ![Cell picture](assets/shot%20copy.png) | plain |\n";
+    fs::write(&source, markdown).unwrap();
+    let template_before = fs::read(&template).unwrap();
+    let source_before = fs::read(&source).unwrap();
+
+    let context = MarkdownAssetContext::new(&input_root, &source);
+    let output = temp.path().join("policy.docx");
+    assemble_markdown_docx(&template, markdown, &output, Some(&context)).unwrap();
+    let repeated = temp.path().join("policy-repeat.docx");
+    assemble_markdown_docx(&template, markdown, &repeated, Some(&context)).unwrap();
+    assert_eq!(fs::read(&output).unwrap(), fs::read(&repeated).unwrap());
+    assert_eq!(fs::read(&template).unwrap(), template_before);
+    assert_eq!(fs::read(&source).unwrap(), source_before);
+    for (path, bytes) in [
+        ("assets/shot.png", &logo),
+        ("assets/shot copy.png", &small),
+        ("bilder/diagramm mit Ümlaut.png", &wide),
+        ("assets/photo.jpeg", &photo),
+    ] {
+        assert_eq!(fs::read(input_root.join(path)).unwrap(), *bytes);
+    }
+
+    let before = zip_entries(&template);
+    let after = zip_entries(&output);
+    assert_eq!(after["word/media/fixture.png"], logo);
+    for (name, bytes) in &before {
+        if !matches!(
+            name.as_str(),
+            "word/document.xml" | "word/_rels/document.xml.rels" | "[Content_Types].xml"
+        ) {
+            assert_eq!(after.get(name), Some(bytes), "changed package part {name}");
+        }
+    }
+    // One media part per distinct asset, in first-reference order.
+    assert_eq!(after["word/media/dms-image-1.png"], logo);
+    assert_eq!(after["word/media/dms-image-2.png"], wide);
+    assert_eq!(after["word/media/dms-image-3.jpeg"], photo);
+    assert_eq!(after["word/media/dms-image-4.png"], small);
+    let mut expected_parts = before.keys().cloned().collect::<Vec<_>>();
+    expected_parts.extend(
+        [
+            "word/media/dms-image-1.png",
+            "word/media/dms-image-2.png",
+            "word/media/dms-image-3.jpeg",
+            "word/media/dms-image-4.png",
+        ]
+        .map(str::to_owned),
+    );
+    expected_parts.sort();
+    assert_eq!(after.keys().cloned().collect::<Vec<_>>(), expected_parts);
+
+    let relationships = String::from_utf8(after["word/_rels/document.xml.rels"].clone()).unwrap();
+    for existing in ["rId1", "rId2", "rId3", "rId4"] {
+        assert!(
+            relationships.contains(&format!("Id=\"{existing}\"")),
+            "lost template relationship {existing}"
+        );
+    }
+    assert_eq!(relationships.matches("relationships/image").count(), 5);
+    for (id, target) in [
+        ("rId5", "media/dms-image-1.png"),
+        ("rId6", "media/dms-image-2.png"),
+        ("rId7", "media/dms-image-3.jpeg"),
+        ("rId8", "media/dms-image-4.png"),
+    ] {
+        assert!(
+            relationships.contains(&format!("Id=\"{id}\" ")) && relationships.contains(target),
+            "missing media relationship {id} -> {target}"
+        );
+    }
+
+    let content_types = String::from_utf8(after["[Content_Types].xml"].clone()).unwrap();
+    assert_eq!(content_types.matches("Extension=\"png\"").count(), 1);
+    assert_eq!(
+        content_types.matches("Extension=\"jpeg\"").count(),
+        1,
+        "jpeg default must be added exactly once"
+    );
+    assert!(content_types.contains("<Default Extension=\"jpeg\" ContentType=\"image/jpeg\"/>"));
+
+    let document = String::from_utf8(after["word/document.xml"].clone()).unwrap();
+    assert_eq!(xml_elements(&document, "w:drawing").len(), 5);
+    assert_eq!(xml_elements(&document, "wp:extent").len(), 5);
+    // A repeated source image reuses one media part and one relationship.
+    assert_eq!(document.matches("r:embed=\"rId5\"").count(), 2);
+    assert_eq!(document.matches("r:embed=\"rId6\"").count(), 1);
+    for description in [
+        "Screenshot",
+        "inline shot",
+        "bilder/diagramm mit Ümlaut.png",
+        "List picture",
+        "Cell picture",
+    ] {
+        assert!(
+            document.contains(&format!("descr=\"{description}\"")),
+            "missing alternative text {description:?}"
+        );
+    }
+    // Printability limit: the fixture page is 11906 twips wide with 1440 twip
+    // margins, so drawings may not exceed 9026 twips (5_731_510 EMU).
+    let limit = (11906 - 1440 - 1440) * 635;
+    let extents = xml_elements(&document, "wp:extent")
+        .iter()
+        .map(|extent| {
+            (
+                xml_attribute(extent, "cx").parse::<u64>().unwrap(),
+                xml_attribute(extent, "cy").parse::<u64>().unwrap(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        extents[0],
+        (u64::from(logo_width) * 9525, u64::from(logo_height) * 9525),
+        "a small image keeps its native 96 DPI size"
+    );
+    assert_eq!(extents[1], extents[0], "a repeated image keeps its size");
+    assert_eq!(extents[2], (limit, limit / 2), "aspect ratio is preserved");
+    assert_eq!(
+        extents[3],
+        (limit, limit * 360 / 640),
+        "a wide JPEG is scaled to the printable width"
+    );
+    assert_eq!(extents[4], (40 * 9525, 20 * 9525));
+
+    let image_only = xml_elements(&document, "w:p")
+        .into_iter()
+        .filter(|paragraph| paragraph.contains("<w:drawing>") && xml_text(paragraph).is_empty())
+        .count();
+    assert!(
+        image_only >= 2,
+        "image-only paragraphs must remain drawing paragraphs"
+    );
+}
+
+#[test]
+fn assembler_rejects_unusable_or_uncontained_source_images() {
+    let temp = tempfile::tempdir().unwrap();
+    let outside = temp.path().join("outside.png");
+    let input_root = temp.path().join("input");
+    fs::create_dir_all(input_root.join("assets")).unwrap();
+    let template = temp.path().join("template.docx");
+    fs::write(&template, FIXTURE).unwrap();
+    let logo = fixture_png();
+    fs::write(input_root.join("assets/shot.png"), &logo).unwrap();
+    fs::write(
+        input_root.join("assets/vector.svg"),
+        b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>",
+    )
+    .unwrap();
+    let mut broken = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+    broken.extend_from_slice(b"truncated payload without a header chunk");
+    fs::write(input_root.join("assets/broken.png"), &broken).unwrap();
+    fs::write(&outside, &logo).unwrap();
+    assert_eq!(
+        fs::canonicalize(input_root.join("../outside.png")).unwrap(),
+        fs::canonicalize(&outside).unwrap()
+    );
+    assert!(!fs::canonicalize(&outside)
+        .unwrap()
+        .starts_with(fs::canonicalize(&input_root).unwrap()));
+
+    let source = input_root.join("policy.md");
+    let context = MarkdownAssetContext::new(&input_root, &source);
+    let absolute = if cfg!(windows) {
+        ("C:\\outside\\shot.png", "remote or unsupported")
+    } else {
+        ("/outside/shot.png", "is an absolute path")
+    };
+    #[cfg(unix)]
+    let symlink_escape = {
+        use std::os::unix::fs::symlink;
+        symlink(&outside, input_root.join("assets/link.png")).unwrap();
+        Some(("assets/link.png", "resolves outside the input root"))
+    };
+    #[cfg(not(unix))]
+    let symlink_escape: Option<(&str, &str)> = None;
+
+    let cases = [
+        (
+            "assets/shot.png",
+            false,
+            "no source/asset resolution context",
+        ),
+        (
+            "https://example.test/shot.png",
+            true,
+            "remote or unsupported",
+        ),
+        (absolute.0, true, absolute.1),
+        ("../outside.png", true, "resolves outside the input root"),
+        (
+            "%2e%2e/outside.png",
+            true,
+            "resolves outside the input root",
+        ),
+        ("assets/missing.png", true, "does not exist"),
+        ("assets/broken.png", true, "is corrupt"),
+        ("assets/vector.svg", true, "unsupported image format"),
+        ("assets/shot.png#fragment", true, "fragment or query"),
+        ("assets/shot.png?query=1", true, "fragment or query"),
+        ("file:assets/shot.png", true, "remote or unsupported"),
+        ("data:image/png;base64,AA==", true, "remote or unsupported"),
+        ("assets", true, "is not a regular file"),
+        (
+            "<img src=\"assets/shot.png\">",
+            true,
+            "raw HTML image markup",
+        ),
+    ];
+    for (reference, use_context, expected) in cases {
+        let markdown = format!(
+            "---\nversion: 1.0\nconfidentiality: Internal\n---\n# Policy\n\n![Picture](<{reference}>)\n"
+        );
+        let output = temp.path().join("rejected.docx");
+        let result = assemble_markdown_docx(
+            &template,
+            &markdown,
+            &output,
+            use_context.then_some(&context),
+        );
+        assert!(
+            matches!(&result, Err(DmsError::InvalidMarkdownImage(message)) if message.contains(expected)),
+            "reference {reference:?} was not rejected with {expected:?}: {result:?}"
+        );
+        assert!(!output.exists(), "rejected input created {reference:?}");
+    }
+
+    if let Some((reference, expected)) = symlink_escape {
+        let markdown = format!(
+            "---\nversion: 1.0\nconfidentiality: Internal\n---\n# Policy\n\n![Link]({reference})\n"
+        );
+        let output = temp.path().join("symlink.docx");
+        let result = assemble_markdown_docx(&template, &markdown, &output, Some(&context));
+        assert!(
+            matches!(&result, Err(DmsError::InvalidMarkdownImage(message)) if message.contains(expected)),
+            "symlink escape was not rejected: {result:?}"
+        );
+        assert!(!output.exists());
+    }
+}
+
+#[test]
+fn assembler_resolves_parent_relative_shared_images_inside_input_root() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("input");
+    fs::create_dir_all(root.join("policies")).unwrap();
+    fs::create_dir_all(root.join("assets")).unwrap();
+    fs::write(root.join("assets/shared.png"), SMALL_PNG).unwrap();
+    let template = temp.path().join("template.docx");
+    fs::write(&template, FIXTURE).unwrap();
+    let markdown = "---\nversion: 1.0\nconfidentiality: Internal\n---\n![Shared](../assets/shared.png)\n\n![Again](%2e%2e/assets/shared.png)";
+    for name in ["a", "b"] {
+        let source = root.join(format!("policies/{name}.md"));
+        fs::write(&source, markdown).unwrap();
+        let output = temp.path().join(format!("{name}.docx"));
+        let context = MarkdownAssetContext::new(&root, &source);
+        assemble_markdown_docx(&template, markdown, &output, Some(&context)).unwrap();
+        let parts = zip_entries(&output);
+        assert_eq!(parts["word/media/dms-image-1.png"], SMALL_PNG);
+        assert!(!parts.contains_key("word/media/dms-image-2.png"));
+        let document = String::from_utf8(parts["word/document.xml"].clone()).unwrap();
+        assert_eq!(document.matches("r:embed=\"rId5\"").count(), 2);
+        assert_eq!(fs::read(source).unwrap(), markdown.as_bytes());
+    }
+    assert_eq!(fs::read(root.join("assets/shared.png")).unwrap(), SMALL_PNG);
+    assert_eq!(fs::read(template).unwrap(), FIXTURE);
+}
+
+#[test]
+fn assembler_rejects_header_only_and_structurally_corrupt_images() {
+    let temp = tempfile::tempdir().unwrap();
+    let template = temp.path().join("template.docx");
+    fs::write(&template, FIXTURE).unwrap();
+    let context = MarkdownAssetContext::new(temp.path(), temp.path().join("policy.md"));
+    let mut bad_crc = SMALL_PNG.to_vec();
+    bad_crc[29] ^= 1;
+    let mut bad_length = SMALL_PNG.to_vec();
+    bad_length[8..12].copy_from_slice(&u32::MAX.to_be_bytes());
+    let mut no_scan = PHOTO_JPEG.to_vec();
+    let scan = no_scan
+        .windows(2)
+        .position(|pair| pair == [0xff, 0xda])
+        .unwrap();
+    no_scan.truncate(scan);
+    no_scan.extend_from_slice(&[0xff, 0xd9]);
+    let mut empty_scan = PHOTO_JPEG.to_vec();
+    let scan_length = u16::from_be_bytes([empty_scan[scan + 2], empty_scan[scan + 3]]);
+    empty_scan.truncate(scan + 2 + usize::from(scan_length));
+    empty_scan.extend_from_slice(&[0xff, 0xd9]);
+    for (name, bytes) in [
+        ("header.png", png_header(40, 20)),
+        ("header.jpeg", jpeg_stub(640, 360)),
+        ("crc.png", bad_crc),
+        ("length.png", bad_length),
+        ("truncated.png", SMALL_PNG[..SMALL_PNG.len() - 1].to_vec()),
+        (
+            "truncated.jpeg",
+            PHOTO_JPEG[..PHOTO_JPEG.len() - 1].to_vec(),
+        ),
+        ("no-scan.jpeg", no_scan),
+        ("empty-scan.jpeg", empty_scan),
+    ] {
+        fs::write(temp.path().join(name), bytes).unwrap();
+        let markdown = format!("---\nversion: 1.0\nconfidentiality: Internal\n---\n![Bad]({name})");
+        let output = temp.path().join("rejected.docx");
+        let result = assemble_markdown_docx(&template, &markdown, &output, Some(&context));
+        assert!(
+            matches!(&result, Err(DmsError::InvalidMarkdownImage(message)) if message.contains("is corrupt")),
+            "{name}: {result:?}"
+        );
+        assert!(!output.exists(), "{name} created output");
+    }
+}
+
+#[test]
+fn assembler_deduplicates_jpeg_content_types_and_rejects_template_conflicts() {
+    let temp = tempfile::tempdir().unwrap();
+    let original = temp.path().join("original.docx");
+    fs::write(&original, FIXTURE).unwrap();
+    // Distinct bytes and canonical assets, not references to one cached image.
+    assert_ne!(PHOTO_JPEG, SECOND_JPEG);
+    fs::write(temp.path().join("one.jpeg"), PHOTO_JPEG).unwrap();
+    fs::write(temp.path().join("two.jpeg"), SECOND_JPEG).unwrap();
+    let context = MarkdownAssetContext::new(temp.path(), temp.path().join("policy.md"));
+    let markdown =
+        "---\nversion: 1.0\nconfidentiality: Internal\n---\n![One](one.jpeg)\n\n![Two](two.jpeg)";
+    for declaration in [
+        "",
+        "<Default Extension=\"JpEg\" ContentType=\"image/jpeg\"/>",
+    ] {
+        let template = temp.path().join("template.docx");
+        rewrite_xml_part(&original, &template, "[Content_Types].xml", |xml| {
+            xml.replace("</Types>", &format!("{declaration}</Types>"))
+        });
+        let output = temp.path().join("ok.docx");
+        assemble_markdown_docx(&template, markdown, &output, Some(&context)).unwrap();
+        let parts = zip_entries(&output);
+        assert_eq!(parts["word/media/dms-image-1.jpeg"], PHOTO_JPEG);
+        assert_eq!(parts["word/media/dms-image-2.jpeg"], SECOND_JPEG);
+        let types = String::from_utf8(parts["[Content_Types].xml"].clone()).unwrap();
+        let defaults = xml_elements(&types, "Default");
+        assert_eq!(
+            defaults
+                .iter()
+                .filter(|entry| xml_attribute(entry, "Extension").eq_ignore_ascii_case("jpeg"))
+                .count(),
+            1
+        );
+        if !declaration.is_empty() {
+            assert_eq!(
+                parts["[Content_Types].xml"],
+                zip_entries(&template)["[Content_Types].xml"]
+            );
+        }
+    }
+    for declaration in [
+        "<Default Extension=\"jpeg\" ContentType=\"image/png\"/>",
+        "<Default Extension=\"JPEG\" ContentType=\"image/png\"/>",
+        "<Default Extension=\"JPEG\" ContentType=\"image/png\"/><Default Extension=\"jpeg\" ContentType=\"image/jpeg\"/>",
+        "<Default Extension=\"jpeg\" ContentType=\"image/jpeg\"/><Default Extension=\"JPEG\" ContentType=\"image/png\"/>",
+    ] {
+        let template = temp.path().join("conflict.docx");
+        rewrite_xml_part(&original, &template, "[Content_Types].xml", |xml| {
+            xml.replace("</Types>", &format!("{declaration}</Types>"))
+        });
+        let before = fs::read(&template).unwrap();
+        let output = temp.path().join("rejected.docx");
+        let result = assemble_markdown_docx(&template, markdown, &output, Some(&context));
+        assert!(matches!(&result, Err(DmsError::InvalidMarkdownTemplate(message)) if message.contains("[Content_Types].xml")), "{result:?}");
+        assert!(!output.exists());
+        assert_eq!(fs::read(&template).unwrap(), before);
+    }
+}
+
+#[test]
+fn assembler_avoids_template_media_relationship_and_drawing_id_collisions() {
+    let temp = tempfile::tempdir().unwrap();
+    let template = temp.path().join("template.docx");
+    let mut entries = zip_entries_from_bytes(FIXTURE);
+    entries.insert("word/media/dms-image-1.png".to_owned(), SMALL_PNG.to_vec());
+    let rels = String::from_utf8(entries["word/_rels/document.xml.rels"].clone()).unwrap();
+    let occupied = "<Relationship Id=\"rId900\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" Target=\"media/dms-image-1.png\"/>";
+    entries.insert(
+        "word/_rels/document.xml.rels".to_owned(),
+        rels.replace("</Relationships>", &format!("{occupied}</Relationships>"))
+            .into_bytes(),
+    );
+    let document = String::from_utf8(entries["word/document.xml"].clone()).unwrap();
+    let drawing = concat!(
+        "<w:p><w:r><w:drawing><wp:inline xmlns:wp=\"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing\">",
+        "<wp:extent cx=\"381000\" cy=\"190500\"/><wp:docPr id=\"7000\" name=\"Existing\"/>",
+        "<a:graphic xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/picture\">",
+        "<pic:pic xmlns:pic=\"http://schemas.openxmlformats.org/drawingml/2006/picture\"><pic:nvPicPr><pic:cNvPr id=\"7000\" name=\"Existing\"/><pic:cNvPicPr/></pic:nvPicPr>",
+        "<pic:blipFill><a:blip r:embed=\"rId900\"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr/></pic:pic>",
+        "</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>"
+    );
+    entries.insert(
+        "word/document.xml".to_owned(),
+        document
+            .replace("<w:body>", &format!("<w:body>{drawing}"))
+            .into_bytes(),
+    );
+    let mut writer = ZipWriter::new(fs::File::create(&template).unwrap());
+    for (name, bytes) in &entries {
+        writer
+            .start_file(name, SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(bytes).unwrap();
+    }
+    writer.finish().unwrap();
+    let before = fs::read(&template).unwrap();
+    fs::write(temp.path().join("new.png"), WIDE_PNG).unwrap();
+    let context = MarkdownAssetContext::new(temp.path(), temp.path().join("policy.md"));
+    let output = temp.path().join("out.docx");
+    assemble_markdown_docx(
+        &template,
+        "---\nversion: 1.0\nconfidentiality: Internal\n---\n![New](new.png)\n\n![Repeat](new.png)",
+        &output,
+        Some(&context),
+    )
+    .unwrap();
+    let parts = zip_entries(&output);
+    assert_eq!(parts["word/media/dms-image-1.png"], SMALL_PNG);
+    assert_eq!(parts["word/media/dms-image-2.png"], WIDE_PNG);
+    let relationships = String::from_utf8(parts["word/_rels/document.xml.rels"].clone()).unwrap();
+    assert!(relationships.contains(occupied));
+    let new_relationship = xml_elements(&relationships, "Relationship")
+        .into_iter()
+        .find(|entry| xml_attribute(entry, "Id") == "rId901")
+        .unwrap();
+    assert_eq!(
+        xml_attribute(new_relationship, "Target"),
+        "media/dms-image-2.png"
+    );
+    let document = String::from_utf8(parts["word/document.xml"].clone()).unwrap();
+    assert!(document.contains(drawing));
+    let ids = xml_elements(&document, "wp:docPr")
+        .iter()
+        .map(|entry| xml_attribute(entry, "id"))
+        .collect::<Vec<_>>();
+    assert_eq!(ids, ["7000", "7001", "7002"]);
+    assert_eq!(document.matches("r:embed=\"rId901\"").count(), 2);
+    assert_eq!(fs::read(&template).unwrap(), before);
+    for (name, bytes) in entries {
+        if !matches!(
+            name.as_str(),
+            "word/document.xml" | "word/_rels/document.xml.rels"
+        ) {
+            assert_eq!(parts[&name], bytes, "changed template part {name}");
+        }
+    }
+}
+
+#[test]
+fn assembler_avoids_drawing_ids_in_preserved_package_parts() {
+    let temp = tempfile::tempdir().unwrap();
+    fs::write(temp.path().join("new.png"), SMALL_PNG).unwrap();
+    let context = MarkdownAssetContext::new(temp.path(), temp.path().join("policy.md"));
+    for (part, root, contents, relationship_type) in [
+        ("word/header1.xml", "w:hdr", "", "header"),
+        ("word/footer1.xml", "w:ftr", "", "footer"),
+        (
+            "word/footnotes.xml",
+            "w:footnotes",
+            "w:footnote",
+            "footnotes",
+        ),
+        ("word/comments.xml", "w:comments", "w:comment", "comments"),
+    ] {
+        // Independently exercise both ID kinds as the package maximum.
+        for (doc_id, pic_id) in [(1, 0), (9000, 8000), (8000, 9000)] {
+            let drawing = format!(concat!(
+                "<w:p><w:r><w:drawing><wp:inline>",
+                "<wp:extent cx=\"9525\" cy=\"9525\"/><wp:docPr id=\"{}\" name=\"Preserved\"/>",
+                "<a:graphic><a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/picture\">",
+                "<pic:pic><pic:nvPicPr><pic:cNvPr id=\"{}\" name=\"Preserved\"/><pic:cNvPicPr/></pic:nvPicPr>",
+                "<pic:blipFill><a:blip r:embed=\"rIdLogo\"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr/></pic:pic>",
+                "</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>"
+            ), doc_id, pic_id);
+            let drawing = if contents.is_empty() {
+                drawing
+            } else {
+                format!("<{contents} w:id=\"1\">{drawing}</{contents}>")
+            };
+            let xml = format!(
+                "<{root} xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" xmlns:wp=\"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing\" xmlns:pic=\"http://schemas.openxmlformats.org/drawingml/2006/picture\" xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">{drawing}</{root}>"
+            );
+            let xml = if part == "word/comments.xml" {
+                xml.replace("wp:", "draw:")
+                    .replace("xmlns:wp=", "xmlns:draw=")
+                    .replace("pic:", "picture:")
+                    .replace("xmlns:pic=", "xmlns:picture=")
+                    .replace(&format!("id=\"{pic_id}\""), &format!("id = '{pic_id}'"))
+            } else {
+                xml
+            };
+            let mut entries = zip_entries_from_bytes(FIXTURE);
+            entries.insert(part.to_owned(), xml.into_bytes());
+            let filename = part.strip_prefix("word/").unwrap();
+            entries.insert(
+                format!("word/_rels/{filename}.rels"),
+                b"<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rIdLogo\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" Target=\"media/fixture.png\"/></Relationships>".to_vec(),
+            );
+            if !contents.is_empty() {
+                let types = String::from_utf8(entries["[Content_Types].xml"].clone()).unwrap();
+                entries.insert("[Content_Types].xml".to_owned(), types.replace(
+                    "</Types>",
+                    &format!("<Override PartName=\"/{part}\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.{relationship_type}+xml\"/></Types>"),
+                ).into_bytes());
+                let rels =
+                    String::from_utf8(entries["word/_rels/document.xml.rels"].clone()).unwrap();
+                entries.insert("word/_rels/document.xml.rels".to_owned(), rels.replace(
+                    "</Relationships>",
+                    &format!("<Relationship Id=\"rIdPreserved\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/{relationship_type}\" Target=\"{filename}\"/></Relationships>"),
+                ).into_bytes());
+            }
+            let template = temp.path().join("template.docx");
+            let mut writer = ZipWriter::new(fs::File::create(&template).unwrap());
+            for (name, bytes) in &entries {
+                writer
+                    .start_file(name, SimpleFileOptions::default())
+                    .unwrap();
+                writer.write_all(bytes).unwrap();
+            }
+            writer.finish().unwrap();
+            let before = fs::read(&template).unwrap();
+            let output = temp.path().join("out.docx");
+            assemble_markdown_docx(
+                &template,
+                "---\nversion: 1.0\nconfidentiality: Internal\n---\n![New](new.png)\n\n![Repeat](new.png)",
+                &output,
+                Some(&context),
+            ).unwrap();
+            let after = zip_entries(&output);
+            let document = std::str::from_utf8(&after["word/document.xml"]).unwrap();
+            for name in ["wp:docPr", "pic:cNvPr"] {
+                let ids = xml_elements(document, name)
+                    .iter()
+                    .map(|entry| xml_attribute(entry, "id").parse::<u32>().unwrap())
+                    .collect::<Vec<_>>();
+                let maximum = doc_id.max(pic_id);
+                assert_eq!(
+                    ids,
+                    [maximum + 1, maximum + 2],
+                    "{part}: {name}, existing {doc_id}/{pic_id}"
+                );
+                assert!(ids.iter().all(|id| *id > doc_id && *id > pic_id));
+            }
+            for (name, bytes) in &after {
+                if name.ends_with(".xml") || name.ends_with(".rels") {
+                    xml_elements(std::str::from_utf8(bytes).unwrap(), "unused");
+                }
+            }
+            for (name, bytes) in &entries {
+                if !matches!(
+                    name.as_str(),
+                    "word/document.xml" | "word/_rels/document.xml.rels"
+                ) {
+                    assert_eq!(after.get(name), Some(bytes), "changed package part {name}");
+                }
+            }
+            assert_eq!(fs::read(&template).unwrap(), before);
+            assert_eq!(fs::read(temp.path().join("new.png")).unwrap(), SMALL_PNG);
+        }
+    }
+}
+
+#[test]
+fn assembler_keeps_image_alt_inline_events_out_of_body_runs() {
+    let temp = tempfile::tempdir().unwrap();
+    let template = temp.path().join("template.docx");
+    fs::write(&template, FIXTURE).unwrap();
+    fs::write(temp.path().join("image.png"), SMALL_PNG).unwrap();
+    let source = temp.path().join("policy.md");
+    let context = MarkdownAssetContext::new(temp.path(), &source);
+    for (alt, expected) in [
+        ("line one\nline two", "line one line two"),
+        ("line one  \nline two", "line one line two"),
+        ("line one\\\nline two", "line one line two"),
+        (
+            "**bold** *italic* `code` ~~strike~~",
+            "bold italic code strike",
+        ),
+        ("[portal](https://example.test)", "portal"),
+        (
+            "<span>markup</span> & \"quoted\"",
+            "<span>markup</span> & “quoted”",
+        ),
+        ("equation $x^2$", "equation $x^2$"),
+        ("note\\[^n\\]", "note[^n]"),
+        ("outer ![inner](unused.png) end", "outer inner end"),
+    ] {
+        let markdown = format!(
+            "---\nversion: 1.0\nconfidentiality: Internal\n---\n![{alt}](image.png)\n\n*before ![{alt}](image.png) after*\n"
+        );
+        fs::write(&source, &markdown).unwrap();
+        let output = temp.path().join("alt.docx");
+        assemble_markdown_docx(&template, &markdown, &output, Some(&context)).unwrap();
+        let parts = zip_entries(&output);
+        let document = std::str::from_utf8(&parts["word/document.xml"]).unwrap();
+        let paragraphs = xml_elements(document, "w:p")
+            .into_iter()
+            .filter(|paragraph| paragraph.contains("<w:drawing>"))
+            .collect::<Vec<_>>();
+        assert_eq!(paragraphs.len(), 2, "{alt:?}");
+        for paragraph in &paragraphs {
+            for name in ["wp:docPr", "pic:cNvPr"] {
+                let properties = xml_elements(paragraph, name);
+                assert_eq!(properties.len(), 1, "{alt:?}");
+                assert_eq!(xml_attribute(properties[0], "descr"), expected, "{alt:?}");
+            }
+        }
+        assert_eq!(xml_elements(paragraphs[0], "w:r").len(), 1, "{alt:?}");
+        assert!(xml_elements(paragraphs[0], "w:t").is_empty(), "{alt:?}");
+        assert!(xml_elements(paragraphs[0], "w:br").is_empty(), "{alt:?}");
+        assert_eq!(xml_text(paragraphs[1]), "before  after", "{alt:?}");
+        let text_runs = xml_elements(paragraphs[1], "w:r")
+            .into_iter()
+            .filter(|run| !xml_elements(run, "w:t").is_empty())
+            .collect::<Vec<_>>();
+        assert_eq!(text_runs.len(), 2, "{alt:?}");
+        assert!(
+            text_runs.iter().all(|run| run.contains("<w:i/>")),
+            "{alt:?}"
+        );
+        assert_eq!(fs::read(&source).unwrap(), markdown.as_bytes());
+    }
+    let output = temp.path().join("rejected.docx");
+    assert!(matches!(assemble_markdown_docx(
+        &template,
+        "---\nversion: 1.0\nconfidentiality: Internal\n---\n![<img src=\"nested.png\">](image.png)",
+        &output,
+        Some(&context),
+    ), Err(DmsError::InvalidMarkdownImage(message)) if message.contains("raw HTML image markup")));
+    assert!(!output.exists());
+    assert_eq!(fs::read(template).unwrap(), FIXTURE);
+    assert_eq!(fs::read(temp.path().join("image.png")).unwrap(), SMALL_PNG);
+}
+
+#[test]
+fn assembler_preserves_other_markdown_constructs_without_losing_content() {
+    let temp = tempfile::tempdir().unwrap();
+    let template = temp.path().join("template.docx");
+    fs::write(&template, FIXTURE).unwrap();
+    let markdown = "---\nversion: 1.0\nconfidentiality: Internal\n---\n# Constructs\n\n\
+- [x] done task\n- [ ] open task\n\n\
+Footnote reference [^note] here.\n\n[^note]: Footnote body text.\n\n\
+Line with <br> inline HTML and <span>markup</span> here.\n\n\
+Math $x^2$ stays.\n\n~~struck out~~ text.\n\n\
+Term\n: Definition text\n\n\
+> Quoted line.\n\n1. first\n   1. nested\n\n\
+Autolink <https://example.test> and `code span`.\n\n---\n\nx: 1\n";
+    let output = temp.path().join("constructs.docx");
+    assemble_markdown_docx(&template, markdown, &output, None).unwrap();
+
+    let parts = zip_entries(&output);
+    let document = String::from_utf8(parts["word/document.xml"].clone()).unwrap();
+    let text = xml_text(&document);
+    for visible in [
+        "[x] done task",
+        "[ ] open task",
+        "[^note]",
+        "Footnote body text.",
+        "markup",
+        "$x^2$",
+        "struck out",
+        "Term",
+        "Definition text",
+        "Quoted line.",
+        "first",
+        "nested",
+        "https://example.test",
+        "x: 1",
+        "—",
+    ] {
+        assert!(
+            text.contains(visible),
+            "lost visible content {visible:?} in {text:?}"
+        );
+    }
+    for markup in ["&lt;br&gt;", "&lt;span&gt;", "&lt;/span&gt;"] {
+        assert!(
+            document.contains(markup),
+            "raw inline HTML was not preserved as text: {markup:?}"
+        );
+    }
 }

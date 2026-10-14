@@ -7,7 +7,7 @@
 | ID | CAP-0007 |
 | Status | not implemented |
 | Mechanism | Installed Microsoft Word for Office drafts and Markdown converted into a temporary DOCX from the workspace Word-template asset |
-| Tests | Partial phase-5 and CHG-0004 evidence: [`dms-desktop` adapter/unit tests](../../../crates/dms-desktop/src/export.rs) cover template-backed temporary DOCX assembly, controlled-field fill, installed-Office dispatch through a test double, valid-PDF enforcement, Win32-safe Word COM paths, and unchanged source/template bytes; [core lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs) cover fail-closed missing, changed, invalid, and unconfigured template states without export or release evidence; [desktop Configuration tests](../../../crates/dms-desktop/src/lib.rs) and [frontend tests](../../../crates/dms-desktop/ui/configuration.test.mjs) cover template selection, validation display, removal confirmation, and Library exclusion; [core template tests](../../../crates/dms-core/tests/markdown_template.rs) cover strict custom properties, temporary DOCX assembly, and template-package preservation. A retained Windows installed-Word smoke released the controlled A.8.29 Markdown as a four-page A4 PDF with refreshed title, table of contents, version, and confidentiality, no unresolved template markers, matching SHA-256 release evidence, and unchanged source/template bytes. Windows/macOS CI runs the fake-backed pipeline; installed-Word evidence on macOS remains pending, so this CAP is not promoted. |
+| Tests | Partial phase-5 and CHG-0004 evidence: [`dms-desktop` adapter/unit tests](../../../crates/dms-desktop/src/export.rs) cover template-backed temporary DOCX assembly, controlled-field fill, installed-Office dispatch through a test double, valid-PDF enforcement, Win32-safe Word COM paths, and unchanged source/template bytes; [core lifecycle tests](../../../crates/dms-core/tests/lifecycle.rs) cover fail-closed missing, changed, invalid, and unconfigured template states without export or release evidence, plus the asset context a Markdown release passes to the assembler; [desktop Configuration tests](../../../crates/dms-desktop/src/lib.rs) and [frontend tests](../../../crates/dms-desktop/ui/configuration.test.mjs) cover template selection, validation display, removal confirmation, and Library exclusion; [core template tests](../../../crates/dms-core/tests/markdown_template.rs) cover strict custom properties, temporary DOCX assembly, template-package preservation, embedded source images, and explicit image rejection. A retained Windows installed-Word smoke released the controlled A.8.29 Markdown as a four-page A4 PDF with refreshed title, table of contents, version, and confidentiality, no unresolved template markers, matching SHA-256 release evidence, and unchanged source/template bytes. Windows/macOS CI runs the fake-backed pipeline; installed-Word evidence on macOS remains pending, so this CAP is not promoted. |
 
 ## Bounded implemented behavior
 
@@ -22,15 +22,52 @@ Two-column tables keep their existing layout. Other column counts clone the
 second-cell styling for columns after the first and receive equal fixed widths
 from the body section's page width minus left/right margins and gutter. Missing
 or invalid dimensions fail rather than guessing a page size. Assembly preserves
-source/template bytes, section properties and non-body package parts (apart
-from the existing optional-variable substitution).
+source/template bytes and section properties. Non-body package parts are
+preserved except for optional-variable substitution and image relationship /
+content-type additions when images are embedded.
 
-Evidence: `assembler_preserves_two_three_four_and_five_column_table_fidelity`
-and `assembler_sizes_wide_tables_without_grid_or_cell_widths` in the
+Markdown image references become real OOXML drawings over embedded package
+media. Assembly takes an explicit source/asset context (input root plus source
+path); without it an asset-bearing document is rejected instead of emitting
+alternative text alone. Parent-relative references such as `../assets/shared.png`
+are allowed when their canonical target stays inside the input root. Remote,
+absolute, fragment-bearing and escaping references, missing, structurally
+corrupt or unsupported assets, symlink escapes and raw HTML `<img>` markup fail
+explicitly. PNG and JPEG bytes are embedded verbatim with non-colliding media
+part and relationship IDs shared by repeated references; each drawing occurrence
+has its own ID above the maximum `wp:docPr` / `pic:cNvPr` ID across all template
+XML parts, including preserved headers, footers, footnotes and comments.
+Drawings preserve aspect ratio within the body printable width and carry the
+Markdown alternative text. Alt-text line breaks become spaces; inline labels,
+code, math and literal HTML stay in the description rather than leaking body
+runs or changing surrounding formatting. An image-only paragraph contains only
+a drawing run. Content-type defaults are added once
+per case-insensitive extension; conflicting template declarations fail before
+output creation. The template logo and unrelated package parts remain unchanged,
+as do the source, template and asset files.
+
+PNG validation checks chunk lengths, CRCs, header encoding fields, nonempty
+image data and termination. JPEG validation checks segment/frame/scan lengths,
+nonempty scan data and termination. These are structural checks, not pixel
+decoding; malformed compressed payloads may still require a decoder to detect.
+Successful tests use independently decoded synthetic images, while header-only
+stubs and selected structural corruptions are explicit rejection cases.
+
+Evidence: `assembler_preserves_two_three_four_and_five_column_table_fidelity`,
+`assembler_sizes_wide_tables_without_grid_or_cell_widths`,
+`assembler_embeds_local_source_images_as_drawings_and_package_media`,
+`assembler_rejects_unusable_or_uncontained_source_images`,
+`assembler_resolves_parent_relative_shared_images_inside_input_root`,
+`assembler_rejects_header_only_and_structurally_corrupt_images`,
+`assembler_deduplicates_jpeg_content_types_and_rejects_template_conflicts`,
+`assembler_avoids_template_media_relationship_and_drawing_id_collisions`,
+`assembler_avoids_drawing_ids_in_preserved_package_parts`,
+`assembler_keeps_image_alt_inline_events_out_of_body_runs` and
+`assembler_preserves_other_markdown_constructs_without_losing_content` in the
 [core template tests](../../../crates/dms-core/tests/markdown_template.rs).
 This is OOXML assembly evidence, not full-corpus Word/PDF layout verification.
-Image embedding, standalone batch conversion and retained final DOCX remain
-pending under [CHG-0053](../../changes/active/CHG-0053-markdown-batch-conversion-retained-docx.md).
+Standalone batch conversion and retained final DOCX remain pending under
+[CHG-0053](../../changes/active/CHG-0053-markdown-batch-conversion-retained-docx.md).
 The overall CAP remains `not implemented` while the platform gaps above remain.
 
 ## Outcomes (contract — not yet true in runtime)

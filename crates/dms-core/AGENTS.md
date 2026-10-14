@@ -20,7 +20,7 @@ persistence.
 | `src/policies.rs` | Folder-policy tree, retained confidentiality type-ID migrations, Entra display binding, and workflow-role resolution |
 | `src/source_history.rs` | Bounded first-import OOXML source-history capture and schema validation |
 | `src/frontmatter.rs` | Strict flat Markdown parsing, controlled-key rewrite from DMS, optional template-variable map, and expected/detected comparison |
-| `src/template.rs` | Reusable workspace Word-template identity, validation, CommonMark-to-OOXML assembly, and frontmatter variable fill |
+| `src/template.rs` | Reusable workspace Word-template identity, validation, CommonMark-to-OOXML assembly with local PNG/JPEG asset embedding, and frontmatter variable fill |
 | `tests/` | Domain, migration-fixture, and persistence behaviour tests |
 
 ## Local Contracts
@@ -112,6 +112,28 @@ persistence.
   invalid page dimensions fail explicitly. The first column uses the first-cell
   prototype; all later columns use the second. Cell/paragraph/run styling and
   inline emphasis/code/link text survive without modifying source or template.
+- Markdown image references resolve only through an explicit source/asset
+  context of input root plus source path. Parent-relative references are allowed
+  when the canonical target remains inside the input root. A reference without
+  that context, a remote, absolute or fragment-bearing reference, a missing,
+  structurally corrupt or unsupported asset, a target outside the canonical input
+  root including symlink escapes, and raw HTML `<img>` markup all fail
+  explicitly instead of emitting alt text alone. PNG and JPEG bytes are embedded
+  verbatim as package media with non-colliding media part, relationship and
+  drawing IDs. Drawing IDs start above the maximum `wp:docPr` / `pic:cNvPr`
+  identity across all template XML parts, including preserved story parts.
+  Repeated references reuse media/relationships, not drawing IDs, and preserve
+  aspect ratio within the body printable width. Image-alt inline events are
+  collected separately from body runs and formatting; line breaks become spaces,
+  and image-only paragraphs contain only a drawing run. Content-type extensions
+  are matched case-insensitively; each required default is added once and conflicting declarations fail before
+  output creation. Image checks validate PNG chunk bounds/CRCs/data presence and
+  JPEG segment/frame/scan structure/data presence, not compressed pixel decoding.
+  Apart from body replacement and optional-variable fill, assembly adds only
+  media parts, image relationships and image content types; source, template and
+  asset files are never modified.
+  Other CommonMark constructs (task lists, footnotes, math, raw inline HTML,
+  definition lists, block quotes, nested lists) keep their visible text.
 - Workflow evidence is append-only, SHA-256 predecessor-linked, newest-first at
   the public history boundary, and validated whenever workspace metadata opens
   or saves.
@@ -219,7 +241,14 @@ persistence.
 - `cargo test -p dms-core`
 - `cargo test -p dms-core --test markdown_template` checks multi-table cell text,
   inline styling, two/three/four/five-column layouts, deterministic assembly,
-  package XML and unchanged source/template bytes.
+  package XML, unchanged source/template/asset bytes, image embedding,
+  in-root parent-relative resolution, escaping targets, structural corruption,
+  content-type/media/relationship/drawing collisions across body/header/footer/
+  footnote/comment parts, image-alt event isolation, and no-content-loss
+  construct coverage. Successful image cases use real synthetic PNG/JPEG
+  fixtures; header-only stubs are rejection cases only.
+- `cargo test -p dms-core --test markdown_template --test lifecycle` checks the
+  assembler together with the release path that supplies its asset context.
 
 ## Child DOX Index
 
