@@ -47,7 +47,7 @@ desktop Release assembly.
 
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
-| 1 | Define persistent library policy and per-file override | done (core/CLI gate and workspace Rust checks exit 0; evidence below) | Focused core and CLI policy-resolution tests exit 0 for disabled default, explicit library settings, override precedence, and invalid values. |
+| 1 | Define persistent library policy and per-file override | done (gate passed; independent review found no findings; evidence below) | Focused core and CLI policy-resolution tests exit 0 for disabled default, explicit library settings, override precedence, and invalid values. |
 | 2 | Project enabled TODO entries through standalone conversion | pending | Conversion/domain and CLI tests exit 0 for entry kinds, table rows, compact ordered lists, manifests, unchanged source hashes, and unchanged Release assembly. |
 | 3 | Expose explicit headless configuration and operator evidence | pending | CLI integration tests exit 0 for reading/updating the library setting and structured effective-policy output. |
 | 4 | Integrate capability contract and full gates | pending | CAP-0022, DOX, record/index checks, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, verifier tests, link check, and `git diff --check` exit 0. |
@@ -112,9 +112,11 @@ not move. CAP-0022 stays unchanged: this is policy infrastructure, not an availa
 TODO-filtering outcome or configuration command. Phase 4 remains responsible for
 the completed capability contract and integration evidence.
 
+Independent autonomous review of the frozen Phase 1 diff reported no findings.
+The reviewed phase state is integrated on `main`; no push or deployment occurred.
+
 Limitations: Rust evidence is synthetic/Linux, not installed-Word fidelity. Older
-binaries cannot open schema 22. No commit, integration, push or deployment is
-part of this worktree result. Phases 2–4 remain pending by operator scope.
+binaries cannot open schema 22. Phases 2–4 remain pending by operator scope.
 
 ## Phase 2 — Project enabled TODO entries through standalone conversion
 
