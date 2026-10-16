@@ -48,6 +48,10 @@ executable.
   when individual files fail, and any failure makes the command exit nonzero.
   `--dry-run` validates and assembles into temporary locations without Word
   preflight, Word calls or output-root writes.
+- Conversion JSON/manifest results carry each file's effective `todo_projection`
+  (`enabled`/`disabled`, null if unresolved). Normal-mode stderr reports the
+  policy or `unresolved` beside the source path. Core owns projection and
+  source-free mixed-entry diagnostics; input hashes still cover original bytes.
 
 ## Work Guidance
 
@@ -59,8 +63,12 @@ executable.
 
 - `cargo test -p dms-cli`
 - `cargo test -p dms-cli --test cli --locked` includes policy-resolution evidence
-  through the public core plan and CLI rejection of invalid library settings.
-  There is no conversion-policy command or effective-policy manifest output yet.
+  through the public core plan, CLI rejection of invalid library/source settings,
+  mixed-entry/cell failures, override precedence, effective-policy JSON and normal
+  diagnostics (including original CRLF/Unicode cell locations), unchanged source
+  SHA-256 and dry-run no-write behaviour. The
+  existing workspace `sha2` dependency is test-only for CLI digest assertions.
+  There is no conversion-policy configuration command yet.
 
 ## Child DOX Index
 

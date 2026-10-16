@@ -563,6 +563,12 @@ fn run_convert(command: ConvertCommand, json: bool) -> CliResult<()> {
             let manifest = plan.run(&mut exporter)?;
             if !json {
                 for result in &manifest.results {
+                    let policy = match result.todo_projection {
+                        Some(dms_core::TodoProjection::Enabled) => "enabled",
+                        Some(dms_core::TodoProjection::Disabled) => "disabled",
+                        None => "unresolved",
+                    };
+                    eprintln!("{}: todo_projection={policy}", result.input.display());
                     if let Some(error) = &result.error {
                         eprintln!("{}: {error}", result.input.display());
                     }

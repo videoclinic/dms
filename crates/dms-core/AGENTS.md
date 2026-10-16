@@ -148,8 +148,24 @@ persistence.
   invalid values fail without echoing source data. Quoted scalar values follow
   the existing flat parser; case, aliases and booleans are not normalized.
   The setting is not document control, candidate/release evidence or a controlled
-  frontmatter key. Resolution does not yet run during conversion rendering or
-  enter manifests; no lifecycle or Release assembler calls the resolver.
+  frontmatter key. Standalone conversion resolves it against the exact hashed
+  source bytes before assembly; no lifecycle or Release assembler resolves or
+  applies it. Per-file manifest `todo_projection` is `enabled`/`disabled`, or null
+  when resolution failed (never an implicit fallback).
+- Enabled standalone TODO projection operates on balanced CommonMark events before
+  numbering and asset loading. A case-insensitive initial visible `TODO:` removes
+  a paragraph, heading, complete list item (including descendants), or code block;
+  a table cell becomes one NBSP without changing the grid or row. Formatting does
+  not obscure the marker; fence language metadata and image alt text are not body
+  content. Images and rendered task checkboxes count as substantive content.
+  Nested lists and tables have independent entries; an item's own continuation
+  text (including quoted continuations) belongs to that item. Unmarked empty
+  parents survive removal of marked children. Raw HTML blocks are literal
+  paragraph text, not interpreted HTML; their markers receive the same checks.
+  A later marker, including in a rendered link URL, after substantive content fails the
+  source before artifact reservation with entry kind and original entry-start
+  line/column, never source text. Surviving native list items compact from the
+  original list start; distinct lists retain distinct numbering instances.
 - Standalone conversion alone aliases flat source `last_modified` to literal
   `{DATE}` during assembly. A template containing that token requires a real
   `YYYY-MM-DD` date per source, including dry-run; otherwise missing/invalid dates
@@ -292,10 +308,15 @@ persistence.
 - `cargo test -p dms-core`
 - `cargo test -p dms-core --test conversion_policy --test conversion --test lifecycle --test workspace --test policies --locked`
   checks policy persistence/migration, strict overrides, read-only configuration,
-  unchanged manifest metadata and the Release boundary with synthetic adapters.
+  effective-policy receipts, unchanged control metadata and the Release boundary.
 - `cargo test -p dms-core --test conversion` checks read-only configuration,
   metadata, paths, mixed results, retained pairs, consumed-byte digests and
   failure cleanup through synthetic exporter doubles, not installed Word.
+  TODO cases also verify structural DOCX projection, table NBSP/grid preservation,
+  compact list references, precise mixed-entry rejection, original input hashes,
+  package-part equality against an explicitly retained-source assembly, and
+  synthetic PDF text transport from the retained DOCX. This is not native
+  Word PDF layout or tagged-table/list structure evidence.
 - `cargo test -p dms-core --test smoke_contract` pins actual parser text,
   optional document numbers, unique embedded-asset receipts and serialized
   template identity for the independent smoke verifier. Synthetic-only direct

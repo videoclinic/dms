@@ -127,6 +127,8 @@ pub struct ConversionFileResult {
     #[serde(with = "crate::relative_path_serde")]
     pub input: PathBuf,
     pub input_sha256: Option<String>,
+    /// None when the source policy could not be resolved; never a fallback.
+    pub todo_projection: Option<TodoProjection>,
     pub assets: Vec<MarkdownAssetDigest>,
     pub metadata: Option<ConversionMetadata>,
     pub docx: Option<ConversionArtifact>,
@@ -333,6 +335,7 @@ impl ConversionPlan {
             let mut result = ConversionFileResult {
                 input: relative.clone(),
                 input_sha256: None,
+                todo_projection: None,
                 assets: Vec::new(),
                 metadata: None,
                 docx: None,
@@ -419,6 +422,8 @@ impl ConversionPlan {
         result.input_sha256 = Some(digest(&bytes));
         let markdown =
             std::str::from_utf8(&bytes).map_err(|_| error("Markdown source is not UTF-8"))?;
+        let todo_projection = self.resolve_todo_projection(markdown)?;
+        result.todo_projection = Some(todo_projection);
         let metadata = self.metadata(markdown)?;
         let chrome = ExportChrome {
             title: metadata.title.clone(),
@@ -440,8 +445,9 @@ impl ConversionPlan {
             template, markdown, &assembled,
             Some(&MarkdownAssetContext::new(&self.options.input_root, &source)),
             self.options.without_toc,
+            todo_projection,
         ).map_err(|e| match e {
-            crate::DmsError::InvalidConversionDate => ConversionError(e.to_string()),
+            crate::DmsError::InvalidConversionDate | crate::DmsError::MixedTodoEntry { .. } => ConversionError(e.to_string()),
             crate::DmsError::InvalidMarkdownImage(_) => error("Markdown image rejected: check local PNG/JPEG format, existence and input-root containment"),
             _ => error("Markdown assembly failed (unsupported content or template variable)"),
         })?;

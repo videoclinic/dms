@@ -100,6 +100,7 @@ struct FakeWord {
     changed_source: Option<PathBuf>,
     changed_asset: Option<PathBuf>,
     expected_date: Option<String>,
+    pdf_from_docx: bool,
 }
 impl ConversionExporter for FakeWord {
     fn preflight(&self) -> Result<(), String> {
@@ -155,6 +156,9 @@ impl ConversionExporter for FakeWord {
                 pdf,
                 if self.failure == Some("pdf") {
                     b"%PDF-1.7\nnot a PDF".to_vec()
+                } else if self.pdf_from_docx {
+                    // Synthetic text transport only, not Word layout/structure proof.
+                    synthetic_pdf_text(&xml_text(&package_text(docx, "word/document.xml")))
                 } else {
                     synthetic_pdf()
                 },
@@ -211,10 +215,34 @@ fn package_text(path: &Path, part: &str) -> String {
 }
 
 fn synthetic_pdf() -> Vec<u8> {
-    let stream = "BT /F1 12 Tf 72 720 Td (Synthetic policy) Tj ET";
+    synthetic_pdf_text("Synthetic policy")
+}
+
+fn xml_text(xml: &str) -> String {
+    let mut reader = quick_xml::Reader::from_str(xml);
+    let mut text = String::new();
+    loop {
+        match reader.read_event().unwrap() {
+            quick_xml::events::Event::Text(value) => text.push_str(&value.unescape().unwrap()),
+            quick_xml::events::Event::End(tag) if tag.name().as_ref() == b"w:p" => text.push('\n'),
+            quick_xml::events::Event::Eof => break,
+            _ => {}
+        }
+    }
+    text
+}
+
+fn synthetic_pdf_text(text: &str) -> Vec<u8> {
+    let escaped = text
+        .replace('\\', "\\\\")
+        .replace('(', "\\(")
+        .replace(')', "\\)")
+        .replace('\u{a0}', "\\240")
+        .replace('\n', ") Tj 0 -14 Td (");
+    let stream = format!("BT /F1 12 Tf 72 720 Td ({escaped}) Tj ET");
     let objects = ["<< /Type /Catalog /Pages 2 0 R >>".to_owned(), "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_owned(),
         "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>".to_owned(),
-        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_owned(), format!("<< /Length {} >>\nstream\n{stream}\nendstream",stream.len())];
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_owned(), format!("<< /Length {} >>\nstream\n{stream}\nendstream",stream.len())];
     let mut pdf = b"%PDF-1.7\n".to_vec();
     let mut offsets = Vec::new();
     for (i, object) in objects.iter().enumerate() {
@@ -252,6 +280,507 @@ fn tree(path: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     out
 }
 
+fn todo_source(body: &str, override_value: Option<&str>) -> String {
+    let setting = override_value
+        .map(|value| format!("todo_projection: {value}\n"))
+        .unwrap_or_default();
+    format!("---\ntitle: Synthetic policy\nversion: 3.0\nconfidentiality: internal\n{setting}---\n{body}")
+}
+
+#[test]
+fn todo_projection_preserves_docx_structure_and_transports_only_retained_text_to_pdf() {
+    let f = Fixture::new(SCHEMA_VERSION);
+    f.config(|v| v["conversion_policy"] = json!({"todo_projection": "enabled"}));
+    let source = todo_source(
+        "TODO: PRIVATE_PARAGRAPH\n\n# tOdO: PRIVATE_HEADING\n\nKept after heading.\n\n**TO**DO: PRIVATE_SPLIT\n\n[TODO: PRIVATE_LINK](https://example.test)\n\n```rust\nTODO: PRIVATE_CODE\n```\n\n    todo: PRIVATE_INDENTED_CODE\n\n- **TODO:** PRIVATE_ITEM\n\n  PRIVATE_CONTINUATION\n\n  - PRIVATE_CHILD\n\n- Kept bullet\n\n> TODO: PRIVATE_QUOTE\n\n# Kept heading\n\nKept **bold** and *italic* and `code` and [link](https://example.test).\n\n![TODO: alt is not body](image.png)\n\nTODO: PRIVATE_IMAGE ![unused](missing.png)\n\n| TODO: PRIVATE_HEADER | Kept header | Third |\n| --- | --- | --- |\n| **TODO:** PRIVATE_CELL | Kept cell | Last |\n| Ordinary | `todo: PRIVATE_CODE_CELL` | End |\n",
+        None,
+    );
+    fs::write(f.options.input_root.join("policy.md"), &source).unwrap();
+    fs::write(f.options.input_root.join("image.png"), IMAGE).unwrap();
+    let before_input = tree(&f.options.input_root);
+    let before_edit = tree(&f.temp.path().join("edit"));
+    let mut word = FakeWord {
+        pdf_from_docx: true,
+        ..Default::default()
+    };
+    let manifest = ConversionPlan::prepare(&f.options)
+        .unwrap()
+        .run(&mut word)
+        .unwrap();
+    assert!(!manifest.has_failures(), "{manifest:?}");
+    let result = &manifest.results[0];
+    assert_eq!(
+        result.todo_projection,
+        Some(dms_core::TodoProjection::Enabled)
+    );
+    assert_eq!(
+        result.input_sha256.as_deref(),
+        Some(digest(source.as_bytes()).as_str())
+    );
+    assert_eq!(result.assets.len(), 1);
+    assert_eq!(result.assets[0].sha256, digest(IMAGE));
+    let xml = package_text(&word.paths[0], "word/document.xml");
+    let text = xml_text(&xml);
+    assert!(!text.contains("PRIVATE_"), "{text}");
+    for retained in [
+        "Kept after heading.",
+        "Kept bullet",
+        "Kept heading",
+        "Kept bold and italic and code and link (https://example.test).",
+        "Kept cell",
+        "Ordinary",
+        "Last",
+        "End",
+    ] {
+        assert!(text.contains(retained), "missing {retained}");
+    }
+    for markup in [
+        "<w:b/>",
+        "<w:i/>",
+        "<w:drawing>",
+        "<w:pStyle w:val=\"Heading1\"/>",
+        "<w:tblLayout w:type=\"fixed\"/>",
+    ] {
+        assert!(xml.contains(markup), "missing {markup}");
+    }
+    assert_eq!(xml.matches("<w:tr>").count(), 3);
+    assert_eq!(xml.matches("<w:tc>").count(), 9);
+    assert_eq!(xml.matches("<w:gridCol ").count(), 3);
+    assert_eq!(text.matches('\u{a0}').count(), 3);
+    for cell in xml
+        .split("<w:tc>")
+        .skip(1)
+        .map(|v| v.split("</w:tc>").next().unwrap())
+    {
+        if cell.contains('\u{a0}') {
+            assert_eq!(xml_text(cell), "\u{a0}\n");
+        }
+    }
+    let pdf = fs::read(f.options.output_root.join("policy.pdf")).unwrap();
+    let pdf_text = pdf_extract::extract_text_from_mem(&pdf).unwrap();
+    assert!(!pdf_text.contains("PRIVATE_"));
+    for retained in [
+        "Kept after heading.",
+        "Kept bullet",
+        "Kept heading",
+        "Kept cell",
+        "Ordinary",
+    ] {
+        assert!(
+            pdf_text.contains(retained),
+            "PDF missing {retained}: {pdf_text}"
+        );
+    }
+    assert_eq!(tree(&f.options.input_root), before_input);
+    assert_eq!(tree(&f.temp.path().join("edit")), before_edit);
+    assert!(tree(&f.temp.path().join("publish")).is_empty());
+    let receipt = fs::read_to_string(f.options.output_root.join("manifest.json")).unwrap();
+    assert!(!receipt.contains("PRIVATE_") && !receipt.contains("Kept cell"));
+    assert_eq!(
+        serde_json::from_str::<Value>(&receipt).unwrap(),
+        serde_json::to_value(&manifest).unwrap()
+    );
+}
+
+#[test]
+fn todo_projection_matches_retained_source_assembly_across_nested_and_inline_content() {
+    let f = Fixture::new(SCHEMA_VERSION);
+    let body = "# Kept heading\n\n**TO**DO: drop formatted marker\n\nKept **bold**, *italic*, `code`, ~~strike~~, $math$, <span>raw</span> and [link](https://example.test).\n\n> TODO: drop quoted paragraph\n>\n> Kept quote\n\n4. TODO: drop first\n5. Kept parent\n\n   8. TODO: drop nested first\n   9. Kept nested\n\n   Kept continuation\n\n6. TODO: drop last\n\n- Kept table parent\n\n  | **TODO:** drop header | Kept header |\n  | --- | --- |\n  | TODO: drop cell | Kept *cell* |\n\n- [x] Kept task\n\n```text\n  TODO: drop code\n```\n\n```TODO:language-is-not-body\nKept code\n```\n\n![TODO: alt-only](image.png)\n\n&#84;ODO: drop entity marker\n\nTODO\\: drop escaped marker\n\nKept final paragraph.\n";
+    let retained = "# Kept heading\n\nKept **bold**, *italic*, `code`, ~~strike~~, $math$, <span>raw</span> and [link](https://example.test).\n\n> Kept quote\n\n4. Kept parent\n\n   8. Kept nested\n\n   Kept continuation\n\n- Kept table parent\n\n  | \u{a0} | Kept header |\n  | --- | --- |\n  | \u{a0} | Kept *cell* |\n\n- [x] Kept task\n\n```TODO:language-is-not-body\nKept code\n```\n\n![TODO: alt-only](image.png)\n\nKept final paragraph.\n";
+    // An unmarked empty parent survives removal of its marked child; raw HTML
+    // without a marker remains literal text, just as in the ordinary assembler.
+    let body = format!("{body}\n-\n  - TODO: drop child\n\n<p>Kept raw block</p>\n");
+    let retained = format!("{retained}\n-\n\n<p>Kept raw block</p>\n");
+    let source = todo_source(&body, Some("enabled"));
+    let source_path = f.options.input_root.join("policy.md");
+    fs::write(&source_path, &source).unwrap();
+    fs::write(f.options.input_root.join("image.png"), IMAGE).unwrap();
+    let before = tree(&f.options.input_root);
+    let mut word = FakeWord::default();
+    let manifest = ConversionPlan::prepare(&f.options)
+        .unwrap()
+        .run(&mut word)
+        .unwrap();
+    assert!(!manifest.has_failures(), "{manifest:?}");
+    let expected = f.temp.path().join("expected.docx");
+    dms_core::assemble_markdown_docx(
+        &f.temp.path().join("edit/template.docx"),
+        &todo_source(&retained, None),
+        &expected,
+        Some(&dms_core::MarkdownAssetContext::new(
+            &f.options.input_root,
+            &source_path,
+        )),
+    )
+    .unwrap();
+    fill_and_save(
+        &expected,
+        &ExportChrome {
+            title: "Synthetic policy".into(),
+            document_number: None,
+            version_label: "3.0".into(),
+            confidentiality: dms_core::ConfidentialitySnapshot {
+                type_id: "internal".into(),
+                label: "Internal label".into(),
+            },
+        },
+    );
+    let actual_parts = package_parts(&word.paths[0]);
+    assert_eq!(actual_parts, package_parts(&expected));
+    assert_eq!(tree(&f.options.input_root), before);
+}
+
+fn package_parts(path: &Path) -> BTreeMap<String, Vec<u8>> {
+    let mut archive = ZipArchive::new(fs::File::open(path).unwrap()).unwrap();
+    (0..archive.len())
+        .map(|index| {
+            let mut entry = archive.by_index(index).unwrap();
+            let mut bytes = Vec::new();
+            entry.read_to_end(&mut bytes).unwrap();
+            (entry.name().to_owned(), bytes)
+        })
+        .collect()
+}
+
+#[test]
+fn todo_projection_compacts_ordered_items_and_preserves_starts_restarts_and_continuations() {
+    let f = Fixture::new(SCHEMA_VERSION);
+    let source = todo_source(
+        "4. TODO: dropped first\n5. First survivor\n6. TODO: dropped middle\n7. Second survivor\n\n   Continuation\n\n   8. TODO: dropped nested\n   9. Nested survivor\n\n8. Third survivor\n\nSeparate paragraph\n\n20. Restart survivor\n21. TODO: dropped final\n\nAnother paragraph\n\n1. TODO: entire list\n2. TODO: entire list too\n",
+        Some("enabled"),
+    );
+    fs::write(f.options.input_root.join("policy.md"), source).unwrap();
+    let mut word = FakeWord::default();
+    let manifest = ConversionPlan::prepare(&f.options)
+        .unwrap()
+        .run(&mut word)
+        .unwrap();
+    assert!(!manifest.has_failures(), "{manifest:?}");
+    let xml = package_text(&word.paths[0], "word/document.xml");
+    let numbering = package_text(&word.paths[0], "word/numbering.xml");
+    assert!(!xml.contains("TODO:") && !xml.contains("dropped"));
+    assert_eq!(numbering.matches("<w:num ").count(), 3);
+    for start in [4, 8, 20] {
+        assert!(numbering.contains(&format!("<w:startOverride w:val=\"{start}\"/>")));
+    }
+    let paragraph = |label: &str| {
+        let position = xml.find(label).unwrap();
+        let start = xml[..position].rfind("<w:p>").unwrap();
+        let end = position + xml[position..].find("</w:p>").unwrap();
+        &xml[start..end]
+    };
+    let num_id = |p: &str| {
+        p.split("<w:numId w:val=\"")
+            .nth(1)
+            .unwrap()
+            .split('"')
+            .next()
+            .unwrap()
+            .to_owned()
+    };
+    let outer_id = num_id(paragraph("First survivor"));
+    for label in ["Second survivor", "Third survivor"] {
+        assert_eq!(num_id(paragraph(label)), outer_id);
+    }
+    assert_ne!(num_id(paragraph("Nested survivor")), outer_id);
+    assert_ne!(num_id(paragraph("Restart survivor")), outer_id);
+    assert_eq!(num_id(paragraph("Continuation")), "0");
+    // One shared native instance, three numbered paragraphs, no per-item reset:
+    // Word owns 4,5,6 despite removed source items.
+    assert_eq!(
+        xml.matches(&format!("<w:numId w:val=\"{outer_id}\"/>"))
+            .count(),
+        3
+    );
+}
+
+#[test]
+fn todo_projection_removes_visible_metadata_and_definition_titles_only_when_enabled() {
+    for body in [
+        "---\nToDo: PRIVATE_DROP\n---\n\nKept body\n",
+        "+++\nToDo: PRIVATE_DROP\n+++\n\nKept body\n",
+        "**ToDo:** PRIVATE_DROP\n: Kept body\n",
+    ] {
+        for policy in ["enabled", "disabled"] {
+            let f = Fixture::new(SCHEMA_VERSION);
+            let source = todo_source(body, Some(policy));
+            fs::write(f.options.input_root.join("policy.md"), &source).unwrap();
+            let mut word = FakeWord {
+                pdf_from_docx: true,
+                ..Default::default()
+            };
+            let manifest = ConversionPlan::prepare(&f.options)
+                .unwrap()
+                .run(&mut word)
+                .unwrap();
+            assert!(!manifest.has_failures());
+            assert_eq!(word.paths.len(), 1);
+            let xml = package_text(&word.paths[0], "word/document.xml");
+            let pdf = pdf_extract::extract_text_from_mem(
+                &fs::read(f.options.output_root.join("policy.pdf")).unwrap(),
+            )
+            .unwrap();
+            for text in [&xml, &pdf] {
+                assert!(text.contains("Kept body"));
+                assert_eq!(text.contains("PRIVATE_DROP"), policy == "disabled");
+            }
+            let release = f.temp.path().join("release.docx");
+            dms_core::assemble_markdown_docx(
+                &f.temp.path().join("edit/template.docx"),
+                &source,
+                &release,
+                None,
+            )
+            .unwrap();
+            let release_xml = package_text(&release, "word/document.xml");
+            assert!(release_xml.contains("PRIVATE_DROP"));
+            if policy == "disabled" {
+                assert_eq!(xml, release_xml);
+            }
+            assert_eq!(
+                fs::read_to_string(f.options.input_root.join("policy.md")).unwrap(),
+                source
+            );
+            assert_eq!(
+                manifest.results[0].input_sha256.as_deref(),
+                Some(digest(source.as_bytes()).as_str())
+            );
+            assert!(!serde_json::to_string(&manifest)
+                .unwrap()
+                .contains("PRIVATE_"));
+        }
+    }
+}
+
+#[test]
+fn todo_projection_rejects_mixed_entries_and_cells_without_pairs_or_source_leaks() {
+    for (body, kind, line, column) in [
+        ("PRIVATE_KEEP TODO: PRIVATE_DROP\n", "paragraph", 7, 1),
+        (
+            "---\nPRIVATE_KEEP TODO: PRIVATE_DROP\n---\n",
+            "paragraph",
+            7,
+            1,
+        ),
+        (
+            "+++\nPRIVATE_KEEP TODO: PRIVATE_DROP\n+++\n",
+            "paragraph",
+            7,
+            1,
+        ),
+        (
+            "PRIVATE_KEEP **TODO:** PRIVATE_DROP\n: Kept definition\n",
+            "paragraph",
+            7,
+            1,
+        ),
+        (
+            "<p>PRIVATE_KEEP TODO: PRIVATE_DROP</p>\n",
+            "paragraph",
+            7,
+            1,
+        ),
+        (
+            "<!-- PRIVATE_KEEP TODO: PRIVATE_DROP -->\n",
+            "paragraph",
+            7,
+            1,
+        ),
+        ("## PRIVATE_KEEP **TODO:** PRIVATE_DROP\n", "heading", 7, 1),
+        ("- PRIVATE_KEEP TODO: PRIVATE_DROP\n", "list item", 7, 1),
+        ("4. PRIVATE_KEEP TODO: PRIVATE_DROP\n", "list item", 7, 1),
+        (
+            "```rust\nPRIVATE_KEEP\nTODO: PRIVATE_DROP\n```\n",
+            "code block",
+            7,
+            1,
+        ),
+        ("    PRIVATE_KEEP TODO: PRIVATE_DROP\n", "code block", 7, 5),
+        (
+            "| A | B |\n| --- | --- |\n| ok | PRIVATE_KEEP **TODO:** PRIVATE_DROP |\n",
+            "table cell",
+            9,
+            7,
+        ),
+        (
+            "- PRIVATE_KEEP\n\n  TODO: PRIVATE_DROP\n",
+            "list item",
+            7,
+            1,
+        ),
+        (
+            "![PRIVATE_ALT](image.png) TODO: PRIVATE_DROP\n",
+            "paragraph",
+            7,
+            1,
+        ),
+        ("PRIVATE_KEEP\nTODO: PRIVATE_DROP\n", "paragraph", 7, 1),
+        ("- [ ] TODO: PRIVATE_DROP\n", "list item", 7, 1),
+        (
+            "- PRIVATE_KEEP\n  > TODO: PRIVATE_DROP\n",
+            "list item",
+            7,
+            1,
+        ),
+        (
+            "See [notes](https://example.test/todo:topics).\n",
+            "paragraph",
+            7,
+            1,
+        ),
+    ] {
+        for dry_run in [false, true] {
+            let mut f = Fixture::new(SCHEMA_VERSION);
+            f.options.dry_run = dry_run;
+            let source = todo_source(body, Some("enabled"));
+            fs::write(f.options.input_root.join("policy.md"), &source).unwrap();
+            fs::write(f.options.input_root.join("z-good.md"), SOURCE).unwrap();
+            let mut word = FakeWord::default();
+            let manifest = ConversionPlan::prepare(&f.options)
+                .unwrap()
+                .run(&mut word)
+                .unwrap();
+            assert!(manifest.has_failures(), "{body}");
+            let failed = &manifest.results[0];
+            assert_eq!(
+                failed.todo_projection,
+                Some(dms_core::TodoProjection::Enabled)
+            );
+            assert_eq!(
+                failed.input_sha256.as_deref(),
+                Some(digest(source.as_bytes()).as_str())
+            );
+            assert_eq!(failed.error.as_deref(), Some(format!("mixed TODO {kind} at line {line}, column {column}: TODO: follows substantive visible content; split retained content and TODO into separate entries").as_str()));
+            assert!(failed.docx.is_none() && failed.pdf.is_none());
+            assert!(failed.retained_diagnostics.is_empty());
+            assert!(!f.options.output_root.join("policy.docx").exists());
+            assert!(!f.options.output_root.join("policy.pdf").exists());
+            assert!(manifest.results[1].error.is_none());
+            assert_eq!(word.paths.len(), usize::from(!dry_run));
+            assert!(!serde_json::to_string(&manifest)
+                .unwrap()
+                .contains("PRIVATE_"));
+            assert_eq!(
+                fs::read_to_string(f.options.input_root.join("policy.md")).unwrap(),
+                source
+            );
+        }
+    }
+}
+
+#[test]
+fn todo_projection_disabled_is_identical_to_release_assembly_and_override_wins() {
+    for (library, override_value) in [
+        (None, None),
+        (Some("disabled"), None),
+        (Some("enabled"), Some("disabled")),
+    ] {
+        let f = Fixture::new(SCHEMA_VERSION);
+        if let Some(value) = library {
+            f.config(|v| v["conversion_policy"] = json!({"todo_projection": value}));
+        }
+        let source = todo_source("TODO: retained paragraph\n\n# TODO: retained heading\n\n4. first\n5. TODO: retained item\n6. last\n\nRetained TODO: mixed\n\n```rust\nTODO: retained code\n```\n\n| A | B |\n| --- | --- |\n| TODO: cell | Mixed TODO: cell |\n", override_value);
+        fs::write(f.options.input_root.join("policy.md"), &source).unwrap();
+        let mut word = FakeWord {
+            pdf_from_docx: true,
+            ..Default::default()
+        };
+        let manifest = ConversionPlan::prepare(&f.options)
+            .unwrap()
+            .run(&mut word)
+            .unwrap();
+        assert!(!manifest.has_failures());
+        assert_eq!(
+            manifest.results[0].todo_projection,
+            Some(dms_core::TodoProjection::Disabled)
+        );
+        let release = f.temp.path().join("release.docx");
+        dms_core::assemble_markdown_docx(
+            &f.temp.path().join("edit/template.docx"),
+            &source,
+            &release,
+            None,
+        )
+        .unwrap();
+        for part in ["word/document.xml", "word/numbering.xml"] {
+            assert_eq!(
+                package_text(&word.paths[0], part),
+                package_text(&release, part)
+            );
+        }
+        let text = pdf_extract::extract_text_from_mem(
+            &fs::read(f.options.output_root.join("policy.pdf")).unwrap(),
+        )
+        .unwrap();
+        assert!(text.contains("TODO: retained paragraph") && text.contains("Mixed TODO: cell"));
+    }
+}
+
+#[test]
+fn todo_projection_enabled_without_markers_preserves_assembly_and_release_ignores_enabled_override()
+{
+    let f = Fixture::new(SCHEMA_VERSION);
+    let source = todo_source("# Kept heading\n\nText with **bold**, *italic* and [link](https://example.test).\n\n4. First\n5. Second\n\n   Continuation\n\n   - Nested\n\n| A | B |\n| --- | --- |\n| First cell | Second cell |\n", Some("enabled"));
+    fs::write(f.options.input_root.join("policy.md"), &source).unwrap();
+    let mut word = FakeWord::default();
+    let manifest = ConversionPlan::prepare(&f.options)
+        .unwrap()
+        .run(&mut word)
+        .unwrap();
+    assert!(!manifest.has_failures());
+    let release = f.temp.path().join("release.docx");
+    let template = f.temp.path().join("edit/template.docx");
+    dms_core::assemble_markdown_docx(&template, &source, &release, None).unwrap();
+    for part in [
+        "word/document.xml",
+        "word/numbering.xml",
+        "word/_rels/document.xml.rels",
+    ] {
+        assert_eq!(
+            package_text(&word.paths[0], part),
+            package_text(&release, part)
+        );
+    }
+    let source =
+        source + "\nTODO: release keeps enabled content\n\nRetained TODO: mixed release content\n";
+    dms_core::assemble_markdown_docx(&template, &source, &release, None).unwrap();
+    let xml = package_text(&release, "word/document.xml");
+    assert!(xml.contains("TODO: release keeps enabled content"));
+    assert!(xml.contains("Retained TODO: mixed release content"));
+}
+
+#[test]
+fn todo_projection_invalid_overrides_have_no_effective_policy_or_artifacts() {
+    for value in [
+        "true",
+        "ENABLED",
+        "PRIVATE_VALUE",
+        "enabled\ntodo_projection: disabled",
+    ] {
+        let f = Fixture::new(SCHEMA_VERSION);
+        let source = todo_source("PRIVATE_BODY", Some(value));
+        fs::write(f.options.input_root.join("policy.md"), &source).unwrap();
+        let mut word = FakeWord::default();
+        let manifest = ConversionPlan::prepare(&f.options)
+            .unwrap()
+            .run(&mut word)
+            .unwrap();
+        assert!(manifest.has_failures());
+        let result = &manifest.results[0];
+        assert!(result.todo_projection.is_none());
+        assert!(result.docx.is_none() && result.pdf.is_none());
+        assert!(word.paths.is_empty());
+        assert_eq!(
+            result.input_sha256.as_deref(),
+            Some(digest(source.as_bytes()).as_str())
+        );
+        assert_eq!(fs::read_dir(&f.options.output_root).unwrap().count(), 1);
+        assert!(!serde_json::to_string(&manifest)
+            .unwrap()
+            .contains("PRIVATE_"));
+    }
+}
+
 #[test]
 fn configuration_projection_is_read_only_for_supported_schemas_and_dry_run_never_calls_word() {
     for schema in [18, 19, 21, SCHEMA_VERSION] {
@@ -281,7 +810,7 @@ fn configuration_projection_is_read_only_for_supported_schemas_and_dry_run_never
     }
 }
 #[test]
-fn todo_policy_resolution_is_read_only_and_does_not_change_rendering_or_manifest_metadata() {
+fn todo_policy_resolution_is_read_only_and_manifest_keeps_policy_separate_from_metadata() {
     use dms_core::TodoProjection;
     for library in [None, Some("disabled"), Some("enabled")] {
         let f = Fixture::new(SCHEMA_VERSION);
@@ -332,8 +861,9 @@ fn todo_policy_resolution_is_read_only_and_does_not_change_rendering_or_manifest
             manifest.results[0].input_sha256.as_deref(),
             Some(digest(source.as_bytes()).as_str())
         );
-        assert!(package_text(&word.paths[0], "word/document.xml").contains("TODO: PRIVATE_BODY"));
+        assert!(!package_text(&word.paths[0], "word/document.xml").contains("TODO: PRIVATE_BODY"));
         let serialized = serde_json::to_value(&manifest).unwrap();
+        assert_eq!(serialized["results"][0]["todo_projection"], "enabled");
         let metadata = serialized["results"][0]["metadata"].as_object().unwrap();
         assert_eq!(
             metadata.keys().map(String::as_str).collect::<Vec<_>>(),
@@ -341,7 +871,6 @@ fn todo_policy_resolution_is_read_only_and_does_not_change_rendering_or_manifest
         );
         let text = serde_json::to_string(&manifest).unwrap();
         for excluded in [
-            "todo_projection",
             "PRIVATE_EXTRA",
             "PRIVATE_BODY",
             "identity_source",

@@ -651,7 +651,7 @@ pub fn assemble_markdown_docx_with_options(
     assets: Option<&MarkdownAssetContext>,
     without_toc: bool,
 ) -> Result<Vec<MarkdownAssetDigest>> {
-    assemble_markdown(template, markdown, destination, assets, without_toc, false)
+    assemble_markdown(template, markdown, destination, assets, without_toc, None)
 }
 
 pub(crate) fn assemble_markdown_conversion_docx(
@@ -660,8 +660,16 @@ pub(crate) fn assemble_markdown_conversion_docx(
     destination: &Path,
     assets: Option<&MarkdownAssetContext>,
     without_toc: bool,
+    todo_projection: crate::TodoProjection,
 ) -> Result<Vec<MarkdownAssetDigest>> {
-    assemble_markdown(template, markdown, destination, assets, without_toc, true)
+    assemble_markdown(
+        template,
+        markdown,
+        destination,
+        assets,
+        without_toc,
+        Some(todo_projection),
+    )
 }
 
 fn assemble_markdown(
@@ -670,16 +678,16 @@ fn assemble_markdown(
     destination: &Path,
     assets: Option<&MarkdownAssetContext>,
     without_toc: bool,
-    conversion: bool,
+    conversion: Option<crate::TodoProjection>,
 ) -> Result<Vec<MarkdownAssetDigest>> {
     let loaded = load_template(template)?;
-    let (frontmatter, body) = if conversion {
+    let (frontmatter, body) = if conversion.is_some() {
         super::frontmatter::parse_conversion_frontmatter(markdown)?
     } else {
         super::parse_markdown_frontmatter(markdown)?
     };
     let mut variables = frontmatter.template_variables();
-    if conversion
+    if conversion.is_some()
         && loaded.entries.iter().any(|entry| {
             (entry.name.ends_with(".xml") || entry.name.ends_with(".rels"))
                 && entry.bytes.windows(b"{DATE}".len()).any(|w| w == b"{DATE}")
@@ -703,7 +711,11 @@ fn assemble_markdown(
         // Conversion-only alias wins over an unrelated optional `date` key.
         variables.insert("{DATE}".to_owned(), date.clone());
     }
-    let blocks = parse_markdown_blocks(body)?;
+    let blocks = if conversion == Some(crate::TodoProjection::Enabled) {
+        parse_markdown_blocks(project_todo_events(markdown, body)?.into_iter())?
+    } else {
+        parse_markdown_blocks(Parser::new_ext(body, Options::all()))?
+    };
     let list_numbering = list_numbering(&loaded, &blocks)?;
     let mut context = RenderContext::new(&loaded, assets)?;
     let rendered = render_blocks(&blocks, &mut context, list_numbering.as_ref())?;
@@ -1850,7 +1862,110 @@ struct ListState {
     id: usize,
 }
 
-fn parse_markdown_blocks(markdown: &str) -> Result<Vec<Block>> {
+/// Project balanced CommonMark entries before rendering, numbering or loading
+/// images. Offsets still refer to the original source, including frontmatter.
+fn project_todo_events<'a>(markdown: &str, body: &'a str) -> Result<Vec<Event<'a>>> {
+    let parsed: Vec<_> = Parser::new_ext(body, Options::all())
+        .into_offset_iter()
+        .collect();
+    let mut ends = vec![0; parsed.len()];
+    let mut stack = Vec::new();
+    for (index, (event, _)) in parsed.iter().enumerate() {
+        match event {
+            Event::Start(_) => stack.push(index),
+            Event::End(_) => ends[stack.pop().expect("balanced CommonMark events")] = index,
+            _ => {}
+        }
+    }
+    let mut projected = Vec::new();
+    let mut index = 0;
+    while index < parsed.len() {
+        let (event, range) = &parsed[index];
+        let kind = match event {
+            // These tags all contribute visible paragraph text in the renderer.
+            Event::Start(
+                Tag::Paragraph | Tag::HtmlBlock | Tag::MetadataBlock(_) | Tag::DefinitionListTitle,
+            ) => Some("paragraph"),
+            Event::Start(Tag::Heading { .. }) => Some("heading"),
+            Event::Start(Tag::Item) => Some("list item"),
+            Event::Start(Tag::CodeBlock(_)) => Some("code block"),
+            Event::Start(Tag::TableCell) => Some("table cell"),
+            _ => None,
+        };
+        if let Some(kind) = kind {
+            let visible = todo_visible_text(&parsed, &ends, index + 1, ends[index]);
+            let visible = visible.trim_start().to_ascii_lowercase();
+            if let Some(marker) = visible.find("todo:") {
+                if marker != 0 {
+                    let prefix = &markdown[..markdown.len() - body.len() + range.start];
+                    return Err(DmsError::MixedTodoEntry {
+                        kind,
+                        line: prefix.bytes().filter(|b| *b == b'\n').count() + 1,
+                        column: prefix.rsplit('\n').next().unwrap_or("").chars().count() + 1,
+                    });
+                }
+                if kind == "table cell" {
+                    projected.push(event.clone());
+                    projected.push(Event::Text("\u{a0}".into()));
+                    projected.push(parsed[ends[index]].0.clone());
+                }
+                index = ends[index] + 1;
+                continue;
+            }
+        }
+        projected.push(event.clone());
+        index += 1;
+    }
+    Ok(projected)
+}
+
+/// Match the assembler's visible inline text, not Markdown syntax, image alt
+/// text or fence metadata. Nested lists/tables are independent entries; count
+/// their presence as content without attributing their TODO markers to a parent.
+fn todo_visible_text(
+    events: &[(Event<'_>, std::ops::Range<usize>)],
+    ends: &[usize],
+    mut index: usize,
+    end: usize,
+) -> String {
+    let mut text = String::new();
+    let mut links = Vec::new();
+    while index < end {
+        match &events[index].0 {
+            Event::Start(Tag::Image { .. } | Tag::List(_) | Tag::Table(_)) => {
+                text.push('\u{fffc}');
+                index = ends[index] + 1;
+                continue;
+            }
+            Event::Text(value)
+            | Event::Code(value)
+            | Event::Html(value)
+            | Event::InlineHtml(value) => text.push_str(value),
+            Event::Start(Tag::Link { dest_url, .. }) => links.push(dest_url),
+            Event::End(TagEnd::Link) => {
+                if let Some(url) = links.pop() {
+                    text.push_str(&format!(" ({url})"));
+                }
+            }
+            Event::InlineMath(value) | Event::DisplayMath(value) => {
+                text.push_str(&format!("${value}$"));
+            }
+            Event::FootnoteReference(label) => text.push_str(&format!("[^{label}]")),
+            Event::TaskListMarker(checked) => text.push_str(if *checked { "[x] " } else { "[ ] " }),
+            Event::Rule => text.push('—'),
+            Event::SoftBreak
+            | Event::HardBreak
+            | Event::End(TagEnd::Paragraph | TagEnd::Heading(_) | TagEnd::CodeBlock) => {
+                text.push('\n')
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+    text
+}
+
+fn parse_markdown_blocks<'a>(mut events: impl Iterator<Item = Event<'a>>) -> Result<Vec<Block>> {
     let mut blocks = Vec::new();
     let mut current = Vec::new();
     let mut block_kind = None;
@@ -1863,7 +1978,6 @@ fn parse_markdown_blocks(markdown: &str) -> Result<Vec<Block>> {
     let mut table = None::<Vec<Vec<Vec<Inline>>>>;
     let mut row = None::<Vec<Vec<Inline>>>;
     let mut cell = None::<Vec<Inline>>;
-    let mut events = Parser::new_ext(markdown, Options::all());
     while let Some(event) = events.next() {
         match event {
             Event::Start(Tag::Heading { level, .. }) => {

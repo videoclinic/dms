@@ -209,6 +209,12 @@ pub enum DmsError {
     InvalidMarkdownFrontmatter(String),
     #[error("conversion template {{DATE}} requires last_modified as a real calendar date in YYYY-MM-DD format")]
     InvalidConversionDate,
+    #[error("mixed TODO {kind} at line {line}, column {column}: TODO: follows substantive visible content; split retained content and TODO into separate entries")]
+    MixedTodoEntry {
+        kind: &'static str,
+        line: usize,
+        column: usize,
+    },
     #[error("Markdown Word template is invalid: {0}")]
     InvalidMarkdownTemplate(String),
     #[error("Markdown Word template path is a symbolic link: {0}")]

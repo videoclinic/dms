@@ -908,8 +908,7 @@ fn cli_todo_policy_resolution_uses_core_without_a_configuration_command() {
         let source_path = layout.input.join("policy.md");
         fs::write(&source_path, VALID_MARKDOWN).unwrap();
         let before = fs::read(&layout.config).unwrap();
-        // Exercise the exact public plan used by the CLI, not a temporary
-        // command or an effective-policy manifest claim before projection exists.
+        // Exercise the public resolver and the exact subprocess conversion path.
         let plan = ConversionPlan::prepare(&ConversionOptions {
             workspace_config: layout.config.clone(),
             input_root: layout.input.clone(),
@@ -942,7 +941,10 @@ fn cli_todo_policy_resolution_uses_core_without_a_configuration_command() {
             );
             let manifest: Value = serde_json::from_slice(&output.stdout).unwrap();
             assert_eq!(manifest["results"][0]["status"], "validated");
-            assert!(!String::from_utf8_lossy(&output.stdout).contains("todo_projection"));
+            assert_eq!(
+                manifest["results"][0]["todo_projection"],
+                serde_json::to_value(expected).unwrap()
+            );
             assert_eq!(fs::read_to_string(&source_path).unwrap(), source);
         }
         for invalid in ["true", "Enabled", "null", "[]", "PRIVATE_INVALID"] {
@@ -966,6 +968,195 @@ fn cli_todo_policy_resolution_uses_core_without_a_configuration_command() {
         );
         assert!(!layout.output.exists());
     }
+}
+
+#[test]
+fn cli_todo_projection_reports_mixed_results_effective_policy_and_original_hashes() {
+    use sha2::{Digest, Sha256};
+    let layout = conversion_layout(dms_core::SCHEMA_VERSION);
+    let mut config: Value = serde_json::from_slice(&fs::read(&layout.config).unwrap()).unwrap();
+    config["conversion_policy"] = serde_json::json!({"todo_projection": "enabled"});
+    let config_bytes = serde_json::to_vec(&config).unwrap();
+    fs::write(&layout.config, &config_bytes).unwrap();
+    let cases = [
+        ("a-inherit.md", "", "TODO: PRIVATE_BODY\n\n# ToDo: PRIVATE_HEADING\n\n- **TODO:** PRIVATE_ITEM\n\n```text\nTODO: PRIVATE_CODE\n```\n\n| A | B |\n| --- | --- |\n| TODO: PRIVATE_CELL | Kept |\n", "validated", Some("enabled")),
+        ("b-disabled.md", "todo_projection: disabled\n", "PRIVATE_KEEP TODO: PRIVATE_BODY\n", "validated", Some("disabled")),
+        ("c-mixed.md", "", "PRIVATE_KEEP TODO: PRIVATE_BODY\n", "failed", Some("enabled")),
+        ("d-cell.md", "", "| A | B |\n| --- | --- |\n| PRIVATE_KEEP TODO: PRIVATE_BODY | kept |\n", "failed", Some("enabled")),
+        ("e-invalid.md", "todo_projection: PRIVATE_VALUE\n", "PRIVATE_BODY\n", "failed", None),
+        ("f-html.md", "", "<p>PRIVATE_KEEP TODO: PRIVATE_BODY</p>\n", "failed", Some("enabled")),
+        ("z-good.md", "", "Kept final body\n", "validated", Some("enabled")),
+    ];
+    let mut sources = Vec::new();
+    for (name, extra, body, _, _) in &cases {
+        let source = format!("---\ntitle: Synthetic policy\nversion: 1.0\nconfidentiality: internal\n{extra}---\n{body}");
+        fs::write(layout.input.join(name), &source).unwrap();
+        sources.push(source);
+    }
+    let output = convert_markdown(&layout, &["--dry-run"]);
+    assert_eq!(output.status.code(), Some(1));
+    let manifest: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let results = manifest["results"].as_array().unwrap();
+    assert_eq!(results.len(), cases.len());
+    for ((result, (name, _, _, status, policy)), source) in results.iter().zip(cases).zip(&sources)
+    {
+        assert_eq!(result["input"], name);
+        assert_eq!(result["status"], status);
+        assert_eq!(
+            result["todo_projection"],
+            serde_json::to_value(policy).unwrap()
+        );
+        assert_eq!(
+            result["input_sha256"],
+            format!("{:x}", Sha256::digest(source.as_bytes()))
+        );
+        assert!(result["docx"].is_null() && result["pdf"].is_null());
+        assert_eq!(
+            fs::read_to_string(layout.input.join(name)).unwrap(),
+            *source
+        );
+    }
+    assert!(results[2]["error"]
+        .as_str()
+        .unwrap()
+        .contains("mixed TODO paragraph at line 6, column 1"));
+    assert!(results[3]["error"]
+        .as_str()
+        .unwrap()
+        .contains("mixed TODO table cell at line 8, column 2"));
+    for bytes in [&output.stdout, &output.stderr] {
+        let text = String::from_utf8_lossy(bytes);
+        assert!(!text.contains("PRIVATE_") && !text.contains("Kept final body"));
+    }
+    assert_eq!(fs::read(&layout.config).unwrap(), config_bytes);
+    assert!(!layout.output.exists());
+}
+
+#[test]
+fn cli_todo_projection_checks_visible_metadata_and_definition_titles_without_source_leaks() {
+    use sha2::{Digest, Sha256};
+    for body in [
+        "---\n{entry}\n---\n\nKept body\n",
+        "+++\n{entry}\n+++\n\nKept body\n",
+        "{entry}\n: Kept body\n",
+    ] {
+        for (policy, entry, succeeds) in [
+            ("enabled", "ToDo: PRIVATE_DROP", true),
+            ("enabled", "PRIVATE_KEEP TODO: PRIVATE_DROP", false),
+            ("disabled", "ToDo: PRIVATE_DROP", true),
+            ("disabled", "PRIVATE_KEEP TODO: PRIVATE_DROP", true),
+        ] {
+            let layout = conversion_layout(dms_core::SCHEMA_VERSION);
+            let source = format!(
+                "---\ntitle: Synthetic policy\nversion: 1.0\nconfidentiality: internal\ntodo_projection: {policy}\n---\n{}",
+                body.replace("{entry}", entry)
+            );
+            let path = layout.input.join("policy.md");
+            fs::write(&path, &source).unwrap();
+            let before_config = fs::read(&layout.config).unwrap();
+            let output = convert_markdown(&layout, &["--dry-run"]);
+            assert_eq!(output.status.code(), Some(if succeeds { 0 } else { 1 }));
+            let manifest: Value = serde_json::from_slice(&output.stdout).unwrap();
+            let result = &manifest["results"][0];
+            assert_eq!(
+                result["status"],
+                if succeeds { "validated" } else { "failed" }
+            );
+            assert_eq!(result["todo_projection"], policy);
+            if succeeds {
+                assert!(result["error"].is_null());
+            } else {
+                assert_eq!(result["error"], "mixed TODO paragraph at line 7, column 1: TODO: follows substantive visible content; split retained content and TODO into separate entries");
+            }
+            assert_eq!(
+                result["input_sha256"],
+                format!("{:x}", Sha256::digest(source.as_bytes()))
+            );
+            assert!(result["docx"].is_null() && result["pdf"].is_null());
+            for bytes in [&output.stdout, &output.stderr] {
+                let text = String::from_utf8_lossy(bytes);
+                assert!(!text.contains("PRIVATE_") && !text.contains("Kept body"));
+            }
+            assert_eq!(fs::read(&path).unwrap(), source.as_bytes());
+            assert_eq!(fs::read(&layout.config).unwrap(), before_config);
+            assert!(!layout.output.exists());
+        }
+    }
+}
+
+#[test]
+fn cli_todo_projection_reports_original_crlf_unicode_cell_location() {
+    use sha2::{Digest, Sha256};
+    let layout = conversion_layout(dms_core::SCHEMA_VERSION);
+    let source = "---\r\ntitle: Synthetic policy\r\nversion: 1.0\r\nconfidentiality: internal\r\ntodo_projection: enabled\r\n---\r\n| A | B |\r\n| --- | --- |\r\n| Grüße | PRIVATE_KEEP **TO**DO: PRIVATE_BODY |\r\n";
+    let path = layout.input.join("unicode.md");
+    fs::write(&path, source).unwrap();
+    let before_config = fs::read(&layout.config).unwrap();
+    let output = convert_markdown(&layout, &["--dry-run"]);
+    assert_eq!(output.status.code(), Some(1));
+    let manifest: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let result = &manifest["results"][0];
+    assert_eq!(result["todo_projection"], "enabled");
+    let column = "| Grüße |".chars().count() + 1;
+    assert_eq!(result["error"], format!("mixed TODO table cell at line 9, column {column}: TODO: follows substantive visible content; split retained content and TODO into separate entries"));
+    assert_eq!(
+        result["input_sha256"],
+        format!("{:x}", Sha256::digest(source.as_bytes()))
+    );
+    assert!(result["docx"].is_null() && result["pdf"].is_null());
+    for bytes in [&output.stdout, &output.stderr] {
+        let text = String::from_utf8_lossy(bytes);
+        assert!(!text.contains("PRIVATE_") && !text.contains("Grüße"));
+    }
+    assert_eq!(fs::read(&path).unwrap(), source.as_bytes());
+    assert_eq!(fs::read(&layout.config).unwrap(), before_config);
+    assert!(!layout.output.exists());
+}
+
+#[test]
+fn cli_todo_projection_normal_output_names_policy_and_sanitized_failure() {
+    let layout = conversion_layout(dms_core::SCHEMA_VERSION);
+    fs::write(layout.input.join("disabled.md"), VALID_MARKDOWN).unwrap();
+    fs::write(
+        layout.input.join("enabled.md"),
+        VALID_MARKDOWN.replacen("title:", "todo_projection: enabled\ntitle:", 1),
+    )
+    .unwrap();
+    fs::write(
+        layout.input.join("invalid.md"),
+        VALID_MARKDOWN.replacen("title:", "todo_projection: PRIVATE_VALUE\ntitle:", 1),
+    )
+    .unwrap();
+    fs::write(
+        layout.input.join("mixed.md"),
+        VALID_MARKDOWN.replacen("title:", "todo_projection: enabled\ntitle:", 1)
+            + "\nPRIVATE_KEEP TODO: PRIVATE_BODY\n",
+    )
+    .unwrap();
+    let output = dms()
+        .args(["convert", "markdown", "--dry-run", "--workspace-config"])
+        .arg(&layout.config)
+        .arg("--input-root")
+        .arg(&layout.input)
+        .arg("--output-root")
+        .arg(&layout.output)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    for expected in [
+        "disabled.md: todo_projection=disabled",
+        "enabled.md: todo_projection=enabled",
+        "invalid.md: todo_projection=unresolved",
+        "mixed.md: todo_projection=enabled",
+        "mixed TODO paragraph at line",
+    ] {
+        assert!(stderr.contains(expected), "{stderr}");
+    }
+    assert!(!stderr.contains("PRIVATE_"));
+    assert!(String::from_utf8_lossy(&output.stdout)
+        .contains("validated 2 of 4 Markdown file(s); 2 failed"));
+    assert!(!layout.output.exists());
 }
 
 #[test]
