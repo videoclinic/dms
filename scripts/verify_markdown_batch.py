@@ -227,6 +227,21 @@ def inline_text(tokens):
     return "".join(parts)
 
 
+def strip_heading_attributes(text):
+    candidate = text.rstrip()
+    if not candidate.endswith("}"):
+        return text
+    start = candidate.rfind("{")
+    if start <= 0 or not candidate[start - 1].isspace():
+        return text
+    attributes = candidate[start + 1:-1].split()
+    if not attributes or not all(
+            len(attribute) > 1 and attribute[0] in "#." and "{" not in attribute and "}" not in attribute
+            for attribute in attributes):
+        return text
+    return candidate[:start].rstrip()
+
+
 def source_inventory(path, root):
     data = path.read_bytes()
     fields, body = source_fields(data.decode("utf-8-sig"))
@@ -238,7 +253,7 @@ def source_inventory(path, root):
             continue
         children = token.children
         if tokens[index - 1].type == "heading_open" and children[-1].type == "text":
-            children[-1].content = re.sub(r"\s+\{(?:[#.][^\s{}]+\s*)+\}$", "", children[-1].content)
+            children[-1].content = strip_heading_attributes(children[-1].content)
         if (index >= 2 and tokens[index - 1].type == "paragraph_open"
                 and tokens[index - 2].type == "list_item_open" and children[0].type == "text"):
             children[0].content = re.sub(r"^\[X\](?=\s)", "[x]", children[0].content)

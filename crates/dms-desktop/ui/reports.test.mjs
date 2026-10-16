@@ -94,5 +94,5 @@ test("audit report history exposes honest integrity and host actions with escape
   assert.match(markup, /data-report-open-folder="event-&lt;unsafe&gt;"/);
   assert.match(markup, /Source drafts and release PDF bytes are never embedded/);
   assert.doesNotMatch(markup, /<unsafe>/);
-  assert.doesNotMatch(markup, /<script>/);
+  assert.doesNotMatch(markup, /<script>/i);
 });

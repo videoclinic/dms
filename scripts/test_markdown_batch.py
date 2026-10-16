@@ -256,6 +256,13 @@ class VerifierTests(unittest.TestCase):
                      'Inline math $x^2$ and a footnote [^n].', 'Footnote body.'):
             self.assertIn(text, inv["chunks"])
 
+    def test_heading_attribute_inventory_rejects_unclosed_repeated_markers(self):
+        suffix = "{" + ("#" * 50) + "!"
+        path = self.source / "policy.md"
+        path.write_text(SOURCE + f"\n# Slow heading {suffix}\n", encoding="utf-8")
+        inv = v.source_inventory(path, self.source)
+        self.assertIn((1, f"Slow heading {suffix}"), inv["headings"])
+
     def test_smart_punctuation_in_docx_body_and_table(self):
         path = self.source / "policy.md"
         path.write_text(SOURCE.replace("Synthetic verification text.", 'Speed -- says "fast"...')
