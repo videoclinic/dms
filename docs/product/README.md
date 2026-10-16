@@ -51,7 +51,8 @@ Static operator-surface wireframes (shadcn-admin 2.2.0 visual base):
 [`wireframes/index.html`](wireframes/index.html) ·
 [`wireframes/manifest.json`](wireframes/manifest.json) ·
 PNG exports under `wireframes/exports/`.
-Each CAP links its HTML + PNG under **Links**.
+CAPs with a primary desktop surface link HTML + PNG under **Links**.
+CAP-0022 declares `Primary surface: none`; standalone conversion adds no desktop UI.
 
 ## Related
 

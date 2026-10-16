@@ -22,7 +22,6 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 | --- | --- | --- | --- |
 | [CHG-0055](active/CHG-0055-configurable-markdown-todo-projection.md) | Configurable Markdown TODO projection | planned | CAP-0022 |
 | [CHG-0054](active/CHG-0054-language-selected-de-en-word-templates.md) | Language-selected reusable DE/EN Word conversion templates | planned | CAP-0007, CAP-0022 |
-| [CHG-0053](active/CHG-0053-markdown-batch-conversion-retained-docx.md) | Markdown batch conversion with retained DOCX | in-progress | CAP-0007, CAP-0022 |
 | [CHG-0050](active/CHG-0050-uuid-msrv-ceiling.md) | UUID dependency MSRV ceiling | planned | none |
 | [CHG-0042](active/CHG-0042-publish-root-released-document-index.md) | Publish-root released-document index | pending | CAP-0005, CAP-0016 |
 | [CHG-0045](active/CHG-0045-operator-library-name.md) | Operator-defined library name | pending | CAP-0001, CAP-0005 |
@@ -32,6 +31,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
+| [CHG-0053](archive/CHG-0053-markdown-batch-conversion-retained-docx.md) | Markdown batch conversion with retained DOCX | done | CAP-0007, CAP-0022 |
 | [CHG-0052](archive/CHG-0052-markdown-frontmatter-initial-import.md) | Markdown frontmatter initial import | done | CAP-0002, CAP-0015, CAP-0017, CAP-0019 |
 | [CHG-0051](archive/CHG-0051-library-agent-instructions.md) | Library agent instructions | done | CAP-0001, CAP-0022 |
 | [CHG-0041](archive/CHG-0041-library-batch-execution-activity.md) | Library batch execution activity | done | CAP-0005, CAP-0006 |

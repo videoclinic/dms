@@ -2,7 +2,7 @@
 
 **Plan ID:** CHG-0055-configurable-markdown-todo-projection
 **Created:** 2026-10-15
-**Depends on:** CHG-0053 Phase 4 remains the authority for retained-DOCX batch-conversion fidelity.
+**Depends on:** archived CHG-0053 is the implementation receipt for retained-DOCX batch-conversion fidelity.
 **Status:** planned
 
 | Field | Value |
@@ -129,6 +129,6 @@ library setting and structured effective-policy output.
 ## Related contracts
 
 - [CAP-0022](../../product/capabilities/CAP-0022-headless-core-cli.md)
-- [CHG-0053](CHG-0053-markdown-batch-conversion-retained-docx.md)
+- [CHG-0053](../archive/CHG-0053-markdown-batch-conversion-retained-docx.md)
 - [Markdown metadata and template variables](../../markdown-frontmatter-and-template-variables.md)
 - [Architecture](../../architecture.md) and [privacy](../../privacy.md)

@@ -6,12 +6,12 @@
 **Entry checkpoint:** Windows checkout `main` at `9b71542`; Phase 1 changes remain uncommitted by operator instruction.
 **Context sources:** Root/documentation/change/product DOX; CAP-0007; CAP-0022; architecture and privacy contracts; ADR-0008 and ADR-0023; CHG-0004 and CHG-0041; all three active CHGs; `crates/dms-core/src/template.rs`; `crates/dms-core/src/frontmatter.rs`; `crates/dms-desktop/src/export.rs`; `crates/dms-cli/src/main.rs`; the operator's workspace configuration and full-corpus assembly/diagnostic Word probes summarized below.
 **Produces:** An explicit headless batch command that converts external Markdown through the configured Word template into paired PDF/DOCX artifacts, preserves tables and local images, retains the exact final Word input, and never registers, approves, releases, or mutates the source workspace.
-**Status:** in-progress
+**Status:** done
 
 | Field | Value |
 | --- | --- |
 | ID | CHG-0053 |
-| Status | in-progress |
+| Status | done |
 | External request | Direct operator request: Create a CHG in /mnt/c/Users/RaphaelBossek/src/dms/ to accomplish this task; there is already a CHG that should accomplish mass export -- I'm not sure. check this first. Incorporate your findings in the CHG. Follow-on: Incorporate the findings regarding converting the markdown document in the ../dms project using the application-records skill for future improvements. Using the dms cli tool would be prefered then. Follow-on: answer the general cadence/responsibility TODOs in `docs/reworked/iso-27001/` with `12 Monate` and `IT-Leitung`; omit every TODO entry from DOCX/PDF conversion using `Vorlage.de.docx`. |
 | Affected CAPs | CAP-0007, CAP-0022 |
 | Decision records | ADR-0008 and ADR-0023 in `docs/architecture.md` describe the shared local Word adapter and standalone non-release conversion boundary. |
@@ -28,8 +28,8 @@ The planning inspection found three active records and 49 archived records. None
 
 - [CHG-0041 — Library batch execution activity](../archive/CHG-0041-library-batch-execution-activity.md) is the likely remembered batch change. It is done and covers only homogeneous batch add/unregister and a session-only result activity. Its out-of-scope section explicitly excludes bulk release and other lifecycle operations. Do not reopen it or extend its UI for this request.
 - [CHG-0004 — Markdown Word-template release](../archive/CHG-0004-markdown-word-template-release.md) is done. Its selected decisions deliberately make DOCX temporary and place only approved versioned PDFs in the publish tree. Reuse its renderer and adapter, not its approval/release transaction for external conversion.
-- [CHG-0042 — Publish-root released-document index](CHG-0042-publish-root-released-document-index.md) lists already released PDFs; it does not generate them. Converted artifacts must not enter that index.
-- [CHG-0045 — Operator-defined library name](CHG-0045-operator-library-name.md) and [CHG-0050 — UUID MSRV ceiling](CHG-0050-uuid-msrv-ceiling.md) are independent. Preserve their work; do not duplicate their phases here.
+- [CHG-0042 — Publish-root released-document index](../active/CHG-0042-publish-root-released-document-index.md) lists already released PDFs; it does not generate them. Converted artifacts must not enter that index.
+- [CHG-0045 — Operator-defined library name](../active/CHG-0045-operator-library-name.md) and [CHG-0050 — UUID MSRV ceiling](../active/CHG-0050-uuid-msrv-ceiling.md) are independent. Preserve their work; do not duplicate their phases here.
 
 CHG-0053 is the sole progress authority for this request. The findings below are baseline evidence, not completed implementation phases.
 
@@ -136,7 +136,7 @@ These are implementation targets, not claims about current runtime.
 | 2 | Embed local source images without silent content loss | done (third-correction G2: 20 markdown_template + 31 lifecycle tests passed on Rust 1.88.0; evidence below) | G2: `cargo test -p dms-core --test markdown_template --test lifecycle` exits 0 with image, containment, rejection and template-preservation coverage. |
 | 3 | Deliver explicit non-release batch CLI and retained Word inputs | done (corrected G3: 250 workspace tests and CLI help passed; review findings corrected) | G3: `cargo test --workspace --locked` and `cargo run -p dms-cli -- convert markdown --help` exit 0 with schema-18/19/current read-only configuration, retained-DOCX, full-width tables, explicit TOC removal and unchanged-release coverage. |
 | 4 | Prove full-corpus Windows Word conversion and repeatability | done (G4: `run-12` automated pass and operator visual review) | G4: The native Windows smoke command specified below exits 0 with 52 verified PDF/DOCX pairs, every selected source image occurrence accounted for, retained source/template/config digests, and inspected rendered evidence. |
-| 5 | Integrate contracts, records and project gates | pending | G5: Full integration commands and record checks below pass; CAP/DOX/visual classifications are current; only then archive CHG-0053. |
+| 5 | Integrate contracts, records and project gates | done (G5: full integration and record checks passed; independent review returned no findings) | G5: Full integration commands and record checks below pass; CAP/DOX/visual classifications are current; only then archive CHG-0053. |
 
 Keep at most one phase `in-progress`. Every done phase records its actual gate evidence; a fake Office exporter is not a real PDF smoke.
 
@@ -945,7 +945,7 @@ workspace template file changed.
   G4 work after a snapshot-clean run is rendered visual inspection, not a relaxed
   artifact-verifier gate.
 
-### Native `run-12` — automated G4 pass; visual review pending
+### Native `run-12` — accepted G4 evidence
 
 - The exact reviewed 52-file selection stayed reconciled through two fresh runs.
   Each run produced 52 successful CLI results and 52 independently verified
@@ -957,9 +957,10 @@ workspace template file changed.
   honest nonzero exits; the saved evidence reports `automated_pass: true`.
 - Confidential rendered pages are retained under
   `C:\Users\RaphaelBossek\dms-conversion-verification\run-12-evidence` for the
-  required human review of cover, TOC, footer, table and image pages. Automated
-  success is not visual G4 sign-off; Phase 4 remains `in-progress` until the
-  operator records that review.
+  human review of cover, TOC, footer, table and image pages. The operator accepted
+  that visual review as recorded in the handoff; Phase 4 is done. Automated
+  success alone is not visual sign-off. Earlier Phase-4 failure/correction
+  receipts above are historical execution evidence, not outstanding G4 blockers.
 
 ## Phase 5 — Integrate contracts, records and project gates
 
@@ -984,6 +985,73 @@ workspace template file changed.
 
 **Verification gate:** G5: Full integration commands and record checks above pass; CAP/DOX/visual classifications are current; only then archive CHG-0053.
 
+### Phase 5 execution evidence
+
+Documentation-only integration in the primary checkout under WSL. No commit,
+push, credentials, real corpus/workspace or native Word access; unrelated
+`scripts/__pycache__/` remains untouched. G4 claims below use the accepted
+repository receipt, not a fresh inspection of confidential artifacts.
+
+- Read the CLI dispatch, conversion projection/metadata/manifest/pair validation,
+  shared Word scripts, desktop release path, assembly and focused tests before
+  editing contracts. CAP-0007 remains bounded `not implemented` / `human`;
+  CAP-0022 remains `implemented` / `none`. Windows G4 evidence is now distinct
+  from synthetic tests, unverified native macOS fidelity and unsupported Linux
+  rendering. Shared multi-paragraph list behavior links its existing regressions.
+- The existing frontmatter/template reference now owns invocation, prerequisites,
+  selection, dry-run, outputs and failure recovery; architecture and CAP-0022
+  link it. No second runbook or progress plan was added. `conversion_only` is
+  correctly described as a manifest/result flag, not a document watermark;
+  standalone filenames are distinguished from released version/classification
+  names. No TODO-filter or language-selected-template implementation is claimed.
+- Privacy covers captured metadata, retained/temporary/diagnostic document copies
+  and confidential rendered smoke pages. Documentation DOX ownership and core
+  list-paragraph guidance are synchronized. The product index clarifies that only
+  desktop-surface CAPs need visuals. Existing root/crate/CLI/export/desktop and
+  product/change/wireframe DOX, child indexes, change index and ADR-0008/ADR-0023
+  remain unchanged: adapter ownership, authority and retention decisions already
+  match implementation; no new boundary, CAP, desktop interaction or ADR is needed.
+
+G5 commands run from the repository root:
+
+| Command | Result |
+| --- | --- |
+| `cargo fmt --all -- --check` | Exit 0 |
+| `cargo clippy --workspace --all-targets --locked -- -D warnings` | Exit 0 |
+| `cargo test --workspace --locked` | Exit 0; 274 passed, 0 failed, 0 ignored; zero doc-tests |
+| `node --test crates/dms-desktop/ui/*.test.mjs` | Exit 0; 160 passed, 0 failed, 0 skipped |
+| `python3 "/home/raphael/.hermes/profiles/hermes-vc/skills/software-development/check-md-links/scripts/check-md-links.py" --format summary .` | Exit 0; strict mode, 0 issues |
+| `git diff --check` | Exit 0 |
+
+Earlier tool-wrapped/foreground test attempts timed out; the tracked rerun of
+the exact workspace command completed successfully after a 4m27s build. These
+timeouts are not passing test evidence. The successful run includes 19 CLI,
+24 conversion, 30 template, 31 lifecycle, four smoke-contract, 91 desktop and
+18 shared-export tests, plus the remaining domain suites. CLI help also exited
+0 and agrees with the documented flags; no conversion invocation used real data.
+
+Read-only Python record/index assertions passed:
+
+- At G5 execution, all 22 CAPs, six active CHGs and 49 archived CHGs had unique
+  matching index entries; every CHG CAP reference resolved and no active CHG was
+  marked done.
+- At G5 execution, CHG-0053 had one active index entry; its five phase rows
+  matched the numbered section titles. G1–G4 had passing gate receipts,
+  including accepted G4 visual review, and only Phase 5 was `in-progress`.
+- CAP-0007's nonempty HTML/PNG links resolve to its manifest entry (PNG signature
+  checked); CAP-0022 explicitly declares `none` and has no visual entry. All 21
+  HTML/PNG pairs match the wireframe manifest. No UI/wireframe edit, regeneration
+  or new visual-inspection claim is made.
+- All 13 tracked DOX contracts are reachable through valid child indexes. Git's
+  staging index is empty. No dedicated record validator exists in the tracked
+  scripts/workflow inventory; these assertions and strict links are the checks,
+  not an invented `records:check` pass.
+
+Independent review in a fresh `grok-4.7` session returned **No findings** against
+the frozen G5 diff. Residual limits: native macOS execution remains unverified;
+Linux has no Word renderer/WSL fallback; structural validation is not
+arbitrary-template visual certification.
+
 ## Out of scope
 
 - Batch registration, approval, release, notification, integrity-maintenance UI, or extending CHG-0041's activity pane.
@@ -995,13 +1063,14 @@ workspace template file changed.
 
 ## Handoff
 
-Phases 1–4 are done. `run-12` proves the exact 52-file selection, two complete
+Phases 1–5 are done. `run-12` proves the exact 52-file selection, two complete
 verified 52-pair runs, controlled negative/overwrite probes, unchanged protected
 snapshots and a zero-to-zero Word process baseline. The operator reviewed the
 confidential cover, TOC, footer, table and image pages under
 `C:\Users\RaphaelBossek\dms-conversion-verification\run-12-evidence` and accepted
-the visual G4 result. Phase 5 remains pending and the primary checkout remains
-uncommitted for integration review.
+the visual G4 result. G5's full integration/record checks passed and its fresh
+independent review returned no findings. This record is archived as the completed
+implementation receipt; the primary checkout remains uncommitted.
 
 ## Related contracts
 

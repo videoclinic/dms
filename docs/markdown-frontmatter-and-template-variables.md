@@ -82,6 +82,84 @@ them):
 - `{VERSION}`
 - `{CONFIDENTIALITY}`
 
+## Standalone conversion operation
+
+`dms convert markdown` creates conversion-only DOCX/PDF pairs, not registered,
+approved or released documents. It reads export configuration without opening,
+migrating, saving or locking the workspace; no Entra session or notification is
+started. Desktop Release keeps its separate `.dms`-owned approval/version flow.
+
+### Prerequisites and invocation
+
+- Build the headless executable with `cargo build -p dms-cli --locked`.
+  Native Windows uses `target\debug\dms.exe`; macOS/Linux use `target/debug/dms`.
+  Actual PDF conversion requires installed, licensed desktop Word. Windows has
+  [recorded native full-selection evidence](changes/archive/CHG-0053-markdown-batch-conversion-retained-docx.md#handoff);
+  the macOS adapter has synthetic/static coverage, not installed-Word fidelity
+  verification. Linux/WSL supports dry-run only; there is no automatic Word bridge.
+- Use the native host's existing `<edit-root>/.dms/workspace.json`, with schema
+  18, 19 or current, an enabled confidentiality catalogue and a configured Word
+  template whose digest and contract validate. Configured edit/publish roots
+  must exist and match that host; Windows locators are not reinterpreted on Linux.
+- Input must be an external directory disjoint from both workspace roots.
+  Output must not exist, its parent must exist, and it must be disjoint from
+  input/edit/publish trees. These rules apply to dry-run too.
+- Each UTF-8 Markdown source needs flat `title`, numeric `version: MAJOR.MINOR`
+  (no `V`), and `confidentiality` containing an enabled type ID, not its label.
+  Omit `document_number` when unset. Supply `last_modified` when required by
+  [the template's `{DATE}` token](#standalone-conversion-date).
+
+Example from native Windows PowerShell, using illustrative operator-chosen paths:
+
+```powershell
+.\target\debug\dms.exe --json convert markdown --workspace-config 'C:\DMS\edit\.dms\workspace.json' --input-root 'C:\Conversion\sources' --output-root 'C:\Conversion\run-1' --dry-run
+.\target\debug\dms.exe --json convert markdown --workspace-config 'C:\DMS\edit\.dms\workspace.json' --input-root 'C:\Conversion\sources' --output-root 'C:\Conversion\run-1'
+```
+
+Run the second command only after reviewing dry-run results and selection.
+Default discovery selects every immediate `.md` child; `--recursive` explicitly
+includes descendants except `.dms` and `assets` subtrees. There is no per-file
+selection flag: keep non-target Markdown outside the selected scope. PNG/JPEG
+references resolve relative to their source and must stay within the input root,
+including shared assets. Remote, escaping, missing or unsupported images fail.
+Keep sources/assets/template stable through conversion; hashes record consumed
+bytes, not a guarantee against concurrent writers.
+
+The template TOC stays by default. `--without-toc` removes only its TOC
+structured-document tag, not a source-authored contents section. Static template
+text is not translated. Avoid manual heading-number prefixes when template styles
+already number headings. Link labels survive, but Markdown-relative links are
+not rewritten into PDF navigation. The command has no TODO-filter or
+language-selected-template option; it uses the one configured template.
+
+### Output and failures
+
+- The exact selected paths go to stderr before processing. With `--json`, stdout
+  contains the final manifest/result object, including mixed per-file failures.
+  Normal stdout reports conversion-only totals; per-file errors go to stderr.
+- Dry-run validates metadata, assets and temporary DOCX assembly without Word
+  preflight or output-root creation. Successful entries are `validated`, with no
+  DOCX/PDF hashes or Word receipt. It does not prove licensing, Word automation,
+  pagination or visual fidelity.
+- Actual conversion mirrors relative parents and writes `<stem>.docx`,
+  `<stem>.pdf` and root `manifest.json`. DOCX is the final controlled-field-filled
+  document saved by Word after field/TOC/pagination updates, then exported to PDF
+  without a later DOCX edit. `succeeded` entries include both final hashes;
+  `conversion_only: true` belongs to the manifest/result, not a document watermark.
+- Configuration/template/root/collision/host-preflight errors stop before document
+  work and may produce no manifest. Document-specific errors continue sequentially
+  and any failed entry makes the command exit nonzero. Failed pairs have no
+  success hashes; owned incomplete files are removed or listed in
+  `retained_diagnostics`. An output/manifest-write failure or interruption may
+  leave files without a complete receipt: file existence alone is not success.
+- Inspect stderr and each result's `status`, `error` and `retained_diagnostics`.
+  Correct the input/configuration or host problem and use a fresh output root;
+  there is no overwrite/resume mode. Do not terminate unrelated Word sessions
+  after an interruption. Protect retained DOCX/PDF, temporary/diagnostic copies
+  and rendered verification pages as confidential content, and captured output
+  as metadata; see [privacy](privacy.md). Rendered inspection is still needed for
+  a new source/template combination; structural success is not a layout guarantee.
+
 ## Standalone conversion date
 
 Only `dms convert markdown` maps the source-owned flat frontmatter scalar
@@ -142,8 +220,9 @@ prototypes in the template; frontmatter is stripped from the body.
 - `Version: <major>.<minor>`
 - `Vertraulichkeitsstufe: <display label>`
 
-Those markers use the **label**, not the type ID. PDF filenames always use the
-confidentiality type ID regardless of draft format.
+Those markers use the **label**, not the type ID. Released PDF filenames use the
+confidentiality type ID regardless of draft format; standalone conversion uses
+the unversioned source stem as described above.
 
 ## Related contracts
 

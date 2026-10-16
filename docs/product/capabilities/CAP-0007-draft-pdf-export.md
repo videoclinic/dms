@@ -21,6 +21,9 @@ unordered lists use native Word bullet numbering. Both use the normal paragraph
 prototype with explicit `w:numPr`, not the template's bullet paragraph prototype,
 and each source list has its own numbering instance. The v1 `{BULLET LIST}` marker
 is still required for template validation; no template-file change is needed.
+Multiple paragraphs in one list item remain separate Word paragraphs: only the
+first carries a marker; continuations keep list-body indentation with numbering
+suppressed, including a parent continuation after a nested list.
 
 The template still requires exactly two prototype cells and no new markers.
 All column counts clone the
@@ -74,6 +77,8 @@ Evidence: `assembler_preserves_two_three_four_and_five_column_table_fidelity`,
 `assembler_renders_unordered_lists_with_native_bullet_numbering`,
 `assembler_keeps_native_bullet_and_decimal_lists_separate`,
 `assembler_sets_one_native_list_reference_in_paragraph_properties`,
+`assembler_preserves_multiple_paragraphs_in_each_list_item`,
+`assembler_keeps_list_continuation_after_a_nested_list`,
 `assembler_renders_authentication_delivery_steps_as_one_native_decimal_list` and
 `assembler_preserves_other_markdown_constructs_without_losing_content` in the
 [core template tests](../../../crates/dms-core/tests/markdown_template.rs).
@@ -83,8 +88,14 @@ Standalone batch conversion and retained final DOCX are a separate headless
 authority under [CAP-0022](CAP-0022-headless-core-cli.md), not release evidence.
 Shared full-width layout and optional template-TOC removal are covered by the
 core template tests; desktop release retains the default TOC. Full-corpus Word
-rendering remains pending under
-[CHG-0053](../../changes/active/CHG-0053-markdown-batch-conversion-retained-docx.md).
+rendering on Windows is recorded in
+[CHG-0053 G4](../../changes/archive/CHG-0053-markdown-batch-conversion-retained-docx.md#handoff):
+two verified runs of the reviewed 52-document selection, 23 source-image
+occurrences across ten documents, unchanged protected snapshots, negative probes
+and operator-accepted visual review. This proves that standalone conversion
+selection/template, not additional desktop release or macOS fidelity. Installed
+Word on macOS remains unverified; Linux has no Office renderer or automatic WSL
+bridge. Windows evidence is not a universal layout guarantee.
 The overall CAP remains `not implemented` while the platform gaps above remain.
 
 ## Outcomes (contract — not yet true in runtime)

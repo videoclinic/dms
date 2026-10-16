@@ -88,7 +88,8 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
   an existing parent is required; there is no overwrite or resume mode.
   Case-insensitive portable path collisions fail before document processing.
 - Conversion runs sequentially and retains `<stem>.docx` / `<stem>.pdf` pairs
-  plus `manifest.json`, all marked `conversion_only`. The shared Word adapter
+  plus `manifest.json`; the manifest and JSON result carry `conversion_only`,
+  not a watermark or approval mark in the documents. The shared Word adapter
   fills controlled fields, updates fields/TOC/pagination, saves DOCX and exports
   that same document. Core reads back ZIP/XML and parses PDF text before
   recording final artifact hashes. Consumed Markdown, template and embedded
@@ -101,7 +102,13 @@ procedures/Onboarding.md    →      procedures/Onboarding_V1.0_internal.pdf
   Generated tables of every supported column count span printable body width.
   Link labels remain visible text; Markdown-relative links are not rewritten
   into working PDF navigation. Automated doubles prove boundaries, not real
-  Word pagination; full-corpus Windows and macOS rendering remain host gates.
+  Word pagination. [CHG-0053 G4](changes/archive/CHG-0053-markdown-batch-conversion-retained-docx.md#handoff)
+  records native Windows full-selection repeatability and accepted visual review;
+  that evidence does not establish arbitrary-template fidelity or native macOS
+  rendering. macOS installed-Word verification remains a host gate; Linux has no
+  renderer or automatic WSL bridge. See the
+  [operator reference](markdown-frontmatter-and-template-variables.md#standalone-conversion-operation)
+  for invocation, output and failure handling.
 - The app reads/writes within those roots and `.dms`, except explicit
   standalone conversion inputs/outputs and user-chosen import paths that must
   still resolve under the edit root for library membership.

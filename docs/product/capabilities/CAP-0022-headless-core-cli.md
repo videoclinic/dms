@@ -7,8 +7,8 @@
 | ID | CAP-0022 |
 | Status | implemented |
 | Executable | `dms` |
-| Platforms | Windows and macOS |
-| Tests | `crates/dms-core/tests/workspace.rs`; `crates/dms-core/tests/conversion.rs`; `crates/dms-cli/tests/cli.rs`; `crates/dms-export/src/lib.rs` |
+| Platforms | Headless core and conversion dry-run: Windows, macOS and Linux; installed-Word conversion: Windows and macOS adapters, with native fidelity evidence limited to Windows |
+| Tests | [Workspace](../../../crates/dms-core/tests/workspace.rs); [conversion](../../../crates/dms-core/tests/conversion.rs); [CLI](../../../crates/dms-cli/tests/cli.rs); [shared Word adapter](../../../crates/dms-export/src/lib.rs); [Markdown assembly](../../../crates/dms-core/tests/markdown_template.rs) |
 
 ## Outcomes
 
@@ -72,7 +72,9 @@ The CLI provides explicit, local operations over the shared `dms-core` library:
     decimal Word numbering with source start values and distinct list restarts;
     unordered lists emit distinct native Word bullet-numbering instances on the
     normal paragraph prototype. The template's `{BULLET LIST}` marker remains a
-    validation-only contract input, not a rendered paragraph prototype. Linux
+    validation-only contract input, not a rendered paragraph prototype. Paragraphs
+    within a list item stay separate, with only the first numbered and subsequent
+    paragraphs indented without a marker. Linux
     conversion fails explicitly; dry-run remains available without Word.
 12. Sequential processing continues after document-specific failures and exits
     nonzero if any fail. Success requires readable DOCX ZIP/XML and a parsed PDF
@@ -82,9 +84,16 @@ The CLI provides explicit, local operations over the shared `dms-core` library:
     metadata, final saved DOCX/PDF hashes and renderer/Word version. Dry-run
     validates assembly privately without creating output or invoking Word.
 
-Automated evidence uses synthetic fixtures and exporter doubles. Full-corpus
-Windows rendering and installed-Word macOS fidelity are not established by these
-tests. Markdown links preserve visible labels, not guaranteed PDF navigation.
+Automated Rust evidence uses synthetic fixtures, exporter doubles and static
+native-script assertions; it does not prove installed-Word fidelity.
+[CHG-0053 G4](../../changes/archive/CHG-0053-markdown-batch-conversion-retained-docx.md#handoff)
+separately records native Windows `run-12`: two verified 52-pair conversions,
+23 source-image occurrences across ten documents, unchanged protected snapshots,
+overwrite/failure probes, a zero-to-zero Word process baseline and accepted
+operator visual review. This evidence is bounded to that reviewed selection,
+template and host. Installed-Word macOS execution/fidelity remains unverified;
+Linux has no renderer or automatic Windows/WSL bridge. Markdown links preserve
+visible labels, not guaranteed PDF navigation.
 The DATE regressions in `crates/dms-core/tests/conversion.rs` exercise ordinary
 and leap dates, malformed/nonexistent/missing dates, no-token optionality,
 pre-export body/header/footer replacement, reserved-token precedence, input
@@ -105,6 +114,7 @@ evidence or publish-root index entry; labels and version chrome imply none.
 ## Links
 
 - DMS Desktop wireframe: none; this capability is headless-only.
+- [Standalone invocation, output and failure handling](../../markdown-frontmatter-and-template-variables.md#standalone-conversion-operation)
 - Architecture and ADR-0023: [`../../architecture.md`](../../architecture.md)
 - Workspace: [`CAP-0001-local-folder-dms.md`](CAP-0001-local-folder-dms.md)
 - Library membership: [`CAP-0006-library-explorer.md`](CAP-0006-library-explorer.md)

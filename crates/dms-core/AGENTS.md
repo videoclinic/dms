@@ -114,6 +114,9 @@ persistence.
   source start values and never inherit bullet formatting. Existing template
   numbering is preserved with non-colliding generated IDs. The `{BULLET LIST}`
   marker remains required by template contract v1, but does not style list bodies.
+  Each paragraph within a list item remains a separate Word paragraph; only the
+  first carries a marker. Continuations, including those after nested lists,
+  retain list-body indentation with numbering explicitly suppressed.
   Synthetic OOXML tests do not establish Word's exported PDF structure ownership.
 - Markdown table assembly retains the two-cell template contract. Every
   column count uses equal fixed grid/cell widths from
@@ -282,7 +285,8 @@ persistence.
 - `cargo test -p dms-core --test markdown_template` checks multi-table cell text,
   inline styling, two/three/four/five-column layouts, native bullet/decimal list
   references, source-list starts and separation, numbering-package preservation,
-  paragraph-property insertion/replacement, deterministic assembly,
+  paragraph-property insertion/replacement, multi-paragraph/nested-list
+  continuations, deterministic assembly,
   package XML, unchanged source/template/asset bytes, image embedding,
   in-root parent-relative resolution, escaping targets, structural corruption,
   content-type/media/relationship/drawing collisions across body/header/footer/

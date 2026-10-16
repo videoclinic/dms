@@ -14,7 +14,7 @@ privacy, design decisions, and Windows deployment assets for this repository.
 | `design-decisions.md` | Cross-cutting ADRs |
 | `entra-client-setup.md` | Operator setup for the DMS Entra public-client registration and delegated Graph consent |
 | `windows-entra-deployment.md` | Operator runbook for manual, GPO, and Intune Entra identifier deployment |
-| `markdown-frontmatter-and-template-variables.md` | Markdown controlled frontmatter keys, optional template variables, and Word chrome tokens |
+| `markdown-frontmatter-and-template-variables.md` | Markdown controlled frontmatter, template variables/chrome, and standalone conversion invocation, output and failure handling |
 | `library-membership-and-obsolescence.md` | Operator comparison of library membership vs obsolescence |
 | `winget-submission.md` | Operator runbook for publishing `Videoclinic.DMSDesktop` to `microsoft/winget-pkgs`; rendered automatically by `release-windows.yml` per stable release |
 | `product/` | CAP index, capability contracts, wireframe references |
