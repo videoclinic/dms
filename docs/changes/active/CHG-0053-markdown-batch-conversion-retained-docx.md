@@ -135,7 +135,7 @@ These are implementation targets, not claims about current runtime.
 | 1 | Preserve multi-column policy tables through template assembly | done (G1: 11 tests passed on Rust 1.88.0; evidence below) | G1: `cargo test -p dms-core --test markdown_template` exits 0 with two/three/four/five-column fidelity coverage. |
 | 2 | Embed local source images without silent content loss | done (third-correction G2: 20 markdown_template + 31 lifecycle tests passed on Rust 1.88.0; evidence below) | G2: `cargo test -p dms-core --test markdown_template --test lifecycle` exits 0 with image, containment, rejection and template-preservation coverage. |
 | 3 | Deliver explicit non-release batch CLI and retained Word inputs | done (corrected G3: 250 workspace tests and CLI help passed; review findings corrected) | G3: `cargo test --workspace --locked` and `cargo run -p dms-cli -- convert markdown --help` exit 0 with schema-18/19/current read-only configuration, retained-DOCX, full-width tables, explicit TOC removal and unchanged-release coverage. |
-| 4 | Prove full-corpus Windows Word conversion and repeatability | in-progress | G4: The native Windows smoke command specified below exits 0 with 52 verified PDF/DOCX pairs, every selected source image occurrence accounted for, retained source/template/config digests, and inspected rendered evidence. |
+| 4 | Prove full-corpus Windows Word conversion and repeatability | done (G4: `run-12` automated pass and operator visual review) | G4: The native Windows smoke command specified below exits 0 with 52 verified PDF/DOCX pairs, every selected source image occurrence accounted for, retained source/template/config digests, and inspected rendered evidence. |
 | 5 | Integrate contracts, records and project gates | pending | G5: Full integration commands and record checks below pass; CAP/DOX/visual classifications are current; only then archive CHG-0053. |
 
 Keep at most one phase `in-progress`. Every done phase records its actual gate evidence; a fake Office exporter is not a real PDF smoke.
@@ -801,6 +801,166 @@ This run proves the requested projection and retained artifacts; it does not
 complete G4's repeatability or broader visual-review gate, which remain
 in-progress.
 
+### Current G4 execution — source correction and unstructured list text
+
+- The verifier candidate now binds painted PDF text directly to its marked
+  structure ancestry, keeps valid negative-glyph/empty-bound ligature
+  continuations in their owning span but out of geometry, and retains the bound
+  two-layer `U+2705` fallback. Its synthetic suite passes 76 tests on Linux
+  (two native-Windows skips) and natively on Windows; Ruff, Markdown links and
+  `git diff --check` pass. An independent review reported no findings. This
+  candidate is uncommitted and is not G4 completion evidence.
+- The `run-5` preflight failure was a literal escaped `\## Versionsverlauf`
+  marker after a retained image sequence in one selected source. The source
+  correction restored a separate final heading; all 52 selected source
+  inventories, corpus validation, TODO-review validation and source-record
+  validation now pass. `run-5-evidence` remains its sanitized failed receipt.
+- Native `run-7` produced 52 successful CLI DOCX/PDF pairs with unchanged input,
+  edit, publish, configuration, template and selection snapshots and no DMS
+  release evidence. The independent verifier accepted 26 pairs and rejected 26
+  only as `pdf_source_text_missing`: 523 list-paragraph and three table-cell
+  source occurrences remain unmatched. Of the 523 list occurrences, 520 occur
+  in raw PDF text, so this is not evidence of conversion loss.
+- The remaining text has no safe ownership evidence. The direct marked-content
+  pass found 6,601 root-level spans (26,417 characters) outside any structure
+  node; none maps to `P`, `LBody`, `TD` or `TH` in the PDF structure XML. A
+  global raw-text fallback, coordinate-nearest assignment or source-driven
+  repair would violate this record's no-content-loss gate. Do not weaken the
+  verifier or rerun G4 until an explicit ownership rule or producer correction
+  exists.
+- `WINWORD` count was 1 immediately before `run-7` and 0 after it. Counts alone
+  cannot establish whether the pre-run process was operator-owned or stale; do
+  not claim cleanup ownership or start another native run without operator
+  confirmation.
+- G4 now needs an operator decision: correct the producer/template so each list
+  body is structurally tagged, or authorize a separately specified verifier
+  ownership rule through an amended phase contract. A fresh output root and the
+  required repeat/visual review remain pending after that decision.
+
+### Phase 4 correction — native unordered list producer
+
+Operator-authorized scope: unordered Markdown now receives an explicit native
+Word bullet-numbering instance (`w:numPr`) on the normal paragraph prototype.
+Ordered lists retain their native decimal format, source start values and separate
+instances. The template's `{BULLET LIST}` marker remains validation-only; no
+workspace template file changed.
+
+- Core numbering preserves existing template definitions/instances, allocates
+  distinct non-colliding IDs, and inserts or replaces paragraph numbering in
+  schema order for absent, self-closing and existing paragraph properties.
+- Red regressions reproduced missing native bullet references. Green evidence:
+  `cargo test -p dms-core --locked --test markdown_template --test conversion
+  --test smoke_contract --test lifecycle` passed 87 tests; `cargo test -p
+  dms-core --locked` passed 144 tests; `cargo fmt --all -- --check`, `cargo
+  clippy -p dms-core --all-targets --locked -- -D warnings`, strict Markdown
+  links and `git diff --check` passed.
+- The independent review found CAP-0022 still described the obsolete template
+  bullet prototype. CAP-0007 and CAP-0022 now state native bullet numbering and
+  the validation-only marker boundary. This producer correction remains
+  uncommitted and is not native G4 evidence.
+- A fresh G4 run remains suspended until the operator confirms no Word session
+  is operator-owned. It must prove list-body tagging, strict PDF ownership,
+  repeatability, protected snapshots, failure/overwrite probes and visual
+  inspection without any raw-text fallback.
+
+### Native `run-8` — material improvement, invalidated input snapshot
+
+- With a zero `WINWORD` baseline and the native-bullet producer binary, the
+  fresh run generated 52 CLI-successful DOCX/PDF pairs and returned `WINWORD` to
+  zero. The verifier accepted 48 pairs. The remaining four documents contain
+  two unmatched list occurrences and three bound `U+2705` table-cell
+  occurrences; the page-level checkmark pair exists for each cell but is not
+  currently attributable to that cell.
+- The harness rejected the run because its complete input-tree snapshot changed.
+  After the run, one unselected Markdown file in the input tree had a recent
+  modification time. This does not establish a writer; do not attribute it to
+  the converter. Require the source tree to remain quiescent for the next run
+  and retain `run-8-evidence` as a sanitized failed receipt.
+- Do not begin the required repeat run. Resolve the remaining list/checkmark
+  ownership failures without raw-text fallback and obtain operator confirmation
+  that no concurrent source writer will run during the next G4 attempt.
+
+### Phase 4 correction — list-item paragraphs and paint order
+
+- The producer now retains each Markdown paragraph within one list item as a
+  separate DOCX paragraph. Only the first carries the generated list marker;
+  later paragraphs retain the list-body indentation with numbering suppressed.
+  Nested lists keep their own numbering and their parent continuation remains a
+  separate paragraph.
+- The verifier now sorts already structure-bound paint spans by paint index before
+  reconstructing a cell, so direct parent paint and child-span paint keep their
+  rendered order. It descends into explicit `P` children of `LBody` and rejects
+  a flattened list body rather than accepting concatenation or a substring.
+- Synthetic evidence: 30 `markdown_template` tests, 24 conversion tests, 31
+  lifecycle tests, four smoke-contract tests and 80 verifier tests pass (two
+  native-Windows skips). Rust formatting/Clippy, Ruff and `git diff --check`
+  pass. Root/core DOX and CAP-0007 were updated with the exact structure-bound
+  verification and list-paragraph rules.
+- This correction is not native Word/PDF evidence. A fresh G4 run must prove
+  that Word retains the intended `LBody`/`P` structure and resolves every
+  residual list/checkmark failure; the former artifact remains an intentional
+  verifier rejection.
+
+### Phase 4 correction — controlled-failure source date
+
+- Operator-reported native `run-10` completed both 52-pair conversions: each had
+  `cli_exit=0`, 52 successes and 52 independent verifications. Protected snapshots
+  stayed unchanged and `WINWORD` returned to zero. The sole gate failure was
+  `controlled_failure_wrong_cause`: the synthetic fixture lacked `last_modified`,
+  so the configured `{DATE}` requirement rejected it before image validation.
+  These native receipts were not re-read during this synthetic-only correction.
+- `negative_probes` now gives both generated sources fixed synthetic
+  `last_modified: 2026-01-01` frontmatter. The missing image remains absent;
+  overwrite refusal, nonzero failure, exact cause, no false-success/partial pair,
+  companion continuation, artifact digests and unchanged-input checks are intact.
+- Regression coverage inspects both generated sources for real ISO calendar
+  dates before the CLI double responds and still rejects a DATE error as the
+  wrong cause. The focused `-k controlled_failure` run first failed all three
+  tests on absent `last_modified`; all three passed after the fixture correction.
+- `uv run --no-project --with markdown-it-py==4.0.0 --with mdit-py-plugins==0.5.0 --with PyMuPDF==1.26.5 python -B -m unittest discover -s scripts -p test_markdown_batch.py -v`
+  exited 0 on Linux: 81 tests run, two native-Windows skips, no failures.
+  `uv run --no-project --with ruff ruff check scripts/verify_markdown_batch.py scripts/test_markdown_batch.py`
+  and `git diff --check` exited 0.
+- Scope is only verifier/tests/CHG evidence in the primary checkout; existing
+  changes are preserved. No Word, real corpus/configuration/output access,
+  commit or push. DOX/CAP/indexes remain unchanged because this fixture repair
+  changes no product contract, ownership or workflow. Phase 4 stays `in-progress`
+  and Phase 5 stays `pending`; native corrected-probe and visual G4 proof remain
+  outstanding.
+
+### Native `run-11` — all conversion/probe receipts pass, input root changed
+
+- With the list-paragraph, paint-order and controlled-probe corrections, both
+  fresh 52-pair runs had `cli_exit=0`, 52 successes and 52 independent artifact
+  verifications. The overwrite refusal and controlled missing-image failure
+  passed; all protected edit/publish/configuration/template/manifest snapshots
+  stayed unchanged and `WINWORD` returned from zero to zero.
+- G4 is nevertheless incomplete: the complete input-tree snapshot changed and
+  the root again contained 54 immediate Markdown files after the run while the
+  reviewed manifest names 52. The conversion command must not be blamed without
+  causal evidence. Treat this as a concurrent source-writer breach and retain
+  `run-11-evidence` as the sanitized failed receipt.
+- Do not run again until the owner prevents the two unreviewed Markdown files
+  from reappearing throughout the complete first/repeat/probe run. The remaining
+  G4 work after a snapshot-clean run is rendered visual inspection, not a relaxed
+  artifact-verifier gate.
+
+### Native `run-12` — automated G4 pass; visual review pending
+
+- The exact reviewed 52-file selection stayed reconciled through two fresh runs.
+  Each run produced 52 successful CLI results and 52 independently verified
+  DOCX/PDF pairs. The input, edit, publish, configuration, template and manifest
+  snapshots remained unchanged; no DMS release evidence appeared and `WINWORD`
+  returned from zero to zero.
+- The verifier accounted for 23 source-image references in ten policies. The
+  overwrite refusal and controlled missing-image continuation probes passed with
+  honest nonzero exits; the saved evidence reports `automated_pass: true`.
+- Confidential rendered pages are retained under
+  `C:\Users\RaphaelBossek\dms-conversion-verification\run-12-evidence` for the
+  required human review of cover, TOC, footer, table and image pages. Automated
+  success is not visual G4 sign-off; Phase 4 remains `in-progress` until the
+  operator records that review.
+
 ## Phase 5 — Integrate contracts, records and project gates
 
 **Goal:** Current CAPs and runtime contracts describe only proven behavior, with one completed change receipt.
@@ -835,19 +995,13 @@ in-progress.
 
 ## Handoff
 
-Phases 1–3 are done. Phase 4 is in progress: the owned-instance teardown correction
-is implemented and internally verified, the harness has synthetic and native-parser
-coverage, the corrected template is registered, and the reviewed 52-file selection
-is approved. G4 is not done and now stops on **authoritative source data**: the
-registered template carries a literal `{DATE}` while none of the 52 corpus documents
-has `last_modified`, so the reviewed native run failed all 52 documents before Word
-with the `{DATE}` requirement and produced no pair. Resolve that with an operator
-decision — authoritative `YYYY-MM-DD` `last_modified` values, or a template without
-`{DATE}` — then rerun the harness into fresh output roots (`run-1` is consumed) and
-prove the `WINWORD` count returns to its baseline. The undiagnosed sanitized Word
-failure on the first image-bearing rehearsal document also still needs a native
-single-document run. Phase 5 remains pending, and the primary checkout stays
-uncommitted for parent review/integration.
+Phases 1–4 are done. `run-12` proves the exact 52-file selection, two complete
+verified 52-pair runs, controlled negative/overwrite probes, unchanged protected
+snapshots and a zero-to-zero Word process baseline. The operator reviewed the
+confidential cover, TOC, footer, table and image pages under
+`C:\Users\RaphaelBossek\dms-conversion-verification\run-12-evidence` and accepted
+the visual G4 result. Phase 5 remains pending and the primary checkout remains
+uncommitted for integration review.
 
 ## Related contracts
 

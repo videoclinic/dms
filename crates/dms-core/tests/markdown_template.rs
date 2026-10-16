@@ -432,13 +432,342 @@ let value = 1;
     let numbering = std::str::from_utf8(&output_parts["word/numbering.xml"]).unwrap();
     assert!(numbering.contains("<w:numFmt w:val=\"decimal\"/>"));
     assert!(numbering.contains("<w:lvlText w:val=\"%1.\"/>"));
-    assert_eq!(numbering.matches("<w:num ").count(), 2);
+    assert_eq!(numbering.matches("<w:num ").count(), 3);
     assert!(numbering.contains("<w:startOverride w:val=\"3\"/>"));
     assert!(numbering.contains("<w:startOverride w:val=\"1\"/>"));
     let relationships = std::str::from_utf8(&output_parts["word/_rels/document.xml.rels"]).unwrap();
     assert!(relationships.contains("relationships/numbering"));
     let content_types = std::str::from_utf8(&output_parts["[Content_Types].xml"]).unwrap();
     assert!(content_types.contains("wordprocessingml.numbering+xml"));
+}
+
+#[test]
+fn assembler_renders_unordered_lists_with_native_bullet_numbering() {
+    let temp = tempfile::tempdir().unwrap();
+    let markdown = "---\nversion: 1.0\nconfidentiality: Internal\n---\n- first **bullet**\n- second *bullet* with `code`\n";
+    let source = temp.path().join("source.md");
+    fs::write(&source, markdown).unwrap();
+    for existing_numbering in [false, true] {
+        let template = temp
+            .path()
+            .join(format!("template-{existing_numbering}.docx"));
+        let output = temp
+            .path()
+            .join(format!("output-{existing_numbering}.docx"));
+        let repeat = temp
+            .path()
+            .join(format!("repeat-{existing_numbering}.docx"));
+        let mut parts = zip_entries_from_bytes(FIXTURE);
+        let document = String::from_utf8(parts["word/document.xml"].clone()).unwrap();
+        parts.insert(
+            "word/document.xml".to_owned(),
+            document.replace(
+                "<w:p><w:r><w:t>{PARAGRAPH}",
+                "<w:p><w:pPr><w:pStyle w:val=\"Normal\"/><w:keepNext/></w:pPr><w:r><w:t>{PARAGRAPH}",
+            ).into_bytes(),
+        );
+        let existing_abstract = "<w:abstractNum w:abstractNumId=\"40\"><w:multiLevelType w:val=\"singleLevel\"/><w:lvl w:ilvl=\"0\"><w:start w:val=\"1\"/><w:numFmt w:val=\"decimal\"/><w:lvlText w:val=\"%1)\"/></w:lvl></w:abstractNum>";
+        let existing_num = "<w:num w:numId=\"70\"><w:abstractNumId w:val=\"40\"/></w:num>";
+        if existing_numbering {
+            parts.insert("word/numbering.xml".to_owned(), format!(
+                "<w:numbering xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">{existing_abstract}{existing_num}<w:numIdMac w:val=\"70\"/></w:numbering>"
+            ).into_bytes());
+            for (name, closing, addition) in [
+                ("word/_rels/document.xml.rels", "</Relationships>", "<Relationship Id=\"rId71\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering\" Target=\"numbering.xml\"/>"),
+                ("[Content_Types].xml", "</Types>", "<Override PartName=\"/word/numbering.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml\"/>"),
+            ] {
+                let xml = String::from_utf8(parts[name].clone()).unwrap();
+                parts.insert(name.to_owned(), xml.replace(closing, &format!("{addition}{closing}")).into_bytes());
+            }
+        }
+        let mut writer = ZipWriter::new(fs::File::create(&template).unwrap());
+        for (name, bytes) in &parts {
+            writer
+                .start_file(name, SimpleFileOptions::default())
+                .unwrap();
+            writer.write_all(bytes).unwrap();
+        }
+        writer.finish().unwrap();
+        let template_bytes = fs::read(&template).unwrap();
+
+        assemble_markdown_docx(&template, markdown, &output, None).unwrap();
+        assemble_markdown_docx(&template, markdown, &repeat, None).unwrap();
+        assert_eq!(fs::read(&output).unwrap(), fs::read(&repeat).unwrap());
+        assert_eq!(fs::read(&template).unwrap(), template_bytes);
+        assert_eq!(fs::read_to_string(&source).unwrap(), markdown);
+        let generated = zip_entries(&output);
+        let document = std::str::from_utf8(&generated["word/document.xml"]).unwrap();
+        for text in ["first bullet", "second bullet with code"] {
+            let paragraph = xml_elements(document, "w:p")
+                .into_iter()
+                .find(|paragraph| xml_text(paragraph) == text)
+                .unwrap();
+            assert_eq!(
+                xml_elements(paragraph, "w:numPr").len(),
+                1,
+                "unordered Markdown must use native Word numbering"
+            );
+            assert_eq!(
+                xml_attribute(xml_elements(paragraph, "w:pStyle")[0], "w:val"),
+                "Normal"
+            );
+            assert!(paragraph.contains("<w:keepNext/>"));
+            assert!(
+                paragraph.find("<w:keepNext/>").unwrap() < paragraph.find("<w:numPr>").unwrap()
+            );
+            assert!(!paragraph.contains("ListParagraph"));
+        }
+        assert!(document.contains("<w:b/>"));
+        assert!(document.contains("<w:i/>"));
+        assert!(document.contains("Courier New"));
+        let numbering = std::str::from_utf8(&generated["word/numbering.xml"]).unwrap();
+        let first = resolved_list_numbering(document, numbering, "first bullet");
+        let second = resolved_list_numbering(document, numbering, "second bullet with code");
+        assert_eq!(first, second);
+        assert_eq!(first.1, "bullet");
+        assert_eq!(first.2, "•");
+        assert_eq!(
+            xml_elements(numbering, "w:num").len(),
+            if existing_numbering { 2 } else { 1 }
+        );
+        if existing_numbering {
+            assert!(numbering.contains(existing_abstract));
+            assert!(numbering.contains(existing_num));
+            assert!(first.0.parse::<u32>().unwrap() > 70);
+            assert!(
+                numbering.rfind("</w:abstractNum>").unwrap() < numbering.find("<w:num ").unwrap()
+            );
+            assert!(numbering.rfind("</w:num>").unwrap() < numbering.find("<w:numIdMac ").unwrap());
+        }
+        for (name, bytes) in &parts {
+            if ![
+                "word/document.xml",
+                "word/numbering.xml",
+                "word/_rels/document.xml.rels",
+                "[Content_Types].xml",
+            ]
+            .contains(&name.as_str())
+            {
+                assert_eq!(&generated[name], bytes, "changed package part {name}");
+            }
+        }
+        for (name, marker) in [
+            ("word/_rels/document.xml.rels", "relationships/numbering"),
+            ("[Content_Types].xml", "wordprocessingml.numbering+xml"),
+        ] {
+            assert_eq!(
+                std::str::from_utf8(&generated[name])
+                    .unwrap()
+                    .matches(marker)
+                    .count(),
+                1
+            );
+        }
+    }
+}
+
+#[test]
+fn assembler_sets_one_native_list_reference_in_paragraph_properties() {
+    let temp = tempfile::tempdir().unwrap();
+    let original = temp.path().join("original.docx");
+    fs::write(&original, FIXTURE).unwrap();
+    for properties in [
+        "<w:pPr/>",
+        "<w:pPr><w:pStyle w:val=\"Normal\"/><w:numPr><w:ilvl w:val=\"2\"/><w:numId w:val=\"99\"/></w:numPr><w:spacing w:after=\"120\"/></w:pPr>",
+    ] {
+        let template = temp.path().join("template.docx");
+        rewrite_xml_part(&original, &template, "word/document.xml", |xml| {
+            xml.replace("<w:p><w:r><w:t>{PARAGRAPH}", &format!("<w:p>{properties}<w:r><w:t>{{PARAGRAPH}}"))
+        });
+        let output = temp.path().join("lists.docx");
+        assemble_markdown_docx(&template,
+            "---\nversion: 1.0\nconfidentiality: Internal\n---\n- bullet\n\n5. numbered\n",
+            &output, None).unwrap();
+        let parts = zip_entries(&output);
+        let document = std::str::from_utf8(&parts["word/document.xml"]).unwrap();
+        let numbering = std::str::from_utf8(&parts["word/numbering.xml"]).unwrap();
+        for (text, expected) in [("bullet", "bullet"), ("numbered", "decimal")] {
+            assert_eq!(resolved_list_numbering(document, numbering, text).1, expected);
+        }
+        assert!(!document.contains("w:val=\"99\""));
+        if properties.contains("w:spacing") {
+            assert_eq!(xml_elements(document, "w:spacing").len(), 2);
+        }
+    }
+}
+
+#[test]
+fn assembler_keeps_native_bullet_and_decimal_lists_separate() {
+    let temp = tempfile::tempdir().unwrap();
+    let template = temp.path().join("template.docx");
+    let output = temp.path().join("mixed.docx");
+    fs::write(&template, FIXTURE).unwrap();
+    let markdown = "---\nversion: 1.0\nconfidentiality: Internal\n---\n3. third\n4. fourth\n\n- bullet one\n- bullet two\n\n0. zero\n1. one\n\nSeparator.\n\n1. restarted\n2. next\n\n- other bullet\n";
+    assemble_markdown_docx(&template, markdown, &output, None).unwrap();
+    let parts = zip_entries(&output);
+    let document = std::str::from_utf8(&parts["word/document.xml"]).unwrap();
+    let numbering = std::str::from_utf8(&parts["word/numbering.xml"]).unwrap();
+    let mut ids = std::collections::BTreeSet::new();
+    for (texts, format, marker, start) in [
+        (vec!["third", "fourth"], "decimal", "%1.", "3"),
+        (vec!["bullet one", "bullet two"], "bullet", "•", "1"),
+        (vec!["zero", "one"], "decimal", "%1.", "0"),
+        (vec!["restarted", "next"], "decimal", "%1.", "1"),
+        (vec!["other bullet"], "bullet", "•", "1"),
+    ] {
+        let first = resolved_list_numbering(document, numbering, texts[0]);
+        assert!(
+            ids.insert(first.0.clone()),
+            "source lists must have distinct numbering instances"
+        );
+        assert_eq!((&*first.1, &*first.2, &*first.3), (format, marker, start));
+        for text in texts {
+            assert_eq!(resolved_list_numbering(document, numbering, text), first);
+        }
+    }
+    assert_eq!(xml_elements(numbering, "w:num").len(), ids.len());
+    let separator = xml_elements(document, "w:p")
+        .into_iter()
+        .find(|paragraph| xml_text(paragraph) == "Separator.")
+        .unwrap();
+    assert!(xml_elements(separator, "w:numPr").is_empty());
+}
+
+#[test]
+fn assembler_preserves_multiple_paragraphs_in_each_list_item() {
+    let temp = tempfile::tempdir().unwrap();
+    let original = temp.path().join("original.docx");
+    fs::write(&original, FIXTURE).unwrap();
+    for properties in [
+        "",
+        "<w:pPr/>",
+        "<w:pPr><w:pStyle w:val=\"Normal\"/><w:numPr><w:numId w:val=\"99\"/></w:numPr><w:spacing w:after=\"120\"/><w:ind w:left=\"100\" w:hanging=\"50\"/></w:pPr>",
+    ] {
+        let template = temp.path().join("template.docx");
+        rewrite_xml_part(&original, &template, "word/document.xml", |xml| {
+            xml.replace("<w:p><w:r><w:t>{PARAGRAPH}", &format!("<w:p>{properties}<w:r><w:t>{{PARAGRAPH}}"))
+        });
+        for (marker, next_marker, format, start) in [
+            ("-", "-", "bullet", "1"),
+            ("0.", "1.", "decimal", "0"),
+            ("3.", "4.", "decimal", "3"),
+        ] {
+            let indent = " ".repeat(marker.len() + 1);
+            let markdown = format!("---\nversion: 1.0\nconfidentiality: Internal\n---\n{marker} First **paragraph**.\n\n{indent}Second *paragraph* with `code`.\n\n{indent}Third paragraph.\n\n{next_marker} Next item.\n\n{indent}Next continuation.\n\nOutside list.\n");
+            let output = temp.path().join("multiple.docx");
+            let repeat = temp.path().join("repeat.docx");
+            assemble_markdown_docx(&template, &markdown, &output, None).unwrap();
+            assemble_markdown_docx(&template, &markdown, &repeat, None).unwrap();
+            let parts = zip_entries(&output);
+            assert_eq!(parts, zip_entries(&repeat));
+            let document = std::str::from_utf8(&parts["word/document.xml"]).unwrap();
+            let numbering = std::str::from_utf8(&parts["word/numbering.xml"]).unwrap();
+            let paragraphs = xml_elements(document, "w:p");
+            let expected = ["First paragraph.", "Second paragraph with code.", "Third paragraph.",
+                            "Next item.", "Next continuation.", "Outside list."];
+            let source: Vec<_> = paragraphs.into_iter()
+                .filter(|p| expected.iter().any(|text| xml_text(p).contains(text)))
+                .collect();
+            assert_eq!(source.iter().map(|p| xml_text(p)).collect::<Vec<_>>(), expected);
+            let first = resolved_list_numbering(document, numbering, expected[0]);
+            assert_eq!((&*first.1, &*first.3), (format, start));
+            assert_eq!(resolved_list_numbering(document, numbering, expected[3]), first);
+            assert_eq!(xml_elements(numbering, "w:num").len(), 1);
+            for index in [1, 2, 4] {
+                let paragraph = source[index];
+                // Explicitly cancel any inherited marker, retaining the list body indent.
+                assert_eq!(xml_attribute(xml_elements(paragraph, "w:numId")[0], "w:val"), "0");
+                let indents = xml_elements(paragraph, "w:ind");
+                assert_eq!(indents.len(), 1);
+                assert_eq!(xml_attribute(indents[0], "w:left"), "720");
+                assert_eq!(xml_attribute(indents[0], "w:firstLine"), "0");
+                assert!(!indents[0].contains("w:hanging"));
+                assert!(!paragraph.contains("<w:br"));
+                if properties.contains("w:spacing") {
+                    assert!(paragraph.contains("<w:spacing w:after=\"120\"/>"));
+                    assert!(paragraph.contains("<w:pStyle w:val=\"Normal\"/>"));
+                }
+            }
+            assert!(source[0].contains("<w:b/>"));
+            assert!(source[1].contains("<w:i/>"));
+            assert!(source[1].contains("Courier New"));
+            validate_markdown_template_output(&output);
+        }
+    }
+    assert_eq!(fs::read(original).unwrap(), FIXTURE);
+}
+
+#[test]
+fn assembler_keeps_list_continuation_after_a_nested_list() {
+    let temp = tempfile::tempdir().unwrap();
+    let template = temp.path().join("template.docx");
+    let output = temp.path().join("nested.docx");
+    fs::write(&template, FIXTURE).unwrap();
+    let markdown = "---\nversion: 1.0\nconfidentiality: Internal\n---\n3. Parent.\n\n   - Child.\n\n     Child continuation.\n\n   Parent continuation.\n\n4. Next parent.\n";
+    assemble_markdown_docx(&template, markdown, &output, None).unwrap();
+    let parts = zip_entries(&output);
+    let document = std::str::from_utf8(&parts["word/document.xml"]).unwrap();
+    let numbering = std::str::from_utf8(&parts["word/numbering.xml"]).unwrap();
+    let parent = resolved_list_numbering(document, numbering, "Parent.");
+    assert_eq!(
+        resolved_list_numbering(document, numbering, "Next parent."),
+        parent
+    );
+    let child = resolved_list_numbering(document, numbering, "Child.");
+    assert_ne!(parent.0, child.0);
+    assert_eq!(
+        (&*parent.1, &*parent.3, &*child.1),
+        ("decimal", "3", "bullet")
+    );
+    let paragraphs = xml_elements(document, "w:p");
+    for text in ["Child continuation.", "Parent continuation."] {
+        let paragraph = paragraphs.iter().find(|p| xml_text(p) == text).unwrap();
+        assert_eq!(
+            xml_attribute(xml_elements(paragraph, "w:numId")[0], "w:val"),
+            "0"
+        );
+        assert_eq!(
+            xml_attribute(xml_elements(paragraph, "w:ind")[0], "w:left"),
+            "720"
+        );
+    }
+}
+
+fn resolved_list_numbering(
+    document: &str,
+    numbering: &str,
+    text: &str,
+) -> (String, String, String, String) {
+    let paragraph = xml_elements(document, "w:p")
+        .into_iter()
+        .find(|paragraph| xml_text(paragraph) == text)
+        .unwrap();
+    let properties = xml_elements(paragraph, "w:numPr");
+    assert_eq!(
+        properties.len(),
+        1,
+        "{text} must have one native numbering reference"
+    );
+    assert_eq!(
+        xml_attribute(xml_elements(properties[0], "w:ilvl")[0], "w:val"),
+        "0"
+    );
+    let id = xml_attribute(xml_elements(properties[0], "w:numId")[0], "w:val");
+    let instance = xml_elements(numbering, "w:num")
+        .into_iter()
+        .find(|instance| xml_attribute(instance, "w:numId") == id)
+        .unwrap();
+    let abstract_id = xml_attribute(xml_elements(instance, "w:abstractNumId")[0], "w:val");
+    let definition = xml_elements(numbering, "w:abstractNum")
+        .into_iter()
+        .find(|definition| xml_attribute(definition, "w:abstractNumId") == abstract_id)
+        .unwrap();
+    (
+        id,
+        xml_attribute(xml_elements(definition, "w:numFmt")[0], "w:val"),
+        xml_attribute(xml_elements(definition, "w:lvlText")[0], "w:val"),
+        xml_attribute(xml_elements(instance, "w:startOverride")[0], "w:val"),
+    )
 }
 
 #[test]
@@ -1129,6 +1458,7 @@ Inline ![inline shot](assets/shot.png) reference.\n\n\
             "word/media/dms-image-2.png",
             "word/media/dms-image-3.jpeg",
             "word/media/dms-image-4.png",
+            "word/numbering.xml",
         ]
         .map(str::to_owned),
     );
@@ -1849,9 +2179,9 @@ fn assembler_retains_template_toc_by_default_and_removes_only_matching_sdt() {
     assert!(removed.contains("Custom block"));
     assert!(removed.contains("Inhaltsverzeichnis"));
     assert!(removed.contains("Body text."));
-    // The template is never mutated and only the body part differs.
+    // TOC removal changes only the body; native list numbering is identical.
     assert_eq!(fs::read(&template).unwrap(), template_before);
-    let before_parts = zip_entries(&template);
+    let before_parts = zip_entries(&default_output);
     let after_parts = zip_entries(&without);
     assert_eq!(
         before_parts.keys().collect::<Vec<_>>(),

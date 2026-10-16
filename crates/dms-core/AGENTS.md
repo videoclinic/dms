@@ -98,8 +98,8 @@ persistence.
   `{CONFIDENTIALITY}` still uses the display label.
 - One optional stable workspace Word-template asset may reference an ordinary
   in-root non-symlink `.docx`. It is configuration rather than a controlled
-  document, is excluded from Library file rows and counters, and preserves all
-  non-body OOXML package parts during deterministic CommonMark body assembly.
+  document, is excluded from Library file rows and counters, and preserves
+  unrelated OOXML package parts during deterministic CommonMark body assembly.
   Its strict contract includes the four `DMS_*` custom properties with one
   release-value placeholder each. Markdown release passes only a configured,
   present, unchanged, valid template path to the export adapter; rejection does
@@ -107,10 +107,14 @@ persistence.
   frontmatter from the body and fills optional non-reserved `{KEY}` tokens from
   additional flat frontmatter scalars; reserved controlled tokens remain for
   export chrome.
-- Markdown headings use native template numbering. Unordered Markdown uses the
-  template list prototype; ordered Markdown uses generated native decimal Word
-  numbering with a distinct numbering instance per source list, so it preserves
-  source start values and never inherits bullet formatting.
+- Markdown headings use native template numbering. Unordered and ordered Markdown
+  use generated native Word bullet and decimal numbering respectively, applied to
+  the normal paragraph prototype rather than the bullet paragraph prototype.
+  Each source list has a distinct numbering instance; ordered lists preserve
+  source start values and never inherit bullet formatting. Existing template
+  numbering is preserved with non-colliding generated IDs. The `{BULLET LIST}`
+  marker remains required by template contract v1, but does not style list bodies.
+  Synthetic OOXML tests do not establish Word's exported PDF structure ownership.
 - Markdown table assembly retains the two-cell template contract. Every
   column count uses equal fixed grid/cell widths from
   the body section's page width minus left/right margins and gutter; absent or
@@ -158,9 +162,9 @@ persistence.
   are matched case-insensitively; each required default is added once and conflicting declarations fail before
   output creation. Image checks validate PNG chunk bounds/CRCs/data presence and
   JPEG segment/frame/scan structure/data presence, not compressed pixel decoding.
-  Apart from body replacement and optional-variable fill, assembly adds only
-  media parts, image relationships and image content types; source, template and
-  asset files are never modified.
+  Apart from body replacement and optional-variable fill, assembly adds media and
+  list-numbering definitions with their package relationships and content types;
+  source, template and asset files are never modified.
   Other CommonMark constructs (task lists, footnotes, math, raw inline HTML,
   definition lists, block quotes, nested lists) keep their visible text.
 - Workflow evidence is append-only, SHA-256 predecessor-linked, newest-first at
@@ -276,7 +280,9 @@ persistence.
   template identity for the independent smoke verifier. Synthetic-only direct
   public API tests do not establish installed-Word fidelity.
 - `cargo test -p dms-core --test markdown_template` checks multi-table cell text,
-  inline styling, two/three/four/five-column layouts, deterministic assembly,
+  inline styling, two/three/four/five-column layouts, native bullet/decimal list
+  references, source-list starts and separation, numbering-package preservation,
+  paragraph-property insertion/replacement, deterministic assembly,
   package XML, unchanged source/template/asset bytes, image embedding,
   in-root parent-relative resolution, escaping targets, structural corruption,
   content-type/media/relationship/drawing collisions across body/header/footer/

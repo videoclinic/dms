@@ -17,7 +17,10 @@ escaped punctuation and Unicode. It retains cell order, paragraph/cell styling
 and template run properties while rendering inline emphasis and code. Multiple
 tables remain separate and preserve their cell text. Ordered Markdown lists use
 native decimal Word numbering, keep source start values and restart independently;
-unordered lists retain the template's bullet prototype.
+unordered lists use native Word bullet numbering. Both use the normal paragraph
+prototype with explicit `w:numPr`, not the template's bullet paragraph prototype,
+and each source list has its own numbering instance. The v1 `{BULLET LIST}` marker
+is still required for template validation; no template-file change is needed.
 
 The template still requires exactly two prototype cells and no new markers.
 All column counts clone the
@@ -25,8 +28,10 @@ second-cell styling for columns after the first and receive equal fixed widths
 from the body section's page width minus left/right margins and gutter. Missing
 or invalid dimensions fail rather than guessing a page size. Assembly preserves
 source/template bytes and section properties. Non-body package parts are
-preserved except for optional-variable substitution and image relationship /
-content-type additions when images are embedded.
+preserved except for optional-variable substitution, generated list-numbering
+definitions and their relationship/content-type wiring, and image relationship /
+content-type additions when images are embedded. Existing template numbering
+definitions and instances are retained without ID collisions.
 
 Markdown image references become real OOXML drawings over embedded package
 media. Assembly takes an explicit source/asset context (input root plus source
@@ -66,10 +71,14 @@ Evidence: `assembler_preserves_two_three_four_and_five_column_table_fidelity`,
 `assembler_avoids_drawing_ids_in_preserved_package_parts`,
 `assembler_keeps_image_alt_inline_events_out_of_body_runs`,
 `assembler_renders_supported_markdown_and_preserves_non_body_package_parts`,
+`assembler_renders_unordered_lists_with_native_bullet_numbering`,
+`assembler_keeps_native_bullet_and_decimal_lists_separate`,
+`assembler_sets_one_native_list_reference_in_paragraph_properties`,
 `assembler_renders_authentication_delivery_steps_as_one_native_decimal_list` and
 `assembler_preserves_other_markdown_constructs_without_losing_content` in the
 [core template tests](../../../crates/dms-core/tests/markdown_template.rs).
-This is OOXML assembly evidence, not full-corpus Word/PDF layout verification.
+This is OOXML assembly evidence, not full-corpus Word/PDF layout or exported
+list-body structure-ownership verification.
 Standalone batch conversion and retained final DOCX are a separate headless
 authority under [CAP-0022](CAP-0022-headless-core-cli.md), not release evidence.
 Shared full-width layout and optional template-TOC removal are covered by the

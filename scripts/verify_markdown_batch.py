@@ -14,11 +14,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import posixpath
 import re
 import stat
-import struct
 import subprocess
 import sys
 import unicodedata
@@ -532,12 +532,167 @@ def pdf_table_rows(rows, join_continuations=False, text_key="text"):
     return [[fidelity_text(cell) for cell in row] for row in result]
 
 
+class PdfMarkedContentAudit(pymupdf.mupdf.PdfProcessor2):
+    """Refuse paint for which MuPDF can retain stale structure after EMC.
+
+    Unmarked cover/chrome before source marks is harmless. Once marked text
+    starts, unmarked text (including artifacts) is ambiguous in the device
+    view. Form XObjects need a separate resource/MCID scope and are refused.
+    """
+    def __init__(self):
+        super().__init__()
+        self.resources, self.marked = [], []
+        self.started = self.ambiguous = False
+        for name in ("push_resources", "pop_resources", "op_BDC", "op_BMC", "op_EMC",
+                     "op_TJ", "op_Tj", "op_squote", "op_dquote", "op_Do_form"):
+            getattr(self, "use_virtual_" + name)()
+
+    def push_resources(self, _ctx, resources):
+        self.resources.append(pymupdf.mupdf.ll_pdf_keep_obj(resources))
+
+    def pop_resources(self, _ctx):
+        return self.resources.pop()
+
+    def op_BDC(self, _ctx, tag, _raw, cooked):
+        mcid = pymupdf.mupdf.ll_pdf_dict_gets(cooked, "MCID")
+        indexed = bool(pymupdf.mupdf.ll_pdf_is_int(mcid))
+        marked = (pymupdf.mupdf.ll_pdf_to_int(mcid) >= 0 if indexed
+                  else bool(self.marked and self.marked[-1])) and tag != "Artifact"
+        self.marked.append(marked)
+        self.started |= indexed
+
+    def op_BMC(self, _ctx, tag):
+        self.marked.append(bool(self.marked and self.marked[-1]) and tag != "Artifact")
+
+    def op_EMC(self, *_args):
+        if self.marked:
+            self.marked.pop()
+        else:
+            self.ambiguous = True
+
+    def text(self, *_args):
+        self.ambiguous |= self.started and not (self.marked and self.marked[-1])
+
+    def op_Do_form(self, *_args):
+        self.ambiguous = True  # Nested content needs its own MCID/resource scope.
+
+    op_TJ = op_Tj = op_squote = op_dquote = text
+
+
+class PdfStructureDevice(pymupdf.mupdf.FzDevice2):
+    """Bind text-paint sequence numbers to the active marked-content ancestry.
+
+    Use the same paint-operation counter as pinned PyMuPDF's get_texttrace.
+    No text comes from structure metadata, ActualText, or a source inventory.
+    """
+    def __init__(self):
+        super().__init__()
+        self.tree = ET.Element("page")
+        self.stack = [self.tree]
+        self.seqno = 0
+        self.owners = {}
+        for name in ("begin_structure", "end_structure", "fill_path", "stroke_path",
+                     "fill_text", "stroke_text", "ignore_text", "fill_shade",
+                     "fill_image", "fill_image_mask"):
+            getattr(self, "use_virtual_" + name)()
+
+    def begin_structure(self, _ctx, standard, _raw, index):
+        role = pymupdf.mupdf.fz_structure_to_string(standard)
+        parent = self.stack[-1]
+        matches = [n for n in parent if n.tag == "struct" and n.get("idx") == str(index)]
+        if matches:
+            node = matches[0]
+            require(node.get("std") == role, "pdf_structure_role_collision")
+        else:
+            node = ET.SubElement(parent, "struct", idx=str(index), std=role)
+        self.stack.append(node)
+
+    def end_structure(self, _ctx):
+        require(len(self.stack) > 1, "pdf_structure_unbalanced")
+        self.stack.pop()
+
+    def paint(self, *_args):
+        self.seqno += 1
+
+    def text(self, *_args):
+        self.owners[self.seqno] = self.stack[-1]
+        self.seqno += 1
+
+    fill_path = stroke_path = fill_shade = fill_image = fill_image_mask = paint
+    fill_text = stroke_text = ignore_text = text
+
+
+def pdf_paint_structure(page):
+    """Read complete paint traces before structured-text layout can lose spans."""
+    audit = PdfMarkedContentAudit()
+    pdf_page = pymupdf.mupdf.pdf_page_from_fz_page(page.this)
+    try:
+        pymupdf.mupdf.pdf_process_contents(audit, pymupdf._as_pdf_document(page.parent),
+                                          pymupdf.mupdf.pdf_page_resources(pdf_page),
+                                          pymupdf.mupdf.pdf_page_contents(pdf_page), pymupdf.mupdf.FzCookie())
+    finally:
+        pymupdf.mupdf.pdf_close_processor(audit)
+    require(not audit.ambiguous and not audit.marked, "pdf_ambiguous_unmarked_paint")
+    device = PdfStructureDevice()
+    rotation = page.rotation
+    try:
+        # get_texttrace uses unrotated coordinates; keep both passes identical.
+        if rotation:
+            page.set_rotation(0)
+        traces = page.get_texttrace()
+        pymupdf.mupdf.fz_run_page(page.this, device, pymupdf.mupdf.FzMatrix(), pymupdf.mupdf.FzCookie())
+        pymupdf.mupdf.fz_close_device(device)
+    finally:
+        if rotation:
+            page.set_rotation(rotation)
+    require(len(device.stack) == 1, "pdf_structure_unbalanced")
+    for index, span in enumerate(traces):
+        require(span["seqno"] in device.owners, "pdf_paint_structure_unbound")
+        ET.SubElement(device.owners[span["seqno"]], "paint", index=str(index))
+    return device.tree, traces
+
+
+def pdf_paint_text(spans, origins=None):
+    """Every character stays in its marked unit; only bound U+2705 is repaired.
+
+    Both exact colour layers must belong to this cell, not merely this page.
+    Unmarked text near a cell is never borrowed using a rectangle or substring.
+    """
+    local = [] if origins is None else pdf_checkmark_origins(None, spans)
+    available = set(local).intersection(origins or ())
+    result = []
+    for span in spans:
+        require(span["type"] == 0 and span["opacity"] == 1 and tuple(span["dir"]) == (1, 0),
+                "pdf_source_paint_not_visible_horizontal_fill")
+        green = (span["font"] == "SegoeUIEmoji" and span["colorspace"] == 3
+                 and tuple(round(c * 255) for c in span["color"]) == (0, 210, 106))
+        for code, glyph, origin, bounds in span["chars"]:
+            require(type(code) is int and 0 <= code <= 0x10ffff and not 0xd800 <= code <= 0xdfff
+                    and type(glyph) is int
+                    and len(origin) == 2 and len(bounds) == 4
+                    and all(isinstance(n, (int, float)) and math.isfinite(n) for n in (*origin, *bounds)),
+                    "pdf_source_paint_character_invalid")
+            rectangle = pymupdf.Rect(bounds)
+            require(rectangle.is_valid and not rectangle.is_infinite and rectangle.is_empty == (glyph < 0),
+                    "pdf_source_paint_character_invalid")
+            # Negative glyphs with valid empty bounds are logical ligature
+            # continuations. Keep their codepoints in this span, not geometry.
+            point = tuple(origin)
+            if glyph >= 0 and origins is not None and green and code == 32 and point in available:
+                result.append("\u2705")
+                available.remove(point)
+                origins.remove(point)
+            else:
+                result.append(chr(code))
+    return "".join(result)
+
+
 def pdf_reading_units(pdf):
     """Read painted characters in structure order; keep full ancestry as identity.
 
-    MuPDF's XML exposes tagged text that extractDICT omits with
-    TEXT_COLLECT_STRUCTURE. Page chrome and TOC entries are not source units.
-    No text is synthesized from PDF tags, DOCX, or the expected source.
+    Structured-text XML can omit ordinary spans next to colour glyph layers.
+    Bind paint directly through the PDF device's structure events instead.
+    Page chrome and TOC entries are not source units.
     """
     units, labelled = {}, set()
     heading_roles = {"H", "H1", "H2", "H3", "H4", "H5", "H6"}
@@ -565,48 +720,42 @@ def pdf_reading_units(pdf):
             elif role == "Lbl":
                 labelled.add(item)
                 return
-            if role in heading_roles | {"P", "LBody", "Title", "Code", "TD", "TH"}:
-                text = "".join(c.get("c", "") for c in node.iter("char"))
-                if not text.strip():
+            # Explicit paragraphs are separate occurrences within this item.
+            # Only a leaf LBody may itself supply a paragraph's evidence.
+            paragraph_container = role == "LBody" and any(
+                child.tag == "struct" and child.get("std") == "P" for child in node)
+            if role in heading_roles | {"P", "LBody", "Title", "Code", "TD", "TH"} and not paragraph_container:
+                # Structure children can precede their parent's direct paints
+                # in this XML projection. Reorder only within the bound unit.
+                indices = sorted(int(p.get("index")) for p in node.iter("paint"))
+                spans = [traces[index] for index in indices]
+                if not spans:
                     return
+                text = pdf_paint_text(spans, origins if role in ("TD", "TH") else None)
                 target = units
                 if role in ("TD", "TH"):
                     require(table is not None and row is not None, "pdf_table_structure")
                     target = units[table]["rows"].setdefault(row, {})
-                bounds = [list(map(float, b.get("bbox").split())) for b in node.iter("block")]
+                bounds = [c[3] for span in spans for c in span["chars"] if c[1] >= 0]
                 require(bounds, "pdf_text_structure_geometry")
                 unit = target.setdefault(path, {"kind": "heading" if role in heading_roles else "paragraph",
                                                "text": "", "first": page_number, "last": page_number,
                                                "x": min(b[0] for b in bounds), "list": list_path,
                                                "item": item, "role": role})
                 unit["text"] += text
-                if role in ("TD", "TH"):
-                    bindings = []
-                    evidenced = pdf_cell_checkmark_text(node, origins, bindings)
-                    unit["checkmark_text"] = unit.get("checkmark_text", "") + evidenced
-                    unit["supplement_text"] = unit.get("supplement_text", "") + pdf_cell_supplement_text(
-                        node, evidenced, bindings, traces, tree)
                 unit["last"] = page_number
                 return
         for child in node:
             walk(child, page_number, path, table, row, list_path, item)
 
     for number, page in enumerate(pdf):
-        textpage = page.get_textpage(flags=pymupdf.TEXTFLAGS_XML | pymupdf.TEXT_COLLECT_STRUCTURE)
-        traces = page.get_texttrace()
+        tree, traces = pdf_paint_structure(page)
         origins = pdf_checkmark_origins(page, traces)
-        tree = ET.fromstring(textpage.extractXML())
         walk(tree, number)
     result = []
     for _, unit in sorted(units.items()):
         if unit["kind"] == "table":
             joined = pdf_table_rows(unit["rows"], join_continuations=True)
-            unit["checkmark_rows"] = pdf_table_rows(unit["rows"], text_key="checkmark_text")
-            unit["joined_checkmark_rows"] = pdf_table_rows(unit["rows"], join_continuations=True,
-                                                         text_key="checkmark_text")
-            unit["supplement_rows"] = pdf_table_rows(unit["rows"], text_key="supplement_text")
-            unit["joined_supplement_rows"] = pdf_table_rows(unit["rows"], join_continuations=True,
-                                                          text_key="supplement_text")
             unit["rows"] = pdf_table_rows(unit["rows"])
             if joined != unit["rows"]:
                 unit["joined_rows"] = joined
@@ -629,8 +778,8 @@ def pdf_source_matches(pdf, inventory):
     """One verdict per source occurrence; cells are bound by table/row/column.
 
     A deficit remains false but does not prevent diagnostics for later chunks.
-    Production requires every verdict. U+2705 fallback requires exact remaining
-    cell text plus independently painted two-layer evidence at each position.
+    Production requires every verdict. U+2705 repair happens only in a bound
+    painted cell before comparison, preserving its exact position and count.
     """
     units = pdf_reading_units(pdf)
     contexts = inventory.get("chunk_contexts", [("paragraph",)] * len(inventory["chunks"]))
@@ -644,8 +793,6 @@ def pdf_source_matches(pdf, inventory):
             if ti not in tables:
                 expected = inventory["tables"][ti]
                 actual = []
-                evidenced = []
-                supplemented = []
                 for index in range(cursor, len(units)):
                     if units[index]["kind"] == "table":
                         actual = units[index]["rows"]
@@ -666,21 +813,10 @@ def pdf_source_matches(pdf, inventory):
                                 actual = shaped[0] if len(shaped) == 1 else []
                             else:
                                 actual = []  # Multiple matching interpretations fail closed.
-                        if actual is units[index]["rows"]:
-                            evidenced = units[index].get("checkmark_rows", [])
-                            supplemented = units[index].get("supplement_rows", [])
-                        elif actual is units[index].get("joined_rows"):
-                            evidenced = units[index].get("joined_checkmark_rows", [])
-                            supplemented = units[index].get("joined_supplement_rows", [])
                         cursor, offset = index + 1, 0
                         break
                 shape = len(actual) == len(expected) and all(len(a) == len(b) for a, b in zip(actual, expected))
-                tables[ti] = [[shape and (fidelity_text(cell) == actual[r][c]
-                               or ("\u2705" in cell and bool(evidenced)
-                                   and fidelity_text(cell.replace("\u2705", "")) == actual[r][c]
-                                   and fidelity_text(cell) == evidenced[r][c])
-                               or (cell.count("\u2705") == 1 and bool(supplemented)
-                                   and fidelity_text(cell) == supplemented[r][c]))
+                tables[ti] = [[shape and fidelity_text(cell) == actual[r][c]
                                for c, cell in enumerate(row)] for r, row in enumerate(expected)]
             matches.append(tables[ti][ri][ci])
             continue
@@ -838,7 +974,8 @@ def negative_probes(dms, config_path, config, source, output, evidence_root):
     fixture = evidence_root / "synthetic-input"
     fixture.mkdir()
     classification = next(k for k, v in config["confidentiality_types"].items() if v["enabled"])
-    front = f"---\ntitle: Synthetic smoke policy\nversion: 1.0\nconfidentiality: {classification}\n---\n"
+    front = (f"---\ntitle: Synthetic smoke policy\nversion: 1.0\nconfidentiality: {classification}\n"
+             "last_modified: 2026-01-01\n---\n")
     (fixture / "a-failure.md").write_text(front + "# Synthetic failure\n![missing](missing.png)\n", encoding="utf-8")
     (fixture / "b-success.md").write_text(front + "# Synthetic continuation\nSynthetic verification text.\n", encoding="utf-8")
     fixture_before = snapshot(fixture)
@@ -953,9 +1090,8 @@ def main():
 def pdf_checkmark_origins(page, traces=None):
     """Pair the opaque green/white Segoe layers omitted by ToUnicode.
 
-    Paint traces retain the white overprint that structured XML suppresses.
-    These are candidates only: a structured cell must independently anchor
-    the green character at this page-local origin before using the evidence.
+    These are candidates only: both paints must also have the same marked
+    cell owner, and each page-local origin can be consumed only once.
     """
     layers = {}
     for span in page.get_texttrace() if traces is None else traces:
@@ -980,112 +1116,6 @@ def pdf_checkmark_origins(page, traces=None):
                 and all(abs(a - b) <= .02 for a, b in zip(green[2], white[2]))):
             result.append(origin)
     return result
-
-
-def pdf_cell_checkmark_text(node, origins, bindings=None):
-    """Keep character order; replace only independently evidenced cell spaces."""
-    replacements = set()
-    for font in node.iter("font"):
-        if font.get("name") != "SegoeUIEmoji" or abs(float(font.get("size", "0")) - 9.96) > .05:
-            continue
-        for char in font:
-            if not (char.get("c") == " " and char.get("color", "").lower() == "#00d26a"
-                    and char.get("alpha", "").lower() == "#ff"):
-                continue
-            quad = list(map(float, char.get("quad", "").split()))
-            if not (len(quad) == 8 and abs(quad[2] - quad[0] - 13.68) <= .05
-                    and abs(quad[7] - quad[1] - 9.34) <= .05):
-                continue
-            origin = (float(char.get("x")), float(char.get("y")))
-            candidates = [p for p in origins if all(abs(a - b) <= .02 for a, b in zip(p, origin))]
-            if len(candidates) == 1:
-                replacements.add(char)
-                if bindings is not None:
-                    bindings.append((char, candidates[0]))
-                origins.remove(candidates[0])  # One painted occurrence cannot satisfy two cells.
-    return "".join("\u2705" if char in replacements else char.get("c", "") for char in node.iter("char"))
-
-
-def pdf_cell_rectangle(node):
-    """Exact envelope of this TD/TH's structured blocks, never a padded area.
-
-    XML serializes MuPDF float32 coordinates as short decimals; restore that
-    representation before comparing with the float32 paint trace coordinates.
-    Use the explicit cell bbox when valid; MuPDF otherwise emits an empty-
-    rectangle sentinel, so only this cell's block envelope is available.
-    """
-    if node.get("bbox"):
-        bounds = pymupdf.Rect(struct.unpack("4f", struct.pack("4f", *map(float, node.get("bbox").split()))))
-        if not bounds.is_empty and not bounds.is_infinite:
-            return bounds
-    blocks = [pymupdf.Rect(struct.unpack("4f", struct.pack("4f", *map(float, b.get("bbox").split()))))
-              for b in node.iter("block")]
-    if not blocks or any(b.is_empty or b.is_infinite for b in blocks):
-        return None
-    return pymupdf.Rect(min(b.x0 for b in blocks), min(b.y0 for b in blocks),
-                        max(b.x1 for b in blocks), max(b.y1 for b in blocks))
-
-
-def pdf_cell_supplement_text(node, evidenced, bindings, traces, tree):
-    """Insert one unstructured ordinary paint span before one bound checkmark.
-
-    Ownership requires every character inside this cell's exact block envelope,
-    no foreign cell overlap or existing structured character ownership, and an
-    unambiguous paint sequence after the structured prefix and before green.
-    Never choose characters/substrings using source text. The caller still must
-    match the entire source cell, including its single checkmark position.
-    """
-    if len(bindings) != 1 or evidenced.count("\u2705") != 1:
-        return evidenced
-    rectangle = pdf_cell_rectangle(node)
-    if rectangle is None:
-        return evidenced
-    anchor, origin = bindings[0]
-    green = [s["seqno"] for s in traces if s["font"] == "SegoeUIEmoji"
-             and tuple(round(c * 255) for c in s["color"]) == (0, 210, 106)
-             and any(tuple(c[2]) == origin for c in s["chars"])]
-    if len(green) != 1:
-        return evidenced
-    structured = [(c, (float(c.get("x")), float(c.get("y")))) for c in tree.iter("char")
-                  if c.get("x") is not None and c.get("y") is not None]
-    foreign = [pdf_cell_rectangle(c) for c in tree.iter("struct")
-               if c is not node and c.get("std") in ("TD", "TH")]
-
-    def same_origin(left, right):
-        return all(abs(a - b) <= .02 for a, b in zip(left, right))
-
-    candidates = []
-    for span in traces:
-        chars = span["chars"]
-        if not (chars and span["font"] != "SegoeUIEmoji" and span["type"] == 0
-                and span["opacity"] == 1 and tuple(span["dir"]) == (1, 0)):
-            continue
-        if not all(0 <= code <= 0x10ffff and chr(code).isprintable() and glyph > 0
-                   and not pymupdf.Rect(bounds).is_empty and rectangle.contains(pymupdf.Rect(bounds))
-                   and rectangle.contains(pymupdf.Point(point))
-                   for code, glyph, point, bounds in chars):
-            continue
-        if any(same_origin(point, owned) for _, _, point, _ in chars for _, owned in structured):
-            continue  # Do not strip or duplicate any structured part of a trace.
-        if any(r is not None and r.intersects(pymupdf.Rect(bounds))
-               for _, _, _, bounds in chars for r in foreign):
-            continue
-        candidates.append(span)
-    if len(candidates) != 1 or candidates[0]["seqno"] >= green[0]:
-        return evidenced
-    candidate = candidates[0]
-    for char in node.iter("char"):
-        if char is anchor:
-            break
-        if not char.get("c", "").strip():
-            continue
-        owned = [point for c, point in structured if c is char]
-        painted = [s["seqno"] for s in traces for code, _, point, _ in s["chars"]
-                   if owned and same_origin(point, owned[0]) and chr(code) == char.get("c")]
-        if len(painted) != 1 or painted[0] >= candidate["seqno"]:
-            return evidenced
-    supplement = "".join(chr(c[0]) for c in candidate["chars"])
-    return evidenced.replace("\u2705", supplement + "\u2705", 1)
 
 
 if __name__ == "__main__":

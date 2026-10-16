@@ -70,8 +70,10 @@ The CLI provides explicit, local operations over the shared `dms-core` library:
     template TOC SDT, not Markdown-authored contents. Every generated table uses
     fixed layout spanning printable width. Ordered Markdown lists emit native
     decimal Word numbering with source start values and distinct list restarts;
-    unordered lists retain the template bullet style. Linux conversion fails
-    explicitly; dry-run remains available without Word.
+    unordered lists emit distinct native Word bullet-numbering instances on the
+    normal paragraph prototype. The template's `{BULLET LIST}` marker remains a
+    validation-only contract input, not a rendered paragraph prototype. Linux
+    conversion fails explicitly; dry-run remains available without Word.
 12. Sequential processing continues after document-specific failures and exits
     nonzero if any fail. Success requires readable DOCX ZIP/XML and a parsed PDF
     with extractable text, not just a PDF signature. Owned incomplete artifacts

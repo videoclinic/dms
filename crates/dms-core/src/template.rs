@@ -403,7 +403,7 @@ struct PackageEntry {
 }
 
 #[derive(Clone, Debug)]
-struct OrderedListNumbering {
+struct ListNumbering {
     xml: String,
     existed_in_template: bool,
     num_ids: BTreeMap<usize, u32>,
@@ -704,9 +704,9 @@ fn assemble_markdown(
         variables.insert("{DATE}".to_owned(), date.clone());
     }
     let blocks = parse_markdown_blocks(body)?;
-    let ordered_list_numbering = ordered_list_numbering(&loaded, &blocks)?;
+    let list_numbering = list_numbering(&loaded, &blocks)?;
     let mut context = RenderContext::new(&loaded, assets)?;
-    let rendered = render_blocks(&blocks, &mut context, ordered_list_numbering.as_ref())?;
+    let rendered = render_blocks(&blocks, &mut context, list_numbering.as_ref())?;
     let mut document_xml = String::with_capacity(loaded.document_xml.len() + rendered.len());
     document_xml.push_str(&loaded.document_xml[..loaded.prototype_start]);
     document_xml.push_str(&rendered);
@@ -757,7 +757,7 @@ fn assemble_markdown(
             &variables,
         ))
     };
-    let relationships = if let Some(_numbering) = &ordered_list_numbering {
+    let relationships = if list_numbering.is_some() {
         let source = relationships
             .as_deref()
             .map(str::to_owned)
@@ -777,7 +777,7 @@ fn assemble_markdown(
     } else {
         relationships
     };
-    let content_types = if ordered_list_numbering.is_some() {
+    let content_types = if list_numbering.is_some() {
         let source = content_types
             .as_deref()
             .map(str::to_owned)
@@ -815,7 +815,7 @@ fn assemble_markdown(
             "word/document.xml" => Some(document_xml.clone()),
             "word/_rels/document.xml.rels" => relationships.clone(),
             "[Content_Types].xml" => content_types.clone(),
-            "word/numbering.xml" => ordered_list_numbering
+            "word/numbering.xml" => list_numbering
                 .as_ref()
                 .map(|numbering| numbering.xml.clone()),
             _ => None,
@@ -853,7 +853,7 @@ fn assemble_markdown(
                 })?;
         }
     }
-    if let Some(numbering) = &ordered_list_numbering {
+    if let Some(numbering) = &list_numbering {
         if !numbering.existed_in_template {
             writer
                 .start_file("word/numbering.xml", SimpleFileOptions::default())
@@ -1632,20 +1632,17 @@ fn content_types_with_media(content_types: &str, formats: &[ImageFormat]) -> Res
     ))
 }
 
-fn ordered_list_numbering(
-    template: &LoadedTemplate,
-    blocks: &[Block],
-) -> Result<Option<OrderedListNumbering>> {
+fn list_numbering(template: &LoadedTemplate, blocks: &[Block]) -> Result<Option<ListNumbering>> {
     let mut starts = BTreeMap::new();
     for block in blocks {
         if let Block::ListItem {
-            ordered: true,
+            ordered,
             list_id,
             number,
             ..
         } = block
         {
-            starts.entry(*list_id).or_insert(*number);
+            starts.entry(*list_id).or_insert((*ordered, *number));
         }
     }
     if starts.is_empty() {
@@ -1674,31 +1671,46 @@ fn ordered_list_numbering(
             )
         })
         .unwrap_or((0, 0));
-    abstract_id = abstract_id.checked_add(1).ok_or_else(|| {
-        DmsError::InvalidMarkdownTemplate("no unused Word abstract numbering IDs remain".to_owned())
-    })?;
-
     let namespace = WORDPROCESSINGML_MAIN_NAMESPACE;
     let mut num_ids = BTreeMap::new();
-    let mut definitions = format!(
-        concat!(
-            "<w:abstractNum xmlns:w=\"{namespace}\" w:abstractNumId=\"{abstract_id}\">",
-            "<w:multiLevelType w:val=\"singleLevel\"/><w:lvl w:ilvl=\"0\">",
-            "<w:start w:val=\"1\"/><w:numFmt w:val=\"decimal\"/>",
-            "<w:lvlText w:val=\"%1.\"/><w:lvlJc w:val=\"left\"/>",
-            "<w:pPr><w:tabs><w:tab w:val=\"num\" w:pos=\"720\"/></w:tabs>",
-            "<w:ind w:left=\"720\" w:hanging=\"360\"/></w:pPr>",
-            "</w:lvl></w:abstractNum>"
-        ),
-        namespace = namespace,
-        abstract_id = abstract_id
-    );
-    for (list_id, start) in starts {
+    let mut definitions = String::new();
+    let mut instances = String::new();
+    for (list_id, (ordered, start)) in starts {
+        abstract_id = abstract_id.checked_add(1).ok_or_else(|| {
+            DmsError::InvalidMarkdownTemplate(
+                "no unused Word abstract numbering IDs remain".to_owned(),
+            )
+        })?;
+        let (format, marker, marker_properties) = if ordered {
+            ("decimal", "%1.", "")
+        } else {
+            (
+                "bullet",
+                "•",
+                "<w:rPr><w:rFonts w:ascii=\"Arial\" w:hAnsi=\"Arial\"/></w:rPr>",
+            )
+        };
+        definitions.push_str(&format!(
+            concat!(
+                "<w:abstractNum xmlns:w=\"{namespace}\" w:abstractNumId=\"{abstract_id}\">",
+                "<w:multiLevelType w:val=\"singleLevel\"/><w:lvl w:ilvl=\"0\">",
+                "<w:start w:val=\"1\"/><w:numFmt w:val=\"{format}\"/>",
+                "<w:lvlText w:val=\"{marker}\"/><w:lvlJc w:val=\"left\"/>",
+                "<w:pPr><w:tabs><w:tab w:val=\"num\" w:pos=\"720\"/></w:tabs>",
+                "<w:ind w:left=\"720\" w:hanging=\"360\"/></w:pPr>{marker_properties}",
+                "</w:lvl></w:abstractNum>"
+            ),
+            namespace = namespace,
+            abstract_id = abstract_id,
+            format = format,
+            marker = marker,
+            marker_properties = marker_properties
+        ));
         num_id = num_id.checked_add(1).ok_or_else(|| {
             DmsError::InvalidMarkdownTemplate("no unused Word numbering IDs remain".to_owned())
         })?;
         num_ids.insert(list_id, num_id);
-        definitions.push_str(&format!(
+        instances.push_str(&format!(
             concat!(
                 "<w:num xmlns:w=\"{namespace}\" w:numId=\"{num_id}\">",
                 "<w:abstractNumId w:val=\"{abstract_id}\"/>",
@@ -1717,13 +1729,30 @@ fn ordered_list_numbering(
                 "word/numbering.xml has no closing numbering element".to_owned(),
             )
         })?;
-        format!("{}{}{}", &source[..end], definitions, &source[end..])
+        // Word requires abstract definitions before instances, and numIdMac last.
+        let children = xml_children(&source)?;
+        let definitions_at = children
+            .iter()
+            .find(|(name, _)| matches!(name.rsplit(':').next(), Some("num" | "numIdMac")))
+            .map_or(end, |(_, (start, _))| *start);
+        let instances_at = children
+            .iter()
+            .find(|(name, _)| name.rsplit(':').next() == Some("numIdMac"))
+            .map_or(end, |(_, (start, _))| *start);
+        format!(
+            "{}{}{}{}{}",
+            &source[..definitions_at],
+            definitions,
+            &source[definitions_at..instances_at],
+            instances,
+            &source[instances_at..]
+        )
     } else {
         format!(
-            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><w:numbering xmlns:w=\"{namespace}\">{definitions}</w:numbering>"
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><w:numbering xmlns:w=\"{namespace}\">{definitions}{instances}</w:numbering>"
         )
     };
-    Ok(Some(OrderedListNumbering {
+    Ok(Some(ListNumbering {
         xml,
         existed_in_template: existing.is_some(),
         num_ids,
@@ -1807,6 +1836,7 @@ enum Block {
         ordered: bool,
         list_id: usize,
         number: u64,
+        continuation: bool,
         inlines: Vec<Inline>,
     },
     Code(Vec<Inline>),
@@ -1848,17 +1878,21 @@ fn parse_markdown_blocks(markdown: &str) -> Result<Vec<Block>> {
                 finish_block(&mut blocks, &mut block_kind, &mut current)
             }
             Event::Start(Tag::Paragraph) if table.is_none() && block_kind.is_none() => {
-                start_block(
-                    &mut blocks,
-                    &mut block_kind,
-                    &mut current,
-                    BlockKind::Paragraph,
-                );
+                // Item start supplies its first paragraph, including tight lists.
+                // Later paragraphs retain the containing item's list and number.
+                let kind =
+                    list_stack
+                        .last()
+                        .map_or(BlockKind::Paragraph, |list| BlockKind::ListItem {
+                            ordered: list.ordered,
+                            list_id: list.id,
+                            number: list.next_number,
+                            continuation: true,
+                        });
+                start_block(&mut blocks, &mut block_kind, &mut current, kind);
             }
             Event::End(TagEnd::Paragraph) if table.is_none() => {
-                if !matches!(block_kind, Some(BlockKind::ListItem { .. })) {
-                    finish_block(&mut blocks, &mut block_kind, &mut current);
-                }
+                finish_block(&mut blocks, &mut block_kind, &mut current);
             }
             Event::Start(Tag::Emphasis) => italic_depth += 1,
             Event::End(TagEnd::Emphasis) => italic_depth = italic_depth.saturating_sub(1),
@@ -1930,6 +1964,7 @@ fn parse_markdown_blocks(markdown: &str) -> Result<Vec<Block>> {
                         ordered: list.ordered,
                         list_id: list.id,
                         number: list.next_number,
+                        continuation: false,
                     },
                 );
             }
@@ -2128,6 +2163,7 @@ enum BlockKind {
         ordered: bool,
         list_id: usize,
         number: u64,
+        continuation: bool,
     },
     Code,
 }
@@ -2144,10 +2180,12 @@ fn finish_block(blocks: &mut Vec<Block>, kind: &mut Option<BlockKind>, inlines: 
             ordered,
             list_id,
             number,
+            continuation,
         } => Block::ListItem {
             ordered,
             list_id,
             number,
+            continuation,
             inlines,
         },
         BlockKind::Code => Block::Code(inlines),
@@ -2206,7 +2244,7 @@ fn heading_number(level: HeadingLevel) -> u8 {
 fn render_blocks(
     blocks: &[Block],
     context: &mut RenderContext<'_>,
-    ordered_list_numbering: Option<&OrderedListNumbering>,
+    list_numbering: Option<&ListNumbering>,
 ) -> Result<String> {
     let mut output = String::new();
     for (index, block) in blocks.iter().enumerate() {
@@ -2229,23 +2267,23 @@ fn render_blocks(
                 output.push_str(&render_paragraph(&prototype, inlines, None, context)?)
             }
             Block::ListItem {
-                ordered,
                 list_id,
+                continuation,
                 inlines,
                 ..
             } => {
                 let prototype = template
                     .paragraphs
-                    .get(if *ordered { "paragraph" } else { "list" })
-                    .expect("validated list/paragraph prototype")
+                    .get("paragraph")
+                    .expect("validated paragraph prototype")
                     .clone();
-                let prototype = if *ordered {
-                    let num_id = ordered_list_numbering
-                        .and_then(|numbering| numbering.num_ids.get(list_id))
-                        .expect("ordered list has generated Word numbering");
-                    paragraph_with_numbering(&prototype, *num_id)?
+                let num_id = list_numbering
+                    .and_then(|numbering| numbering.num_ids.get(list_id))
+                    .expect("list has generated Word numbering");
+                let prototype = if *continuation {
+                    list_continuation_paragraph(&prototype)?
                 } else {
-                    prototype
+                    paragraph_with_numbering(&prototype, *num_id)?
                 };
                 output.push_str(&render_paragraph(&prototype, inlines, None, context)?)
             }
@@ -2278,38 +2316,60 @@ fn render_blocks(
 }
 
 fn paragraph_with_numbering(prototype: &str, num_id: u32) -> Result<String> {
-    let opening_end = prototype.find('>').ok_or_else(|| {
-        DmsError::InvalidMarkdownTemplate("paragraph prototype has no opening tag".to_owned())
-    })? + 1;
-    let closing = prototype.rfind("</w:p>").ok_or_else(|| {
-        DmsError::InvalidMarkdownTemplate("paragraph prototype has no closing tag".to_owned())
-    })?;
     let numbering =
         format!("<w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"{num_id}\"/></w:numPr>");
-    if let Some(properties_start) = prototype[opening_end..closing].find("<w:pPr") {
-        let properties_start = opening_end + properties_start;
-        let properties_end = prototype[properties_start..closing]
-            .find('>')
-            .ok_or_else(|| {
-                DmsError::InvalidMarkdownTemplate(
-                    "paragraph prototype has an incomplete property element".to_owned(),
-                )
-            })?
-            + properties_start
-            + 1;
-        return Ok(format!(
-            "{}{}{}",
-            &prototype[..properties_end],
-            numbering,
-            &prototype[properties_end..]
-        ));
-    }
-    Ok(format!(
-        "{}<w:pPr>{}</w:pPr>{}",
-        &prototype[..opening_end],
-        numbering,
-        &prototype[opening_end..]
-    ))
+    let properties = xml_child(prototype, "w:pPr")?.unwrap_or("<w:pPr/>");
+    let properties = set_xml_child(
+        properties,
+        "w:numPr",
+        &numbering,
+        &[
+            "w:pStyle",
+            "w:keepNext",
+            "w:keepLines",
+            "w:pageBreakBefore",
+            "w:framePr",
+            "w:widowControl",
+        ],
+    )?;
+    set_xml_child(prototype, "w:pPr", &properties, &[])
+}
+
+fn list_continuation_paragraph(prototype: &str) -> Result<String> {
+    // A continuation is a separate paragraph, not a new numbered item or a
+    // line break. Cancel inherited numbering and align with the list body.
+    let prototype = paragraph_with_numbering(prototype, 0)?;
+    let properties = xml_child(&prototype, "w:pPr")?.expect("numbering adds paragraph properties");
+    let properties = set_xml_child(
+        properties,
+        "w:ind",
+        "<w:ind w:left=\"720\" w:firstLine=\"0\"/>",
+        &[
+            "w:pStyle",
+            "w:keepNext",
+            "w:keepLines",
+            "w:pageBreakBefore",
+            "w:framePr",
+            "w:widowControl",
+            "w:numPr",
+            "w:suppressLineNumbers",
+            "w:pBdr",
+            "w:shd",
+            "w:tabs",
+            "w:suppressAutoHyphens",
+            "w:kinsoku",
+            "w:wordWrap",
+            "w:overflowPunct",
+            "w:topLinePunct",
+            "w:autoSpaceDE",
+            "w:autoSpaceDN",
+            "w:bidi",
+            "w:adjustRightInd",
+            "w:snapToGrid",
+            "w:spacing",
+        ],
+    )?;
+    set_xml_child(&prototype, "w:pPr", &properties, &[])
 }
 
 fn render_paragraph(
