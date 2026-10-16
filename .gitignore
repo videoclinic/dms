@@ -5,3 +5,6 @@
 # editor swap files
 *.swp
 *.swo
+
+# Python
+**/__pycache__/
