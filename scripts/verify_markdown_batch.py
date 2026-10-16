@@ -18,6 +18,7 @@ import os
 import posixpath
 import re
 import stat
+import struct
 import subprocess
 import sys
 import unicodedata
@@ -242,10 +243,16 @@ def source_inventory(path, root):
                 and tokens[index - 2].type == "list_item_open" and children[0].type == "text"):
             children[0].content = re.sub(r"^\[X\](?=\s)", "[x]", children[0].content)
     images, chunks, headings, tables, history = [], [], [], [], []
+    chunk_contexts = []
     current_table = None
     row = None
     history_next = False
+    list_depth = 0
     for index, token in enumerate(tokens):
+        if token.type == "list_item_open":
+            list_depth += 1
+        elif token.type == "list_item_close":
+            list_depth -= 1
         if token.type == "heading_open":
             text = inline_text(tokens[index + 1].children or [])
             headings.append((int(token.tag[1:]), text))
@@ -267,6 +274,11 @@ def source_inventory(path, root):
             text = inline_text(children)
             if text.strip():
                 chunks.append(text)
+                if current_table is not None:
+                    chunk_contexts.append(("cell", len(tables), len(current_table), len(row)))
+                else:
+                    kind = "heading" if tokens[index - 1].type == "heading_open" else "paragraph"
+                    chunk_contexts.append((kind, "list" if list_depth else "body"))
             if current_table is not None and tokens[index - 1].type in ("td_open", "th_open"):
                 row.append(text)
             for child in children:
@@ -287,12 +299,14 @@ def source_inventory(path, root):
             require(not re.search(r"<img\b", token.content, re.IGNORECASE), "html_image_not_supported")
             if token.content.strip():
                 chunks.append(token.content)
+                chunk_contexts.append(("paragraph",))
         elif token.type in ("fence", "code_block") and token.content.strip():
             chunks.append(token.content)
+            chunk_contexts.append(("paragraph",))
     require(len(history) == 1 and history[0] and all(len(r) == 5 for r in history[0]),
             "five_column_versionsverlauf_missing")
     return {"sha256": sha(data), "fields": fields, "images": images, "chunks": chunks,
-            "headings": headings, "tables": tables, "history": history[0]}
+            "chunk_contexts": chunk_contexts, "headings": headings, "tables": tables, "history": history[0]}
 
 
 def xml_text(node):
@@ -490,6 +504,222 @@ def check_docx(doc, template, inventory, metadata):
             "tables": len(inventory["tables"]), "heading_convention": "no_source_plus_word_double_numbering"}
 
 
+def pdf_table_rows(rows, join_continuations=False, text_key="text"):
+    """Interpret rows by column geometry, optionally joining adjacent pages."""
+    physical = [list(cells.values()) for _, cells in sorted(rows.items())]
+    if not physical:
+        return []
+    columns = sorted(cell["x"] for cell in physical[0])
+    result, last_page = [], -1
+    for cells in physical:
+        mapped = {}
+        for cell in cells:
+            column = min(range(len(columns)), key=lambda i: abs(columns[i] - cell["x"]))
+            require(abs(columns[column] - cell["x"]) <= 2 and column not in mapped,
+                    "pdf_table_column_geometry")
+            mapped[column] = cell
+        first = min(cell["first"] for cell in cells)
+        last = max(cell["last"] for cell in cells)
+        # A new-page row may be a continuation or a separate sparse row.
+        # Geometry supplies an interpretation, not proof of continuation;
+        # the source matcher must disambiguate it against the unjoined rows.
+        if join_continuations and result and first == last_page + 1:
+            for column, cell in mapped.items():
+                result[-1][column] += cell[text_key]
+        else:
+            result.append([mapped[i][text_key] if i in mapped else "" for i in range(len(columns))])
+        last_page = last
+    return [[fidelity_text(cell) for cell in row] for row in result]
+
+
+def pdf_reading_units(pdf):
+    """Read painted characters in structure order; keep full ancestry as identity.
+
+    MuPDF's XML exposes tagged text that extractDICT omits with
+    TEXT_COLLECT_STRUCTURE. Page chrome and TOC entries are not source units.
+    No text is synthesized from PDF tags, DOCX, or the expected source.
+    """
+    units, labelled = {}, set()
+    heading_roles = {"H", "H1", "H2", "H3", "H4", "H5", "H6"}
+    tagged = pdf.xref_get_key(pdf.pdf_catalog(), "StructTreeRoot")[0] != "null"
+    if not tagged:
+        # Untagged blocks have no cross-page or cell identity. Do not infer it.
+        return [{"kind": "block", "text": fidelity_text(b[4])}
+                for page in pdf for b in page.get_text("blocks", sort=False) if b[6] == 0]
+
+    def walk(node, page_number, path=(), table=None, row=None, list_path=None, item=None):
+        if node.tag == "struct":
+            path += (int(node.get("idx")),)
+            role = node.get("std")
+            if role in ("TOC", "TOCI", "Artifact"):
+                return
+            if role == "Table":
+                table = path
+                units.setdefault(path, {"kind": "table", "rows": {}})
+            elif role == "TR":
+                row = path
+            elif role == "L":
+                list_path = path
+            elif role == "LI":
+                item = path
+            elif role == "Lbl":
+                labelled.add(item)
+                return
+            if role in heading_roles | {"P", "LBody", "Title", "Code", "TD", "TH"}:
+                text = "".join(c.get("c", "") for c in node.iter("char"))
+                if not text.strip():
+                    return
+                target = units
+                if role in ("TD", "TH"):
+                    require(table is not None and row is not None, "pdf_table_structure")
+                    target = units[table]["rows"].setdefault(row, {})
+                bounds = [list(map(float, b.get("bbox").split())) for b in node.iter("block")]
+                require(bounds, "pdf_text_structure_geometry")
+                unit = target.setdefault(path, {"kind": "heading" if role in heading_roles else "paragraph",
+                                               "text": "", "first": page_number, "last": page_number,
+                                               "x": min(b[0] for b in bounds), "list": list_path,
+                                               "item": item, "role": role})
+                unit["text"] += text
+                if role in ("TD", "TH"):
+                    bindings = []
+                    evidenced = pdf_cell_checkmark_text(node, origins, bindings)
+                    unit["checkmark_text"] = unit.get("checkmark_text", "") + evidenced
+                    unit["supplement_text"] = unit.get("supplement_text", "") + pdf_cell_supplement_text(
+                        node, evidenced, bindings, traces, tree)
+                unit["last"] = page_number
+                return
+        for child in node:
+            walk(child, page_number, path, table, row, list_path, item)
+
+    for number, page in enumerate(pdf):
+        textpage = page.get_textpage(flags=pymupdf.TEXTFLAGS_XML | pymupdf.TEXT_COLLECT_STRUCTURE)
+        traces = page.get_texttrace()
+        origins = pdf_checkmark_origins(page, traces)
+        tree = ET.fromstring(textpage.extractXML())
+        walk(tree, number)
+    result = []
+    for _, unit in sorted(units.items()):
+        if unit["kind"] == "table":
+            joined = pdf_table_rows(unit["rows"], join_continuations=True)
+            unit["checkmark_rows"] = pdf_table_rows(unit["rows"], text_key="checkmark_text")
+            unit["joined_checkmark_rows"] = pdf_table_rows(unit["rows"], join_continuations=True,
+                                                         text_key="checkmark_text")
+            unit["supplement_rows"] = pdf_table_rows(unit["rows"], text_key="supplement_text")
+            unit["joined_supplement_rows"] = pdf_table_rows(unit["rows"], join_continuations=True,
+                                                          text_key="supplement_text")
+            unit["rows"] = pdf_table_rows(unit["rows"])
+            if joined != unit["rows"]:
+                unit["joined_rows"] = joined
+        else:
+            unit["text"] = fidelity_text(unit["text"])
+            previous = result[-1] if result else {}
+            # Word may split one list paragraph into a new, unlabelled LI.
+            # A labelled item or intervening unit must never be joined.
+            if (unit["role"] == previous.get("role") == "LBody"
+                    and unit["list"] == previous["list"] and unit["item"] not in labelled
+                    and unit["first"] == previous["last"] + 1):
+                previous["text"] += unit["text"]
+                previous["last"] = unit["last"]
+                continue
+        result.append(unit)
+    return result
+
+
+def pdf_source_matches(pdf, inventory):
+    """One verdict per source occurrence; cells are bound by table/row/column.
+
+    A deficit remains false but does not prevent diagnostics for later chunks.
+    Production requires every verdict. U+2705 fallback requires exact remaining
+    cell text plus independently painted two-layer evidence at each position.
+    """
+    units = pdf_reading_units(pdf)
+    contexts = inventory.get("chunk_contexts", [("paragraph",)] * len(inventory["chunks"]))
+    require(len(contexts) == len(inventory["chunks"]), "pdf_source_context_count")
+    require(not inventory.get("tables") or "chunk_contexts" in inventory, "pdf_source_table_context")
+    matches, tables, cursor, offset = [], {}, 0, 0
+    for chunk, context in zip(inventory["chunks"], contexts):
+        needle = fidelity_text(chunk)
+        if context[0] == "cell":
+            _, ti, ri, ci = context
+            if ti not in tables:
+                expected = inventory["tables"][ti]
+                actual = []
+                evidenced = []
+                supplemented = []
+                for index in range(cursor, len(units)):
+                    if units[index]["kind"] == "table":
+                        actual = units[index]["rows"]
+                        if "joined_rows" in units[index]:
+                            normalized = [[fidelity_text(cell) for cell in row] for row in expected]
+                            interpretations = [actual, units[index]["joined_rows"]]
+                            matching = [rows for rows in interpretations if rows == normalized]
+                            if len(matching) == 1:
+                                actual = matching[0]
+                            elif not matching:
+                                # No interpretation passes the table. Preserve
+                                # per-cell deficits only when shape is unambiguous;
+                                # at least one cell must still fail the text check.
+                                shaped = [rows for rows in interpretations if len(rows) == len(expected)
+                                          and all(len(a) == len(b) for a, b in zip(rows, expected))
+                                          and all(cell or not rows[r][c] for r, row in enumerate(normalized)
+                                                  for c, cell in enumerate(row))]
+                                actual = shaped[0] if len(shaped) == 1 else []
+                            else:
+                                actual = []  # Multiple matching interpretations fail closed.
+                        if actual is units[index]["rows"]:
+                            evidenced = units[index].get("checkmark_rows", [])
+                            supplemented = units[index].get("supplement_rows", [])
+                        elif actual is units[index].get("joined_rows"):
+                            evidenced = units[index].get("joined_checkmark_rows", [])
+                            supplemented = units[index].get("joined_supplement_rows", [])
+                        cursor, offset = index + 1, 0
+                        break
+                shape = len(actual) == len(expected) and all(len(a) == len(b) for a, b in zip(actual, expected))
+                tables[ti] = [[shape and (fidelity_text(cell) == actual[r][c]
+                               or ("\u2705" in cell and bool(evidenced)
+                                   and fidelity_text(cell.replace("\u2705", "")) == actual[r][c]
+                                   and fidelity_text(cell) == evidenced[r][c])
+                               or (cell.count("\u2705") == 1 and bool(supplemented)
+                                   and fidelity_text(cell) == supplemented[r][c]))
+                               for c, cell in enumerate(row)] for r, row in enumerate(expected)]
+            matches.append(tables[ti][ri][ci])
+            continue
+        found = False
+        for index in range(cursor, len(units)):
+            unit = units[index]
+            if unit["kind"] == "table":
+                # Do not let a later paragraph satisfy an occurrence before
+                # an as-yet-unconsumed source table.
+                break
+            text = unit["text"]
+            if unit["kind"] == "block":
+                start = text.find(needle, offset if index == cursor else 0)
+                if start < 0:
+                    continue
+                cursor, offset = index, start + len(needle)
+            else:
+                if context[0] != unit["kind"]:
+                    continue
+                if context[0] == "heading":
+                    # Word heading styles can display all caps and add an
+                    # outline ordinal. Never fold case in body text/cells.
+                    candidates = (needle, needle.upper())
+                    if not any(text.endswith(c) and re.fullmatch(r"[0-9.()]*", text[:-len(c)])
+                               for c in candidates):
+                        continue
+                elif text != needle:
+                    # Markdown list ordinals are syntax, not source chunks;
+                    # Word can place their visible prefix inside P or LBody.
+                    if not (context == ("paragraph", "list") and unit["role"] in ("P", "LBody")
+                            and text.endswith(needle) and re.fullmatch(r"\d+[.)]", text[:-len(needle)])):
+                        continue
+                cursor, offset = index + 1, 0
+            found = True
+            break
+        matches.append(found)
+    return matches
+
+
 def check_pdf(path, inventory, metadata, render_dir, file_id, profile=None):
     require(path.read_bytes().rstrip().endswith(b"%%EOF"), "pdf_incomplete")
     with pymupdf.open(path) as pdf:
@@ -512,11 +742,10 @@ def check_pdf(path, inventory, metadata, render_dir, file_id, profile=None):
                 require(all(compact(values[key]) in compact(chrome) for key in fields), "pdf_footer_controlled_chrome")
                 footer_pages.append(number)
             if number == 1:
-                require(compact(metadata["title"]) in compact(text), "pdf_cover_title")
+                require(fidelity_text(metadata["title"]).casefold() in fidelity_text(text).casefold(), "pdf_cover_title")
             page.get_pixmap(dpi=120, alpha=False).save(render_dir / f"{file_id}-page-{number:03}.png")
             pages.append(text)
-        all_text = fidelity_text("\n".join(pages))
-        require(all(fidelity_text(chunk) in all_text for chunk in inventory["chunks"]), "pdf_source_text_missing")
+        require(all(pdf_source_matches(pdf, inventory)), "pdf_source_text_missing")
         return {"pdf_pages": len(pages), "pdf_text_characters": [len(t) for t in pages],
                 "rendered_pages": list(range(1, len(pages) + 1)), "footer_checked_pages": footer_pages,
                 "visual_review": "required"}
@@ -719,6 +948,144 @@ def main():
     except Exception:  # noqa: BLE001 -- never print config/path/parser contents
         print(json.dumps({"automated_pass": False, "failure": "preflight_parse_or_io_failure"}))
     return 1
+
+
+def pdf_checkmark_origins(page, traces=None):
+    """Pair the opaque green/white Segoe layers omitted by ToUnicode.
+
+    Paint traces retain the white overprint that structured XML suppresses.
+    These are candidates only: a structured cell must independently anchor
+    the green character at this page-local origin before using the evidence.
+    """
+    layers = {}
+    for span in page.get_texttrace() if traces is None else traces:
+        if not (span["font"] == "SegoeUIEmoji" and abs(span["size"] - 9.96) <= .05
+                and span["type"] == 0 and span["opacity"] == 1
+                and tuple(span["dir"]) == (1, 0) and span["colorspace"] == 3):
+            continue
+        colour = tuple(round(c * 255) for c in span["color"])
+        if colour not in ((0, 210, 106), (244, 244, 244)):
+            continue
+        for code, glyph, origin, bounds in span["chars"]:
+            if (code == 32 and glyph > 0 and abs(bounds[2] - bounds[0] - 13.68) <= .05
+                    and abs(bounds[3] - bounds[1] - 9.96) <= .05):
+                layers.setdefault(tuple(origin), []).append((colour, glyph, bounds, span["seqno"]))
+    result = []
+    for origin, pair in layers.items():
+        if len(pair) != 2:
+            continue
+        green, white = sorted(pair, key=lambda layer: layer[3])
+        if (green[0] == (0, 210, 106) and white[0] == (244, 244, 244)
+                and green[1] != white[1] and white[3] == green[3] + 1
+                and all(abs(a - b) <= .02 for a, b in zip(green[2], white[2]))):
+            result.append(origin)
+    return result
+
+
+def pdf_cell_checkmark_text(node, origins, bindings=None):
+    """Keep character order; replace only independently evidenced cell spaces."""
+    replacements = set()
+    for font in node.iter("font"):
+        if font.get("name") != "SegoeUIEmoji" or abs(float(font.get("size", "0")) - 9.96) > .05:
+            continue
+        for char in font:
+            if not (char.get("c") == " " and char.get("color", "").lower() == "#00d26a"
+                    and char.get("alpha", "").lower() == "#ff"):
+                continue
+            quad = list(map(float, char.get("quad", "").split()))
+            if not (len(quad) == 8 and abs(quad[2] - quad[0] - 13.68) <= .05
+                    and abs(quad[7] - quad[1] - 9.34) <= .05):
+                continue
+            origin = (float(char.get("x")), float(char.get("y")))
+            candidates = [p for p in origins if all(abs(a - b) <= .02 for a, b in zip(p, origin))]
+            if len(candidates) == 1:
+                replacements.add(char)
+                if bindings is not None:
+                    bindings.append((char, candidates[0]))
+                origins.remove(candidates[0])  # One painted occurrence cannot satisfy two cells.
+    return "".join("\u2705" if char in replacements else char.get("c", "") for char in node.iter("char"))
+
+
+def pdf_cell_rectangle(node):
+    """Exact envelope of this TD/TH's structured blocks, never a padded area.
+
+    XML serializes MuPDF float32 coordinates as short decimals; restore that
+    representation before comparing with the float32 paint trace coordinates.
+    Use the explicit cell bbox when valid; MuPDF otherwise emits an empty-
+    rectangle sentinel, so only this cell's block envelope is available.
+    """
+    if node.get("bbox"):
+        bounds = pymupdf.Rect(struct.unpack("4f", struct.pack("4f", *map(float, node.get("bbox").split()))))
+        if not bounds.is_empty and not bounds.is_infinite:
+            return bounds
+    blocks = [pymupdf.Rect(struct.unpack("4f", struct.pack("4f", *map(float, b.get("bbox").split()))))
+              for b in node.iter("block")]
+    if not blocks or any(b.is_empty or b.is_infinite for b in blocks):
+        return None
+    return pymupdf.Rect(min(b.x0 for b in blocks), min(b.y0 for b in blocks),
+                        max(b.x1 for b in blocks), max(b.y1 for b in blocks))
+
+
+def pdf_cell_supplement_text(node, evidenced, bindings, traces, tree):
+    """Insert one unstructured ordinary paint span before one bound checkmark.
+
+    Ownership requires every character inside this cell's exact block envelope,
+    no foreign cell overlap or existing structured character ownership, and an
+    unambiguous paint sequence after the structured prefix and before green.
+    Never choose characters/substrings using source text. The caller still must
+    match the entire source cell, including its single checkmark position.
+    """
+    if len(bindings) != 1 or evidenced.count("\u2705") != 1:
+        return evidenced
+    rectangle = pdf_cell_rectangle(node)
+    if rectangle is None:
+        return evidenced
+    anchor, origin = bindings[0]
+    green = [s["seqno"] for s in traces if s["font"] == "SegoeUIEmoji"
+             and tuple(round(c * 255) for c in s["color"]) == (0, 210, 106)
+             and any(tuple(c[2]) == origin for c in s["chars"])]
+    if len(green) != 1:
+        return evidenced
+    structured = [(c, (float(c.get("x")), float(c.get("y")))) for c in tree.iter("char")
+                  if c.get("x") is not None and c.get("y") is not None]
+    foreign = [pdf_cell_rectangle(c) for c in tree.iter("struct")
+               if c is not node and c.get("std") in ("TD", "TH")]
+
+    def same_origin(left, right):
+        return all(abs(a - b) <= .02 for a, b in zip(left, right))
+
+    candidates = []
+    for span in traces:
+        chars = span["chars"]
+        if not (chars and span["font"] != "SegoeUIEmoji" and span["type"] == 0
+                and span["opacity"] == 1 and tuple(span["dir"]) == (1, 0)):
+            continue
+        if not all(0 <= code <= 0x10ffff and chr(code).isprintable() and glyph > 0
+                   and not pymupdf.Rect(bounds).is_empty and rectangle.contains(pymupdf.Rect(bounds))
+                   and rectangle.contains(pymupdf.Point(point))
+                   for code, glyph, point, bounds in chars):
+            continue
+        if any(same_origin(point, owned) for _, _, point, _ in chars for _, owned in structured):
+            continue  # Do not strip or duplicate any structured part of a trace.
+        if any(r is not None and r.intersects(pymupdf.Rect(bounds))
+               for _, _, _, bounds in chars for r in foreign):
+            continue
+        candidates.append(span)
+    if len(candidates) != 1 or candidates[0]["seqno"] >= green[0]:
+        return evidenced
+    candidate = candidates[0]
+    for char in node.iter("char"):
+        if char is anchor:
+            break
+        if not char.get("c", "").strip():
+            continue
+        owned = [point for c, point in structured if c is char]
+        painted = [s["seqno"] for s in traces for code, _, point, _ in s["chars"]
+                   if owned and same_origin(point, owned[0]) and chr(code) == char.get("c")]
+        if len(painted) != 1 or painted[0] >= candidate["seqno"]:
+            return evidenced
+    supplement = "".join(chr(c[0]) for c in candidate["chars"])
+    return evidenced.replace("\u2705", supplement + "\u2705", 1)
 
 
 if __name__ == "__main__":

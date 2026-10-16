@@ -10,13 +10,14 @@ import copy
 import io
 import json
 import re
+import struct
 import subprocess
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pymupdf
 import verify_markdown_batch as v
@@ -85,14 +86,64 @@ def docx(path, template=False, image_count=2, wrong_cell=False, numbered=False):
             archive.writestr(key, value)
 
 
-def pdf(path, omit=""):
+def tagged_pdf(path, structure, page_count=1):
+    """Real marked content and structure, including deliberately split Word tags."""
     with pymupdf.open() as document:
-        page = document.new_page()
-        lines = ["Synthetic policy", "Synthetic heading", "Synthetic verification text.", "Versionsverlauf",
-                 "Version Date Author Change Review", "1.0 2026 Person Initial Done"]
-        page.insert_text((50, 70), "\n".join(line for line in lines if line != omit))
-        page.insert_text((50, 800), "1.0 Internal")
+        for _ in range(page_count):
+            page = document.new_page()
+            page.insert_text((50, 40), "Synthetic policy")
+            page.insert_text((50, 800), "1.0 Internal")
+        root = document.get_new_xref()
+        document.update_object(root, "<< /Type /StructTreeRoot >>")
+        mcids = [0] * page_count
+        parents = [[] for _ in range(page_count)]
+
+        def add(role, children, parent):
+            xref = document.get_new_xref()
+            document.update_object(xref, "<< >>")
+            kids = []
+            for child in children:
+                if isinstance(child[0], str):
+                    kids.append(f"{add(*child, xref)} 0 R")
+                else:
+                    pn, x, y, text = child
+                    page = document[pn]
+                    mcid = mcids[pn]
+                    mcids[pn] += 1
+                    span = document.get_new_xref()
+                    document.update_object(span, f"<< /Type /StructElem /S /Span /P {xref} 0 R "
+                                           f"/Pg {page.xref} 0 R /K {mcid} >>")
+                    parents[pn].append(f"{span} 0 R")
+                    page.insert_text((x, y), text)
+                    stream = page.get_contents()[-1]
+                    document.update_stream(stream, f"/Span <</MCID {mcid}>> BDC\n".encode()
+                                           + document.xref_stream(stream) + b"\nEMC")
+                    kids.append(f"{span} 0 R")
+            document.update_object(xref, f"<< /Type /StructElem /S /{role} /P {parent} 0 R /K [{' '.join(kids)}] >>")
+            return xref
+
+        body = add("Document", structure, root)
+        document.xref_set_key(root, "K", f"[{body} 0 R]")
+        parent_tree = document.get_new_xref()
+        nums = " ".join(f"{pn} [{' '.join(refs)}]" for pn, refs in enumerate(parents))
+        document.update_object(parent_tree, f"<< /Nums [{nums}] >>")
+        document.xref_set_key(root, "ParentTree", f"{parent_tree} 0 R")
+        for pn, page in enumerate(document):
+            document.xref_set_key(page.xref, "StructParents", str(pn))
+        document.xref_set_key(document.pdf_catalog(), "StructTreeRoot", f"{root} 0 R")
+        document.xref_set_key(document.pdf_catalog(), "MarkInfo", "<< /Marked true >>")
         document.save(path)
+
+
+def pdf(path, omit=""):
+    structure = [(kind, [(0, 50, y, text)]) for kind, y, text in (
+        ("H1", 70, "Synthetic heading"), ("P", 100, "Synthetic verification text."),
+        ("H2", 130, "Versionsverlauf")) if text != omit]
+    structure.append(("Table", [("TR", [("TH" if ri == 0 else "TD", [(0, 50 + ci * 95, 160 + ri * 30, text)])
+                                      for ci, text in enumerate(row)])
+                                for ri, row in enumerate((["Version", "Date", "Author", "Change", "Review"],
+                                                          ["1.0", "2026", "Person", "Initial", "Done"]))]))
+    tagged_pdf(path, structure)
 
 
 class VerifierTests(unittest.TestCase):
@@ -179,6 +230,7 @@ class VerifierTests(unittest.TestCase):
         path.write_text(SOURCE + '\n```\n![not an image](missing.png)\n```\n', encoding="utf-8")
         self.assertEqual(len(v.source_inventory(path, self.source)["images"]), 2)
 
+
     def test_smart_punctuation_matches_actual_assembler_text_without_hiding_loss(self):
         source = 'Speed -- and power --- and range... says "fast" and don\'t stop.'
         rendered = 'Speed – and power — and range… says “fast” and don’t stop.'
@@ -224,6 +276,381 @@ class VerifierTests(unittest.TestCase):
         inv["chunks"].append("Missing content must still fail.")
         with self.assertRaisesRegex(v.CheckError, "pdf_source_text_missing"):
             v.check_pdf(path, inv, META, self.root, "file-002")
+
+    def pdf_matches(self, structure, body, page_count=1):
+        path = self.source / "policy.md"
+        history = SOURCE[SOURCE.index("## Versionsverlauf"):]
+        path.write_text("---\ntitle: Synthetic policy\n---\n" + body + "\n" + history, encoding="utf-8")
+        inventory = v.source_inventory(path, self.source)
+        # The fixture exercises only the supplied body; inventory parsing still
+        # establishes paragraph/heading/cell identity from actual Markdown.
+        end = inventory["chunks"].index("Versionsverlauf")
+        inventory["chunks"] = inventory["chunks"][:end]
+        inventory["chunk_contexts"] = inventory["chunk_contexts"][:end]
+        inventory["tables"] = inventory["tables"][:-1]
+        target = self.root / "structure.pdf"
+        tagged_pdf(target, structure, page_count)
+        with pymupdf.open(target) as document:
+            return v.pdf_source_matches(document, inventory)
+
+    def test_pdf_wrapped_columns_are_cell_contiguous_and_row_major(self):
+        structure = [("Table", [
+            ("TR", [("TH", [(0, 50, 90, "Left")]), ("TH", [(0, 300, 90, "Right")])]),
+            ("TR", [("TD", [(0, 50, 120, "alpha\nbeta")]), ("TD", [(0, 300, 120, "gamma\ndelta")])]),
+            ("TR", [("TD", [(0, 50, 180, "omega")]), ("TD", [(0, 300, 180, "end")])]),
+        ])]
+        body = "| Left | Right |\n| --- | --- |\n| alpha beta | gamma delta |\n| omega | end |\n"
+        self.assertEqual(self.pdf_matches(structure, body), [True] * 6)
+        for wrong in (body.replace("alpha beta", "alpha MISSING beta"),
+                      body.replace("alpha beta | gamma delta", "gamma delta | alpha beta"),
+                      body.replace("omega | end", "end | omega")):
+            with self.subTest(wrong=wrong):
+                self.assertFalse(all(self.pdf_matches(structure, wrong)))
+
+    def test_pdf_paragraph_continues_across_page_without_chrome(self):
+        structure = [("P", [(0, 50, 740, "Start of paragraph"), (1, 50, 90, "and its ending.")])]
+        self.assertEqual(self.pdf_matches(structure, "Start of paragraph and its ending.\n", 2), [True])
+        self.assertEqual(self.pdf_matches(structure, "Start of paragraph LOST and its ending.\n", 2), [False])
+
+    def test_pdf_unlabelled_list_continuation_is_not_a_new_occurrence(self):
+        structure = [("L", [
+            ("LI", [("Lbl", [(0, 50, 740, "*")]), ("LBody", [(0, 70, 740, "First half")])]),
+            ("LI", [("LBody", [(1, 70, 90, "second half.")])]),
+        ])]
+        self.assertEqual(self.pdf_matches(structure, "- First half second half.\n", 2), [True])
+        structure[0][1][1][1].insert(0, ("Lbl", [(1, 50, 90, "*")]))
+        self.assertEqual(self.pdf_matches(structure, "- First half second half.\n", 2), [False])
+
+    def test_pdf_ordered_list_prefix_in_p_and_lbody_is_exact_and_list_only(self):
+        for role in ("P", "LBody"):
+            for prefix in ("1.", "12)"):
+                with self.subTest(role=role, prefix=prefix):
+                    structure = [(role, [(0, 50, 90, prefix + " Expected body.")])]
+                    self.assertEqual(self.pdf_matches(structure, "1. Expected body.\n"), [True])
+                    self.assertEqual(self.pdf_matches(structure, "1. Wrong body.\n"), [False])
+                    self.assertEqual(self.pdf_matches(structure, "Expected body.\n"), [False])
+            for prefix in ("x1.", "1.2.", "(1)", "1..", "1", "1. Wrong"):
+                with self.subTest(role=role, invalid_prefix=prefix):
+                    structure = [(role, [(0, 50, 90, prefix + " Expected body.")])]
+                    self.assertEqual(self.pdf_matches(structure, "1. Expected body.\n"), [False])
+        structure = [("Code", [(0, 50, 90, "1. Expected body.")])]
+        self.assertEqual(self.pdf_matches(structure, "1. Expected body.\n"), [False])
+
+    def test_pdf_split_cell_uses_column_geometry_not_continuation_tag_index(self):
+        structure = [("Table", [
+            ("TR", [("TH", [(0, 50, 90, "Left")]), ("TH", [(0, 300, 90, "Right")])]),
+            ("TR", [("TD", [(0, 50, 740, "First half")]), ("TD", [(0, 300, 740, "Neighbour")])]),
+            ("TR", [("TD", []), ("TD", [(1, 50, 90, "second half.")])]),
+            ("TR", [("TD", [(1, 50, 140, "Last")]), ("TD", [(1, 300, 140, "Row")])]),
+        ])]
+        body = "| Left | Right |\n| --- | --- |\n| First half second half. | Neighbour |\n| Last | Row |\n"
+        self.assertEqual(self.pdf_matches(structure, body, 2), [True] * 6)
+        self.assertFalse(all(self.pdf_matches(structure, body.replace("First half second", "First LOST half second"), 2)))
+        structure[0][1][2][1][1] = ("TD", [(1, 300, 90, "second half.")])
+        self.assertFalse(all(self.pdf_matches(structure, body, 2)))
+
+    def test_pdf_next_page_sparse_row_is_not_assumed_to_be_a_continuation(self):
+        structure = [("Table", [
+            ("TR", [("TH", [(0, 50, 90, "Left")]), ("TH", [(0, 300, 90, "Right")])]),
+            ("TR", [("TD", [(0, 50, 740, "First")]), ("TD", [(0, 300, 740, "Neighbour")])]),
+            ("TR", [("TD", [(1, 50, 90, "Next")]), ("TD", [])]),
+            ("TR", [("TD", [(1, 50, 140, "Last")]), ("TD", [(1, 300, 140, "Row")])]),
+        ])]
+        body = "| Left | Right |\n| --- | --- |\n| First | Neighbour |\n| Next | |\n| Last | Row |\n"
+        self.assertEqual(self.pdf_matches(structure, body, 2), [True] * 7)
+        for wrong in (body.replace("Next | |", "Next | MISSING |"),
+                      body.replace("Next | |", "| Next |"), body.replace("Next", "Wrong")):
+            with self.subTest(wrong=wrong):
+                self.assertFalse(all(self.pdf_matches(structure, wrong, 2)))
+        structure[0][1][2][1][1] = ("TD", [(1, 300, 90, "EXTRA")])
+        self.assertFalse(all(self.pdf_matches(structure, body, 2)))
+        # A continuation can also paint every column; populated-cell count
+        # cannot decide between a separate row and a split source row.
+        structure[0][1][2][1][1] = ("TD", [(1, 300, 90, "ending")])
+        joined = body.replace("First | Neighbour |\n| Next | |", "First Next | Neighbour ending |")
+        self.assertEqual(self.pdf_matches(structure, joined, 2), [True] * 6)
+        self.assertEqual(self.pdf_matches(structure, joined.replace("Row", "Row \u2705"), 2),
+                         [True, True, True, True, True, False])
+        rows = [["Left", "Right"], ["FirstNext", "Neighbourending"], ["Last", "Row"]]
+        ambiguous = [{"kind": "table", "rows": rows, "joined_rows": copy.deepcopy(rows)}]
+        with patch.object(v, "pdf_reading_units", return_value=ambiguous):
+            self.assertEqual(self.pdf_matches(structure, joined, 2), [False] * 6)
+
+    def test_pdf_occurrences_order_and_paragraph_boundaries_are_strict(self):
+        structure = [("P", [(0, 50, 90, "Repeat")]), ("P", [(0, 50, 120, "End")])]
+        self.assertEqual(self.pdf_matches(structure, "Repeat\n\nRepeat\n\nEnd\n"), [True, False, True])
+        self.assertFalse(all(self.pdf_matches(structure, "End\n\nRepeat\n")))
+        self.assertEqual(self.pdf_matches(structure, "Repeat End\n"), [False])
+
+    def test_pdf_missing_checkmark_is_still_a_deficit(self):
+        structure = [("Table", [
+            ("TR", [("TH", [(0, 50, 90, "Status")])]),
+            ("TR", [("TD", [(0, 50, 120, "Done")])]),
+        ])]
+        self.assertEqual(self.pdf_matches(structure, "| Status |\n| --- |\n| Done \u2705 |\n"), [True, False])
+
+    def checkmark_fixture(self):
+        # Model the independent XML and paint-trace views of a tagged cell.
+        # Both layers map to spaces; XML suppresses the overprinted white one.
+        xml = ET.fromstring('<document><struct idx="0" std="Table"><struct idx="0" std="TR">'
+                            '<struct idx="0" std="TD"><block bbox="50 90 180 110"><line>'
+                            '<font name="Calibri" size="10"><char c="Done"/></font>'
+                            '<font name="SegoeUIEmoji" size="9.96">'
+                            '<char c=" " x="90" y="100" color="#00d26a" alpha="#ff" '
+                            'quad="90 92.75 103.68 92.75 90 102.09 103.68 102.09"/>'
+                            '</font></line></block></struct></struct></struct></document>')
+        layers = [{"font": "SegoeUIEmoji", "size": 9.96, "type": 0, "opacity": 1.0,
+                   "dir": (1.0, 0.0), "colorspace": 3, "color": color, "seqno": index,
+                   "chars": [(32, 100 + index, (90.0, 100.0), (90.0, 92.27, 103.68, 102.23))]}
+                  for index, color in enumerate(((0, 210 / 255, 106 / 255), (244 / 255,) * 3))]
+        return xml, layers
+
+    def checkmark_matches(self, xml, layers, text="Done \u2705", kind="cell", rows=None):
+        page = MagicMock()
+        page.get_textpage.return_value.extractXML.return_value = ET.tostring(xml, encoding="unicode")
+        page.get_texttrace.return_value = layers
+        document = MagicMock()
+        document.xref_get_key.return_value = ("dict", "synthetic structure")
+        document.__iter__.return_value = iter([page])
+        inv = {"chunks": [text], "chunk_contexts": [("cell", 0, 0, 0) if kind == "cell" else (kind,)],
+               "tables": [[[text]]] if kind == "cell" else []}
+        if rows is not None:
+            inv = {"chunks": [c for row in rows for c in row], "tables": [rows],
+                   "chunk_contexts": [("cell", 0, ri, ci) for ri, row in enumerate(rows)
+                                      for ci, _ in enumerate(row)]}
+        return v.pdf_source_matches(document, inv)
+
+    def test_pdf_checkmark_two_layers_at_bound_cell_location(self):
+        xml, layers = self.checkmark_fixture()
+        self.assertEqual(self.checkmark_matches(xml, layers), [True])
+
+    def test_pdf_checkmark_surrounding_text_without_paint_is_rejected(self):
+        xml, _ = self.checkmark_fixture()
+        self.assertEqual(self.checkmark_matches(xml, []), [False])
+
+    def supplemental_cell_fixture(self):
+        xml, layers = self.checkmark_fixture()
+        cell = xml.findall(".//struct[@std='TD']")[0]
+        cell.findall("block")[0].set("bbox", "50 70 180 110")
+        font = cell.findall(".//font[@name='Calibri']")[0]
+        font.remove(font[0])
+        for i, c in enumerate("Done"):
+            ET.SubElement(font, "char", c=c, x=str(50 + i * 5), y="80")
+        ordinary = {**layers[0], "font": "OpenSans-Regular", "color": (0, 0, 0),
+                    "seqno": 1, "chars": [(ord(c), 200 + i, (50 + i * 5, 100),
+                                          (50 + i * 5, 92.27, 55 + i * 5, 102.23))
+                                         for i, c in enumerate("APPROVED")]}
+        prefix = {**ordinary, "seqno": 0,
+                  "chars": [(ord(c), 300 + i, (50 + i * 5, 80),
+                             (50 + i * 5, 72.27, 55 + i * 5, 82.23)) for i, c in enumerate("Done")]}
+        layers[0]["seqno"], layers[1]["seqno"] = 2, 3
+        return xml, [prefix, ordinary, *layers]
+
+    def test_pdf_checkmark_supplement_is_cell_local_and_keeps_exact_position(self):
+        for role in ("TD", "TH"):
+            xml, layers = self.supplemental_cell_fixture()
+            cell = xml.findall(".//struct[@std='TD']")[0]
+            cell.set("std", role)
+            with self.subTest(role=role):
+                self.assertEqual(self.checkmark_matches(xml, layers, "Done APPROVED \u2705"), [True])
+                font = ET.SubElement(cell.findall(".//line")[0], "font", name="Calibri", size="10")
+                ET.SubElement(font, "char", c=" tail", x="110", y="100")
+                self.assertEqual(self.checkmark_matches(xml, layers, "Done APPROVED \u2705 tail"), [True])
+                for wrong in ("Done \u2705 APPROVED tail", "APPROVED Done \u2705 tail",
+                              "Done APPROVE \u2705 tail", "Done APPROVEDX \u2705 tail",
+                              "Done APPROVED \u2705 \u2705 tail", "Done APPROVED tail"):
+                    with self.subTest(wrong=wrong):
+                        self.assertEqual(self.checkmark_matches(xml, layers, wrong), [False])
+
+    def test_pdf_checkmark_supplement_requires_every_character_inside_cell(self):
+        for bounds, origin in (((49.999, 92, 55, 102), (50, 100)),
+                               ((50, 69.999, 55, 102), (50, 100)),
+                               ((50, 92, 180.001, 102), (50, 100)),
+                               ((50, 92, 55, 110.001), (50, 100)),
+                               ((50, 92, 55, 102), (49.999, 100)),
+                               ((50, 92, 50, 102), (50, 100)),
+                               ((250, 92, 255, 102), (250, 100))):
+            xml, layers = self.supplemental_cell_fixture()
+            code, glyph, _, _ = layers[1]["chars"][0]
+            layers[1]["chars"][0] = (code, glyph, origin, bounds)
+            # A plausible span bbox must not hide a single out-of-cell character.
+            layers[1]["bbox"] = (50, 90, 90, 105)
+            with self.subTest(bounds=bounds, origin=origin):
+                self.assertEqual(self.checkmark_matches(xml, layers, "Done APPROVED \u2705"), [False])
+
+    def test_pdf_checkmark_supplement_uses_float32_rectangle_without_padding(self):
+        xml, layers = self.supplemental_cell_fixture()
+        cell = xml.findall(".//struct[@std='TD']")[0]
+        # A valid explicit cell rectangle wins over a larger block envelope.
+        cell.set("bbox", "51 70 180 110")
+        self.assertEqual(self.checkmark_matches(xml, layers, "Done APPROVED \u2705"), [False])
+        cell.set("bbox", "2147483500 2147483500 -2147483700 -2147483700")
+        self.assertEqual(self.checkmark_matches(xml, layers, "Done APPROVED \u2705"), [True])
+        cell.findall("block")[0].set("bbox", "439.78 70 569.78 110")
+        for char in cell.iter("char"):
+            char.set("x", str(float(char.attrib["x"]) + 389.78))
+            if char.get("quad"):
+                quad = list(map(float, char.attrib["quad"].split()))
+                char.set("quad", " ".join(str(n + 389.78 if i % 2 == 0 else n) for i, n in enumerate(quad)))
+        def shifted(values):
+            moved = [n + 389.78 if i % 2 == 0 else n for i, n in enumerate(values)]
+            return struct.unpack(f"{len(moved)}f", struct.pack(f"{len(moved)}f", *moved))
+        for span in layers:
+            span["chars"] = [(code, glyph, shifted(point), shifted(bounds))
+                             for code, glyph, point, bounds in span["chars"]]
+        self.assertEqual(self.checkmark_matches(xml, layers, "Done APPROVED \u2705"), [True])
+        code, glyph, point, bounds = layers[1]["chars"][0]
+        layers[1]["chars"][0] = (code, glyph, point, (bounds[0] - .001, *bounds[1:]))
+        self.assertEqual(self.checkmark_matches(xml, layers, "Done APPROVED \u2705"), [False])
+
+    def test_pdf_checkmark_supplement_rejects_multiple_sequences_and_wrong_order(self):
+        for mutate in (lambda s: s[1].update(seqno=2), lambda s: s[1].update(seqno=4),
+                       lambda s: s[0].update(seqno=1.5),
+                       lambda s: s[1]["chars"].reverse(),
+                       lambda s: s.insert(1, copy.deepcopy(s[1])),
+                       lambda s: s.insert(1, {**copy.deepcopy(s[1]), "seqno": .5}),
+                       lambda s: s[1]["chars"].pop(),
+                       lambda s: s[1]["chars"].append(s[1]["chars"][-1])):
+            xml, layers = self.supplemental_cell_fixture()
+            mutate(layers)
+            with self.subTest(mutate=mutate):
+                self.assertEqual(self.checkmark_matches(xml, layers, "Done APPROVED \u2705"), [False])
+        xml, layers = self.supplemental_cell_fixture()
+        extra = {**layers[1], "seqno": .5, "chars": layers[1]["chars"][:4]}
+        layers[1]["chars"] = layers[1]["chars"][4:]
+        layers.insert(1, extra)
+        self.assertEqual(self.checkmark_matches(xml, layers, "Done APPROVED \u2705"), [False])
+
+    def test_pdf_checkmark_supplement_requires_ordinary_visible_paint_and_bound_layers(self):
+        for mutate in (lambda s: s.pop(), lambda s: s.pop(2),
+                       lambda s: s[2].update(color=(0, 1, 0)),
+                       lambda s: s[3].update(opacity=0),
+                       lambda s: s[1].update(opacity=.5), lambda s: s[1].update(type=3),
+                       lambda s: s[1].update(dir=(0, 1)),
+                       lambda s: s[1].update(font="SegoeUIEmoji")):
+            xml, layers = self.supplemental_cell_fixture()
+            mutate(layers)
+            with self.subTest(mutate=mutate):
+                self.assertEqual(self.checkmark_matches(xml, layers, "Done APPROVED \u2705"), [False])
+        xml, layers = self.supplemental_cell_fixture()
+        xml.findall(".//font[@name='SegoeUIEmoji']/char")[0].set("alpha", "#00")
+        self.assertEqual(self.checkmark_matches(xml, layers, "Done APPROVED \u2705"), [False])
+
+    def test_pdf_checkmark_supplement_cannot_borrow_another_structured_cell(self):
+        for overlapping in (False, True):
+            xml, layers = self.supplemental_cell_fixture()
+            table = xml.findall(".//struct[@std='Table']")[0]
+            row = ET.SubElement(table, "struct", idx="1", std="TR")
+            cell = ET.SubElement(row, "struct", idx="0", std="TD")
+            block = ET.SubElement(cell, "block", bbox="50 90 180 110" if overlapping else "50 120 180 140")
+            font = ET.SubElement(block, "font", name="Calibri", size="10")
+            for i, c in enumerate("APPROVED"):
+                ET.SubElement(font, "char", c=c, x=str(50 + i * 5), y="100" if not overlapping else "130")
+            # Either explicit foreign character ownership or overlapping cell
+            # rectangles makes the supplemental sequence ineligible.
+            rows = [["Done APPROVED \u2705"], ["APPROVED"]]
+            with self.subTest(overlapping=overlapping):
+                self.assertEqual(self.checkmark_matches(xml, layers, rows=rows), [False, True])
+
+    def test_pdf_checkmark_supplement_never_duplicates_structured_text(self):
+        xml, layers = self.supplemental_cell_fixture()
+        expected = "Done APPROVED \u2705"
+        # Identical text elsewhere is not itself a reason to borrow or reject;
+        # the local complete sequence, bounds and paint order establish ownership.
+        other = ET.fromstring('<struct idx="-1" std="P"><block bbox="50 60 180 80">'
+                              '<font name="Calibri" size="10"><char c="Done APPROVED"/>'
+                              '</font></block></struct>')
+        xml.insert(0, other)
+        self.assertEqual(self.checkmark_matches(xml, layers, expected), [True])
+        # Actual structure ownership excludes the ordinary trace from supplementation.
+        font = xml.findall(".//struct[@std='TD']//font[@name='Calibri']")[0]
+        for code, _, origin, _ in layers[1]["chars"]:
+            ET.SubElement(font, "char", c=chr(code), x=str(origin[0]), y=str(origin[1]))
+        self.assertEqual(self.checkmark_matches(xml, layers, expected), [True])
+        self.assertEqual(self.checkmark_matches(xml, layers, "Done APPROVED APPROVED \u2705"), [False])
+
+    def test_pdf_checkmark_requires_both_exact_colour_layers(self):
+        for change in (lambda s: s.pop(), lambda s: s.pop(0),
+                       lambda s: s[1].update(color=(1, 1, 1)),
+                       lambda s: s[0].update(color=(0, 1, 0)),
+                       lambda s: s[1].update(font="OtherFont"),
+                       lambda s: s[1].update(opacity=0),
+                       lambda s: s[1].update(type=3)):
+            xml, layers = self.checkmark_fixture()
+            change(layers)
+            with self.subTest(layers=layers):
+                self.assertEqual(self.checkmark_matches(xml, layers), [False])
+
+    def test_pdf_checkmark_rejects_degenerate_wrong_size_or_displaced_layers(self):
+        for origin, bounds in (((90, 100), (90, 92.27, 90, 102.23)),
+                               ((90, 100), (90, 92.27, 93, 102.23)),
+                               ((90, 100), (90, 100, 103.68, 100)),
+                               ((110, 100), (110, 92.27, 123.68, 102.23)),
+                               ((90, 130), (90, 122.27, 103.68, 132.23))):
+            xml, layers = self.checkmark_fixture()
+            layers[1]["chars"] = [(32, 101, origin, bounds)]
+            with self.subTest(origin=origin, bounds=bounds):
+                self.assertEqual(self.checkmark_matches(xml, layers), [False])
+        xml, layers = self.checkmark_fixture()
+        layers[1]["size"] = 5
+        self.assertEqual(self.checkmark_matches(xml, layers), [False])
+
+    def test_pdf_checkmark_location_order_count_and_other_text_are_strict(self):
+        for text in ("\u2705 Done", "Done \u2705 \u2705", "Done LOST \u2705", "Wrong \u2705", "Done \u2714"):
+            xml, layers = self.checkmark_fixture()
+            with self.subTest(text=text):
+                self.assertEqual(self.checkmark_matches(xml, layers, text), [False])
+
+    def test_pdf_checkmark_evidence_in_other_cell_or_paragraph_cannot_satisfy(self):
+        xml, layers = self.checkmark_fixture()
+        cell = xml.find(".//struct[@std='TD']")
+        glyph = cell.find(".//font[@name='SegoeUIEmoji']")
+        cell.find(".//line").remove(glyph)
+        row = xml.find(".//struct[@std='TR']")
+        other = ET.SubElement(row, "struct", idx="1", std="TD")
+        ET.SubElement(other, "block", bbox="90 90 180 110").append(glyph)
+        self.assertEqual(self.checkmark_matches(xml, layers), [False])
+        xml, layers = self.checkmark_fixture()
+        xml.find(".//struct[@std='TD']").set("std", "P")
+        self.assertEqual(self.checkmark_matches(xml, layers, kind="paragraph"), [False])
+
+    def test_pdf_checkmark_requires_structured_green_anchor_not_font_alone(self):
+        for attributes in ({"color": "#000000"}, {"alpha": "#00"}, {"x": "200"},
+                           {"quad": "90 100 90 100 90 100 90 100"}, {"c": "X"}):
+            xml, layers = self.checkmark_fixture()
+            xml.find(".//font[@name='SegoeUIEmoji']/char").attrib.update(attributes)
+            with self.subTest(attributes=attributes):
+                self.assertEqual(self.checkmark_matches(xml, layers), [False])
+
+    def test_pdf_cover_title_accepts_all_caps_but_rejects_wrong_or_later_title(self):
+        renders = self.root / "renders"
+        renders.mkdir()
+        upper = self.root / "upper.pdf"
+        with pymupdf.open() as document:
+            page = document.new_page()
+            page.insert_text((50, 70), "SYNTHETIC POLICY")
+            page.insert_text((50, 800), "1.0 Internal")
+            document.save(upper)
+        v.check_pdf(upper, {"chunks": []}, META, renders, "file-001")
+
+        wrong = self.root / "wrong.pdf"
+        with pymupdf.open() as document:
+            page = document.new_page()
+            page.insert_text((50, 70), "SYNTHETIC OTHER")
+            page.insert_text((50, 800), "1.0 Internal")
+            document.save(wrong)
+        with self.assertRaisesRegex(v.CheckError, "pdf_cover_title"):
+            v.check_pdf(wrong, {"chunks": []}, META, renders, "file-002")
+
+        later = self.root / "later.pdf"
+        with pymupdf.open() as document:
+            page = document.new_page()
+            page.insert_text((50, 70), "Cover")
+            page.insert_text((50, 800), "1.0 Internal")
+            document.new_page().insert_text((50, 70), "SYNTHETIC POLICY")
+            document.save(later)
+        with self.assertRaisesRegex(v.CheckError, "pdf_cover_title"):
+            v.check_pdf(later, {"chunks": []}, META, renders, "file-003")
 
     def test_link_target_in_table_and_extension_literals_in_code(self):
         path = self.source / "policy.md"
