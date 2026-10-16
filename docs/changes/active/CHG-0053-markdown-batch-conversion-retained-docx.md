@@ -12,7 +12,7 @@
 | --- | --- |
 | ID | CHG-0053 |
 | Status | in-progress |
-| External request | Direct operator request: Create a CHG in /mnt/c/Users/RaphaelBossek/src/dms/ to accomplish this task; there is already a CHG that should accomplish mass export -- I'm not sure. check this first. Incorporate your findings in the CHG. Follow-on: Incorporate the findings regarding converting the markdown document in the ../dms project using the application-records skill for future improvements. Using the dms cli tool would be prefered then. |
+| External request | Direct operator request: Create a CHG in /mnt/c/Users/RaphaelBossek/src/dms/ to accomplish this task; there is already a CHG that should accomplish mass export -- I'm not sure. check this first. Incorporate your findings in the CHG. Follow-on: Incorporate the findings regarding converting the markdown document in the ../dms project using the application-records skill for future improvements. Using the dms cli tool would be prefered then. Follow-on: answer the general cadence/responsibility TODOs in `docs/reworked/iso-27001/` with `12 Monate` and `IT-Leitung`; omit every TODO entry from DOCX/PDF conversion using `Vorlage.de.docx`. |
 | Affected CAPs | CAP-0007, CAP-0022 |
 | Decision records | ADR-0008 and ADR-0023 in `docs/architecture.md` describe the shared local Word adapter and standalone non-release conversion boundary. |
 
@@ -135,7 +135,7 @@ These are implementation targets, not claims about current runtime.
 | 1 | Preserve multi-column policy tables through template assembly | done (G1: 11 tests passed on Rust 1.88.0; evidence below) | G1: `cargo test -p dms-core --test markdown_template` exits 0 with two/three/four/five-column fidelity coverage. |
 | 2 | Embed local source images without silent content loss | done (third-correction G2: 20 markdown_template + 31 lifecycle tests passed on Rust 1.88.0; evidence below) | G2: `cargo test -p dms-core --test markdown_template --test lifecycle` exits 0 with image, containment, rejection and template-preservation coverage. |
 | 3 | Deliver explicit non-release batch CLI and retained Word inputs | done (corrected G3: 250 workspace tests and CLI help passed; review findings corrected) | G3: `cargo test --workspace --locked` and `cargo run -p dms-cli -- convert markdown --help` exit 0 with schema-18/19/current read-only configuration, retained-DOCX, full-width tables, explicit TOC removal and unchanged-release coverage. |
-| 4 | Prove full-corpus Windows Word conversion and repeatability | in-progress | G4: The native Windows smoke command specified below exits 0 with 48 verified PDF/DOCX pairs, all 25 image occurrences accounted for, retained source/template/config digests, and inspected rendered evidence. |
+| 4 | Prove full-corpus Windows Word conversion and repeatability | in-progress | G4: The native Windows smoke command specified below exits 0 with 52 verified PDF/DOCX pairs, every selected source image occurrence accounted for, retained source/template/config digests, and inspected rendered evidence. |
 | 5 | Integrate contracts, records and project gates | pending | G5: Full integration commands and record checks below pass; CAP/DOX/visual classifications are current; only then archive CHG-0053. |
 
 Keep at most one phase `in-progress`. Every done phase records its actual gate evidence; a fake Office exporter is not a real PDF smoke.
@@ -256,12 +256,16 @@ paths; the parent integrated their partial results and completed verification.
      lookup remains. The error handler cannot close the unverified result and
      never saves a document. An unresolvable Word handle fails closed instead
      of falling back to a user's active document.
-  2. **Medium — corrected.** Running state is captured before Word commands.
-     Temporary release (`retain_docx=false`) hides Word before opening the copy;
-     success and error paths quit only when Word was initially stopped and no
-     documents remain. Existing user sessions are never quit. Retained
-     conversion neither sets application visibility nor quits Word. The empty
-     document guard also preserves documents opened while the operation runs.
+  2. **Medium — corrected, later superseded by Phase 4 cleanup.** Running state is
+     captured before Word commands. Temporary release (`retain_docx=false`) hides
+     Word before opening the copy; success and error paths quit only when Word was
+     initially stopped and no documents remain. Existing user sessions are never
+     quit. At this Phase-3 checkpoint retained conversion neither set application
+     visibility nor quit Word. Phase 4 now changes cleanup in both modes: retained
+     conversion closes its own document and reaps the empty instance it started on
+     Windows and macOS. Windows leaves application-wide visibility and alerts
+     untouched; macOS keeps its `wasRunning` hide/quit gate. The empty-document
+     guard also preserves documents opened while the operation runs.
   3. **Medium — not a bug; unchanged.** Preflight is exactly
      `osascript -e 'id of application "Microsoft Word"'`, not a tell/open/run
      command. The [AppleScript application-class reference](https://developer.apple.com/library/archive/documentation/AppleScript/Conceptual/AppleScriptLangGuide/reference/ASLR_classes.html)
@@ -382,15 +386,15 @@ paths; the parent integrated their partial results and completed verification.
 2. From native Windows PowerShell in this repository, build `cargo build -p dms-cli --locked`, then run:
 
    ```powershell
-   .\scripts\Test-MarkdownBatchExport.ps1 -WorkspaceConfig 'C:\Users\RaphaelBossek\dms-demo2\edit\.dms\workspace.json' -InputRoot '\\wsl.localhost\Ubuntu\home\raphael\src\vc\iso27001-documentation-rework\docs\reworked\iso-27001' -OutputRoot 'C:\Users\RaphaelBossek\dms-conversion-verification\run-1' -ExpectedCount 48 -PolicyManifest 'C:\Users\RaphaelBossek\dms-conversion-verification\policies.json'
+   .\scripts\Test-MarkdownBatchExport.ps1 -WorkspaceConfig 'C:\Users\RaphaelBossek\dms-demo2\edit\.dms\workspace.json' -InputRoot '\\wsl.localhost\Ubuntu\home\raphael\src\vc\iso27001-documentation-rework\docs\reworked\iso-27001' -OutputRoot 'C:\Users\RaphaelBossek\dms-conversion-verification\run-1' -ExpectedCount 52 -PolicyManifest 'C:\Users\RaphaelBossek\dms-conversion-verification\policies.json'
    ```
 
-   Run the script from the Windows-local checkout `C:\Users\RaphaelBossek\src\dms`, not a WSL UNC checkout. `C:\Users\RaphaelBossek\dms-conversion-verification\policies.json` is the approved exact 48-file root-policy selection; its compact JSON-name-list SHA-256 is `11c78c2f29630126db3b186ffc7fd253df3997303499e990188d12ff8771c367`. Require a nonexistent output location and never redirect to the demo publish root.
-3. Verify 48 policy pairs, all five-column histories and their text, and all 25 source image occurrences across 10 policies. Count source drawings separately from the repeated template logo. Inspect PDF pages containing tables/images as well as cover, TOC and footer; confirm classification, source version, no unresolved placeholders, no missing text and no clipped columns/images. Persist per-file hashes/counts and non-secret inspection findings in this CHG; do not depend on chat or scratch files for completion evidence.
+   Run the script from the Windows-local checkout `C:\Users\RaphaelBossek\src\dms`, not a WSL UNC checkout. The operator re-approved every 52 immediate Markdown files in the generated corpus on 2026-10-15 after confirming the four additions are mapped corpus documents rather than stray input. `C:\Users\RaphaelBossek\dms-conversion-verification\policies.json` is the approved exact 52-file selection; its compact JSON-name-list SHA-256 is `ca1af82b96bf13a0dd7e07ad1da234137b7d5af49eafd665748d9977e212642c`. Require a nonexistent output location and never redirect to the demo publish root.
+3. Verify 52 policy pairs, all five-column histories and their text, and every source image occurrence across the reviewed selection. Count source drawings separately from the repeated template logo. Inspect PDF pages containing tables/images as well as cover, TOC and footer; confirm classification, source version, no unresolved placeholders, no missing text and no clipped columns/images. Persist per-file hashes/counts and non-secret inspection findings in this CHG; do not depend on chat or scratch files for completion evidence.
 4. Repeat into a second fresh output root and verify the same complete source/asset coverage and unchanged originals; do not demand byte-identical PDFs because Word metadata can vary. Verify rerunning against an existing output root refuses overwrites. Exercise one controlled failing fixture to prove nonzero exit and an honest failure entry without false success.
 5. Keep full output artifacts in the operator-selected local directory with equivalent confidentiality protection. If a review package is needed, create `docs/changes/reviews/CHG-0053/README.md` as `review-only`, link it here, add that ownership to change DOX/index, and keep sanitized evidence there at a stable path. Never place internal corpus copies or live workspace metadata in product wireframes.
 
-**Verification gate:** G4: The native Windows smoke command specified above exits 0 with 48 verified PDF/DOCX pairs, all 25 image occurrences accounted for, retained source/template/config digests, and inspected rendered evidence.
+**Verification gate:** G4: The native Windows smoke command specified above exits 0 with 52 verified PDF/DOCX pairs, every selected source image occurrence accounted for, retained source/template/config digests, and inspected rendered evidence.
 
 **Execution evidence — corrected harness; G4 blocked:** Work is confined to the
 operator-selected `dms-chg0053-phase4` worktree at `050315c`. No commit, push,
@@ -512,6 +516,68 @@ deployment, converter change or primary-checkout edit.
   alter the live workspace record or template during this phase; restore the
   configured template bytes or have the operator intentionally revalidate the
   template through the DMS workspace workflow before retrying G4.
+- The attempted DMS revalidation of the updated `Vorlage.docx` is itself blocked:
+  `Markdown Word template is invalid: body prototype {Heading 1} must occur
+  exactly once; found 2`. The UI retains the existing template ID and offers
+  **Replace Word template...** for a corrected package; do not remove the
+  configuration. A corrected template must pass validation before its digest can
+  be accepted and before G4 can retry.
+- Direct package inspection confirmed that `word/document.xml` is well-formed and
+  that the duplicate is not a second body prototype: cached TOC paragraphs carry
+  `{Heading 1}` / `{Heading 2}` under `Verzeichnis1` / `Verzeichnis2`, while the
+  real prototypes occur once under `berschrift1` / `berschrift2`. Clear only the
+  stale cached TOC result text containing those prototype tokens; retain the TOC
+  field instructions and the single real heading prototypes. The package health
+  check otherwise passes.
+- An approved non-overwriting repair probe did not create a replacement: after
+  clearing the stale cached TOC tokens, the package still lacks the mandatory
+  `{PARAGRAPH}` prototype entirely. The template has an `Absatz`-styled table-cell
+  prototype but no standalone `Absatz` paragraph prototype. Choosing whether to
+  add a new paragraph prototype or repurpose an existing paragraph is a template
+  authoring decision; do not guess or overwrite `Vorlage.docx`.
+- The operator selected a distinct `Absatz` paragraph prototype after `{Heading 4}`.
+  The resulting new file is
+  `C:\Users\RaphaelBossek\dms-demo2\edit\Vorlage.dms-fixed.docx` (SHA-256
+  `c851c5a4fb7eb534a04b1c80c21f67b53e5a58983923ea7425bafaf33dfe7388`).
+  It clears cached TOC text only in `Verzeichnis1`–`Verzeichnis3`, retains the
+  TOC fields, and has exactly one each of `{Heading 1}`–`{Heading 4}`,
+  `{PARAGRAPH}`, `{BULLET LIST}`, `{TABLE COLUMN 1}` and `{TABLE COLUMN 2}`.
+  ZIP/XML package validation passed. The original `Vorlage.docx` remains
+  unchanged; select the new file through **Replace Word template...** to perform
+  the DMS contract validation and persist the new workspace digest.
+- The operator selected the corrected template. Native read-back confirms the
+  workspace still uses template ID `f2d1dc1f-c3f2-4f8d-863c-c07e3cd65fb6`, now
+  points to `Vorlage.dms-fixed.docx`, and records the matching digest
+  `c851c5a4fb7eb534a04b1c80c21f67b53e5a58983923ea7425bafaf33dfe7388`.
+  A native Windows `dms convert markdown --dry-run` selected all 48 policies,
+  accepted the configuration/template, and failed all 48 only with the expected
+  per-document `{DATE}`/`last_modified` error; it created no output tree and did
+  not invoke Word.
+- Operator-authorized rehearsal inputs were created under
+  `C:\Users\RaphaelBossek\dms-demo2-phase4-rehearsal` with a distinct
+  configuration/template and a separate 48-document input root containing valid
+  dates, five-column histories and 25 PNG occurrences across ten documents.
+  The first attempt exposed a rehearsal-only root-path spelling error, then the
+  CLI dry-run reached all 48 inputs but rejected the generated placeholder PNGs;
+  those were replaced with the repository's valid synthetic PNG fixture. The
+  subsequent full native smoke exceeded the 420-second execution limit after
+  creating the first and repeat output roots, without writing `evidence.json`.
+  Inspection found many headless `WINWORD` processes and an unrelated active
+  Word automation process. Do not terminate any Word process automatically:
+  retained conversion must not close user documents, and process ownership is not
+  provable from this host snapshot. This rehearsal is not G4 evidence and needs
+  operator cleanup/decision before another installed-Word attempt.
+- After operator-authorized headless-process cleanup, the retained-cleanup source
+  correction was built into the native CLI. A second rehearsal progressed through
+  47 of 48 outputs, with all 47 independently verified, but its first image-bearing
+  document returned the sanitized Word failure and the process still left 48 new
+  headless `WINWORD` instances. Later diagnosis attributes those leaks to the
+  non-bindable `Quit(0)` cleanup and the former ownership heuristic, not to
+  per-document automation itself. Rebuild with the corrected cleanup, first prove
+  that one native conversion returns the WINWORD process count to its baseline,
+  then run the two fresh 48-document conversions. A shared Word session is not a
+  Phase-4 prerequisite or an authorized scope expansion. The process cleanup was
+  operator-authorized; remaining non-headless Word instances were preserved.
 - Only the requested output parent was created. Read-back confirmed `run-1`,
   `run-1-repeat` and `run-1-evidence` do not exist. No real conversion/manifest,
   output pairs, image counts, rendered inspection, repeatability or real-data
@@ -526,6 +592,214 @@ deployment, converter change or primary-checkout edit.
   wireframes remain unchanged: no ownership boundary, converter semantics, desktop
   interaction or release authority changed. Phase 4 stays `in-progress`, Phase 5
   stays `pending`; no commit/push/deployment or fresh independent sign-off.
+
+### Phase 4 correction — owned Word instance teardown
+
+The rehearsal's leaked headless `WINWORD` instances are traced to two defects in
+the uncommitted retained-cleanup correction. Both were reproduced directly on the
+operator's host:
+
+1. **`Quit(0)` is not bindable in PowerShell.** Word exposes `Quit`'s
+   `SaveChanges` parameter by reference, so `$word.Quit(0)` raises
+   `Argument: "1" muss System.Management.Automation.PSReference sein` inside the
+   `finally` block. Cleanup threw for every document and reaped no instance, so 48
+   documents produced 48 leaked headless processes. `$w.Quit()` (no argument) and
+   `$saveChanges = 0; $w.Quit([ref]$saveChanges)` both succeeded and returned the
+   process count to its baseline, so the documented `wdDoNotSaveChanges`
+   semantic is reachable through the `[ref]` form.
+2. **Each COM activation starts a new Word process.** Two consecutive
+   `New-Object -ComObject Word.Application` calls on an idle host produced two
+   distinct processes (`ReferenceEquals` false). This confirms one process per
+   document and matches the observed 48-process count. The former
+   `$wordWasRunning` ownership guess can additionally misclassify a lingering
+   process from the operation's own previous document as "not ours" and then
+   suppress that document's quit.
+
+Correction: Windows ownership is the observed process-ID difference across
+activation (`$wordPidsBefore` versus the post-activation WINWORD set), and cleanup
+always closes the operation's own document without saving through a nested
+`finally`, then quits that observed new instance with `[ref]$saveChanges`
+(`wdDoNotSaveChanges`) only when its document count is zero. The nested cleanup
+also uses `[ref]$saveChanges` for `Document.Close`, which is likewise a ByRef Word
+parameter. Windows does not change Word visibility or alerts because the observed
+PID difference cannot bind the returned COM object to a process. macOS hides Word
+only when its application was initially stopped, and its success-path quit is
+non-fatal after the DOCX/PDF pair exists. A pre-existing operator session remains
+outside the pre-activation PID set; the empty-document check bounds a race where
+an unrelated WINWORD starts during activation, and an unreadable count fails safe
+by leaving the instance running. macOS keeps its `wasRunning` gate because macOS
+Word is a single attachable application. This changes retained conversion's
+instance lifecycle — it now reaps its own empty Windows instance — but not its
+conversion-only authority, global visibility/alert state, or any desktop release
+outcome.
+
+Evidence (`crates/dms-export`):
+
+- `cargo test -p dms-export` exited 0: 18 passed, 0 failed, 0 ignored; 0 doc-tests.
+- `cargo test --workspace --locked` exited 0 after the final teardown correction:
+  267 passed, 0 failed, 0 ignored across every suite (including the 18 shared-export
+  tests), so the correction regresses no phase 1–3 behaviour. `cargo run -p dms-cli
+  -- convert markdown --help` also exited 0.
+- Independent read-only review of the first correction confirmed the `Quit` ByRef
+  failure and the process-ID probe, then found the same ByRef binding risk in
+  `Document.Close`, an unprotected `finally` sequence that could skip cleanup, and
+  stale retained-mode documentation. The first follow-up uses `[ref]` for both
+  calls, nests cleanup so Close failure cannot bypass the empty-instance check, and
+  reconciles CHG/DOX. A second independent review then found that the observed PID
+  difference must not gate Word-global visibility/alert mutation, that macOS must
+  hide only an instance it started, that its success-path quit must be non-fatal,
+  and that the earlier session-reuse wording contradicted the corrected root cause.
+  The final follow-up removes Windows visibility/alert mutation, gates macOS hide
+  on `wasRunning`, makes the macOS success cleanup non-fatal, and states the
+  baseline-count rerun as the next allowed Phase-4 step. The residual process-level
+  interruption risk is not claimed solved: if PowerShell itself is killed, its
+  `finally` cannot run; G4 requires the native baseline-count evidence.
+- New regressions `windows_owned_instance_cleanup_uses_bindable_byref_arguments`
+  and `retained_cleanup_windows_finally_reaches_owned_quit_after_close_failure`
+  reject literal `Close`/`Quit` arguments, require the bindable `[ref]` form, and
+  pin a nested `finally` so a close failure cannot skip the owned-instance
+  teardown. `windows_avoids_global_visibility_and_alert_mutation` pins the
+  pre-activation PID snapshot, the post-activation observed-PID probe, and the
+  absence of Windows `Visible`/`DisplayAlerts` mutation.
+- `cargo fmt --all -- --check` and
+  `cargo clippy -p dms-export --all-targets --locked -- -D warnings` exited 0.
+- `crates/dms-export/AGENTS.md` now states the process-ID ownership rule, the
+  never-quit-an-operator-session rule and the `Quit` `[ref]` binding pitfall.
+
+Still open for G4; neither item may be reported as passing:
+
+- The operator-authorized native harness was rebuilt from this checkout with
+  `CARGO_INCREMENTAL=0` and started with `WINWORD=0`, but failed before CLI/Word
+  invocation with `policy_selection_not_reconciled`: the approved manifest has
+  48 names while the immediate input root now has 52 Markdown files (four
+  unapproved additions). `run-1`, `run-1-repeat` and `run-1-evidence` remained
+  absent and WINWORD returned to 0. The operator then re-approved the complete
+  52-document generated corpus after `python3 tools/corpus.py validate` confirmed
+  every addition is mapped and provenance-backed. The manifest was atomically
+  rewritten and read back with those exact 52 names and compact JSON SHA-256
+  `ca1af82b96bf13a0dd7e07ad1da234137b7d5af49eafd665748d9977e212642c`;
+  no corpus document was moved or changed. The next G4 invocation uses that
+  reviewed 52-file manifest and `-ExpectedCount 52`.
+- After that decision, native proof that one conversion run returns the WINWORD
+  process count to its baseline and the two fresh 52-document smoke conversions
+  remain required.
+- **G4 is now blocked on authoritative source dates, not on converter behaviour.**
+  The reviewed 52-file run reached the CLI with the rebuilt binary
+  (`WINWORD` baseline 0) and stopped before Word and before any PDF/DOCX pair:
+  `run-1/manifest.json` records 52 `failed` entries, all with
+  `conversion template {DATE} requires last_modified as a real calendar date in YYYY-MM-DD format`,
+  and `run-1-evidence/evidence.json` reports
+  `conversion_or_independent_verification_failed`, 23 source image references in
+  10 documents, every protected snapshot unchanged and no DMS release evidence.
+  `WINWORD` returned to 0 and `run-1-repeat` was not created.
+  The cause is data, not code: the registered template
+  `Vorlage.dms-fixed.docx` contains a literal `{DATE}` token, while none of the 52
+  corpus documents carries `last_modified` frontmatter. G4 therefore needs an
+  operator decision — either supply authoritative `YYYY-MM-DD` `last_modified`
+  values for the 52 documents, or register a template that omits `{DATE}`. Do not
+  invent dates and do not weaken the `{DATE}` contract to pass the gate. The
+  operator authorized a source-backed derivation: each immediate corpus document
+  now carries `last_modified` from the final `Versionsverlauf` date; the one
+  US-form exception `04.23.2025` in the 8-32 umbrella change-control document is
+  recorded as `2025-04-23`. All 52 fields are present and their filename/date
+  mapping SHA-256 is `a5c64f9945d3e14e0acbebcbc024a4d8136e449f60743ef0ccba8450c7f5d8fa`.
+  The corpus validator passed (`152 raw files; 52 generated documents; 0 pending`).
+  `todo_review.py verify` remains independently failing on its pre-existing
+  `ISO TODOs are not assigned exactly once` ledger condition; the date slice
+  changes only one frontmatter line per corpus document and no TODO artifact.
+  Rerun G4 into fresh output roots with the supplied source-owned dates.
+- **Heading-number composition was operator-resolved before the next run.** The
+  configured Word template remains the single numbering authority. The operator
+  approved removal of 73 inline numeric heading prefixes from the 17 affected
+  source documents; the heading-change mapping SHA-256 is
+  `e2fe5bfbb31ce5762d0909f67f78cb71614d97a6bb3509b467fdc3b38534a959`.
+  The corpus validator passed after that source-backed correction. Do not suppress
+  the verifier's duplicate-heading check or make the template unnumbered.
+- **Second native run after date and heading correction:** `run-3` produced 52
+  retained DOCX/PDF pairs with every CLI result successful, unchanged protected
+  snapshots, no DMS release evidence and `WINWORD` baseline/after counts both 0.
+  The duplicate-heading failure is gone. The independent verifier still stopped
+  before its repeat run on one DOCX table-structure mismatch, 12 cover-title
+  checks and 39 PDF-source-text checks. `run-3-repeat` is absent. These remain
+  evidence-backed fidelity questions, not license/host or process-lifecycle
+  failures: diagnose the one table structurally and the rendered PDF comparisons
+  without weakening no-content-loss verification or claiming G4 complete.
+- **Third native run after table-separator and cover-title fixes:** `run-4` again
+  produced 52 successful DOCX/PDF pairs, unchanged protected snapshots and
+  `WINWORD` 0 → 0. The table and cover-title failure classes are resolved; every
+  remaining receipt now fails only `pdf_source_text_missing`, so no repeat run was
+  attempted. A read-only token-multiset probe against extracted PDF text found
+  deficits in all 52 documents (1,298 normalized source-word occurrences total,
+  18–39 per document), so this is not safe to dismiss as only table reading order
+  or case normalization. Preserve the strict verifier and diagnose the Word/PDF
+  layout or extraction loss before another G4 run. The full current workspace gate
+  `cargo test --workspace --locked` also passed after the table and verifier
+  corrections (all suites, 0 failures).
+- **Read-only extraction diagnosis:** against all 52 `run-4` PDFs, the verifier's
+  `sort=True` flattened extraction reports 255 absent source chunks, while
+  `sort=False` reports 35. The 30 non-emoji cases cross a page boundary in wrapped
+  paragraphs or five-column table cells; the text is visible in the retained DOCX
+  and PDF but a per-page flattening interrupts the source chunk. The remaining five
+  cases are source `U+2705` symbols in table cells: Word renders the two Segoe UI
+  Emoji colour layers with a non-degenerate 13.68-point advance, but their embedded
+  font map and ToUnicode map extract as spaces. This is a PDF text-layer mapping
+  defect, not evidence of source-content loss. No safe correction was implemented:
+  a replacement verifier must bind continuation fragments to their source cell or
+  paragraph and bind each `U+2705` tolerance to its exact rendered glyph; a global
+  flattening, font-name check or character omission would weaken G4. Baseline
+  `test_markdown_batch.py` still passes 46 tests (two native-Windows skips) and
+  Ruff passes, but neither is correction coverage. G4 remains in progress; do not
+  rerun conversion until this occurrence-aware verifier and its regressions exist.
+- **Native text-layer probe did not complete:** a fresh operator-output sibling
+  `C:\Users\RaphaelBossek\dms-conversion-verification\word-structure-probe-01`
+  received only two copied retained-DOCX inputs. The native PowerShell Word probe
+  exceeded its 420-second limit before producing either comparison PDF; read-back
+  found two `WINWORD` processes and zero PDFs. Do not terminate either process
+  automatically: process ownership cannot be proven after the timeout. The probe
+  does not establish a Word option fix, retained-DOCX correctness, or a G4 result;
+  operator cleanup or decision is required before another installed-Word probe.
+- **Manual Word export confirms the structure defect:** after operator cleanup,
+  an operator opened the copied retained DOCX and exported
+  `word-structure-probe-01\manual-export.pdf` without changing inputs. The
+  five-page PDF matched 81 of 82 source chunks under the strict verifier. Its
+  sole failure is the same bound `U+2705` table-cell occurrence: the cell has one
+  structured normalized character despite its source cell requiring additional
+  ordinary text, while the PDF still contains one verified emoji paint origin.
+  Manual Word export therefore does not repair the missing structure-tree text;
+  no `ExportAsFixedFormat` option change is proven. Word remains open at the
+  operator's request and is not an agent-owned cleanup target.
+- **Operator visual finding — ordered lists:** the run-4 visual review found one
+  ordered Markdown list in the 5-19-5-23 source rendered with the template bullet
+  style. The assembler now emits native decimal Word numbering for each ordered
+  source list, preserving its start value and keeping it distinct from the
+  unordered bullet prototype. Core OOXML regression coverage proves generated
+  `w:numPr`, decimal `numbering.xml`, relationship/content-type wiring and
+  independent source-list starts; native PDF confirmation waits for the next fresh
+  G4 run and is not visual G4 sign-off.
+- `run-1` now exists and contains only that failed-run `manifest.json` (no DOCX/PDF
+  pair); it is consumed and cannot be reused as a fresh G4 output root. `run-1-repeat`
+  and the harness's missing-image/overwrite probes have not run.
+- The first image-bearing rehearsal document still returns the sanitized Word
+  failure; that defect is undiagnosed and requires a native single-document run.
+- No real corpus, workspace configuration, template or publish content was read or
+  changed by this correction. The primary checkout's `target\debug\dms.exe` was
+  rebuilt natively before the blocked harness run.
+
+### TODO-projection execution evidence
+
+Native Windows rebuilt `dms-cli` and converted the 52 immediate corpus Markdown
+files through a dedicated, read-only schema-19 configuration that byte-copies
+the supplied `Vorlage.de.docx` (SHA-256
+`ce5be5aa46956b4996ecbb5b98e3b7d3f94feaf598efc722fad730b9c137df11`)
+without changing the live workspace. The conversion-only manifest under
+`C:\Users\RaphaelBossek\iso27001-todo-filtered-export-v2` records 52 successful
+retained DOCX/PDF pairs. Independent read-back parsed all 52 DOCX bodies and
+257 PDF pages: both contained zero `TODO:` markers. The source corpus still has
+52 documents with the common `IT-Leitung` owner and `12 Monate` review cadence.
+
+This run proves the requested projection and retained artifacts; it does not
+complete G4's repeatability or broader visual-review gate, which remain
+in-progress.
 
 ## Phase 5 — Integrate contracts, records and project gates
 
@@ -561,12 +835,19 @@ deployment, converter change or primary-checkout edit.
 
 ## Handoff
 
-Phases 1–3 are done. Phase 4 is in progress: its smoke harness has synthetic and
-native-parser coverage, but G4 is blocked by the 48-versus-49 selection drift and
-native PowerShell authorization failure above. Reconcile those host/input gates
-without modifying the corpus or weakening checks, then run the two fresh native
-conversions and review rendered evidence. Phase 5 remains pending. The isolated
-worktree is uncommitted for parent review/integration; G4 is not marked done.
+Phases 1–3 are done. Phase 4 is in progress: the owned-instance teardown correction
+is implemented and internally verified, the harness has synthetic and native-parser
+coverage, the corrected template is registered, and the reviewed 52-file selection
+is approved. G4 is not done and now stops on **authoritative source data**: the
+registered template carries a literal `{DATE}` while none of the 52 corpus documents
+has `last_modified`, so the reviewed native run failed all 52 documents before Word
+with the `{DATE}` requirement and produced no pair. Resolve that with an operator
+decision — authoritative `YYYY-MM-DD` `last_modified` values, or a template without
+`{DATE}` — then rerun the harness into fresh output roots (`run-1` is consumed) and
+prove the `WINWORD` count returns to its baseline. The undiagnosed sanitized Word
+failure on the first image-bearing rehearsal document also still needs a native
+single-document run. Phase 5 remains pending, and the primary checkout stays
+uncommitted for parent review/integration.
 
 ## Related contracts
 
