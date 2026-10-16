@@ -20,7 +20,7 @@ A CHG is not a feature specification; CAPs describe current behaviour.
 
 | ID | Title | Status | CAP impact |
 | --- | --- | --- | --- |
-| [CHG-0055](active/CHG-0055-configurable-markdown-todo-projection.md) | Configurable Markdown TODO projection | planned | CAP-0022 |
+| [CHG-0055](active/CHG-0055-configurable-markdown-todo-projection.md) | Configurable Markdown TODO projection | in-progress | CAP-0022 |
 | [CHG-0054](active/CHG-0054-language-selected-de-en-word-templates.md) | Language-selected reusable DE/EN Word conversion templates | planned | CAP-0007, CAP-0022 |
 | [CHG-0050](active/CHG-0050-uuid-msrv-ceiling.md) | UUID dependency MSRV ceiling | planned | none |
 | [CHG-0042](active/CHG-0042-publish-root-released-document-index.md) | Publish-root released-document index | pending | CAP-0005, CAP-0016 |

@@ -391,6 +391,79 @@ fn assert_markdown_template_release_error(fixture: &mut Fixture, expected: &str)
 }
 
 #[test]
+fn todo_policy_is_not_invoked_by_release_or_release_assembly() {
+    struct InspectRelease;
+    impl PdfExporter for InspectRelease {
+        fn export(&mut self, request: &dms_core::ExportRequest) -> Result<(), String> {
+            let markdown = fs::read_to_string(&request.source_path).unwrap();
+            // This override would fail standalone policy resolution. Release
+            // must neither validate it nor project the visible TODO paragraph.
+            assert!(markdown.contains("not-a-conversion-policy"));
+            let temp = tempfile::tempdir().unwrap();
+            let docx = temp.path().join("release.docx");
+            dms_core::assemble_markdown_docx(
+                request.markdown_template_path.as_ref().unwrap(),
+                &markdown,
+                &docx,
+                request.markdown_assets.as_ref(),
+            )
+            .unwrap();
+            let mut zip = zip::ZipArchive::new(fs::File::open(docx).unwrap()).unwrap();
+            let mut xml = String::new();
+            zip.by_name("word/document.xml")
+                .unwrap()
+                .read_to_string(&mut xml)
+                .unwrap();
+            assert!(xml.contains("TODO: release content stays"));
+            fs::write(&request.temporary_pdf_path, b"%PDF-1.7\nfake export")
+                .map_err(|e| e.to_string())
+        }
+    }
+    let source = "---\nversion: 1.0\nconfidentiality: internal\ntodo_projection: not-a-conversion-policy\n---\n# Handbook\n\nTODO: release content stays\n";
+    let mut fixture = Fixture::new(source, NotificationTransport::Smtp);
+    let mut graph = approve_first_release(&mut fixture);
+    let before_document =
+        serde_json::to_value(fixture.workspace.document(fixture.document_id).unwrap()).unwrap();
+    fixture
+        .workspace
+        .set_conversion_policy(dms_core::ConversionPolicy {
+            todo_projection: dms_core::TodoProjection::Enabled,
+        });
+    fixture.workspace.save().unwrap();
+    assert_eq!(
+        serde_json::to_value(fixture.workspace.document(fixture.document_id).unwrap()).unwrap(),
+        before_document
+    );
+    let before_source = fs::read(&fixture.source_path).unwrap();
+    assert!(fixture
+        .workspace
+        .conversion_policy()
+        .resolve_todo_projection(std::str::from_utf8(&before_source).unwrap())
+        .is_err());
+    fixture
+        .workspace
+        .release_candidate(
+            fixture.document_id,
+            None,
+            &mut graph,
+            &mut FakeNotifier::default(),
+            &mut InspectRelease,
+            &fixture.editor_principal(),
+        )
+        .unwrap();
+    assert_eq!(fs::read(&fixture.source_path).unwrap(), before_source);
+    let document =
+        serde_json::to_string(fixture.workspace.document(fixture.document_id).unwrap()).unwrap();
+    assert!(!document.contains("todo_projection"));
+    assert!(!document.contains("not-a-conversion-policy"));
+    assert!(fixture
+        .workspace
+        .verify_workflow(fixture.document_id)
+        .unwrap()
+        .is_valid());
+}
+
+#[test]
 fn markdown_release_requires_an_unchanged_valid_configured_template() {
     let source = "# Handbook\n\nVersion: 1.0\n\nVertraulichkeitsstufe: Internal";
 

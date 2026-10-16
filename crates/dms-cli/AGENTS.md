@@ -38,7 +38,7 @@ executable.
   takeover and confirmed release, lock-threshold configuration, manifest backup,
   and confirmed restore into explicit existing replacement roots.
 - `convert markdown` is standalone, non-release conversion: it reads only the
-  read-only export projection of an explicit `workspace.json` (schema 18, 19 or
+  read-only export projection of an explicit `workspace.json` (schema 18, 19, 21 or
   current) and writes new paired DOCX/PDF artifacts plus a `manifest.json` into a
   disjoint, previously nonexistent output root. It never opens, migrates or
   writes a workspace, acquires a lock, or contacts Entra or notification
@@ -58,6 +58,9 @@ executable.
 ## Verification
 
 - `cargo test -p dms-cli`
+- `cargo test -p dms-cli --test cli --locked` includes policy-resolution evidence
+  through the public core plan and CLI rejection of invalid library settings.
+  There is no conversion-policy command or effective-policy manifest output yet.
 
 ## Child DOX Index
 

@@ -253,8 +253,8 @@ fn tree(path: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
 }
 
 #[test]
-fn configuration_projection_is_read_only_for_18_19_current_and_dry_run_never_calls_word() {
-    for schema in [18, 19, SCHEMA_VERSION] {
+fn configuration_projection_is_read_only_for_supported_schemas_and_dry_run_never_calls_word() {
+    for schema in [18, 19, 21, SCHEMA_VERSION] {
         let mut f = Fixture::new(schema);
         f.dry();
         fs::write(f.temp.path().join("edit/.dms/lock"), "existing lock").unwrap();
@@ -280,6 +280,116 @@ fn configuration_projection_is_read_only_for_18_19_current_and_dry_run_never_cal
         assert_eq!(tree(f.temp.path()), before);
     }
 }
+#[test]
+fn todo_policy_resolution_is_read_only_and_does_not_change_rendering_or_manifest_metadata() {
+    use dms_core::TodoProjection;
+    for library in [None, Some("disabled"), Some("enabled")] {
+        let f = Fixture::new(SCHEMA_VERSION);
+        if let Some(setting) = library {
+            f.config(|v| v["conversion_policy"] = json!({"todo_projection": setting}));
+        }
+        let source = SOURCE.replacen(
+            "title:",
+            "todo_projection: enabled\nprivate_extra: PRIVATE_EXTRA\ntitle:",
+            1,
+        ) + "\nTODO: PRIVATE_BODY\n";
+        fs::write(f.options.input_root.join("policy.md"), &source).unwrap();
+        fs::write(f.temp.path().join("edit/.dms/lock"), "existing lock").unwrap();
+        let before = tree(f.temp.path());
+        let plan = ConversionPlan::prepare(&f.options).unwrap();
+        let inherited = if library == Some("enabled") {
+            TodoProjection::Enabled
+        } else {
+            TodoProjection::Disabled
+        };
+        assert_eq!(plan.resolve_todo_projection(SOURCE).unwrap(), inherited);
+        assert_eq!(
+            plan.resolve_todo_projection(&source).unwrap(),
+            TodoProjection::Enabled
+        );
+        assert_eq!(
+            plan.resolve_todo_projection(
+                &source.replace("todo_projection: enabled", "todo_projection: disabled")
+            )
+            .unwrap(),
+            TodoProjection::Disabled
+        );
+        let invalid = source.replace(
+            "todo_projection: enabled",
+            "todo_projection: PRIVATE_INVALID",
+        );
+        let error = plan
+            .resolve_todo_projection(&invalid)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(error, "todo_projection must be enabled or disabled");
+        assert_eq!(tree(f.temp.path()), before);
+
+        let mut word = FakeWord::default();
+        let manifest = plan.run(&mut word).unwrap();
+        assert!(!manifest.has_failures());
+        assert_eq!(
+            manifest.results[0].input_sha256.as_deref(),
+            Some(digest(source.as_bytes()).as_str())
+        );
+        assert!(package_text(&word.paths[0], "word/document.xml").contains("TODO: PRIVATE_BODY"));
+        let serialized = serde_json::to_value(&manifest).unwrap();
+        let metadata = serialized["results"][0]["metadata"].as_object().unwrap();
+        assert_eq!(
+            metadata.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["confidentiality", "document_number", "title", "version"]
+        );
+        let text = serde_json::to_string(&manifest).unwrap();
+        for excluded in [
+            "todo_projection",
+            "PRIVATE_EXTRA",
+            "PRIVATE_BODY",
+            "identity_source",
+            "documents",
+            "workflow",
+        ] {
+            assert!(!text.contains(excluded), "manifest leaked {excluded}");
+        }
+        for (path, bytes) in before {
+            assert_eq!(fs::read(f.temp.path().join(path)).unwrap(), bytes);
+        }
+        let disk: Value =
+            serde_json::from_slice(&fs::read(f.options.output_root.join("manifest.json")).unwrap())
+                .unwrap();
+        assert_eq!(disk, serialized);
+    }
+}
+
+#[test]
+fn todo_policy_projection_rejects_invalid_configuration_and_unsupported_schemas_without_writes() {
+    for schema in [18, 19, 21, SCHEMA_VERSION] {
+        for policy in [
+            json!(null),
+            json!({}),
+            json!({"todo_projection": true}),
+            json!({"todo_projection": "Enabled"}),
+            json!({"todo_projection": "PRIVATE_INVALID"}),
+            json!({"todo_projection": "enabled", "extra": true}),
+        ] {
+            let f = Fixture::new(schema);
+            f.config(|v| v["conversion_policy"] = policy);
+            let before = tree(f.temp.path());
+            let error = ConversionPlan::prepare(&f.options)
+                .err()
+                .unwrap()
+                .to_string();
+            assert_eq!(error, "invalid conversion configuration projection");
+            assert_eq!(tree(f.temp.path()), before);
+        }
+    }
+    for schema in [0, 17, 20, SCHEMA_VERSION + 1] {
+        let f = Fixture::new(schema);
+        let before = tree(f.temp.path());
+        assert!(ConversionPlan::prepare(&f.options).is_err());
+        assert_eq!(tree(f.temp.path()), before);
+    }
+}
+
 #[test]
 fn conversion_date_fills_all_stories_before_export_and_preserves_non_release_inputs() {
     for date in ["2026-10-14", "2024-02-29", "2000-02-29"] {

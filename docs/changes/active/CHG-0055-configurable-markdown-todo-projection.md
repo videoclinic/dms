@@ -3,12 +3,12 @@
 **Plan ID:** CHG-0055-configurable-markdown-todo-projection
 **Created:** 2026-10-15
 **Depends on:** archived CHG-0053 is the implementation receipt for retained-DOCX batch-conversion fidelity.
-**Status:** planned
+**Status:** in-progress
 
 | Field | Value |
 | --- | --- |
 | ID | CHG-0055 |
-| Status | planned |
+| Status | in-progress |
 | External request | Direct operator request: incorporate the TODO filter as new CHR with the application-record skill. it should be possible to enable / disable the filter per file and library wide |
 | Affected CAPs | CAP-0022 |
 | Decision records | None; the conversion-only boundary remains ADR-0023. |
@@ -47,7 +47,7 @@ desktop Release assembly.
 
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
-| 1 | Define persistent library policy and per-file override | pending | Focused core and CLI policy-resolution tests exit 0 for disabled default, explicit library settings, override precedence, and invalid values. |
+| 1 | Define persistent library policy and per-file override | done (core/CLI gate and workspace Rust checks exit 0; evidence below) | Focused core and CLI policy-resolution tests exit 0 for disabled default, explicit library settings, override precedence, and invalid values. |
 | 2 | Project enabled TODO entries through standalone conversion | pending | Conversion/domain and CLI tests exit 0 for entry kinds, table rows, compact ordered lists, manifests, unchanged source hashes, and unchanged Release assembly. |
 | 3 | Expose explicit headless configuration and operator evidence | pending | CLI integration tests exit 0 for reading/updating the library setting and structured effective-policy output. |
 | 4 | Integrate capability contract and full gates | pending | CAP-0022, DOX, record/index checks, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, verifier tests, link check, and `git diff --check` exit 0. |
@@ -70,6 +70,51 @@ without affecting release paths.
 **Verification gate:** Focused core and CLI policy-resolution tests exit 0 for
 disabled default, explicit library settings, override precedence, and invalid
 values.
+
+### Phase 1 evidence and boundary
+
+- Schema 22 persists `ConversionPolicy` with a default-disabled `TodoProjection`.
+  `Workspace::conversion_policy` / `set_conversion_policy` use the ordinary
+  explicit `save` boundary. Migration retains the exact prior metadata backup;
+  missing policy defaults disabled, while present malformed policy fails closed.
+- `ConversionPolicy::resolve_todo_projection` and the read-only `ConversionPlan`
+  resolver reuse strict flat conversion frontmatter. Exact lowercase
+  `enabled` / `disabled` scalars (including ordinary quoted scalars) override
+  the library default; omission inherits. Invalid/duplicate/nested values fail
+  with source-free diagnostics. No new parser, dependency or CLI command.
+- Read-only conversion continues to accept schemas 18, 19 and 21 as well as 22;
+  schema 20 remains unsupported by conversion, preserving the existing allowlist.
+  The workspace store retains its existing older-schema migration support.
+- Core tests cover persistence-only mutation, v21 migration, invalid stored
+  shapes, source-owned override preservation during controlled-key sync,
+  unchanged source hashes and manifest metadata, and an approved Release with
+  an invalid conversion override and retained TODO body. CLI tests exercise
+  resolution through the public core plan and subprocess configuration rejection.
+- Resolution is not wired into `ConversionPlan::run` or either assembler.
+  Thus even `enabled` does not remove content in this phase, invalid overrides
+  are rejected by the explicit resolver rather than the CLI conversion run,
+  and manifests do not claim an applied policy. Those integrations belong to
+  Phase 2; operator configuration belongs to Phase 3.
+
+Passed in the dedicated Phase 1 worktree (each exit 0):
+
+- `cargo test -p dms-core --test conversion_policy --test conversion --test lifecycle --test workspace --test policies --locked`
+- `cargo test -p dms-cli --test cli --locked`
+- `cargo fmt --all -- --check`
+- `cargo clippy --workspace --all-targets --locked -- -D warnings`
+- `cargo test --workspace --locked`
+- `git diff --check`
+
+DOX: core and CLI owning contracts describe policy ownership, schema compatibility
+and the explicit resolution-only boundary; the active index matches this record.
+Parent contracts and child indexes stay unchanged because ownership boundaries did
+not move. CAP-0022 stays unchanged: this is policy infrastructure, not an available
+TODO-filtering outcome or configuration command. Phase 4 remains responsible for
+the completed capability contract and integration evidence.
+
+Limitations: Rust evidence is synthetic/Linux, not installed-Word fidelity. Older
+binaries cannot open schema 22. No commit, integration, push or deployment is
+part of this worktree result. Phases 2–4 remain pending by operator scope.
 
 ## Phase 2 — Project enabled TODO entries through standalone conversion
 

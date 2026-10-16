@@ -37,7 +37,7 @@ pub use policies::*;
 pub use source_history::*;
 pub use template::*;
 
-pub const SCHEMA_VERSION: u32 = 21;
+pub const SCHEMA_VERSION: u32 = 22;
 pub const METADATA_DIRECTORY: &str = ".dms";
 pub const METADATA_FILENAME: &str = "workspace.json";
 const AGENT_INSTRUCTIONS_FILENAME: &str = "AGENTS.md";
@@ -341,6 +341,8 @@ pub struct Workspace {
     #[serde(default)]
     pub(crate) markdown_template: Option<MarkdownTemplateAsset>,
     #[serde(default)]
+    pub(crate) conversion_policy: ConversionPolicy,
+    #[serde(default)]
     agent_instructions: Option<AgentInstructions>,
 }
 
@@ -485,6 +487,7 @@ impl Workspace {
             workspace_events: Vec::new(),
             lock_stale_after_hours: default_lock_stale_after_hours(),
             markdown_template: None,
+            conversion_policy: ConversionPolicy::default(),
             agent_instructions: None,
         };
         workspace.synchronize_agent_instructions()?;
@@ -512,7 +515,7 @@ impl Workspace {
             .and_then(serde_json::Value::as_u64)
             .and_then(|version| u32::try_from(version).ok())
             .unwrap_or_default();
-        let migrated = matches!(found, 1..=20);
+        let migrated = matches!(found, 1..=21);
         if found == 1 {
             migrate_v1_catalogues(&mut value)?;
         }
@@ -544,6 +547,11 @@ impl Workspace {
             migrate_v20_agent_instructions(&mut value);
         }
         if migrated {
+            value
+                .as_object_mut()
+                .expect("versioned workspace is an object")
+                .entry("conversion_policy")
+                .or_insert_with(|| serde_json::json!({"todo_projection": "disabled"}));
             value["schema_version"] = serde_json::Value::from(SCHEMA_VERSION);
         } else if found != SCHEMA_VERSION {
             return Err(DmsError::UnsupportedSchema {

@@ -879,8 +879,8 @@ fn cli_convert_markdown_recursion_is_explicit_and_excludes_metadata_and_assets()
 }
 
 #[test]
-fn cli_convert_markdown_accepts_schema_18_19_and_current_and_ignores_unrelated_data() {
-    for schema_version in [18_u32, 19, 21] {
+fn cli_convert_markdown_accepts_supported_schemas_and_ignores_unrelated_data() {
+    for schema_version in [18_u32, 19, 21, dms_core::SCHEMA_VERSION] {
         let layout = conversion_layout(schema_version);
         fs::write(layout.input.join("policy.md"), VALID_MARKDOWN).unwrap();
         let output = convert_markdown(&layout, &["--dry-run"]);
@@ -892,6 +892,103 @@ fn cli_convert_markdown_accepts_schema_18_19_and_current_and_ignores_unrelated_d
         let manifest: Value = serde_json::from_slice(&output.stdout).expect("manifest JSON");
         assert_eq!(manifest["configuration_schema"], schema_version);
         assert_eq!(manifest["results"].as_array().unwrap().len(), 1);
+    }
+}
+
+#[test]
+fn cli_todo_policy_resolution_uses_core_without_a_configuration_command() {
+    use dms_core::{ConversionOptions, ConversionPlan, TodoProjection};
+    for library in [None, Some("disabled"), Some("enabled")] {
+        let layout = conversion_layout(dms_core::SCHEMA_VERSION);
+        let mut config: Value = serde_json::from_slice(&fs::read(&layout.config).unwrap()).unwrap();
+        if let Some(setting) = library {
+            config["conversion_policy"] = serde_json::json!({"todo_projection": setting});
+        }
+        fs::write(&layout.config, serde_json::to_vec(&config).unwrap()).unwrap();
+        let source_path = layout.input.join("policy.md");
+        fs::write(&source_path, VALID_MARKDOWN).unwrap();
+        let before = fs::read(&layout.config).unwrap();
+        // Exercise the exact public plan used by the CLI, not a temporary
+        // command or an effective-policy manifest claim before projection exists.
+        let plan = ConversionPlan::prepare(&ConversionOptions {
+            workspace_config: layout.config.clone(),
+            input_root: layout.input.clone(),
+            output_root: layout.output.clone(),
+            recursive: false,
+            dry_run: true,
+            without_toc: false,
+        })
+        .unwrap();
+        for (extra, expected) in [
+            (
+                "",
+                if library == Some("enabled") {
+                    TodoProjection::Enabled
+                } else {
+                    TodoProjection::Disabled
+                },
+            ),
+            ("todo_projection: enabled\n", TodoProjection::Enabled),
+            ("todo_projection: disabled\n", TodoProjection::Disabled),
+        ] {
+            let source = VALID_MARKDOWN.replacen("title:", &format!("{extra}title:"), 1);
+            assert_eq!(plan.resolve_todo_projection(&source).unwrap(), expected);
+            fs::write(&source_path, &source).unwrap();
+            let output = convert_markdown(&layout, &["--dry-run"]);
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let manifest: Value = serde_json::from_slice(&output.stdout).unwrap();
+            assert_eq!(manifest["results"][0]["status"], "validated");
+            assert!(!String::from_utf8_lossy(&output.stdout).contains("todo_projection"));
+            assert_eq!(fs::read_to_string(&source_path).unwrap(), source);
+        }
+        for invalid in ["true", "Enabled", "null", "[]", "PRIVATE_INVALID"] {
+            let source = VALID_MARKDOWN.replacen(
+                "title:",
+                &format!("todo_projection: {invalid}\ntitle:"),
+                1,
+            );
+            let error = plan
+                .resolve_todo_projection(&source)
+                .unwrap_err()
+                .to_string();
+            assert!(!error.contains("PRIVATE_INVALID"));
+        }
+        assert_eq!(fs::read(&layout.config).unwrap(), before);
+        assert_eq!(
+            fs::read_dir(layout.config.parent().unwrap())
+                .unwrap()
+                .count(),
+            1
+        );
+        assert!(!layout.output.exists());
+    }
+}
+
+#[test]
+fn cli_todo_policy_rejects_invalid_library_values_without_writing_configuration() {
+    for invalid in [
+        serde_json::json!(true),
+        serde_json::json!("Enabled"),
+        serde_json::json!("PRIVATE_INVALID"),
+    ] {
+        let layout = conversion_layout(dms_core::SCHEMA_VERSION);
+        fs::write(layout.input.join("policy.md"), VALID_MARKDOWN).unwrap();
+        let mut config: Value = serde_json::from_slice(&fs::read(&layout.config).unwrap()).unwrap();
+        config["conversion_policy"] = serde_json::json!({"todo_projection": invalid});
+        let bytes = serde_json::to_vec(&config).unwrap();
+        fs::write(&layout.config, &bytes).unwrap();
+        let output = convert_markdown(&layout, &["--dry-run"]);
+        assert!(!output.status.success());
+        assert!(output.stdout.is_empty());
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(error.contains("invalid conversion configuration projection"));
+        assert!(!error.contains("PRIVATE_INVALID"));
+        assert_eq!(fs::read(&layout.config).unwrap(), bytes);
+        assert!(!layout.output.exists());
     }
 }
 

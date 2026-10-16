@@ -22,6 +22,48 @@ pub struct ConversionError(pub String);
 
 type Result<T> = std::result::Result<T, ConversionError>;
 
+/// Standalone conversion policy only; never release or document-control data.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TodoProjection {
+    #[default]
+    Disabled,
+    Enabled,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ConversionPolicy {
+    pub todo_projection: TodoProjection,
+}
+
+impl ConversionPolicy {
+    /// Resolve a source-owned override from strict conversion frontmatter.
+    /// Omission inherits this library policy. No source bytes are changed and
+    /// no content projection or export is performed.
+    pub fn resolve_todo_projection(&self, markdown: &str) -> Result<TodoProjection> {
+        let (fields, _) = parse_conversion_frontmatter(markdown)
+            .map_err(|_| error("invalid or missing flat conversion frontmatter"))?;
+        match fields.variables.get("todo_projection").map(String::as_str) {
+            None => Ok(self.todo_projection),
+            Some("enabled") => Ok(TodoProjection::Enabled),
+            Some("disabled") => Ok(TodoProjection::Disabled),
+            Some(_) => Err(error("todo_projection must be enabled or disabled")),
+        }
+    }
+}
+
+impl crate::Workspace {
+    pub fn conversion_policy(&self) -> ConversionPolicy {
+        self.conversion_policy
+    }
+
+    /// Change only the library conversion policy; persist with Workspace::save.
+    pub fn set_conversion_policy(&mut self, policy: ConversionPolicy) {
+        self.conversion_policy = policy;
+    }
+}
+
 /// The adapter fills controlled fields, updates and saves this DOCX, then exports
 /// that same document to PDF. It must not edit DOCX after PDF export.
 pub trait ConversionExporter {
@@ -53,6 +95,8 @@ struct ConfigurationProjection {
     publish_root: PathBuf,
     markdown_template: MarkdownTemplateAsset,
     confidentiality_types: BTreeMap<String, ConfidentialityType>,
+    #[serde(default)]
+    conversion_policy: ConversionPolicy,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -133,9 +177,9 @@ impl ConversionPlan {
         let bytes = read(&config_path)?;
         let config: ConfigurationProjection = serde_json::from_slice(&bytes)
             .map_err(|_| error("invalid conversion configuration projection"))?;
-        if ![18, 19, SCHEMA_VERSION].contains(&config.schema_version) {
+        if ![18, 19, 21, SCHEMA_VERSION].contains(&config.schema_version) {
             return Err(error(
-                "unsupported conversion configuration schema (expected 18, 19 or current)",
+                "unsupported conversion configuration schema (expected 18, 19, 21 or current)",
             ));
         }
         if !config.edit_root.is_absolute() || !config.publish_root.is_absolute() {
@@ -234,6 +278,14 @@ impl ConversionPlan {
 
     pub fn selected_paths(&self) -> Vec<PathBuf> {
         self.selected.clone()
+    }
+
+    /// Resolve against the captured read-only configuration, without running
+    /// conversion. Rendering and manifest reporting are separate operations.
+    pub fn resolve_todo_projection(&self, markdown: &str) -> Result<TodoProjection> {
+        self.config
+            .conversion_policy
+            .resolve_todo_projection(markdown)
     }
 
     pub fn run(&self, exporter: &mut impl ConversionExporter) -> Result<ConversionManifest> {

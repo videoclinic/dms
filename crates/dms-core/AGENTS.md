@@ -13,7 +13,7 @@ persistence.
 | `src/assistance.rs` | Optional Claude Desktop policy, released-PDF/source comparison payloads, and assistance evidence |
 | `src/audit.rs` | Filtered deterministic CSV/PDF audit reports, report-file integrity, and workspace report evidence |
 | `src/catalogues.rs` | Document-type catalogue primitives plus shared stable-ID and label validation |
-| `src/conversion.rs` | Read-only export-configuration projection, external batch discovery/metadata/path validation, sequential conversion port, retained-pair validation and manifest digests |
+| `src/conversion.rs` | Library conversion-policy API and source override resolution, read-only export-configuration projection, external batch discovery/metadata/path validation, sequential conversion port, retained-pair validation and manifest digests |
 | `src/integrity.rs` | Advisory workspace locks, backup-manifest validation, and confirmed root-safe restore |
 | `src/library.rs` | Folder/file discovery, membership, search, registration state, reassociation, and permalinks |
 | `src/lifecycle.rs` | Version candidates, Entra/notification/export ports, content conformance, review decisions, release commits, and hash-chained evidence |
@@ -127,7 +127,7 @@ persistence.
   not coalesce them. Cell/paragraph/run styling and inline emphasis/code/link text
   survive without modifying source or template.
 - Standalone conversion is separate from Workspace open/save and lifecycle
-  authority. It supports only schema 18, 19 and current read-only projections,
+  authority. It supports only schema 18, 19, 21 and current read-only projections,
   validates native configuration location and template identity, and never
   migrates, locks, authenticates, notifies or imports workflow data. Explicit
   config-file symlinks are rejected before canonicalization. Whitespace-only
@@ -139,6 +139,17 @@ persistence.
   bytes and writes the conversion-only manifest. Consumed Markdown/template and
   embedded asset bytes determine input hashes. Dry-run assembles temporarily
   without the host adapter or output-root writes.
+- `Workspace::conversion_policy` / `set_conversion_policy` own the typed library
+  setting; mutation changes memory only until `Workspace::save`. Missing policy
+  defaults to disabled; a present object requires exactly `todo_projection` with
+  `enabled` or `disabled`. `ConversionPolicy::resolve_todo_projection` and the
+  read-only `ConversionPlan` resolver use strict flat conversion frontmatter:
+  the exact source key overrides the library setting, omission inherits, and
+  invalid values fail without echoing source data. Quoted scalar values follow
+  the existing flat parser; case, aliases and booleans are not normalized.
+  The setting is not document control, candidate/release evidence or a controlled
+  frontmatter key. Resolution does not yet run during conversion rendering or
+  enter manifests; no lifecycle or Release assembler calls the resolver.
 - Standalone conversion alone aliases flat source `last_modified` to literal
   `{DATE}` during assembly. A template containing that token requires a real
   `YYYY-MM-DD` date per source, including dry-run; otherwise missing/invalid dates
@@ -271,10 +282,17 @@ persistence.
 - Schema v21 adds optional per-document Markdown initial versions. Its v20
   migration defaults the field to `None`, retaining existing first-target and
   release history behaviour.
+- Schema v22 adds `conversion_policy: {"todo_projection": "disabled"}` when
+  absent during migration, retaining the original versioned backup (including
+  `workspace.v21.json.bak`). Present invalid policies fail validation rather
+  than being replaced with defaults. Standalone configuration reads never migrate.
 
 ## Verification
 
 - `cargo test -p dms-core`
+- `cargo test -p dms-core --test conversion_policy --test conversion --test lifecycle --test workspace --test policies --locked`
+  checks policy persistence/migration, strict overrides, read-only configuration,
+  unchanged manifest metadata and the Release boundary with synthetic adapters.
 - `cargo test -p dms-core --test conversion` checks read-only configuration,
   metadata, paths, mixed results, retained pairs, consumed-byte digests and
   failure cleanup through synthetic exporter doubles, not installed Word.
