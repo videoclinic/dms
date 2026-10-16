@@ -29,10 +29,21 @@ desktop Release assembly.
 - A flat, source-owned per-file conversion override is explicit: `todo_projection:
   enabled` or `todo_projection: disabled`. It wins over the library-wide default.
   Omission inherits the library-wide setting; other values fail that source.
-- With projection enabled, a visible paragraph, heading, list item, code block, or
-  complete Markdown table row containing `TODO:` is omitted from conversion output.
-  Surviving ordered list items are renumbered without gaps. Marker matching is
-  case-insensitive; frontmatter is not a visible entry.
+- With projection enabled, a visible paragraph, heading, list item or code block
+  is omitted only when its first visible content is `TODO:` (case-insensitive).
+  For a list item, the marker follows the list marker; for example,
+  `- TODO: ...` and `4. TODO: ...` are eligible. `**TODO:**` is accepted for
+  existing sources, but `TODO:` is the canonical source form. Frontmatter is not
+  visible content. Surviving ordered list items are renumbered without gaps.
+- A `TODO:` marker following substantive visible text is an invalid mixed entry:
+  that source fails conversion with a precise diagnostic and no artifact pair is
+  emitted for it. The converter never silently removes the substantive text. An
+  author must split the content into a retained entry and a standalone TODO entry.
+- A Markdown table cell whose first visible content is `TODO:` is projected to one
+  non-breaking space in the DOCX/PDF cell. The row, its other cells and the table
+  grid remain intact. A cell containing substantive visible text before `TODO:`
+  is an invalid mixed cell and fails that source; a table row is never removed
+  merely because one cell is a TODO.
 - CLI output and the conversion manifest record the effective per-file projection
   policy without source bodies. The input SHA-256 continues to cover the unmodified
   source bytes.
@@ -48,7 +59,7 @@ desktop Release assembly.
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
 | 1 | Define persistent library policy and per-file override | done (gate passed; independent review found no findings; evidence below) | Focused core and CLI policy-resolution tests exit 0 for disabled default, explicit library settings, override precedence, and invalid values. |
-| 2 | Project enabled TODO entries through standalone conversion | pending | Conversion/domain and CLI tests exit 0 for entry kinds, table rows, compact ordered lists, manifests, unchanged source hashes, and unchanged Release assembly. |
+| 2 | Project enabled TODO entries through standalone conversion | pending | Conversion/domain and CLI tests exit 0 for entry kinds, table-cell whitespace projection, mixed-entry/cell rejection, compact ordered lists, manifests, unchanged source hashes, and unchanged Release assembly. |
 | 3 | Expose explicit headless configuration and operator evidence | pending | CLI integration tests exit 0 for reading/updating the library setting and structured effective-policy output. |
 | 4 | Integrate capability contract and full gates | pending | CAP-0022, DOX, record/index checks, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, verifier tests, link check, and `git diff --check` exit 0. |
 
@@ -125,12 +136,15 @@ artifacts while leaving all controlled/release inputs unchanged.
 
 1. Apply the resolved policy only during standalone CommonMark assembly.
 2. Preserve remaining paragraph, heading, table, image and list fidelity; compact
-   ordered list ordinals only after a projected item is removed.
-3. Add manifest effective-policy evidence and structural DOCX/PDF regressions.
+   ordered list ordinals only after a projected item is removed. Project eligible
+   table cells to non-breaking spaces and reject mixed entries/cells without
+   discarding their substantive content.
+3. Add manifest effective-policy evidence, invalid-mixed-entry diagnostics and
+   structural DOCX/PDF regressions.
 
 **Verification gate:** Conversion/domain and CLI tests exit 0 for entry kinds,
-table rows, compact ordered lists, manifests, unchanged source hashes, and
-unchanged Release assembly.
+table-cell whitespace projection, mixed-entry/cell rejection, compact ordered
+lists, manifests, unchanged source hashes, and unchanged Release assembly.
 
 ## Phase 3 — Expose explicit headless configuration and operator evidence
 
