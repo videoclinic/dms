@@ -321,13 +321,13 @@ $ErrorActionPreference = 'Stop'
 $retain = $env:DMS_OFFICE_RETAIN_DOCX -eq '1'
 $word = $null
 $document = $null
-$wordWasRunning = @(Get-Process -Name WINWORD -ErrorAction SilentlyContinue).Count -gt 0
+$wordPidsBefore = @(Get-Process -Name WINWORD -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
 $startedWord = $false
 try {
   $word = New-Object -ComObject Word.Application
-  $startedWord = -not $wordWasRunning
-  if ((-not $retain) -and $startedWord) { $word.Visible = $false }
-  if ((-not $retain) -and $startedWord) { $word.DisplayAlerts = 0 }
+  $startedWord = @(Get-Process -Name WINWORD -ErrorAction SilentlyContinue | Where-Object { $wordPidsBefore -notcontains $_.Id }).Count -gt 0
+  # Never mutate application-wide visibility or alerts: process observation
+  # cannot prove that this COM object is the newly observed Word process.
   $document = $word.Documents.Open($env:DMS_OFFICE_SOURCE, $false, (-not $retain))
   if ($retain -and $document.ReadOnly) { throw 'Retained DOCX opened read-only' }
   foreach ($tableOfContents in $document.TablesOfContents) {
@@ -351,8 +351,18 @@ try {
   $document.ExportAsFixedFormat($env:DMS_OFFICE_OUTPUT, 17)
   [Console]::Out.Write($word.Version)
 } finally {
-  if ($null -ne $document) { $document.Close($false) }
-  if ((-not $retain) -and $startedWord -and ($null -ne $word) -and ($word.Documents.Count -eq 0)) { $word.Quit() }
+  try {
+    if ($null -ne $document) { $saveChanges = 0; $document.Close([ref]$saveChanges) }
+  } finally {
+    # A Close failure must not skip the owned-instance cleanup. If the document
+    # count cannot be read, do not guess: keeping an instance is safer than
+    # quitting one that may have documents opened by the operator.
+    $documentCount = $null
+    if ($startedWord -and ($null -ne $word)) {
+      try { $documentCount = $word.Documents.Count } catch {}
+      if ($documentCount -eq 0) { $saveChanges = 0; $word.Quit([ref]$saveChanges) }
+    }
+  }
 }
 "#;
 
@@ -390,7 +400,7 @@ set sourceDocument to missing value
 set wasRunning to application "Microsoft Word" is running
 tell application "Microsoft Word"
   try
-    if not retainDocx then set visible to false
+    if (not retainDocx) and (not wasRunning) then set visible to false
     set openedDocument to open file name sourcePath
     if openedDocument is missing value then error "Word did not return the opened document"
     set openedName to full name of openedDocument as text
@@ -425,7 +435,9 @@ tell application "Microsoft Word"
     save as sourceDocument file name outputPath file format format PDF
     close sourceDocument saving no
     set sourceDocument to missing value
-    if (not retainDocx) and (not wasRunning) and (count of documents is 0) then quit
+    try
+      if (not wasRunning) and (count of documents is 0) then quit
+    end try
     return appVersion
   on error errorMessage number errorNumber
     if sourceDocument is not missing value then
@@ -434,7 +446,7 @@ tell application "Microsoft Word"
       end try
     end if
     try
-      if (not retainDocx) and (not wasRunning) and (count of documents is 0) then quit
+      if (not wasRunning) and (count of documents is 0) then quit
     end try
     error "Microsoft Word conversion failed" number errorNumber
   end try
@@ -875,34 +887,71 @@ mod tests {
     }
 
     #[test]
-    fn platform_review_windows_lifecycle_is_release_only_and_owned() {
+    fn windows_avoids_global_visibility_and_alert_mutation() {
         let script = WINDOWS_WORD_SCRIPT;
-        let running = script.find("$wordWasRunning = @(Get-Process -Name WINWORD -ErrorAction SilentlyContinue).Count -gt 0").unwrap();
+        let snapshot = script.find("$wordPidsBefore = @(Get-Process -Name WINWORD -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)").unwrap();
         let initialized = script.find("$startedWord = $false").unwrap();
         let created = script
             .find("$word = New-Object -ComObject Word.Application")
             .unwrap();
-        let owned = script.find("$startedWord = -not $wordWasRunning").unwrap();
-        let hide = "if ((-not $retain) -and $startedWord) { $word.Visible = $false }";
-        let quit = "if ((-not $retain) -and $startedWord -and ($null -ne $word) -and ($word.Documents.Count -eq 0)) { $word.Quit() }";
+        let observed = script
+            .find("$startedWord = @(Get-Process -Name WINWORD -ErrorAction SilentlyContinue | Where-Object { $wordPidsBefore -notcontains $_.Id }).Count -gt 0")
+            .unwrap();
         let opened = script.find("$document = $word.Documents.Open(").unwrap();
-        assert!(running < created && initialized < created && created < owned);
-        assert!(owned < script.find(hide).unwrap() && script.find(hide).unwrap() < opened);
-        let (_, cleanup) = script.split_once("} finally {").unwrap();
-        assert!(cleanup.find("$document.Close($false)").unwrap() < cleanup.find(quit).unwrap());
-        assert_eq!(script.matches("$word.Visible").count(), 1);
-        assert_eq!(script.matches("$word.Quit()").count(), 1);
-        let retained = script
-            .lines()
-            .filter(|line| ![hide, quit].contains(&line.trim()))
-            .collect::<Vec<_>>()
-            .join("\n");
-        assert!(!retained.contains("$word.Visible"));
-        assert!(!retained.contains("$word.Quit()"));
         assert!(
-            script.contains("if ((-not $retain) -and $startedWord) { $word.DisplayAlerts = 0 }")
+            snapshot < created && initialized < created && created < observed && observed < opened
         );
-        assert_eq!(script.matches("$word.DisplayAlerts").count(), 1);
+        assert!(
+            script.contains("cannot prove that this COM object is the newly observed Word process")
+        );
+        assert!(!script.contains("$word.Visible"));
+        assert!(!script.contains("$word.DisplayAlerts"));
+    }
+
+    #[test]
+    fn retained_cleanup_windows_finally_reaches_owned_quit_after_close_failure() {
+        let script = WINDOWS_WORD_SCRIPT;
+        let (operation, cleanup) = script.split_once("} finally {").unwrap();
+        assert!(operation.contains("$document = $null"));
+        assert!(operation.contains(
+            "$document = $word.Documents.Open($env:DMS_OFFICE_SOURCE, $false, (-not $retain))"
+        ));
+        assert!(operation.contains("$document.ExportAsFixedFormat("));
+        // Both Word lifecycle methods have a ByRef SaveChanges parameter. The
+        // nested finally means a close failure cannot skip the owned-instance
+        // cleanup, while an unreadable document count fails safe (no guessed quit).
+        assert_eq!(cleanup.trim(), concat!(
+            "try {\n",
+            "    if ($null -ne $document) { $saveChanges = 0; $document.Close([ref]$saveChanges) }\n",
+            "  } finally {\n",
+            "    # A Close failure must not skip the owned-instance cleanup. If the document\n",
+            "    # count cannot be read, do not guess: keeping an instance is safer than\n",
+            "    # quitting one that may have documents opened by the operator.\n",
+            "    $documentCount = $null\n",
+            "    if ($startedWord -and ($null -ne $word)) {\n",
+            "      try { $documentCount = $word.Documents.Count } catch {}\n",
+            "      if ($documentCount -eq 0) { $saveChanges = 0; $word.Quit([ref]$saveChanges) }\n",
+            "    }\n",
+            "  }\n",
+            "}"
+        ));
+        assert_eq!(script.matches(".Close(").count(), 1);
+        assert_eq!(script.matches(".Quit(").count(), 1);
+        assert_eq!(script.matches("$startedWord =").count(), 2);
+        assert!(!script.contains("ActiveDocument"));
+    }
+
+    #[test]
+    fn windows_owned_instance_cleanup_uses_bindable_byref_arguments() {
+        let script = WINDOWS_WORD_SCRIPT;
+        // Word's Close and Quit expose SaveChanges as a ByRef parameter. A literal
+        // value raises inside `finally`, so both calls use the bindable [ref] form.
+        assert!(!script.contains("$document.Close($false)"));
+        assert!(!script.contains("$word.Quit(0)"));
+        assert!(script.contains("$document.Close([ref]$saveChanges)"));
+        assert!(script.contains("$word.Quit([ref]$saveChanges)"));
+        assert_eq!(script.matches("$document.Close(").count(), 1);
+        assert_eq!(script.matches("$word.Quit(").count(), 1);
     }
 
     #[test]
@@ -921,51 +970,36 @@ mod tests {
         assert!(!preflight.contains("Visible"));
     }
 
-    // Remove only single-line lifecycle commands explicitly guarded by release
-    // mode. Any unguarded/retained-mode visibility change or quit remains visible
-    // to the retained-mode assertions below.
+    // Remove the release-only visibility command; cleanup applies to both modes.
     fn macos_retained_script() -> String {
         MACOS_WORD_SCRIPT
             .lines()
             .filter(|line| {
-                !matches!(line.trim(),
-                "if not retainDocx then set visible to false" |
-                "if (not retainDocx) and (not wasRunning) and (count of documents is 0) then quit"
-            )
+                !matches!(
+                    line.trim(),
+                    "if (not retainDocx) and (not wasRunning) then set visible to false"
+                )
             })
             .collect::<Vec<_>>()
             .join("\n")
     }
 
     #[test]
-    fn macos_script_preserves_release_lifecycle_without_changing_retained_sessions() {
+    fn macos_visibility_changes_are_release_only_and_owned() {
         let script = MACOS_WORD_SCRIPT;
         let running = script
             .find("set wasRunning to application \"Microsoft Word\" is running")
             .unwrap();
         let tell = script.find("tell application \"Microsoft Word\"").unwrap();
         let hide = script
-            .find("if not retainDocx then set visible to false")
+            .find("if (not retainDocx) and (not wasRunning) then set visible to false")
             .unwrap();
         let open = script.find("open file name sourcePath").unwrap();
         assert!(running < tell && tell < hide && hide < open);
         assert_eq!(script.matches("set visible").count(), 1);
-        assert_eq!(script.matches("quit").count(), 2);
-        let (success, error) = script
-            .split_once("on error errorMessage number errorNumber")
-            .unwrap();
-        let quit =
-            "if (not retainDocx) and (not wasRunning) and (count of documents is 0) then quit";
-        for branch in [success, error] {
-            assert!(
-                branch.find("close sourceDocument saving no").unwrap() < branch.find(quit).unwrap()
-            );
-        }
-        assert!(success.find(quit).unwrap() < success.find("return appVersion").unwrap());
-        assert!(error.contains(&format!("try\n      {quit}\n    end try")));
         let retained = macos_retained_script();
-        assert!(!retained.contains("quit"));
         assert!(!retained.contains("set visible"));
+        assert!(!script.contains("display alerts"));
         assert!(!script.contains("activate"));
         let (_, retained_updates) = script.split_once("    if retainDocx then\n").unwrap();
         let (retained_updates, release_tail) = retained_updates.split_once("    end if\n").unwrap();
@@ -973,6 +1007,56 @@ mod tests {
         assert!(!release_tail.contains("save sourceDocument"));
         assert!(release_tail
             .contains("save as sourceDocument file name outputPath file format format PDF"));
+    }
+
+    #[test]
+    fn retained_cleanup_macos_success_closes_before_quitting_empty_owned_word() {
+        let (success, _) = MACOS_WORD_SCRIPT
+            .split_once("on error errorMessage number errorNumber")
+            .unwrap();
+        let (_, cleanup) = success
+            .split_once("save as sourceDocument file name outputPath file format format PDF")
+            .unwrap();
+        assert_eq!(
+            cleanup.trim(),
+            concat!(
+                "close sourceDocument saving no\n",
+                "    set sourceDocument to missing value\n",
+                "    try\n",
+                "      if (not wasRunning) and (count of documents is 0) then quit\n",
+                "    end try\n",
+                "    return appVersion"
+            )
+        );
+        assert_eq!(success.matches("then quit").count(), 1);
+        assert!(success.contains(
+            "try\n      if (not wasRunning) and (count of documents is 0) then quit\n    end try"
+        ));
+        assert_eq!(MACOS_WORD_SCRIPT.matches("set wasRunning to").count(), 1);
+    }
+
+    #[test]
+    fn retained_cleanup_macos_error_closes_only_verified_document_then_quits_empty_owned_word() {
+        let (_, error) = MACOS_WORD_SCRIPT
+            .split_once("on error errorMessage number errorNumber")
+            .unwrap();
+        assert_eq!(
+            error.trim(),
+            concat!(
+                "if sourceDocument is not missing value then\n",
+                "      try\n",
+                "        close sourceDocument saving no\n",
+                "      end try\n",
+                "    end if\n",
+                "    try\n",
+                "      if (not wasRunning) and (count of documents is 0) then quit\n",
+                "    end try\n",
+                "    error \"Microsoft Word conversion failed\" number errorNumber\n",
+                "  end try\n",
+                "end tell"
+            )
+        );
+        assert_eq!(MACOS_WORD_SCRIPT.matches("quit").count(), 2);
     }
 
     #[test]
@@ -1000,9 +1084,8 @@ mod tests {
             assert!(update < paginate && paginate < save_at && save_at < export_at);
             assert!(!script[export_at..].contains(save));
         }
-        assert!(!macos_retained_script().contains("quit"));
         assert!(!macos_retained_script().contains("set visible"));
-        assert!(WINDOWS_WORD_SCRIPT.contains("$document.Close($false)"));
+        assert!(WINDOWS_WORD_SCRIPT.contains("$document.Close([ref]$saveChanges)"));
         assert!(!WINDOWS_WORD_SCRIPT.contains("AutomationSecurity"));
     }
 

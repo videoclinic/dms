@@ -26,20 +26,31 @@ by desktop release and standalone CLI conversion.
   overwrite operator files. Native errors are sanitized, not raw Office stderr.
 - Close only the document opened by the operation. Do not close unrelated Word
   documents, alter global security settings, or add a Linux/WSL fallback.
-- macOS converts Word's POSIX or HFS full-name text to an alias and binds the
-  `open` result only after it matches the supplied source; an unverified result
-  is never a save/close target. Bind immediately after comparison so subsequent
-  failures close that verified document without saving.
-- macOS temporary release hides Word and quits on success/error only if Word
-  was initially stopped and no documents remain. Retained conversion never
-  sets application visibility or quits Word. Installation preflight resolves
-  the application identifier without launching it.
-- Windows records whether Word was already running before COM activation;
-  only temporary release with a newly started Word may hide it or suppress
-  alerts, and may quit only after the opened document closes and none remain.
-  Retained conversion never hides or quits Word or changes application alerts.
-  Preflight checks COM registration without activation; licensing and actual
-  automation availability are checked by export, not this installation probe.
+- In both retained and temporary-release modes, success/error cleanup closes only
+  the operation's document without saving, then quits the observed owned instance
+  when no documents remain. Never quit an instance with documents remaining, and
+  never change retained conversion's Word visibility or application alerts. If
+  Windows cannot read the observed instance's document count, it fails safe by
+  leaving it running rather than guessing that an empty instance is owned.
+- On macOS, cleanup quits only when Word was initially stopped and no documents
+  remain; retained conversion never changes visibility. Temporary release hides
+  Word only when this operation started it. macOS converts Word's POSIX or HFS
+  full-name text to an alias and binds the `open` result only after it matches the
+  supplied source; an unverified result is never a save/close target. Bind
+  immediately after comparison so subsequent failures close that verified document
+  without saving.
+- Windows does not change application-wide visibility or alerts: its observed
+  process-ID difference cannot prove that the COM object is the new process.
+  It records Word process IDs before COM activation and uses the observed new
+  process only for empty-instance cleanup. A pre-existing operator session is
+  outside that snapshot. An unrelated Word process starting in the activation
+  window is bounded by the empty-document guard, not attributed with an
+  unprovable process-to-COM identity. Word's `Quit` takes `SaveChanges` by
+  reference, so owned cleanup passes `wdDoNotSaveChanges` as `[ref]$saveChanges`;
+  a literal argument throws inside `finally` and leaks the owned instance.
+  Failed COM activation grants no ownership. Preflight checks COM registration
+  without activation; licensing and actual automation availability are checked by
+  export, not this installation probe.
 
 ## Work Guidance
 
@@ -50,6 +61,10 @@ by desktop release and standalone CLI conversion.
 ## Verification
 
 - `cargo test -p dms-export`
+- `cargo test -p dms-export retained_cleanup_` checks static Windows finally and
+  macOS success/error cleanup, close-before-quit, ownership and empty-instance
+  guards. Script tests also protect retained visibility/alerts and no DOCX
+  resave after PDF export; they do not execute native Word.
 - `cargo test -p dms-desktop export::tests`
 - `cargo test --workspace`
 
