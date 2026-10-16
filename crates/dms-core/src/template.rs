@@ -402,6 +402,13 @@ struct PackageEntry {
     is_dir: bool,
 }
 
+#[derive(Clone, Debug)]
+struct OrderedListNumbering {
+    xml: String,
+    existed_in_template: bool,
+    num_ids: BTreeMap<usize, u32>,
+}
+
 impl Workspace {
     pub fn markdown_template(&self) -> Option<&MarkdownTemplateAsset> {
         self.markdown_template.as_ref()
@@ -697,8 +704,9 @@ fn assemble_markdown(
         variables.insert("{DATE}".to_owned(), date.clone());
     }
     let blocks = parse_markdown_blocks(body)?;
+    let ordered_list_numbering = ordered_list_numbering(&loaded, &blocks)?;
     let mut context = RenderContext::new(&loaded, assets)?;
-    let rendered = render_blocks(&blocks, &mut context)?;
+    let rendered = render_blocks(&blocks, &mut context, ordered_list_numbering.as_ref())?;
     let mut document_xml = String::with_capacity(loaded.document_xml.len() + rendered.len());
     document_xml.push_str(&loaded.document_xml[..loaded.prototype_start]);
     document_xml.push_str(&rendered);
@@ -749,6 +757,46 @@ fn assemble_markdown(
             &variables,
         ))
     };
+    let relationships = if let Some(_numbering) = &ordered_list_numbering {
+        let source = relationships
+            .as_deref()
+            .map(str::to_owned)
+            .unwrap_or_else(|| {
+                String::from_utf8(
+                    loaded
+                        .entries
+                        .iter()
+                        .find(|entry| entry.name == "word/_rels/document.xml.rels")
+                        .expect("required part checked")
+                        .bytes
+                        .clone(),
+                )
+                .expect("validated template relationship XML is UTF-8")
+            });
+        Some(relationships_with_numbering(&source)?)
+    } else {
+        relationships
+    };
+    let content_types = if ordered_list_numbering.is_some() {
+        let source = content_types
+            .as_deref()
+            .map(str::to_owned)
+            .unwrap_or_else(|| {
+                String::from_utf8(
+                    loaded
+                        .entries
+                        .iter()
+                        .find(|entry| entry.name == "[Content_Types].xml")
+                        .expect("required part checked")
+                        .bytes
+                        .clone(),
+                )
+                .expect("validated template content-types XML is UTF-8")
+            });
+        Some(content_types_with_numbering(&source)?)
+    } else {
+        content_types
+    };
 
     let output = fs::File::create(destination).map_err(|source| DmsError::Io {
         path: destination.to_path_buf(),
@@ -767,6 +815,9 @@ fn assemble_markdown(
             "word/document.xml" => Some(document_xml.clone()),
             "word/_rels/document.xml.rels" => relationships.clone(),
             "[Content_Types].xml" => content_types.clone(),
+            "word/numbering.xml" => ordered_list_numbering
+                .as_ref()
+                .map(|numbering| numbering.xml.clone()),
             _ => None,
         };
         writer
@@ -796,6 +847,19 @@ fn assemble_markdown(
         } else {
             writer
                 .write_all(&entry.bytes)
+                .map_err(|source| DmsError::Io {
+                    path: destination.to_path_buf(),
+                    source,
+                })?;
+        }
+    }
+    if let Some(numbering) = &ordered_list_numbering {
+        if !numbering.existed_in_template {
+            writer
+                .start_file("word/numbering.xml", SimpleFileOptions::default())
+                .map_err(|error| DmsError::InvalidDocx(error.to_string()))?;
+            writer
+                .write_all(numbering.xml.as_bytes())
                 .map_err(|source| DmsError::Io {
                     path: destination.to_path_buf(),
                     source,
@@ -1568,6 +1632,157 @@ fn content_types_with_media(content_types: &str, formats: &[ImageFormat]) -> Res
     ))
 }
 
+fn ordered_list_numbering(
+    template: &LoadedTemplate,
+    blocks: &[Block],
+) -> Result<Option<OrderedListNumbering>> {
+    let mut starts = BTreeMap::new();
+    for block in blocks {
+        if let Block::ListItem {
+            ordered: true,
+            list_id,
+            number,
+            ..
+        } = block
+        {
+            starts.entry(*list_id).or_insert(*number);
+        }
+    }
+    if starts.is_empty() {
+        return Ok(None);
+    }
+
+    let existing = template
+        .entries
+        .iter()
+        .find(|entry| entry.name == "word/numbering.xml");
+    let source = existing
+        .map(|entry| {
+            String::from_utf8(entry.bytes.clone()).map_err(|error| {
+                DmsError::InvalidMarkdownTemplate(format!(
+                    "word/numbering.xml is not UTF-8: {error}"
+                ))
+            })
+        })
+        .transpose()?;
+    let (mut abstract_id, mut num_id) = source
+        .as_deref()
+        .map(|xml| {
+            (
+                max_numbering_attribute(xml, "abstractNumId"),
+                max_numbering_attribute(xml, "numId"),
+            )
+        })
+        .unwrap_or((0, 0));
+    abstract_id = abstract_id.checked_add(1).ok_or_else(|| {
+        DmsError::InvalidMarkdownTemplate("no unused Word abstract numbering IDs remain".to_owned())
+    })?;
+
+    let namespace = WORDPROCESSINGML_MAIN_NAMESPACE;
+    let mut num_ids = BTreeMap::new();
+    let mut definitions = format!(
+        concat!(
+            "<w:abstractNum xmlns:w=\"{namespace}\" w:abstractNumId=\"{abstract_id}\">",
+            "<w:multiLevelType w:val=\"singleLevel\"/><w:lvl w:ilvl=\"0\">",
+            "<w:start w:val=\"1\"/><w:numFmt w:val=\"decimal\"/>",
+            "<w:lvlText w:val=\"%1.\"/><w:lvlJc w:val=\"left\"/>",
+            "<w:pPr><w:tabs><w:tab w:val=\"num\" w:pos=\"720\"/></w:tabs>",
+            "<w:ind w:left=\"720\" w:hanging=\"360\"/></w:pPr>",
+            "</w:lvl></w:abstractNum>"
+        ),
+        namespace = namespace,
+        abstract_id = abstract_id
+    );
+    for (list_id, start) in starts {
+        num_id = num_id.checked_add(1).ok_or_else(|| {
+            DmsError::InvalidMarkdownTemplate("no unused Word numbering IDs remain".to_owned())
+        })?;
+        num_ids.insert(list_id, num_id);
+        definitions.push_str(&format!(
+            concat!(
+                "<w:num xmlns:w=\"{namespace}\" w:numId=\"{num_id}\">",
+                "<w:abstractNumId w:val=\"{abstract_id}\"/>",
+                "<w:lvlOverride w:ilvl=\"0\"><w:startOverride w:val=\"{start}\"/>",
+                "</w:lvlOverride></w:num>"
+            ),
+            namespace = namespace,
+            num_id = num_id,
+            abstract_id = abstract_id,
+            start = start
+        ));
+    }
+    let xml = if let Some(source) = source {
+        let end = source.rfind("</").ok_or_else(|| {
+            DmsError::InvalidMarkdownTemplate(
+                "word/numbering.xml has no closing numbering element".to_owned(),
+            )
+        })?;
+        format!("{}{}{}", &source[..end], definitions, &source[end..])
+    } else {
+        format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><w:numbering xmlns:w=\"{namespace}\">{definitions}</w:numbering>"
+        )
+    };
+    Ok(Some(OrderedListNumbering {
+        xml,
+        existed_in_template: existing.is_some(),
+        num_ids,
+    }))
+}
+
+fn max_numbering_attribute(xml: &str, attribute: &str) -> u32 {
+    let needle = format!("{attribute}=\"");
+    xml.match_indices(&needle)
+        .filter_map(|(offset, _)| {
+            xml[offset + needle.len()..]
+                .chars()
+                .take_while(char::is_ascii_digit)
+                .collect::<String>()
+                .parse::<u32>()
+                .ok()
+        })
+        .max()
+        .unwrap_or(0)
+}
+
+fn relationships_with_numbering(relationships: &str) -> Result<String> {
+    if relationships.contains("relationships/numbering") {
+        return Ok(relationships.to_owned());
+    }
+    let id = max_relationship_id(relationships)
+        .checked_add(1)
+        .ok_or_else(|| {
+            DmsError::InvalidMarkdownTemplate("no unused relationship IDs remain".to_owned())
+        })?;
+    let end = relationships.rfind("</Relationships>").ok_or_else(|| {
+        DmsError::InvalidMarkdownTemplate(
+            "package part word/_rels/document.xml.rels has no closing Relationships element"
+                .to_owned(),
+        )
+    })?;
+    Ok(format!(
+        "{}<Relationship Id=\"rId{id}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering\" Target=\"numbering.xml\"/>{}",
+        &relationships[..end],
+        &relationships[end..]
+    ))
+}
+
+fn content_types_with_numbering(content_types: &str) -> Result<String> {
+    if content_types.contains("wordprocessingml.numbering+xml") {
+        return Ok(content_types.to_owned());
+    }
+    let end = content_types.rfind("</Types>").ok_or_else(|| {
+        DmsError::InvalidMarkdownTemplate(
+            "package part [Content_Types].xml has no closing Types element".to_owned(),
+        )
+    })?;
+    Ok(format!(
+        "{}<Override PartName=\"/word/numbering.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml\"/>{}",
+        &content_types[..end],
+        &content_types[end..]
+    ))
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct Inline {
     text: String,
@@ -1590,11 +1805,19 @@ enum Block {
     Paragraph(Vec<Inline>),
     ListItem {
         ordered: bool,
+        list_id: usize,
         number: u64,
         inlines: Vec<Inline>,
     },
     Code(Vec<Inline>),
     Table(Vec<Vec<Vec<Inline>>>),
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ListState {
+    ordered: bool,
+    next_number: u64,
+    id: usize,
 }
 
 fn parse_markdown_blocks(markdown: &str) -> Result<Vec<Block>> {
@@ -1605,8 +1828,8 @@ fn parse_markdown_blocks(markdown: &str) -> Result<Vec<Block>> {
     let mut italic_depth = 0usize;
     let mut code_block = false;
     let mut link_stack = Vec::new();
-    let mut list_stack = Vec::new();
-    let mut list_number = 0u64;
+    let mut list_stack = Vec::<ListState>::new();
+    let mut next_list_id = 0usize;
     let mut table = None::<Vec<Vec<Vec<Inline>>>>;
     let mut row = None::<Vec<Vec<Inline>>>;
     let mut cell = None::<Vec<Inline>>;
@@ -1687,26 +1910,35 @@ fn parse_markdown_blocks(markdown: &str) -> Result<Vec<Block>> {
                 finish_block(&mut blocks, &mut block_kind, &mut current);
             }
             Event::Start(Tag::List(start)) => {
-                list_stack.push(start);
-                list_number = start.unwrap_or(1);
+                list_stack.push(ListState {
+                    ordered: start.is_some(),
+                    next_number: start.unwrap_or(1),
+                    id: next_list_id,
+                });
+                next_list_id += 1;
             }
             Event::End(TagEnd::List(_)) => {
                 list_stack.pop();
             }
             Event::Start(Tag::Item) => {
+                let list = list_stack.last().expect("list item has a containing list");
                 start_block(
                     &mut blocks,
                     &mut block_kind,
                     &mut current,
                     BlockKind::ListItem {
-                        ordered: list_stack.last().is_some_and(Option::is_some),
-                        number: list_number,
+                        ordered: list.ordered,
+                        list_id: list.id,
+                        number: list.next_number,
                     },
                 );
             }
             Event::End(TagEnd::Item) => {
                 finish_block(&mut blocks, &mut block_kind, &mut current);
-                list_number += 1;
+                list_stack
+                    .last_mut()
+                    .expect("list item has a containing list")
+                    .next_number += 1;
             }
             Event::Start(Tag::Table(_)) => {
                 flush_paragraph(&mut blocks, &mut block_kind, &mut current);
@@ -1892,7 +2124,11 @@ fn collect_image_alt_text<'a>(events: &mut impl Iterator<Item = Event<'a>>) -> R
 enum BlockKind {
     Heading(u8),
     Paragraph,
-    ListItem { ordered: bool, number: u64 },
+    ListItem {
+        ordered: bool,
+        list_id: usize,
+        number: u64,
+    },
     Code,
 }
 
@@ -1904,8 +2140,13 @@ fn finish_block(blocks: &mut Vec<Block>, kind: &mut Option<BlockKind>, inlines: 
     blocks.push(match kind {
         BlockKind::Heading(level) => Block::Heading(level, inlines),
         BlockKind::Paragraph => Block::Paragraph(inlines),
-        BlockKind::ListItem { ordered, number } => Block::ListItem {
+        BlockKind::ListItem {
             ordered,
+            list_id,
+            number,
+        } => Block::ListItem {
+            ordered,
+            list_id,
             number,
             inlines,
         },
@@ -1962,9 +2203,13 @@ fn heading_number(level: HeadingLevel) -> u8 {
     }
 }
 
-fn render_blocks(blocks: &[Block], context: &mut RenderContext<'_>) -> Result<String> {
+fn render_blocks(
+    blocks: &[Block],
+    context: &mut RenderContext<'_>,
+    ordered_list_numbering: Option<&OrderedListNumbering>,
+) -> Result<String> {
     let mut output = String::new();
-    for block in blocks {
+    for (index, block) in blocks.iter().enumerate() {
         let template = context.template;
         match block {
             Block::Heading(level, inlines) => {
@@ -1985,20 +2230,24 @@ fn render_blocks(blocks: &[Block], context: &mut RenderContext<'_>) -> Result<St
             }
             Block::ListItem {
                 ordered,
-                number,
+                list_id,
                 inlines,
+                ..
             } => {
                 let prototype = template
                     .paragraphs
-                    .get("list")
-                    .expect("validated list")
+                    .get(if *ordered { "paragraph" } else { "list" })
+                    .expect("validated list/paragraph prototype")
                     .clone();
-                output.push_str(&render_paragraph(
-                    &prototype,
-                    inlines,
-                    ordered.then(|| format!("{number}. ")).as_deref(),
-                    context,
-                )?)
+                let prototype = if *ordered {
+                    let num_id = ordered_list_numbering
+                        .and_then(|numbering| numbering.num_ids.get(list_id))
+                        .expect("ordered list has generated Word numbering");
+                    paragraph_with_numbering(&prototype, *num_id)?
+                } else {
+                    prototype
+                };
+                output.push_str(&render_paragraph(&prototype, inlines, None, context)?)
             }
             Block::Code(inlines) => {
                 let mut inlines = inlines.clone();
@@ -2012,10 +2261,55 @@ fn render_blocks(blocks: &[Block], context: &mut RenderContext<'_>) -> Result<St
                     .clone();
                 output.push_str(&render_paragraph(&prototype, &inlines, None, context)?);
             }
-            Block::Table(rows) => output.push_str(&render_table(rows, context)?),
+            Block::Table(rows) => {
+                output.push_str(&render_table(rows, context)?);
+                if matches!(blocks.get(index + 1), Some(Block::Table(_))) {
+                    let prototype = template
+                        .paragraphs
+                        .get("paragraph")
+                        .expect("validated paragraph")
+                        .clone();
+                    output.push_str(&render_paragraph(&prototype, &[], None, context)?);
+                }
+            }
         }
     }
     Ok(output)
+}
+
+fn paragraph_with_numbering(prototype: &str, num_id: u32) -> Result<String> {
+    let opening_end = prototype.find('>').ok_or_else(|| {
+        DmsError::InvalidMarkdownTemplate("paragraph prototype has no opening tag".to_owned())
+    })? + 1;
+    let closing = prototype.rfind("</w:p>").ok_or_else(|| {
+        DmsError::InvalidMarkdownTemplate("paragraph prototype has no closing tag".to_owned())
+    })?;
+    let numbering =
+        format!("<w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"{num_id}\"/></w:numPr>");
+    if let Some(properties_start) = prototype[opening_end..closing].find("<w:pPr") {
+        let properties_start = opening_end + properties_start;
+        let properties_end = prototype[properties_start..closing]
+            .find('>')
+            .ok_or_else(|| {
+                DmsError::InvalidMarkdownTemplate(
+                    "paragraph prototype has an incomplete property element".to_owned(),
+                )
+            })?
+            + properties_start
+            + 1;
+        return Ok(format!(
+            "{}{}{}",
+            &prototype[..properties_end],
+            numbering,
+            &prototype[properties_end..]
+        ));
+    }
+    Ok(format!(
+        "{}<w:pPr>{}</w:pPr>{}",
+        &prototype[..opening_end],
+        numbering,
+        &prototype[opening_end..]
+    ))
 }
 
 fn render_paragraph(

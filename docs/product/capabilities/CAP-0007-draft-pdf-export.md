@@ -15,7 +15,9 @@ The shared Markdown assembler supports two-, three-, four- and five-column
 policy tables, including German version histories, long text, empty cells,
 escaped punctuation and Unicode. It retains cell order, paragraph/cell styling
 and template run properties while rendering inline emphasis and code. Multiple
-tables remain separate and preserve their cell text.
+tables remain separate and preserve their cell text. Ordered Markdown lists use
+native decimal Word numbering, keep source start values and restart independently;
+unordered lists retain the template's bullet prototype.
 
 The template still requires exactly two prototype cells and no new markers.
 All column counts clone the
@@ -62,7 +64,9 @@ Evidence: `assembler_preserves_two_three_four_and_five_column_table_fidelity`,
 `assembler_deduplicates_jpeg_content_types_and_rejects_template_conflicts`,
 `assembler_avoids_template_media_relationship_and_drawing_id_collisions`,
 `assembler_avoids_drawing_ids_in_preserved_package_parts`,
-`assembler_keeps_image_alt_inline_events_out_of_body_runs` and
+`assembler_keeps_image_alt_inline_events_out_of_body_runs`,
+`assembler_renders_supported_markdown_and_preserves_non_body_package_parts`,
+`assembler_renders_authentication_delivery_steps_as_one_native_decimal_list` and
 `assembler_preserves_other_markdown_constructs_without_losing_content` in the
 [core template tests](../../../crates/dms-core/tests/markdown_template.rs).
 This is OOXML assembly evidence, not full-corpus Word/PDF layout verification.

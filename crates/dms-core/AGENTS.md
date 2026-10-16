@@ -107,12 +107,18 @@ persistence.
   frontmatter from the body and fills optional non-reserved `{KEY}` tokens from
   additional flat frontmatter scalars; reserved controlled tokens remain for
   export chrome.
+- Markdown headings use native template numbering. Unordered Markdown uses the
+  template list prototype; ordered Markdown uses generated native decimal Word
+  numbering with a distinct numbering instance per source list, so it preserves
+  source start values and never inherits bullet formatting.
 - Markdown table assembly retains the two-cell template contract. Every
   column count uses equal fixed grid/cell widths from
   the body section's page width minus left/right margins and gutter; absent or
   invalid page dimensions fail explicitly. The first column uses the first-cell
-  prototype; all later columns use the second. Cell/paragraph/run styling and
-  inline emphasis/code/link text survive without modifying source or template.
+  prototype; all later columns use the second. Consecutive Markdown tables receive
+  one empty template paragraph between their OOXML tables so Word save/export does
+  not coalesce them. Cell/paragraph/run styling and inline emphasis/code/link text
+  survive without modifying source or template.
 - Standalone conversion is separate from Workspace open/save and lifecycle
   authority. It supports only schema 18, 19 and current read-only projections,
   validates native configuration location and template identity, and never

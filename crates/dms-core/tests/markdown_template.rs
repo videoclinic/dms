@@ -314,8 +314,13 @@ Normal **bold** and *italic* text with [portal](https://example.test) and `inlin
 - first bullet
 - second bullet
 
-1. first number
-2. second number
+3. first number
+4. second number
+
+A separator between ordered lists.
+
+1. restarted number
+2. restarted again
 
 ```rust
 let value = 1;
@@ -334,18 +339,26 @@ let value = 1;
 
     let template_parts = zip_entries(&template);
     let output_parts = zip_entries(&first);
-    assert_eq!(
-        template_parts.keys().collect::<Vec<_>>(),
-        output_parts.keys().collect::<Vec<_>>()
-    );
+    let changed_parts = [
+        "[Content_Types].xml",
+        "word/document.xml",
+        "word/_rels/document.xml.rels",
+        "word/numbering.xml",
+    ];
     for (name, bytes) in &template_parts {
-        if name != "word/document.xml" {
+        if !changed_parts.contains(&name.as_str()) {
             assert_eq!(
                 output_parts.get(name),
                 Some(bytes),
                 "changed package part {name}"
             );
         }
+    }
+    for name in output_parts.keys() {
+        assert!(
+            template_parts.contains_key(name) || name == "word/numbering.xml",
+            "unexpected output package part {name}"
+        );
     }
 
     let document = String::from_utf8(output_parts["word/document.xml"].clone()).unwrap();
@@ -383,7 +396,7 @@ let value = 1;
         "Details",
         "Normal ",
         "first bullet",
-        "1. ",
+        "first number",
         "let value = 1;",
         "Alpha",
         "Beta",
@@ -401,6 +414,72 @@ let value = 1;
     ] {
         assert!(document.contains(markup), "missing OOXML {markup:?}");
     }
+    let ordered_start = document[..document.find("first number").unwrap()]
+        .rfind("<w:p>")
+        .unwrap();
+    let ordered_end =
+        ordered_start + document[ordered_start..].find("</w:p>").unwrap() + "</w:p>".len();
+    assert!(
+        document[ordered_start..ordered_end].contains("<w:numPr>"),
+        "ordered Markdown must use native Word numbering"
+    );
+    assert!(
+        !["1. ", "3. "]
+            .iter()
+            .any(|prefix| document[ordered_start..ordered_end].contains(prefix)),
+        "the native Word list owns the visible ordinal"
+    );
+    let numbering = std::str::from_utf8(&output_parts["word/numbering.xml"]).unwrap();
+    assert!(numbering.contains("<w:numFmt w:val=\"decimal\"/>"));
+    assert!(numbering.contains("<w:lvlText w:val=\"%1.\"/>"));
+    assert_eq!(numbering.matches("<w:num ").count(), 2);
+    assert!(numbering.contains("<w:startOverride w:val=\"3\"/>"));
+    assert!(numbering.contains("<w:startOverride w:val=\"1\"/>"));
+    let relationships = std::str::from_utf8(&output_parts["word/_rels/document.xml.rels"]).unwrap();
+    assert!(relationships.contains("relationships/numbering"));
+    let content_types = std::str::from_utf8(&output_parts["[Content_Types].xml"]).unwrap();
+    assert!(content_types.contains("wordprocessingml.numbering+xml"));
+}
+
+#[test]
+fn assembler_renders_authentication_delivery_steps_as_one_native_decimal_list() {
+    let temp = tempfile::tempdir().unwrap();
+    let template = temp.path().join("template.docx");
+    let output = temp.path().join("authentication-delivery.docx");
+    fs::write(&template, FIXTURE).unwrap();
+    let markdown = r#"---
+title: Verwaltung von Authentisierungsinformationen
+version: 3.0
+confidentiality: internal
+---
+
+1. Initiale, zurückgesetzte oder temporäre Geheimnisse werden über einen geschützten und für die empfangende Person authentisierten Kanal übermittelt. Unverschlüsselte Klartext-E-Mail ist untersagt.
+2. Als Übermittlungsarten kommen, soweit sie für den jeweiligen Fall freigegeben und geeignet sind, persönliche Übergabe, ein verschlüsselter Einmal-Link, ein Out-of-Band-Kanal oder eine telefonische Mitteilung nach Identitätsprüfung in Betracht.
+3. Der Empfang ist zu bestätigen, etwa durch eine Rückmeldung im Vorgang oder einen erfolgreichen ersten Anmeldevorgang.
+4. Temporäre Kennwörter sind bei der ersten Anmeldung zu ändern. Das eingesetzte System soll dies technisch erzwingen, soweit es dies unterstützt.
+5. TODO: Freigegebene Übermittlungskanäle, die Form der Empfangsbestätigung und das Vorgehen bei nicht erzwingbarer Erstanmeldungsänderung sind festzulegen.
+"#;
+
+    assemble_markdown_docx(&template, markdown, &output, None).unwrap();
+
+    let entries = zip_entries(&output);
+    let document = std::str::from_utf8(&entries["word/document.xml"]).unwrap();
+    for phrase in [
+        "Initiale, zurückgesetzte oder temporäre Geheimnisse",
+        "Als Übermittlungsarten kommen",
+        "Der Empfang ist zu bestätigen",
+        "Temporäre Kennwörter sind bei der ersten Anmeldung zu ändern",
+        "TODO: Freigegebene Übermittlungskanäle",
+    ] {
+        let start = document[..document.find(phrase).unwrap()]
+            .rfind("<w:p>")
+            .unwrap();
+        let end = start + document[start..].find("</w:p>").unwrap() + "</w:p>".len();
+        assert!(document[start..end].contains("<w:numPr>"), "{phrase}");
+    }
+    let numbering = std::str::from_utf8(&entries["word/numbering.xml"]).unwrap();
+    assert_eq!(numbering.matches("<w:num ").count(), 1);
+    assert!(numbering.contains("<w:startOverride w:val=\"1\"/>"));
 }
 
 #[test]
@@ -643,6 +722,27 @@ fn assembler_preserves_two_three_four_and_five_column_table_fidelity() {
             }
         }
     }
+}
+
+#[test]
+fn assembler_separates_consecutive_tables_for_word_save() {
+    let temp = tempfile::tempdir().unwrap();
+    let template = temp.path().join("template.docx");
+    fs::write(&template, FIXTURE).unwrap();
+    let source = "---\ntitle: Tables\nversion: 1.0\nconfidentiality: internal\n---\n\n| A | B | C |\n| --- | --- | --- |\n| one | two | three |\n\n| D | E | F |\n| --- | --- | --- |\n| four | five | six |\n";
+    let output = temp.path().join("tables.docx");
+
+    assemble_markdown_docx(&template, source, &output, None).unwrap();
+
+    let entries = zip_entries(&output);
+    let document = std::str::from_utf8(&entries["word/document.xml"]).unwrap();
+    let first_end = document.find("</w:tbl>").unwrap() + "</w:tbl>".len();
+    let second_start = first_end + document[first_end..].find("<w:tbl").unwrap();
+    assert_eq!(xml_elements(document, "w:tbl").len(), 2);
+    assert!(
+        document[first_end..second_start].contains("<w:p"),
+        "Word coalesces adjacent tables without a paragraph separator"
+    );
 }
 
 #[test]
