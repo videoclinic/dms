@@ -59,7 +59,7 @@ desktop Release assembly.
 | # | Phase | Status | Verification gate |
 | --- | --- | --- | --- |
 | 1 | Define persistent library policy and per-file override | done (gate passed; independent review found no findings; evidence below) | Focused core and CLI policy-resolution tests exit 0 for disabled default, explicit library settings, override precedence, and invalid values. |
-| 2 | Project enabled TODO entries through standalone conversion | done (core conversion/markdown-template/lifecycle, CLI and clippy gates passed; final autonomous review: no findings) | Conversion/domain and CLI tests exit 0 for entry kinds, table-cell whitespace projection, mixed-entry/cell rejection, compact ordered lists, manifests, unchanged source hashes, and unchanged Release assembly. |
+| 2 | Project enabled TODO entries through standalone conversion | done (132 core and 25 CLI tests, scoped clippy, fmt and diff gates passed; fresh independent review: no findings; evidence below) | Conversion/domain and CLI tests exit 0 for entry kinds, table-cell whitespace projection, mixed-entry/cell rejection, compact ordered lists, manifests, unchanged source hashes, and unchanged Release assembly. |
 | 3 | Expose explicit headless configuration and operator evidence | pending | CLI integration tests exit 0 for reading/updating the library setting and structured effective-policy output. |
 | 4 | Integrate capability contract and full gates | pending | CAP-0022, DOX, record/index checks, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, verifier tests, link check, and `git diff --check` exit 0. |
 
@@ -114,11 +114,12 @@ Passed in the dedicated Phase 1 worktree (each exit 0):
 - `cargo test --workspace --locked`
 - `git diff --check`
 
-DOX: core and CLI owning contracts describe policy ownership, schema compatibility
-and the explicit resolution-only boundary; the active index matches this record.
+Phase 1 DOX covered policy ownership, schema compatibility and resolution only;
+Phase 2 owning contracts cover rendering and result reporting. The active index
+matches this record.
 Parent contracts and child indexes stay unchanged because ownership boundaries did
-not move. CAP-0022 stays unchanged: this is policy infrastructure, not an available
-TODO-filtering outcome or configuration command. Phase 4 remains responsible for
+not move. Phase 1 left CAP-0022 unchanged because policy infrastructure alone
+provided no filtering outcome or configuration command. Phase 4 remains responsible for
 the completed capability contract and integration evidence.
 
 Independent autonomous review of the frozen Phase 1 diff reported no findings.
@@ -146,11 +147,13 @@ lists, manifests, unchanged source hashes, and unchanged Release assembly.
 
 ### Phase 2 evidence and review boundary
 
-Implementation is confined to worktree `dms-chg-0055-phase-2`, branch
-`agent/chg-0055-phase-2`, rebased onto local `main` without conflicts using
-`git rebase --autostash main` (exit 0). The implementation gate passed and the
-final autonomous review of the corrected frozen diff reported no findings.
-Phases 3/4 remain pending. No push or deployment occurred.
+Phase 2 implementation and corrections passed the gate and fresh independent
+review in worktree `dms-chg-0055-phase-2`, branch `agent/chg-0055-phase-2`, on
+candidate `0c2fcf7`. The operator authorized `phased-plan-closeout --commit-ff`
+for the reviewed boundary: commit the corrections and this done transition,
+fast-forward `main`, rerun the phase gate, verify the target record and remove
+the clean dedicated worktree. Phases 3/4 remain pending. No push or deployment
+is authorized.
 
 - `ConversionPlan::convert_one` hashes the original bytes, resolves policy, and
   passes it only to `assemble_markdown_conversion_docx`. Enabled assembly projects
@@ -166,14 +169,16 @@ Phases 3/4 remain pending. No push or deployment occurred.
   to the item (including quoted continuations), while nested lists/table cells
   are independent entries. Removing a TODO item removes its descendants, not
   unmarked ancestors; removing a heading does not remove its following section.
-  Rendered link URLs and literal raw HTML count as visible text. Mixed diagnostics
+  Rendered link URLs, body metadata and literal raw HTML count as visible text.
+  Definition titles and tight definition bodies are visible entries; loose
+  definition paragraphs remain independent. Mixed diagnostics
   identify original entry-start line/column and kind without quoting source,
   including CRLF/Unicode inputs. Failure emits no pair and processing continues.
 - Each result records `todo_projection: enabled|disabled`, or null when unresolved;
   normal-mode stderr reports the policy beside the path. No body is added to
   receipts. Input hashes, sources, assets, template/configuration, existing lock
-  and publish tree are preserved. `sha2` is added only as a CLI test dependency,
-  reusing the locked workspace version; no runtime dependency/version changes.
+  and publish tree are preserved. The candidate's existing test-only `sha2`
+  dependency is retained; this reconciliation changes no manifest or lockfile.
 - Traced paths: CLI `run_convert` → `ConversionPlan::run`/`convert_one` → private
   conversion assembler → `InstalledWord::export` → retained save/PDF export.
   Release remains `Workspace::release_candidate` → `PdfExporter::export` →
@@ -181,59 +186,67 @@ Phases 3/4 remain pending. No push or deployment occurred.
   Release receives neither conversion policy nor resolver invocation. Tests cover
   enabled/invalid overrides, mixed TODO release text and an approved release.
 
-Candidate audit: the pre-existing implementation passed its original tests but
-missed mixed TODO text in raw HTML blocks rendered as literal paragraphs.
-The focused mixed-entry regression exited 101 for
-`<p>PRIVATE_KEEP TODO: PRIVATE_DROP</p>` before the fix. Projection now checks
-`Tag::HtmlBlock` as paragraph text; core and CLI regressions pass. The bounded
-read-only audit's other concerns are pinned by tests: quoted/loose continuations
-belong to their item, rendered URLs obey the literal mixed-marker rule, and an
-unmarked empty parent matches assembly of the explicitly retained source.
-Full DOCX package-part equality also covers nested lists/tables, formatted and
-entity/escaped markers, images, non-TODO raw HTML and code-fence metadata.
-This is not a claim of independent approval of the final frozen diff.
+Final-review corrections:
 
-Broader candidate verification before the bounded review correction (each command
-exit 0; not rerun in full for the correction):
+- Visible-text matching retains closed-inline event offsets. A full marker
+  immediately after bold, emphasis, strikethrough or inline code is a later marker,
+  not an identifier suffix. No separator is inserted inside split markers such as
+  `**TO**DO:`. Uninterrupted `NOTODO:`/`mytodo:` remain ordinary text, including
+  the existing Unicode/digit/underscore boundary cases.
+- Definition classification checks direct Paragraph children only. A nested
+  quote's paragraph cannot make a tight body loose. Tight-body mixed diagnostics
+  identify the definition entry start (line 8, column 1 in the synthetic fixture),
+  including a later marker inside the quote. Whole-package comparisons cover
+  leading-body removal with descendants, ordinary retained quote/body content,
+  loose paragraphs in both orders and disabled bypass.
+- Projection normalizes a retained definition title to balanced Paragraph events
+  only when no nonempty definition body remains. This preserves the term/following
+  paragraph boundary after removing tight bodies with quoted/list descendants or
+  all loose-body paragraphs, without changing the shared block renderer. Retained
+  tight/loose definitions, multiple bodies and sibling nested-list/quote paths
+  retain whole-package equality against explicitly retained-source assembly.
+- Core rejection cases exercise normal and dry-run conversion, exact original
+  SHA-256, source-free diagnostics, no artifact pair, protected-input snapshots and
+  continued batch processing. CLI cases cover adjacent bold/emphasis/code runs,
+  nested-quote definitions, disabled bypass and unchanged source/configuration.
+- Candidate package-part equality, synthetic PDF text transport, CRLF/Unicode
+  locations, compact native numbering, table NBSP/grid tests and approved-Release
+  isolation remain intact. The CLI test-only `sha2` dependency is unchanged.
 
-- `cargo fmt --all`
+Reproduced before correction (exit 101):
+
+- `cargo test -p dms-core --test conversion todo_projection_rejects_mixed_entries_and_cells_without_pairs_or_source_leaks --locked --offline`
+  rejected the test expectation because `**bold**TODO: PRIVATE_DROP` succeeded.
+  After the inline fix alone, the same command exposed the nested-quote tight
+  definition succeeding instead of failing at the definition-body start.
+- `cargo test -p dms-core --test conversion todo_projection_matches_renderer_visible_retained_source_without_widening_entries --locked --offline`
+  exposed the retained TODO definition and its quoted descendant.
+  Restoring the complete continuation fixture reproduced exit 101 with
+  `Kept termKept final` in one OOXML paragraph instead of two. The final regression
+  explicitly asserts the two retained paragraphs, no removed body/descendant, and
+  whole-package equality. A broad flush-on-removal attempt failed the existing
+  loose-definition equality check and was replaced by orphan-title normalization.
+
+Continuation correction gates passed on the current source/tests (each command exit 0):
+
 - `cargo test -p dms-core --test conversion_policy --test conversion --test markdown_template --test lifecycle --test smoke_contract --test workspace --test policies --locked --offline`
-  — 33 conversion, 6 conversion-policy, 30 template, 32 lifecycle, 4 smoke,
-  14 workspace and 11 policy tests passed.
-- `cargo test -p dms-cli --test cli --locked --offline` — 24 passed.
-- `cargo test -p dms-export --locked --offline` — 18 passed; 0 doc tests.
-- `cargo clippy -p dms-core -p dms-cli -p dms-export --all-targets --locked --offline -- -D warnings`
-- `cargo fmt --all -- --check`
-- `git diff --check`
-
-A batched verification wrapper timed out at 300 seconds (tool exit -1); the
-complete final command chain was rerun directly and returned exit 0.
-
-The confirmed frozen-review finding is corrected by treating
-`Tag::MetadataBlock(_)` and `Tag::DefinitionListTitle` as paragraph entries in the
-existing enabled projection. Body metadata blocks (both `---` and `+++`, after
-conversion frontmatter) and definition titles now receive leading removal and
-mixed-entry rejection before pair reservation. Core tests assert retained DOCX
-and synthetic PDF text, disabled/Release preservation, original source hashes,
-no failed pair/export call, and source-free diagnostics. CLI dry-run tests cover
-leading acceptance, mixed rejection, disabled acceptance and no output/source
-leak. The new core removal and CLI mixed regressions each exited 101 before the
-fix.
-
-Correction verification (each command exit 0):
-
-- `cargo test -p dms-core --test conversion --locked --offline` — 34 passed.
+  — 132 passed: conversion 35, conversion-policy 6, template 30, lifecycle 32,
+  smoke 4, workspace 14 and policies 11.
 - `cargo test -p dms-cli --test cli --locked --offline` — 25 passed.
+- `cargo clippy -p dms-core -p dms-cli --all-targets --locked --offline -- -D warnings`.
 - `cargo fmt --all -- --check` (after `cargo fmt --all`).
 - `git diff --check`.
 
-Build/test paths are worktree-local: `CARGO_TARGET_DIR="$PWD/target"` and
-`TMPDIR="$PWD/target/phase-2-tmp"`. The initial core run passed 33 tests but failed
-the existing case-collision test on case-insensitive DrvFS. Enabling case
-sensitivity only on `target/phase-2-tmp` with `fsutil.exe file
-setCaseSensitiveInfo` allowed the unchanged full conversion suite to pass.
-DOX recheck: existing paragraph/projection and CLI contracts remain sufficient;
-no owning-contract or child-index changes are needed for this correction.
+Record/index/CAP-reference assertions cover the Phase 2 done transition,
+Phases 3/4 pending, and the active index and CAP-0022 link. The reviewed
+implementation fingerprint remains unchanged; no manifest or lockfile correction
+is included against the candidate.
+Fresh independent review reported no findings (receipt below). Full-workspace clippy is
+unproven for this corrected candidate and reserved for Phase 4, not attempted in
+this continuation. The final foreground gate rerun explicitly exported worktree-local
+`CARGO_TARGET_DIR="$PWD/target"` and `TMPDIR="$PWD/target/phase-2-tmp"`; all commands
+completed successfully. An earlier successful background run used the harness's
+scratch TMPDIR instead; it is not the worktree-local temporary-path evidence.
 
 Evidence limits: structural DOCX assertions cover preserved grid, NBSP cells,
 native list instances, starts, continuations, formatting and retained images.
@@ -242,10 +255,53 @@ they prove projected/retained text transport, not installed-Word pagination,
 visual fidelity or tagged PDF table/list structure. Native Word/desktop execution
 and the full-workspace Phase 4 gates were not run.
 
-DOX: core/CLI owning contracts now describe applied projection, receipts and these
-verification limits. Root/parent contracts and child indexes remain unchanged:
-ownership/structure did not move. CAP-0022, operator reference and Phase 3 docs
-remain untouched by explicit scope; Phase 4 owns capability integration.
+### Phase 2 correction receipt — definition paragraph boundaries
+
+**State:** paragraph-boundary correction and all listed correction gates passed;
+fresh independent review approved with no findings. The full failing fixture is restored, not
+bounded after the quote. The shared renderer ignored definition-list tags and
+relied on the removed quote's Paragraph end to close the term. Conversion-only
+orphan-title normalization restores that boundary without modifying disabled
+conversion, Release, or the shared renderer.
+
+Whole-package regressions cover quoted/list descendants, a following paragraph
+or definition, ordinary retained tight definitions with nested blocks, multiple
+bodies, all-removed bodies, loose paragraphs in both orders, sibling nested list
+and quote removal, and disabled conversion against public Release assembly.
+Existing inline adjacency, split markers, identifier exclusions, direct-child
+definition classification, source-free diagnostics, exact SHA-256, CRLF/Unicode,
+no-pair, synthetic PDF, numbering, NBSP/grid and approved-Release tests all pass.
+
+Fresh independent read-only review (`deleg_fb8aad4d`, reviewer `sa-0-8e16e138`)
+covered the complete Phase 2 candidate against `727ac94`, including committed
+`0c2fcf7` and all uncommitted corrections, not only the continuation patch. The
+reviewer inspected projection/assembly, conversion wiring, CLI output, diagnostics,
+tests and owning contracts, and reported **No findings; approve for separate
+Phase 2 closeout**. Its independent rerun reported the two focused regressions,
+132 core tests, 25 CLI tests, scoped clippy, formatting and diff checks green.
+The executor's exact gate commands/results above are independently recorded;
+neither review nor synthetic tests establish native Word fidelity.
+
+Reviewed implementation diff SHA-256:
+`2b0ed65ee2220ca85faa454a8aea0fb3cf76da5daf0fc26467e2dc02b912191f`.
+Computed from `git diff --binary --no-ext-diff 727ac94 -- .
+':!docs/changes/active/CHG-0055-configurable-markdown-todo-projection.md'` and
+rechecked unchanged after review. The CHG was reviewed too, but excluded from
+this implementation fingerprint to permit this review receipt and progress-only
+updates; no source, tests, manifests or owning DOX changed after review.
+
+**Stop/handoff:** Phase 2 is done; Phases 3/4 stay pending. Closeout uses only
+the operator-authorized fast-forward route described above. Stop after target-ref
+verification and dedicated-worktree removal; do not begin Phase 3 or push/deploy.
+The recovery patch under `target/` is not implementation input or review evidence.
+
+DOX: the core owning contract states direct-child definition classification,
+closed-inline marker boundaries and orphan-title paragraph normalization.
+CLI reporting and diagnostic contracts already
+cover these regressions.
+Root/parent contracts, child indexes and the active CHG index remain unchanged:
+ownership/structure did not move. CAP-0022 and the operator reference remain
+assigned to Phase 4; no Phase 3 command or Phase 4 integration is included.
 
 ## Phase 3 — Expose explicit headless configuration and operator evidence
 

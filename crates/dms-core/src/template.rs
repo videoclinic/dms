@@ -1869,10 +1869,18 @@ fn project_todo_events<'a>(markdown: &str, body: &'a str) -> Result<Vec<Event<'a
         .into_offset_iter()
         .collect();
     let mut ends = vec![0; parsed.len()];
+    let mut direct_paragraph = vec![false; parsed.len()];
     let mut stack = Vec::new();
     for (index, (event, _)) in parsed.iter().enumerate() {
         match event {
-            Event::Start(_) => stack.push(index),
+            Event::Start(tag) => {
+                if matches!(tag, Tag::Paragraph) {
+                    if let Some(parent) = stack.last() {
+                        direct_paragraph[*parent] = true;
+                    }
+                }
+                stack.push(index);
+            }
             Event::End(_) => ends[stack.pop().expect("balanced CommonMark events")] = index,
             _ => {}
         }
@@ -1890,13 +1898,30 @@ fn project_todo_events<'a>(markdown: &str, body: &'a str) -> Result<Vec<Event<'a
             Event::Start(Tag::Item) => Some("list item"),
             Event::Start(Tag::CodeBlock(_)) => Some("code block"),
             Event::Start(Tag::TableCell) => Some("table cell"),
+            // Tight definitions elide their paragraph tags. Loose definitions
+            // retain direct paragraph children: nested block paragraphs do not
+            // make the containing definition loose.
+            Event::Start(Tag::DefinitionListDefinition) if !direct_paragraph[index] => {
+                Some("definition body")
+            }
             _ => None,
         };
         if let Some(kind) = kind {
-            let visible = todo_visible_text(&parsed, &ends, index + 1, ends[index]);
-            let visible = visible.trim_start().to_ascii_lowercase();
-            if let Some(marker) = visible.find("todo:") {
-                if marker != 0 {
+            let (visible, boundaries) = todo_visible_text(&parsed, &ends, index + 1, ends[index]);
+            let visible = visible.to_ascii_lowercase();
+            let marker = visible.match_indices("todo:").find_map(|(offset, _)| {
+                // Closed inline runs start a new boundary without breaking a
+                // marker split across formatting events, such as **TO**DO:.
+                (offset == 0
+                    || boundaries.binary_search(&offset).is_ok()
+                    || visible[..offset]
+                        .chars()
+                        .next_back()
+                        .is_some_and(|c| !c.is_alphanumeric() && c != '_'))
+                .then_some(offset)
+            });
+            if let Some(marker) = marker {
+                if !visible[..marker].trim().is_empty() {
                     let prefix = &markdown[..markdown.len() - body.len() + range.start];
                     return Err(DmsError::MixedTodoEntry {
                         kind,
@@ -1916,6 +1941,39 @@ fn project_todo_events<'a>(markdown: &str, body: &'a str) -> Result<Vec<Event<'a
         projected.push(event.clone());
         index += 1;
     }
+    // A title whose definitions were removed is now a retained paragraph.
+    // Keep ordinary tight/loose definitions on the unchanged renderer path.
+    let mut projected_ends = vec![0; projected.len()];
+    for (index, event) in projected.iter().enumerate() {
+        match event {
+            Event::Start(_) => stack.push(index),
+            Event::End(_) => {
+                projected_ends[stack.pop().expect("balanced projected events")] = index;
+            }
+            _ => {}
+        }
+    }
+    for index in 0..projected.len() {
+        if !matches!(projected[index], Event::Start(Tag::DefinitionListTitle)) {
+            continue;
+        }
+        let end = projected_ends[index];
+        let mut next = end + 1;
+        while matches!(
+            projected.get(next),
+            Some(Event::Start(Tag::DefinitionListDefinition))
+        ) && projected_ends[next] == next + 1
+        {
+            next = projected_ends[next] + 1;
+        }
+        if !matches!(
+            projected.get(next),
+            Some(Event::Start(Tag::DefinitionListDefinition))
+        ) {
+            projected[index] = Event::Start(Tag::Paragraph);
+            projected[end] = Event::End(TagEnd::Paragraph);
+        }
+    }
     Ok(projected)
 }
 
@@ -1927,8 +1985,9 @@ fn todo_visible_text(
     ends: &[usize],
     mut index: usize,
     end: usize,
-) -> String {
+) -> (String, Vec<usize>) {
     let mut text = String::new();
+    let mut boundaries = Vec::new();
     let mut links = Vec::new();
     while index < end {
         match &events[index].0 {
@@ -1937,10 +1996,13 @@ fn todo_visible_text(
                 index = ends[index] + 1;
                 continue;
             }
-            Event::Text(value)
-            | Event::Code(value)
-            | Event::Html(value)
-            | Event::InlineHtml(value) => text.push_str(value),
+            Event::Text(value) | Event::Html(value) | Event::InlineHtml(value) => {
+                text.push_str(value)
+            }
+            Event::Code(value) => {
+                text.push_str(value);
+                boundaries.push(text.len());
+            }
             Event::Start(Tag::Link { dest_url, .. }) => links.push(dest_url),
             Event::End(TagEnd::Link) => {
                 if let Some(url) = links.pop() {
@@ -1953,16 +2015,28 @@ fn todo_visible_text(
             Event::FootnoteReference(label) => text.push_str(&format!("[^{label}]")),
             Event::TaskListMarker(checked) => text.push_str(if *checked { "[x] " } else { "[ ] " }),
             Event::Rule => text.push('—'),
+            // A tight item's bare text can precede a block without an End
+            // Paragraph event. Keep that boundary from joining marker words.
+            Event::Start(
+                Tag::Paragraph
+                | Tag::Heading { .. }
+                | Tag::CodeBlock(_)
+                | Tag::HtmlBlock
+                | Tag::MetadataBlock(_)
+                | Tag::DefinitionListTitle
+                | Tag::DefinitionListDefinition,
+            ) => text.push('\n'),
             Event::SoftBreak
             | Event::HardBreak
             | Event::End(TagEnd::Paragraph | TagEnd::Heading(_) | TagEnd::CodeBlock) => {
                 text.push('\n')
             }
+            Event::End(_) => boundaries.push(text.len()),
             _ => {}
         }
         index += 1;
     }
-    text
+    (text, boundaries)
 }
 
 fn parse_markdown_blocks<'a>(mut events: impl Iterator<Item = Event<'a>>) -> Result<Vec<Block>> {

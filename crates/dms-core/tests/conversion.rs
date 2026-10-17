@@ -495,11 +495,14 @@ fn todo_projection_compacts_ordered_items_and_preserves_starts_restarts_and_cont
 }
 
 #[test]
-fn todo_projection_removes_visible_metadata_and_definition_titles_only_when_enabled() {
+fn todo_projection_removes_renderer_visible_entries_only_when_enabled() {
     for body in [
         "---\nToDo: PRIVATE_DROP\n---\n\nKept body\n",
         "+++\nToDo: PRIVATE_DROP\n+++\n\nKept body\n",
         "**ToDo:** PRIVATE_DROP\n: Kept body\n",
+        "Kept body\n: **ToDo:** PRIVATE_DROP\n",
+        "[**TODO:** PRIVATE_DROP](TODO:PRIVATE_DESTINATION)\n\nKept body\n",
+        "| A | B |\n| --- | --- |\n| [TODO: PRIVATE_DROP](TODO:PRIVATE_DESTINATION) | Kept body |\n",
     ] {
         for policy in ["enabled", "disabled"] {
             let f = Fixture::new(SCHEMA_VERSION);
@@ -553,8 +556,152 @@ fn todo_projection_removes_visible_metadata_and_definition_titles_only_when_enab
 }
 
 #[test]
+fn todo_projection_matches_renderer_visible_retained_source_without_widening_entries() {
+    for (body, retained) in [
+        ("Kept term\n: **ToDo:** PRIVATE_DROP\n", "Kept term\n"),
+        ("Kept term\n: TODO: PRIVATE_DROP\n  > PRIVATE_DESCENDANT\n\nKept final\n", "Kept term\n\nKept final\n"),
+        ("Kept term\n: TODO: PRIVATE_DROP\n\nKept final\n", "Kept term\n\nKept final\n"),
+        ("Kept term\n: TODO: PRIVATE_DROP\n  - PRIVATE_DESCENDANT\n\nKept final\n", "Kept term\n\nKept final\n"),
+        ("Kept term\n: Kept definition\n  - Kept child\n\nKept final\n", "Kept term\n: Kept definition\n  - Kept child\n\nKept final\n"),
+        ("Kept term\n: TODO: PRIVATE_DROP\n: Kept definition\n\nKept final\n", "Kept term\n: Kept definition\n\nKept final\n"),
+        ("TODO: PRIVATE_DROP\n: TODO: PRIVATE_BODY\n\nKept final\n", "Kept final\n"),
+        ("Kept term\n\n: TODO: PRIVATE_DROP\n\nKept final\n", "Kept term\n\nKept final\n"),
+        ("- Kept parent\n  - TODO: PRIVATE_DROP\n\nKept final\n", "- Kept parent\n\nKept final\n"),
+        ("> TODO: PRIVATE_DROP\n\nKept final\n", "Kept final\n"),
+        ("Kept term\n: TODO: PRIVATE_DROP\n  > PRIVATE_DESCENDANT\n\nKept second\n: Kept definition\n", "Kept term\n\nKept second\n: Kept definition\n"),
+        ("Kept term\n: Kept definition\n  > Kept quote\n", "Kept term\n: Kept definition\n  > Kept quote\n"),
+        ("NOTODO: kept\n\nmytodo: kept\n\n**TO**DO: PRIVATE_DROP\n", "NOTODO: kept\n\nmytodo: kept\n"),
+        // Loose definitions contain independent paragraphs, not one removable entry.
+        ("Kept term\n\n: TODO: PRIVATE_DROP\n\n  Kept paragraph\n", "Kept term\n\n: Kept paragraph\n"),
+        ("Kept term\n\n: Kept paragraph\n\n  TODO: PRIVATE_DROP\n", "Kept term\n\n: Kept paragraph\n"),
+        (
+            "+++\nKept metadata\n+++\n\nKept term\n: Kept definition\n\n<div>\nKept HTML\n</div>\n\n[Kept link](https://example.test)\n\n| A | B |\n| --- | --- |\n| [Kept cell](https://example.test) | Other |\n",
+            "+++\nKept metadata\n+++\n\nKept term\n: Kept definition\n\n<div>\nKept HTML\n</div>\n\n[Kept link](https://example.test)\n\n| A | B |\n| --- | --- |\n| [Kept cell](https://example.test) | Other |\n",
+        ),
+        (
+            "NOTODO: kept identifier\n\n# NOTODO: kept heading\n\n- _TODO: kept underscore\n\n```text\n1TODO: kept digit\n```\n\n| A | B |\n| --- | --- |\n| éTODO: kept Unicode | [Kept link](https://example.test/NOTODO:topic) |\n",
+            "NOTODO: kept identifier\n\n# NOTODO: kept heading\n\n- _TODO: kept underscore\n\n```text\n1TODO: kept digit\n```\n\n| A | B |\n| --- | --- |\n| éTODO: kept Unicode | [Kept link](https://example.test/NOTODO:topic) |\n",
+        ),
+    ] {
+        for policy in ["enabled", "disabled"] {
+            let f = Fixture::new(SCHEMA_VERSION);
+            let source = todo_source(body, Some(policy));
+            fs::write(f.options.input_root.join("policy.md"), &source).unwrap();
+            let before = tree(f.temp.path());
+            let mut word = FakeWord::default();
+            let manifest = ConversionPlan::prepare(&f.options).unwrap().run(&mut word).unwrap();
+            assert!(!manifest.has_failures(), "{body}: {manifest:?}");
+            let expected = f.temp.path().join("expected.docx");
+            dms_core::assemble_markdown_docx(
+                &f.temp.path().join("edit/template.docx"),
+                &todo_source(if policy == "enabled" { retained } else { body }, Some(policy)),
+                &expected,
+                None,
+            ).unwrap();
+            fill_and_save(&expected, &ExportChrome {
+                title: "Synthetic policy".into(),
+                document_number: None,
+                version_label: "3.0".into(),
+                confidentiality: dms_core::ConfidentialitySnapshot {
+                    type_id: "internal".into(),
+                    label: "Internal label".into(),
+                },
+            });
+            if policy == "enabled" && retained == "Kept term\n\nKept final\n" {
+                let document = package_text(&word.paths[0], "word/document.xml");
+                let text = xml_text(&document);
+                let retained_paragraphs: Vec<_> = text
+                    .lines()
+                    .filter(|text| text.contains("Kept term") || text.contains("Kept final"))
+                    .collect();
+                assert_eq!(retained_paragraphs, ["Kept term", "Kept final"]);
+                assert!(!document.contains("PRIVATE_DROP"));
+                assert!(!document.contains("PRIVATE_DESCENDANT"));
+            }
+            assert!(package_parts(&word.paths[0]) == package_parts(&expected), "whole-package mismatch: {body}");
+            assert_eq!(manifest.results[0].input_sha256.as_deref(), Some(digest(source.as_bytes()).as_str()));
+            for (path, bytes) in before {
+                assert_eq!(fs::read(f.temp.path().join(path)).unwrap(), bytes);
+            }
+        }
+    }
+}
+
+#[test]
 fn todo_projection_rejects_mixed_entries_and_cells_without_pairs_or_source_leaks() {
     for (body, kind, line, column) in [
+        ("**bold**TODO: PRIVATE_DROP\n", "paragraph", 7, 1),
+        ("*PRIVATE_KEEP*TODO: PRIVATE_DROP\n", "paragraph", 7, 1),
+        ("`PRIVATE_KEEP`TODO: PRIVATE_DROP\n", "paragraph", 7, 1),
+        ("~~PRIVATE_KEEP~~TODO: PRIVATE_DROP\n", "paragraph", 7, 1),
+        (
+            "Kept term\n: PRIVATE_KEEP\n  > TODO: PRIVATE_DROP\n",
+            "definition body",
+            8,
+            1,
+        ),
+        (
+            "Kept term\n: PRIVATE_KEEP TODO: PRIVATE_DROP\n  > Kept quote\n",
+            "definition body",
+            8,
+            1,
+        ),
+        (
+            "- PRIVATE_KEEP\n  # TODO: PRIVATE_DROP\n",
+            "list item",
+            7,
+            1,
+        ),
+        (
+            "- PRIVATE_KEEP\n  ```text\n  TODO: PRIVATE_DROP\n  ```\n",
+            "list item",
+            7,
+            1,
+        ),
+        (
+            "- PRIVATE_KEEP\n  : TODO: PRIVATE_DROP\n",
+            "list item",
+            7,
+            1,
+        ),
+        (
+            "NOTODO: PRIVATE_KEEP; TODO: PRIVATE_DROP\n",
+            "paragraph",
+            7,
+            1,
+        ),
+        ("(TODO: PRIVATE_DROP)\n", "paragraph", 7, 1),
+        (
+            "Kept term\n\n: PRIVATE_KEEP TODO: PRIVATE_DROP\n",
+            "paragraph",
+            9,
+            3,
+        ),
+        (
+            "Kept term\n: PRIVATE_KEEP TODO: PRIVATE_DEFINITION\n",
+            "definition body",
+            8,
+            1,
+        ),
+        (
+            "[PRIVATE_KEEP](TODO:PRIVATE_DESTINATION)\n",
+            "paragraph",
+            7,
+            1,
+        ),
+        (
+            "| A | B |\n| --- | --- |\n| [PRIVATE_KEEP](TODO:PRIVATE_DESTINATION) | kept |\n",
+            "table cell",
+            9,
+            2,
+        ),
+        (
+            "| [PRIVATE_KEEP](TODO:PRIVATE_DESTINATION) | B |\n| --- | --- |\n",
+            "table cell",
+            7,
+            2,
+        ),
+        ("<div>\nTODO: PRIVATE_HTML\n</div>\n", "paragraph", 7, 1),
         ("PRIVATE_KEEP TODO: PRIVATE_DROP\n", "paragraph", 7, 1),
         (
             "---\nPRIVATE_KEEP TODO: PRIVATE_DROP\n---\n",
@@ -635,6 +782,9 @@ fn todo_projection_rejects_mixed_entries_and_cells_without_pairs_or_source_leaks
             let source = todo_source(body, Some("enabled"));
             fs::write(f.options.input_root.join("policy.md"), &source).unwrap();
             fs::write(f.options.input_root.join("z-good.md"), SOURCE).unwrap();
+            let before_input = tree(&f.options.input_root);
+            let before_edit = tree(&f.temp.path().join("edit"));
+            let before_publish = tree(&f.temp.path().join("publish"));
             let mut word = FakeWord::default();
             let manifest = ConversionPlan::prepare(&f.options)
                 .unwrap()
@@ -664,6 +814,12 @@ fn todo_projection_rejects_mixed_entries_and_cells_without_pairs_or_source_leaks
                 fs::read_to_string(f.options.input_root.join("policy.md")).unwrap(),
                 source
             );
+            assert_eq!(tree(&f.options.input_root), before_input);
+            assert_eq!(tree(&f.temp.path().join("edit")), before_edit);
+            assert_eq!(tree(&f.temp.path().join("publish")), before_publish);
+            if dry_run {
+                assert!(!f.options.output_root.exists());
+            }
         }
     }
 }

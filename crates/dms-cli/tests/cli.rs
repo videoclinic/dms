@@ -985,6 +985,15 @@ fn cli_todo_projection_reports_mixed_results_effective_policy_and_original_hashe
         ("d-cell.md", "", "| A | B |\n| --- | --- |\n| PRIVATE_KEEP TODO: PRIVATE_BODY | kept |\n", "failed", Some("enabled")),
         ("e-invalid.md", "todo_projection: PRIVATE_VALUE\n", "PRIVATE_BODY\n", "failed", None),
         ("f-html.md", "", "<p>PRIVATE_KEEP TODO: PRIVATE_BODY</p>\n", "failed", Some("enabled")),
+        ("g-definition-body.md", "", "Kept term\n: PRIVATE_KEEP TODO: PRIVATE_DEFINITION\n", "failed", Some("enabled")),
+        ("h-link.md", "", "[PRIVATE_KEEP](TODO:PRIVATE_DESTINATION)\n", "failed", Some("enabled")),
+        ("i-table-link.md", "", "| A | B |\n| --- | --- |\n| [PRIVATE_KEEP](TODO:PRIVATE_DESTINATION) | kept |\n", "failed", Some("enabled")),
+        ("j-header-link.md", "", "| [PRIVATE_KEEP](TODO:PRIVATE_DESTINATION) | B |\n| --- | --- |\n", "failed", Some("enabled")),
+        ("k-html.md", "", "<div>\nTODO: PRIVATE_HTML\n</div>\n", "failed", Some("enabled")),
+        ("l-identifiers.md", "", "NOTODO: kept\n\nmytodo: kept\n\n_TODO: kept\n\néTODO: kept\n\n1TODO: kept\n", "validated", Some("enabled")),
+        ("m-later-marker.md", "", "NOTODO: PRIVATE_KEEP; TODO: PRIVATE_DROP\n", "failed", Some("enabled")),
+        ("n-loose-definition.md", "", "Kept term\n\n: Kept paragraph\n\n  TODO: PRIVATE_DROP\n", "validated", Some("enabled")),
+        ("o-quoted-continuation.md", "", "- PRIVATE_KEEP\n  > TODO: PRIVATE_DROP\n", "failed", Some("enabled")),
         ("z-good.md", "", "Kept final body\n", "validated", Some("enabled")),
     ];
     let mut sources = Vec::new();
@@ -1033,18 +1042,41 @@ fn cli_todo_projection_reports_mixed_results_effective_policy_and_original_hashe
 }
 
 #[test]
-fn cli_todo_projection_checks_visible_metadata_and_definition_titles_without_source_leaks() {
+fn cli_todo_projection_checks_renderer_visible_entries_without_source_leaks() {
     use sha2::{Digest, Sha256};
-    for body in [
-        "---\n{entry}\n---\n\nKept body\n",
-        "+++\n{entry}\n+++\n\nKept body\n",
-        "{entry}\n: Kept body\n",
+    for (body, kind, line, column) in [
+        ("---\n{entry}\n---\n\nKept body\n", "paragraph", 7, 1),
+        ("+++\n{entry}\n+++\n\nKept body\n", "paragraph", 7, 1),
+        ("{entry}\n: Kept body\n", "paragraph", 7, 1),
+        ("Kept body\n: {entry}\n", "definition body", 8, 1),
+        (
+            "Kept body\n: {entry}\n  > Kept quote\n",
+            "definition body",
+            8,
+            1,
+        ),
+        (
+            "[{entry}](TODO:PRIVATE_DESTINATION)\n\nKept body\n",
+            "paragraph",
+            7,
+            1,
+        ),
+        (
+            "| A | B |\n| --- | --- |\n| [{entry}](TODO:PRIVATE_DESTINATION) | Kept body |\n",
+            "table cell",
+            9,
+            2,
+        ),
     ] {
         for (policy, entry, succeeds) in [
             ("enabled", "ToDo: PRIVATE_DROP", true),
             ("enabled", "PRIVATE_KEEP TODO: PRIVATE_DROP", false),
+            ("enabled", "**bold**TODO: PRIVATE_DROP", false),
+            ("enabled", "*PRIVATE_KEEP*TODO: PRIVATE_DROP", false),
+            ("enabled", "`PRIVATE_KEEP`TODO: PRIVATE_DROP", false),
             ("disabled", "ToDo: PRIVATE_DROP", true),
             ("disabled", "PRIVATE_KEEP TODO: PRIVATE_DROP", true),
+            ("disabled", "**bold**TODO: PRIVATE_DROP", true),
         ] {
             let layout = conversion_layout(dms_core::SCHEMA_VERSION);
             let source = format!(
@@ -1066,7 +1098,7 @@ fn cli_todo_projection_checks_visible_metadata_and_definition_titles_without_sou
             if succeeds {
                 assert!(result["error"].is_null());
             } else {
-                assert_eq!(result["error"], "mixed TODO paragraph at line 7, column 1: TODO: follows substantive visible content; split retained content and TODO into separate entries");
+                assert_eq!(result["error"], format!("mixed TODO {kind} at line {line}, column {column}: TODO: follows substantive visible content; split retained content and TODO into separate entries"));
             }
             assert_eq!(
                 result["input_sha256"],

@@ -160,8 +160,21 @@ persistence.
   content. Images and rendered task checkboxes count as substantive content.
   Nested lists and tables have independent entries; an item's own continuation
   text (including quoted continuations) belongs to that item. Unmarked empty
-  parents survive removal of marked children. Raw HTML blocks are literal
+  parents survive removal of marked children. Definition titles, tight definition
+  bodies and body metadata blocks are visible entries; loose definition bodies
+  have direct Paragraph children and retain independently projected paragraphs.
+  Paragraphs nested in quotes/lists do not make a definition body loose; tight
+  body diagnostics use the definition entry start. After projection, a retained
+  definition title with no remaining nonempty body becomes an explicit paragraph,
+  so deleting a definition and its nested blocks cannot join the title to following
+  content. Retained definitions keep the ordinary renderer semantics; disabled
+  conversion and Release bypass this normalization. Raw HTML blocks are literal
   paragraph text, not interpreted HTML; their markers receive the same checks.
+  `TODO:` must start a word or follow a closed inline run: within uninterrupted
+  text a preceding Unicode alphanumeric character or underscore makes it an
+  identifier suffix, not a marker (`NOTODO:`/`mytodo:`). Preserve markers split
+  across formatting events (`**TO**DO:`); a complete marker immediately after
+  closed formatting or inline code triggers mixed-entry rejection.
   A later marker, including in a rendered link URL, after substantive content fails the
   source before artifact reservation with entry kind and original entry-start
   line/column, never source text. Surviving native list items compact from the
