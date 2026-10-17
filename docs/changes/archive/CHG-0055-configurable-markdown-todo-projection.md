@@ -3,12 +3,12 @@
 **Plan ID:** CHG-0055-configurable-markdown-todo-projection
 **Created:** 2026-10-15
 **Depends on:** archived CHG-0053 is the implementation receipt for retained-DOCX batch-conversion fidelity.
-**Status:** in-progress
+**Status:** done
 
 | Field | Value |
 | --- | --- |
 | ID | CHG-0055 |
-| Status | in-progress |
+| Status | done |
 | External request | Direct operator request: incorporate the TODO filter as new CHR with the application-record skill. it should be possible to enable / disable the filter per file and library wide |
 | Affected CAPs | CAP-0022 |
 | Decision records | None; the conversion-only boundary remains ADR-0023. |
@@ -61,7 +61,7 @@ desktop Release assembly.
 | 1 | Define persistent library policy and per-file override | done (gate passed; independent review found no findings; evidence below) | Focused core and CLI policy-resolution tests exit 0 for disabled default, explicit library settings, override precedence, and invalid values. |
 | 2 | Project enabled TODO entries through standalone conversion | done (132 core and 25 CLI tests, scoped clippy, fmt and diff gates passed; fresh independent review: no findings; evidence below) | Conversion/domain and CLI tests exit 0 for entry kinds, table-cell whitespace projection, mixed-entry/cell rejection, compact ordered lists, manifests, unchanged source hashes, and unchanged Release assembly. |
 | 3 | Expose explicit headless configuration and operator evidence | done (31 CLI tests, fmt, scoped clippy and diff gates passed; independent review found no findings) | CLI integration tests exit 0 for reading/updating the library setting and structured effective-policy output. |
-| 4 | Integrate capability contract and full gates | pending | CAP-0022, DOX, record/index checks, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, verifier tests, link check, and `git diff --check` exit 0. |
+| 4 | Integrate capability contract and full gates | done (corrected full gate passed; fresh independent review found no findings) | CAP-0022, DOX, record/index checks, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, verifier tests, link check, and `git diff --check` exit 0. |
 
 Keep at most one phase `in-progress`. This record is the sole progress authority
 for configurable TODO projection; it does not advance CHG-0053.
@@ -389,6 +389,57 @@ work is included.
 `cargo test --workspace --locked`, verifier tests, link check, and `git diff
 --check` exit 0.
 
+### Phase 4 evidence and closeout
+
+Phase 4 is **done** and this record is archived as a closed implementation
+receipt. The first final review found that CAP-0022 stated mixed-entry/cell
+rejection without limiting it to enabled projection. The correction states that
+disabled projection keeps mixed markers as ordinary visible body text. The
+corrected freeze passed the full gate, and a fresh independent review found no
+findings. No push or deployment is authorized.
+
+- CAP-0022 records present-tense outcomes for the conversion policy:
+  `dms workspace conversion-policy` (inspect/persist the library default;
+  outcome 13) and conversion-only TODO projection (outcome 14). Its `Tests`
+  field links `crates/dms-core/tests/conversion_policy.rs`; the executable-
+  evidence paragraph names the projection regressions.
+- A prior independent review of the Phase 4 candidate
+  found the new `workspace conversion-policy` outcome inserted as outcome 3,
+  which shifted the pre-existing standalone-conversion outcome from 8 to 9 and
+  broke planned CHG-0054's cross-reference to CAP-0022 outcome 8. The new
+  outcome now sits at 13, immediately before the TODO-projection outcome at 14,
+  so every pre-existing CAP-0022 outcome keeps its established number (outcomes
+  1–12 are byte-identical to the record before this phase) and CHG-0054 stays
+  untouched.
+- The operator reference (`markdown-frontmatter-and-template-variables.md`)
+  already carried the Phase 3 command/override/receipt contract. It was re-read
+  against the current implementation and left accurate, so no fact-changing edit
+  was needed and no unrelated facts were overwritten.
+- DOX pass: the owning contracts (`crates/dms-core/AGENTS.md`,
+  `crates/dms-cli/AGENTS.md`, the operator-reference ownership row in
+  `docs/AGENTS.md`) already state the conversion-policy and projection contracts
+  from Phases 1–3. Ownership, structure and lifecycle rules did not move, so no
+  parent/child AGENTS.md or Child DOX Index changed in Phase 4.
+
+Gates on the corrected freeze, run from the dedicated Phase 4 worktree with
+worktree-local `CARGO_TARGET_DIR="$PWD/target"` and
+`TMPDIR="$PWD/target/phase-4-tmp"` (each exit 0):
+
+- `cargo fmt --all -- --check`.
+- `cargo clippy --workspace --all-targets --locked -- -D warnings`.
+- `cargo test --workspace --locked` — 304 passed, 0 failed.
+- verifier tests (`uv run --no-project --with markdown-it-py==4.0.0 --with
+  mdit-py-plugins==0.5.0 --with PyMuPDF==1.26.5 python -B -m unittest discover
+  -s scripts -p test_markdown_batch.py -v`) — 82 tests OK, 2 native-host tests skipped.
+- `python3 …/check-md-links.py --format summary .` — strict mode, 0 issues.
+- `git diff --check`.
+
+Manual record/index checks (no `records:check` script exists) confirm the active
+index lists exactly the active CHGs, no active CHG is marked done, and CAP-0022
+exists and is implemented. The final reviewer independently inspected the
+corrected frozen diff and reported no findings. Rust and verifier evidence is
+synthetic/Linux and does not establish installed-Word fidelity.
+
 ## Out of scope
 
 - Changing CHG-0053's full-corpus fidelity gate, source corpus, template, or
@@ -403,6 +454,6 @@ work is included.
 ## Related contracts
 
 - [CAP-0022](../../product/capabilities/CAP-0022-headless-core-cli.md)
-- [CHG-0053](../archive/CHG-0053-markdown-batch-conversion-retained-docx.md)
+- [CHG-0053](CHG-0053-markdown-batch-conversion-retained-docx.md)
 - [Markdown metadata and template variables](../../markdown-frontmatter-and-template-variables.md)
 - [Architecture](../../architecture.md) and [privacy](../../privacy.md)

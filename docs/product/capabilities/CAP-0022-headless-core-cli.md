@@ -8,7 +8,7 @@
 | Status | implemented |
 | Executable | `dms` |
 | Platforms | Headless core and conversion dry-run: Windows, macOS and Linux; installed-Word conversion: Windows and macOS adapters, with native fidelity evidence limited to Windows |
-| Tests | [Workspace](../../../crates/dms-core/tests/workspace.rs); [conversion](../../../crates/dms-core/tests/conversion.rs); [CLI](../../../crates/dms-cli/tests/cli.rs); [shared Word adapter](../../../crates/dms-export/src/lib.rs); [Markdown assembly](../../../crates/dms-core/tests/markdown_template.rs) |
+| Tests | [Workspace](../../../crates/dms-core/tests/workspace.rs); [conversion](../../../crates/dms-core/tests/conversion.rs); [conversion policy](../../../crates/dms-core/tests/conversion_policy.rs); [CLI](../../../crates/dms-cli/tests/cli.rs); [shared Word adapter](../../../crates/dms-export/src/lib.rs); [Markdown assembly](../../../crates/dms-core/tests/markdown_template.rs) |
 
 ## Outcomes
 
@@ -83,6 +83,32 @@ The CLI provides explicit, local operations over the shared `dms-core` library:
     state `conversion_only`, consumed input/template/asset hashes, effective
     metadata, final saved DOCX/PDF hashes and renderer/Word version. Dry-run
     validates assembly privately without creating output or invoking Word.
+13. `dms workspace conversion-policy --edit-root <dir> [--todo-projection
+    enabled|disabled]` requires the explicit edit root. Without
+    `--todo-projection` it inspects the library-wide standalone-conversion TODO
+    default; supplying exactly lowercase `enabled` or `disabled` persists it
+    through the typed core setter and `Workspace::save`. `--json` emits the
+    `ConversionPolicy` object alone. It runs no conversion or Release, reads no
+    source and takes no advisory lock; ordinary core opening may still migrate an
+    older schema or refresh managed agent instructions.
+14. Standalone conversion applies a conversion-only TODO projection policy. The
+    workspace holds one library-wide default (initially `disabled`); a source may
+    override it with flat frontmatter `todo_projection: enabled|disabled`, which
+    wins in either direction while omission inherits the default; invalid, boolean,
+    duplicate or nested values fail that source. When enabled, a paragraph,
+    heading, complete list item (with descendants) or code block whose first
+    visible content is `TODO:` (case-insensitive, including `**TODO:**`) is omitted
+    and surviving ordered items renumber without gaps; a leading TODO table cell
+    becomes one non-breaking space with its row and grid intact. With projection
+    enabled, substantive visible text before a TODO marker is a mixed entry/cell
+    that fails only that source with a source-free diagnostic and no emitted pair,
+    never discarding the text. With projection disabled, mixed markers remain
+    ordinary visible body text. Each result and the manifest record the effective `todo_projection`
+    (`enabled`/`disabled`, or null when unresolved); `input_sha256` still covers
+    the unmodified source bytes. Projection never rewrites source, hashes,
+    registered document control, release authority, desktop Release assembly or
+    publish artifacts; retained conversion DOCX holds confidential content
+    equivalent to the PDF.
 
 Automated Rust evidence uses synthetic fixtures, exporter doubles and static
 native-script assertions; it does not prove installed-Word fidelity.
@@ -99,6 +125,13 @@ and leap dates, malformed/nonexistent/missing dates, no-token optionality,
 pre-export body/header/footer replacement, reserved-token precedence, input
 preservation and the unchanged release assembler through public core APIs.
 `crates/dms-cli/tests/cli.rs` also checks no-token optionality through the CLI.
+TODO-projection regressions in `crates/dms-core/tests/conversion.rs` and
+`crates/dms-core/tests/conversion_policy.rs` exercise entry kinds, table-cell
+non-breaking-space projection, mixed entry/cell rejection without discarding
+content, compact ordered numbering, effective-policy receipts, unchanged source
+hashes and the Release boundary; `crates/dms-cli/tests/cli.rs` covers the
+`workspace conversion-policy` command, override precedence and effective-policy
+output. These are synthetic, not installed-Word fidelity.
 This command creates no library membership, approval, occupied version, release
 evidence or publish-root index entry; labels and version chrome imply none.
 
@@ -115,6 +148,7 @@ evidence or publish-root index entry; labels and version chrome imply none.
 
 - DMS Desktop wireframe: none; this capability is headless-only.
 - [Standalone invocation, output and failure handling](../../markdown-frontmatter-and-template-variables.md#standalone-conversion-operation)
+- [Library TODO projection and per-file override](../../markdown-frontmatter-and-template-variables.md#library-todo-projection-and-per-file-override)
 - Architecture and ADR-0023: [`../../architecture.md`](../../architecture.md)
 - Workspace: [`CAP-0001-local-folder-dms.md`](CAP-0001-local-folder-dms.md)
 - Library membership: [`CAP-0006-library-explorer.md`](CAP-0006-library-explorer.md)
