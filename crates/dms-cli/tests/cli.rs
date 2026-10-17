@@ -11,6 +11,243 @@ fn dms() -> Command {
     Command::new(env!("CARGO_BIN_EXE_dms"))
 }
 
+fn policy_workspace() -> (tempfile::TempDir, dms_core::Workspace) {
+    let temp = tempfile::tempdir().unwrap();
+    let edit = temp.path().join("edit");
+    fs::create_dir(&edit).unwrap();
+    let mut workspace = dms_core::Workspace::init(&edit, &temp.path().join("publish")).unwrap();
+    let source = edit.join("policy.md");
+    fs::write(&source, "# Policy\n\nTODO: PRIVATE_SOURCE\n").unwrap();
+    workspace.add_document(&source).unwrap();
+    workspace.save().unwrap();
+    fs::write(
+        workspace.publish_root.join("existing.pdf"),
+        b"PRIVATE_PUBLISH",
+    )
+    .unwrap();
+    fs::write(temp.path().join("external.md"), b"PRIVATE_EXTERNAL").unwrap();
+    (temp, workspace)
+}
+
+fn conversion_policy_command(edit_root: &Path, extra: &[&str]) -> std::process::Output {
+    dms()
+        .args(["--json", "workspace", "conversion-policy", "--edit-root"])
+        .arg(edit_root)
+        .args(extra)
+        .output()
+        .unwrap()
+}
+
+// Include directories as well as bytes so unexpected empty output/lock trees fail.
+fn policy_tree_snapshot(root: &Path) -> std::collections::BTreeMap<PathBuf, Option<Vec<u8>>> {
+    fn visit(
+        root: &Path,
+        path: &Path,
+        snapshot: &mut std::collections::BTreeMap<PathBuf, Option<Vec<u8>>>,
+    ) {
+        for entry in fs::read_dir(path).unwrap() {
+            let path = entry.unwrap().path();
+            let bytes = if path.is_dir() {
+                visit(root, &path, snapshot);
+                None
+            } else {
+                Some(fs::read(&path).unwrap())
+            };
+            snapshot.insert(path.strip_prefix(root).unwrap().to_owned(), bytes);
+        }
+    }
+    let mut snapshot = std::collections::BTreeMap::new();
+    visit(root, root, &mut snapshot);
+    snapshot
+}
+
+#[test]
+fn cli_conversion_policy_reads_default_without_saving_current_workspace() {
+    let (temp, workspace) = policy_workspace();
+    let config = workspace.edit_root.join(".dms/workspace.json");
+    for omitted in [false, true] {
+        if omitted {
+            let mut value: Value = serde_json::from_slice(&fs::read(&config).unwrap()).unwrap();
+            value.as_object_mut().unwrap().remove("conversion_policy");
+            fs::write(&config, serde_json::to_vec(&value).unwrap()).unwrap();
+        }
+        let before = policy_tree_snapshot(temp.path());
+        let output = conversion_policy_command(&workspace.edit_root, &[]);
+        assert!(output.status.success(), "{output:?}");
+        assert!(output.stderr.is_empty());
+        assert_eq!(
+            serde_json::from_slice::<Value>(&output.stdout).unwrap(),
+            serde_json::json!({"todo_projection": "disabled"})
+        );
+        assert_eq!(policy_tree_snapshot(temp.path()), before);
+    }
+}
+
+#[test]
+fn cli_conversion_policy_updates_only_policy_without_conversion_or_release() {
+    let (temp, workspace) = policy_workspace();
+    // No template or conversion metadata is configured; configuration must not
+    // invoke Word, conversion preflight, source projection or lifecycle actions.
+    workspace.acquire_lock(false).unwrap();
+    let before = policy_tree_snapshot(temp.path());
+    let relative_config = Path::new("edit/.dms/workspace.json");
+    let original: Value =
+        serde_json::from_slice(before[relative_config].as_ref().unwrap()).unwrap();
+    for setting in ["enabled", "disabled"] {
+        let output =
+            conversion_policy_command(&workspace.edit_root, &["--todo-projection", setting]);
+        assert!(output.status.success(), "{output:?}");
+        assert!(output.stderr.is_empty());
+        let expected = serde_json::json!({"todo_projection": setting});
+        assert_eq!(
+            serde_json::from_slice::<Value>(&output.stdout).unwrap(),
+            expected
+        );
+        let reopened = dms_core::Workspace::open(&workspace.edit_root).unwrap();
+        assert_eq!(
+            serde_json::to_value(reopened.conversion_policy()).unwrap(),
+            expected
+        );
+        let read = conversion_policy_command(&workspace.edit_root, &[]);
+        assert!(read.status.success());
+        assert_eq!(
+            serde_json::from_slice::<Value>(&read.stdout).unwrap(),
+            expected
+        );
+
+        let mut after = policy_tree_snapshot(temp.path());
+        let mut actual: Value =
+            serde_json::from_slice(after[relative_config].as_ref().unwrap()).unwrap();
+        assert_eq!(actual["conversion_policy"], expected);
+        actual["conversion_policy"] = original["conversion_policy"].clone();
+        assert_eq!(
+            actual, original,
+            "no document, workflow, release or other policy mutation"
+        );
+        after.insert(relative_config.to_owned(), before[relative_config].clone());
+        assert_eq!(after, before, "only workspace.json may change");
+    }
+    let normal = dms()
+        .args(["workspace", "conversion-policy", "--edit-root"])
+        .arg(&workspace.edit_root)
+        .output()
+        .unwrap();
+    assert!(normal.status.success());
+    assert!(normal.stderr.is_empty());
+    assert_eq!(
+        String::from_utf8(normal.stdout).unwrap(),
+        "library conversion policy: todo_projection=disabled (conversion-only)\n"
+    );
+}
+
+#[test]
+fn cli_conversion_policy_requires_explicit_target_and_rejects_invalid_arguments() {
+    let (temp, workspace) = policy_workspace();
+    let before = policy_tree_snapshot(temp.path());
+    let help = dms()
+        .args(["workspace", "conversion-policy", "--help"])
+        .output()
+        .unwrap();
+    assert!(help.status.success());
+    let help = String::from_utf8(help.stdout).unwrap();
+    assert!(help.contains("--edit-root <EDIT_ROOT>"));
+    assert!(help.contains("--todo-projection <TODO_PROJECTION>"));
+    for extra in [vec![], vec!["--todo-projection", "enabled"]] {
+        let output = dms()
+            .current_dir(&workspace.edit_root)
+            .args(["--json", "workspace", "conversion-policy"])
+            .args(extra)
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("--edit-root"));
+    }
+    for invalid in [
+        "true",
+        "false",
+        "Enabled",
+        "DISABLED",
+        "1",
+        "null",
+        "",
+        " enabled ",
+    ] {
+        let output =
+            conversion_policy_command(&workspace.edit_root, &["--todo-projection", invalid]);
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("--todo-projection"));
+    }
+    let missing_value = conversion_policy_command(&workspace.edit_root, &["--todo-projection"]);
+    assert_eq!(missing_value.status.code(), Some(2));
+    assert!(missing_value.stdout.is_empty());
+    // An explicit non-workspace is not a request to search its parent or cwd.
+    let missing_workspace =
+        conversion_policy_command(&workspace.publish_root, &["--todo-projection", "enabled"]);
+    assert_eq!(missing_workspace.status.code(), Some(1));
+    assert!(missing_workspace.stdout.is_empty());
+    assert_eq!(policy_tree_snapshot(temp.path()), before);
+}
+
+#[test]
+fn cli_conversion_policy_rejects_malformed_stored_policy_without_repair() {
+    let (temp, workspace) = policy_workspace();
+    let config = workspace.edit_root.join(".dms/workspace.json");
+    let mut value: Value = serde_json::from_slice(&fs::read(&config).unwrap()).unwrap();
+    for invalid in [
+        serde_json::json!(null),
+        serde_json::json!({}),
+        serde_json::json!({"todo_projection": "invalid"}),
+        serde_json::json!({"todo_projection": true}),
+        serde_json::json!({"todo_projection": "disabled", "unknown": true}),
+    ] {
+        value["conversion_policy"] = invalid;
+        fs::write(&config, serde_json::to_vec(&value).unwrap()).unwrap();
+        let before = policy_tree_snapshot(temp.path());
+        for extra in [vec![], vec!["--todo-projection", "enabled"]] {
+            let output = conversion_policy_command(&workspace.edit_root, &extra);
+            assert_eq!(output.status.code(), Some(1));
+            assert!(output.stdout.is_empty());
+            assert!(!output.stderr.is_empty());
+            assert_eq!(policy_tree_snapshot(temp.path()), before);
+        }
+    }
+}
+
+#[test]
+fn cli_conversion_policy_preserves_core_open_migration_boundary() {
+    let (temp, workspace) = policy_workspace();
+    let config = workspace.edit_root.join(".dms/workspace.json");
+    let mut value: Value = serde_json::from_slice(&fs::read(&config).unwrap()).unwrap();
+    value["schema_version"] = serde_json::json!(21);
+    value.as_object_mut().unwrap().remove("conversion_policy");
+    let legacy = serde_json::to_vec_pretty(&value).unwrap();
+    fs::write(&config, &legacy).unwrap();
+    let before = policy_tree_snapshot(temp.path());
+    let output = conversion_policy_command(&workspace.edit_root, &[]);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        serde_json::from_slice::<Value>(&output.stdout).unwrap(),
+        serde_json::json!({"todo_projection": "disabled"})
+    );
+    let mut expected = before;
+    value["schema_version"] = serde_json::json!(dms_core::SCHEMA_VERSION);
+    value["conversion_policy"] = serde_json::json!({"todo_projection": "disabled"});
+    let mut after = policy_tree_snapshot(temp.path());
+    let config_key = Path::new("edit/.dms/workspace.json");
+    assert_eq!(
+        serde_json::from_slice::<Value>(after[config_key].as_ref().unwrap()).unwrap(),
+        value
+    );
+    expected.insert(
+        PathBuf::from("edit/.dms/workspace.v21.json.bak"),
+        Some(legacy),
+    );
+    after.insert(config_key.to_owned(), expected[config_key].clone());
+    assert_eq!(after, expected);
+}
+
 #[test]
 fn cli_requires_confirmation_before_initializing_a_workspace() {
     let edit_root = tempfile::tempdir().expect("edit root");
@@ -759,6 +996,63 @@ fn convert_markdown_to(
     command.output().expect("run convert markdown")
 }
 
+#[test]
+fn cli_conversion_policy_updates_feed_effective_conversion_evidence() {
+    let (temp, mut workspace) = policy_workspace();
+    let template = workspace.edit_root.join(TEMPLATE_RELATIVE);
+    fs::copy(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join(TEMPLATE_FIXTURE),
+        &template,
+    )
+    .unwrap();
+    workspace.import_markdown_template(&template).unwrap();
+    workspace
+        .configure_confidentiality_type("internal", "Internal", true)
+        .unwrap();
+    workspace
+        .set_confidentiality_policy(".", "internal")
+        .unwrap();
+    workspace.save().unwrap();
+    let input = temp.path().join("input");
+    fs::create_dir(&input).unwrap();
+    let layout = ConversionLayout {
+        config: workspace.edit_root.join(".dms/workspace.json"),
+        input,
+        output: temp.path().join("out"),
+        _temp: temp,
+    };
+    for (name, extra) in [
+        ("a-inherit.md", ""),
+        ("b-enabled.md", "todo_projection: enabled\n"),
+        ("c-disabled.md", "todo_projection: disabled\n"),
+    ] {
+        fs::write(
+            layout.input.join(name),
+            VALID_MARKDOWN.replacen("title:", &format!("{extra}title:"), 1),
+        )
+        .unwrap();
+    }
+    for setting in ["enabled", "disabled"] {
+        let updated =
+            conversion_policy_command(&workspace.edit_root, &["--todo-projection", setting]);
+        assert!(updated.status.success(), "{updated:?}");
+        assert!(!layout.output.exists());
+        let before = policy_tree_snapshot(layout._temp.path());
+        // Conversion is a separate, explicit invocation, never a configuration side effect.
+        let converted = convert_markdown(&layout, &["--dry-run"]);
+        assert!(converted.status.success(), "{converted:?}");
+        let manifest: Value = serde_json::from_slice(&converted.stdout).unwrap();
+        assert_eq!(manifest["conversion_only"], true);
+        let results = manifest["results"].as_array().unwrap();
+        assert_eq!(results.len(), 3);
+        for (result, expected) in results.iter().zip([setting, "enabled", "disabled"]) {
+            assert_eq!(result["todo_projection"], expected);
+            assert_eq!(result["status"], "validated");
+        }
+        assert_eq!(policy_tree_snapshot(layout._temp.path()), before);
+    }
+}
+
 fn result_inputs(manifest: &Value) -> Vec<String> {
     manifest["results"]
         .as_array()
@@ -896,7 +1190,7 @@ fn cli_convert_markdown_accepts_supported_schemas_and_ignores_unrelated_data() {
 }
 
 #[test]
-fn cli_todo_policy_resolution_uses_core_without_a_configuration_command() {
+fn cli_todo_policy_resolution_uses_core_export_projection() {
     use dms_core::{ConversionOptions, ConversionPlan, TodoProjection};
     for library in [None, Some("disabled"), Some("enabled")] {
         let layout = conversion_layout(dms_core::SCHEMA_VERSION);

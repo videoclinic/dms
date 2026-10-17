@@ -60,7 +60,7 @@ desktop Release assembly.
 | --- | --- | --- | --- |
 | 1 | Define persistent library policy and per-file override | done (gate passed; independent review found no findings; evidence below) | Focused core and CLI policy-resolution tests exit 0 for disabled default, explicit library settings, override precedence, and invalid values. |
 | 2 | Project enabled TODO entries through standalone conversion | done (132 core and 25 CLI tests, scoped clippy, fmt and diff gates passed; fresh independent review: no findings; evidence below) | Conversion/domain and CLI tests exit 0 for entry kinds, table-cell whitespace projection, mixed-entry/cell rejection, compact ordered lists, manifests, unchanged source hashes, and unchanged Release assembly. |
-| 3 | Expose explicit headless configuration and operator evidence | pending | CLI integration tests exit 0 for reading/updating the library setting and structured effective-policy output. |
+| 3 | Expose explicit headless configuration and operator evidence | done (31 CLI tests, fmt, scoped clippy and diff gates passed; independent review found no findings) | CLI integration tests exit 0 for reading/updating the library setting and structured effective-policy output. |
 | 4 | Integrate capability contract and full gates | pending | CAP-0022, DOX, record/index checks, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, verifier tests, link check, and `git diff --check` exit 0. |
 
 Keep at most one phase `in-progress`. This record is the sole progress authority
@@ -317,6 +317,63 @@ workspace JSON.
 
 **Verification gate:** CLI integration tests exit 0 for reading/updating the
 library setting and structured effective-policy output.
+
+### Phase 3 evidence and review boundary
+
+Phase 3 is **done**; Phase 4 remains **pending**. The Phase 2 receipt's
+pending-phase statements describe its handoff boundary, not the current phase
+table. This verified, reviewed but uncommitted candidate is confined to worktree
+`dms-chg-0055-phase-3`, branch `agent/chg-0055-phase-3`; no commit, push or
+deployment is authorized.
+
+- `workspace conversion-policy` requires `--edit-root`; omission of
+  `--todo-projection` inspects, while explicit `enabled|disabled` updates through
+  the typed core setter and `Workspace::save`. JSON serializes only the policy.
+- Six new CLI integration tests cover default/missing-policy inspection,
+  enabled/disabled persistence/readback, normal/JSON output, invalid/missing
+  arguments, explicit targets, malformed stored policy rejection, and schema-21
+  opening with exact migration backup. Whole-tree snapshots preserve source,
+  external input, existing publish content, instructions and advisory lock;
+  workspace JSON differs only in policy on a current synchronized workspace.
+- A separate explicit conversion dry-run consumes the command's persisted
+  default and proves both override directions in effective-policy JSON.
+  Existing conversion tests retain source-hash, mixed-entry and diagnostic
+  evidence. No conversion, core, exporter or Release implementation changed.
+- Ordinary core opening can migrate metadata or synchronize managed instructions;
+  inspection is not advertised as universally read-only. The operator reference
+  documents this boundary, precedence, manifest evidence and confidential
+  retained DOCX/PDF handling without granting release authority.
+
+Passed on this candidate (each exit 0), with worktree-local
+`CARGO_TARGET_DIR="$PWD/target"` and `TMPDIR="$PWD/target/phase-3-tmp"`:
+
+- `cargo test -p dms-cli --test cli --locked` — 31 passed, 0 failed.
+- `cargo fmt --all -- --check`.
+- `cargo clippy -p dms-cli --all-targets --locked -- -D warnings`.
+- `git diff --check`.
+
+The coordinator independently reran the same four gates after implementation:
+`cargo test -p dms-cli --test cli --locked` reported 31 passed, 0 failed; the
+format, scoped clippy and diff gates also exited 0.
+
+Fresh independent read-only review of the full Phase 3 diff against `6245faf`
+reported **No findings**. The configured `grok` reviewer selector was unavailable
+because xAI OAuth lacked an access token; the operator explicitly selected the
+accepted session-only `astra` selector instead. The reviewer inspected the actual
+diff, CLI tests, open/save boundary and DOX contracts without modifying the
+worktree. This is not full-workspace or native-Word evidence.
+
+An intermediate CLI run failed because the new conversion fixture omitted its
+required root confidentiality policy; the fixture was corrected through the core
+API. Clippy then rejected five uninlined assertion formats; all were corrected
+before the passing rerun. No product workaround or gate suppression was added.
+
+DOX pass: updated `crates/dms-cli/AGENTS.md` and the operator-reference ownership
+entry in `docs/AGENTS.md`. Root/crates/changes parent contracts and child indexes
+remain unchanged because ownership boundaries and lifecycle rules did not move.
+CAP-0022 is intentionally untouched for Phase 4. Full-workspace gates and native
+Word fidelity remain outside this phase. No commit, push, deployment or Phase 4
+work is included.
 
 ## Phase 4 — Integrate capability contract and full gates
 

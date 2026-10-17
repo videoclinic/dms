@@ -37,6 +37,12 @@ executable.
 - Workspace integrity commands expose advisory-lock status, explicit stale
   takeover and confirmed release, lock-threshold configuration, manifest backup,
   and confirmed restore into explicit existing replacement roots.
+- `workspace conversion-policy --edit-root <dir>` inspects the library default;
+  optional `--todo-projection enabled|disabled` updates it through the typed core
+  setter and explicit `Workspace::save`. JSON is the `ConversionPolicy` object,
+  not per-source resolution. No implicit target, source access, conversion,
+  Release or lock operation is added. Ordinary `Workspace::open` migration and
+  managed-instruction synchronization still apply, including during inspection.
 - `convert markdown` is standalone, non-release conversion: it reads only the
   read-only export projection of an explicit `workspace.json` (schema 18, 19, 21 or
   current) and writes new paired DOCX/PDF artifacts plus a `manifest.json` into a
@@ -68,7 +74,12 @@ executable.
   diagnostics (including original CRLF/Unicode cell locations), unchanged source
   SHA-256 and dry-run no-write behaviour. The
   existing workspace `sha2` dependency is test-only for CLI digest assertions.
-  There is no conversion-policy configuration command yet.
+- The same CLI gate covers conversion-policy default/missing-policy inspection,
+  enabled/disabled persistence and readback, explicit-target/invalid-value
+  rejection, malformed stored policy, normal/JSON output, core migration with
+  exact backup, and whole-fixture snapshots proving policy-only mutation.
+  Separate explicit conversion dry-runs prove configured-default/override
+  precedence in effective-policy receipts without output or protected-tree writes.
 
 ## Child DOX Index
 

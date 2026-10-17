@@ -98,7 +98,7 @@ started. Desktop Release keeps its separate `.dms`-owned approval/version flow.
   the macOS adapter has synthetic/static coverage, not installed-Word fidelity
   verification. Linux/WSL supports dry-run only; there is no automatic Word bridge.
 - Use the native host's existing `<edit-root>/.dms/workspace.json`, with schema
-  18, 19 or current, an enabled confidentiality catalogue and a configured Word
+  18, 19, 21 or current (22), an enabled confidentiality catalogue and a configured Word
   template whose digest and contract validate. Configured edit/publish roots
   must exist and match that host; Windows locators are not reinterpreted on Linux.
 - Input must be an external directory disjoint from both workspace roots.
@@ -129,14 +129,79 @@ The template TOC stays by default. `--without-toc` removes only its TOC
 structured-document tag, not a source-authored contents section. Static template
 text is not translated. Avoid manual heading-number prefixes when template styles
 already number headings. Link labels survive, but Markdown-relative links are
-not rewritten into PDF navigation. The command has no TODO-filter or
-language-selected-template option; it uses the one configured template.
+not rewritten into PDF navigation. TODO projection uses the library default and
+source override below, not a `convert markdown` flag. There is no
+language-selected-template option; conversion uses the one configured template.
+
+### Library TODO projection and per-file override
+
+Inspect or update the standalone-conversion default through an explicit workspace
+target (illustrative native Windows paths):
+
+```powershell
+.\target\debug\dms.exe --json workspace conversion-policy --edit-root 'C:\DMS\edit'
+.\target\debug\dms.exe --json workspace conversion-policy --edit-root 'C:\DMS\edit' --todo-projection enabled
+.\target\debug\dms.exe --json workspace conversion-policy --edit-root 'C:\DMS\edit' --todo-projection disabled
+```
+
+- `--edit-root` is required even when the current directory is inside a workspace;
+  there is no implicit workspace or source discovery. Omit `--todo-projection` to
+  inspect; supply exactly lowercase `enabled` or `disabled` to persist the setting.
+  No additional confirmation flag is required. Invalid arguments fail before
+  opening the workspace; malformed stored policy is rejected, not repaired.
+- Successful `--json` stdout is the policy object, for example
+  `{"todo_projection":"disabled"}`. Normal output names the library setting and
+  its conversion-only scope. This reports the library default, not a particular
+  source's effective policy. Errors go to stderr with a nonzero exit status.
+- The initial library default is `disabled`. The command opens the explicit
+  workspace through core; updates use `Workspace::set_conversion_policy` and
+  `Workspace::save`. A current, synchronized workspace inspection does not save.
+  Ordinary core opening can migrate older schemas (retaining a metadata backup)
+  or refresh managed agent instructions, even during inspection. Unlike
+  `convert markdown`, this is not a read-only export-configuration projection.
+- Configuration itself invokes neither conversion nor Release, requires no Word
+  template or installed Word, and changes no source, candidate, approval, release
+  evidence or publish artifact. It does not acquire or release an advisory lock.
+
+An external source may override the library default with flat frontmatter:
+
+```yaml
+todo_projection: enabled
+```
+
+The exact key `todo_projection` accepts `enabled` or `disabled` (ordinary quoted
+scalars are also accepted). An explicit per-file value wins in either direction;
+omission inherits the library default. Boolean, empty, other-case or other values,
+duplicate keys and nested values fail that source rather than silently falling
+back. This is source-owned conversion metadata, not a DMS-controlled key; it does
+not alter registered document control or desktop Release assembly.
+
+When enabled, leading visible `TODO:` entries (case-insensitive, including
+`**TODO:**`) are omitted from conversion: paragraphs, headings, list items and code
+blocks. A removed heading does not remove its section; a removed list item removes
+its descendants. Surviving ordered items are renumbered without gaps. A leading
+TODO table cell becomes one non-breaking space, preserving the row and grid.
+Substantive visible content followed by a TODO marker is a mixed entry/cell error,
+not permission to discard that content. Split it into retained and standalone TODO
+entries. Disabled projection retains the ordinary conversion body.
+
+Projection never rewrites source bytes or changes their input hash, and never
+applies to desktop Release. Retained DOCX contains confidential content equivalent
+to PDF: projection is not a confidentiality downgrade or release authorization.
+Protect both formats and any temporary, diagnostic or rendered copies alike.
 
 ### Output and failures
 
 - The exact selected paths go to stderr before processing. With `--json`, stdout
   contains the final manifest/result object, including mixed per-file failures.
   Normal stdout reports conversion-only totals; per-file errors go to stderr.
+- Each manifest/JSON result records effective `todo_projection` as `enabled` or
+  `disabled`, or null if policy resolution was not reached or failed. A failed
+  assembly may still have a resolved policy; inspect `status` and `error` too.
+  Normal-mode stderr prints `todo_projection=enabled|disabled|unresolved` beside
+  each source path. These receipts contain policy evidence, not source bodies;
+  `input_sha256` still covers the original, unprojected bytes. Dry-run reports the
+  same effective policy but writes no `manifest.json` or artifact pair.
 - Dry-run validates metadata, assets and temporary DOCX assembly without Word
   preflight or output-root creation. Successful entries are `validated`, with no
   DOCX/PDF hashes or Word receipt. It does not prove licensing, Word automation,

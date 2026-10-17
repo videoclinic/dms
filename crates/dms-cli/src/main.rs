@@ -6,7 +6,7 @@ use dms_core::{
     ConversionOptions, ConversionPlan, ConversionStatus, DeliveryReceipt, Document,
     EntraIdentitySource, EntraPerson, GraphClient, MutationPrincipal, Note, NotificationClient,
     NotificationMessage, NotificationSettings, OwnerReference, PeriodicReviewResult,
-    RestoreRequest, RoleUpdate, Workspace,
+    RestoreRequest, RoleUpdate, TodoProjection, Workspace,
 };
 use dms_export::InstalledWord;
 use serde::Serialize;
@@ -104,6 +104,13 @@ enum WorkspaceCommand {
     Status {
         #[arg(long)]
         edit_root: PathBuf,
+    },
+    /// Inspect or update the library default for standalone conversion only
+    ConversionPolicy {
+        #[arg(long)]
+        edit_root: PathBuf,
+        #[arg(long, value_enum, help = "Set the library default; omit to inspect")]
+        todo_projection: Option<TodoProjectionArg>,
     },
     Verify {
         #[arg(long)]
@@ -229,6 +236,21 @@ enum LibraryCommand {
         #[arg(long)]
         query: String,
     },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum TodoProjectionArg {
+    Enabled,
+    Disabled,
+}
+
+impl From<TodoProjectionArg> for TodoProjection {
+    fn from(value: TodoProjectionArg) -> Self {
+        match value {
+            TodoProjectionArg::Enabled => Self::Enabled,
+            TodoProjectionArg::Disabled => Self::Disabled,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -811,6 +833,28 @@ fn run_workspace(command: WorkspaceCommand, json: bool) -> CliResult<()> {
                     workspace.edit_root.display(),
                     workspace.publish_root.display()
                 ),
+            )
+        }
+        WorkspaceCommand::ConversionPolicy {
+            edit_root,
+            todo_projection,
+        } => {
+            let mut workspace = Workspace::open(&edit_root)?;
+            if let Some(value) = todo_projection {
+                let mut policy = workspace.conversion_policy();
+                policy.todo_projection = value.into();
+                workspace.set_conversion_policy(policy);
+                workspace.save()?;
+            }
+            let policy = workspace.conversion_policy();
+            let setting = match policy.todo_projection {
+                TodoProjection::Enabled => "enabled",
+                TodoProjection::Disabled => "disabled",
+            };
+            print_value(
+                &policy,
+                json,
+                format!("library conversion policy: todo_projection={setting} (conversion-only)"),
             )
         }
         WorkspaceCommand::Verify { edit_root } => {
