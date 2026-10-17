@@ -322,9 +322,8 @@ library setting and structured effective-policy output.
 
 Phase 3 is **done**; Phase 4 remains **pending**. The Phase 2 receipt's
 pending-phase statements describe its handoff boundary, not the current phase
-table. This verified, reviewed but uncommitted candidate is confined to worktree
-`dms-chg-0055-phase-3`, branch `agent/chg-0055-phase-3`; no commit, push or
-deployment is authorized.
+table. Commit `c962c1f` integrates the verified, reviewed Phase 3 boundary on
+`main`; the dedicated worktree is removed. No push or deployment is authorized.
 
 - `workspace conversion-policy` requires `--edit-root`; omission of
   `--todo-projection` inspects, while explicit `enabled|disabled` updates through
