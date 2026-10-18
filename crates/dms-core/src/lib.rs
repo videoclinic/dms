@@ -21,6 +21,7 @@ mod library;
 mod lifecycle;
 mod maintenance;
 mod policies;
+mod publish_index;
 mod source_history;
 mod template;
 
@@ -34,6 +35,7 @@ pub use library::*;
 pub use lifecycle::*;
 pub use maintenance::*;
 pub use policies::*;
+pub use publish_index::*;
 pub use source_history::*;
 pub use template::*;
 
@@ -233,6 +235,12 @@ pub enum DmsError {
     ReleasePathExists(PathBuf),
     #[error("release path is invalid: {0}")]
     InvalidReleasePath(PathBuf),
+    #[error(
+        "publish index at {0} is not a regular DMS-owned file; move it aside before refreshing"
+    )]
+    ForeignPublishIndex(PathBuf),
+    #[error("publish index at {0} changed during refresh; retry with exclusive workspace access")]
+    PublishIndexChanged(PathBuf),
     #[error("export did not produce a non-empty PDF at {0}")]
     InvalidExportedPdf(PathBuf),
     #[error("canonical workflow event could not be encoded: {0}")]
