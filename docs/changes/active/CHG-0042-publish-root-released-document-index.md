@@ -7,25 +7,26 @@
 **Entry checkpoint:** CHG-0037 Phase 1 is done with its active-session switching gate evidence; its switch path retains the old workspace until the new one can safely replace it.
 **Context sources:** `AGENTS.md` (Architectural decisions, Application records); `docs/AGENTS.md`; `docs/changes/AGENTS.md`; `docs/product/AGENTS.md`; `docs/product/wireframes/AGENTS.md`; `docs/architecture.md` (Runtime shape, publish root); `docs/product/capabilities/CAP-0004-release-integrity.md`; `docs/product/capabilities/CAP-0005-desktop-shell.md` (Outcomes 3, 6, 16); `docs/product/capabilities/CAP-0016-publish-tree-maintenance.md`; `crates/AGENTS.md`; `crates/dms-core/AGENTS.md`; `crates/dms-desktop/AGENTS.md`; `crates/dms-core/src/maintenance.rs` (`Workspace::verify_release`, `Workspace::verify_all_releases`); `crates/dms-desktop/src/lib.rs` (`release_maintenance`); `crates/dms-desktop/ui/maintenance.mjs`; `crates/dms-desktop/ui/app.mjs` (`switchWorkspaceSession`, `closeWorkspaceSession`, `registerWindowCloseHandler`); `crates/dms-desktop/ui/maintenance.test.mjs`; `crates/dms-desktop/ui/app.test.mjs`; `docs/product/wireframes/generate.mjs`.
 **Produces:** Each publish root contains a DMS-owned, self-contained `index.html` that presents one current released PDF per document in its mirrored folder hierarchy, opens that PDF by a relative link, searches and filters only release metadata, defaults to newest release date, and supports alternate sorting. DMS can refresh it on demand and refreshes it before a workspace is cleanly closed or switched when its deterministic contents differ.
-**Status:** in-progress — Phase 2 implementation is reserved.
+**Status:** pending — Phases 1 and 2 are done; Phase 3 is pending. No phase is reserved.
 
-DMS will generate the publish root’s `index.html` from immutable release records without replacing the existing Releases / Release history & integrity interface. The generated library lists only each document’s latest non-withdrawn released PDF; older and withdrawn records remain discoverable and verifiable only through the existing DMS release-history and integrity surfaces.
+DMS generates the publish root’s `index.html` from immutable release records without replacing the existing Releases / Release history & integrity interface. The generated library lists only each document’s latest non-withdrawn released PDF; older and withdrawn records remain discoverable and verifiable only through the existing DMS release-history and integrity surfaces.
 
 | Field | Value |
 | --- | --- |
 | ID | CHG-0042 |
-| Status | in-progress |
+| Status | pending |
 | External request | Direct operator request: "Create for the \"publish\" directory a self contained \"index.html\" file like a document library for the released documents only using the same directory structure. A search bar allows to look for these documents. It's a transformation of \"Release history and integrity\" but not a replacement. Integrate this \"index.html\" in DMS. The \"index.html\" should be updated on request or if the library is closed (DMS is exited or library switching CHG-0037) and new releases appeared in the meantime. The user should be able to open the documents shown there. The default sort order of the documents should be the last release date. The user have the ability to change the sort order e.g. by document name. Also filters for \"type-id\" (e.g. on/off) should also be possible" |
 | Affected CAPs | CAP-0005, CAP-0016 |
 | Decision records | No new ADR. The index is a deterministic derived artifact in the existing publish root; `.dms` remains the release-record authority and the existing history/integrity workflow remains unchanged. |
 
 ## Current state
 
+- Core index generation and Desktop refresh/open integration are implemented; Phase 3 still owns the capability contracts, wireframe evidence, and full integration gate.
 - `release_maintenance` already projects every recorded release into `ReleaseRow`, including immutable title, version, relative PDF path, type ID, release timestamp, withdrawal state, and integrity verdict; it sorts those rows newest-first (`crates/dms-desktop/src/lib.rs:2881-2929`).
 - The current `ReleaseMaintenance` projection verifies each record while listing it, so it cannot be reused as the close-time generator without making normal close/switch dependent on integrity scans (`crates/dms-desktop/src/lib.rs:2887-2890`).
 - `Workspace::verify_release` and `Workspace::verify_all_releases` re-read PDF bytes but never repair them; integrity verification is a distinct core operation (`crates/dms-core/AGENTS.md:108-110`; `crates/dms-core/src/maintenance.rs:205-211`).
 - Existing CAP-0016 defines per-document released-version history, host opening, title filtering, pagination, verification, orphan handling, and immutable releases; it does not define a portable publish-root catalog (`docs/product/capabilities/CAP-0016-publish-tree-maintenance.md:14-49`).
-- The desktop switch transaction acquires the destination lock then releases the old lock before returning (`crates/dms-desktop/ui/app.mjs:685-724`), while clean window close releases the active lock then destroys the window (`crates/dms-desktop/ui/app.mjs:2712-2743`). Both need an index-sync call before the active lock/session is released.
+- Desktop refreshes the active source workspace's index before a different-library activation, including each delayed authorization poll, and before clean-close teardown (`crates/dms-desktop/ui/app.mjs`). Refresh failure retains the source session, activities, and lock; successful switching still acquires the destination lock before releasing the source lock.
 - The publish root mirrors the edit-relative tree and is a storage destination rather than a lifecycle state (`docs/architecture.md:34-60`; `docs/product/AGENTS.md:32-34`).
 
 ## Risk call-out
