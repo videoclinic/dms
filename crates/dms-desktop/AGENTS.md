@@ -46,6 +46,20 @@ macOS.
   active lock on a clean window close only when its recorded owner still
   matches. A blocked destination names the recorded OS user and hostname
   without showing the process id, and leaves the current library unchanged.
+  Before close teardown or any different-library activation (including an Entra
+  authorization poll that may acquire its lock), refresh the active source's
+  publish index through core. Every delayed different-library authorization poll
+  needs its own immediately preceding refresh; an earlier pending poll never
+  satisfies a later attempt. Refresh failure keeps the window, activities,
+  session, and source lock intact and prevents destination acquisition; show
+  the path-specific failure for retry. Same-library focus has no refresh/handoff.
+  Delayed authorization results belong to their captured workspace session;
+  after replacement, discard their status and activation, releasing only an
+  acquired stale destination lock with its returned owner, never the active
+  replacement workspace's lock or activities.
+  Destination rollback rechecks the on-disk owner and the active root/owner
+  after status IPC; release IPC must still enforce the captured owner. Equal
+  owners at different roots do not suppress stale-destination cleanup.
   Bound workspace-scoped mutations (reassociation, document control,
   notes, candidate/review/release, local lifecycle, periodic-review, reports)
   use that cached Entra actor or fail before changing metadata; new events
@@ -247,6 +261,13 @@ macOS.
   than replaced by current metadata. It
   filters by captured title and exposes per-release and workspace-wide
   verification actions. It never edits, repairs, or replaces release bytes.
+  **Update released document index** refreshes only the active workspace and
+  distinguishes written from already-current output. **Open released document
+  index** is offered for an existing owned index and revalidates it before host
+  opening; a missing index directs the operator to update first. Index errors
+  stay separate from history/integrity results and never reset filters or paging.
+  Refresh/open failures clear index availability only for a missing or foreign
+  owned-index target, not generic write or host-open I/O errors.
 - The Audit & Reports pane generates filtered CSV/PDF reports, lists report
   evidence with filter-before-pagination, and exposes read-only verification and
   host-mediated Open folder actions. It also shows periodic-review markers and

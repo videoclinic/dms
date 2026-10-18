@@ -227,6 +227,7 @@ export function createInitialState(preferences = defaultPreferences()) {
     flyout: null,
     setup_edit_root: "",
     library_switcher: { open: false, error: "", lock_feedback: null },
+    session_error: "",
     error: "",
     startup_authorization: { kind: "inactive" },
     library_session_authorization: { kind: "inactive" },
@@ -762,58 +763,124 @@ async function reissueStartupAuthorization() {
   render(appState);
 }
 
-async function finishLibrarySessionActivation(activation) {
-  const currentWorkspace = appState.workspace;
+function captureWorkspaceSession(state, getState) {
+  const session = state.workspace_session;
+  const editRoot = state.workspace?.edit_root;
+  const workspaceId = state.workspace?.workspace_id;
+  return () => {
+    const current = getState();
+    return current.workspace_session === session
+      && current.workspace?.edit_root === editRoot
+      && current.workspace?.workspace_id === workspaceId;
+  };
+}
+
+async function releaseStaleLibraryDestination(activation, getState, invoke) {
+  const owner = activation?.lock_status?.lock;
+  if (!owner) return;
+  const editRoot = activation.workspace.edit_root;
+  const matchesOwner = (candidate) => candidate && ["os_user", "hostname", "process_id", "acquired_at"]
+    .every((field) => owner[field] === candidate[field]);
+  const isActiveOwner = () => {
+    const current = getState();
+    return current.workspace?.edit_root === editRoot
+      && matchesOwner(current.maintenance.lock_status?.lock);
+  };
+  if (isActiveOwner()) return;
+  try {
+    const status = await invoke("workspace_lock_status", { editRoot });
+    if (isActiveOwner() || !matchesOwner(status.lock)) return;
+    // IPC checks this captured owner again; never substitute a replacement owner.
+    await invoke("release_workspace_lock", {
+      editRoot,
+      owner,
+      confirmed: true,
+    });
+  } catch (error) {
+    console.warn("Could not release stale library authorization destination lock", error);
+  }
+}
+
+export async function finishLibrarySessionActivation(activation, {
+  getState = () => appState,
+  setState = (state) => { appState = state; },
+  invoke = invokeCommand,
+  persist = persistPreferences,
+  openLibrary = () => openDestination("Library"),
+} = {}) {
+  const initial = getState();
+  let isCurrent = captureWorkspaceSession(initial, getState);
+  const currentWorkspace = initial.workspace;
   if (currentWorkspace && currentWorkspace.edit_root !== activation.workspace.edit_root) {
-    const currentOwner = appState.maintenance.lock_status?.lock;
+    const currentOwner = initial.maintenance.lock_status?.lock;
     if (!currentOwner) {
-      await invokeCommand("release_workspace_lock", {
-        editRoot: activation.workspace.edit_root,
-        owner: activation.lock_status.lock,
-        confirmed: true,
-      });
+      await releaseStaleLibraryDestination(activation, getState, invoke);
+      if (!isCurrent()) return;
       throw new Error("Active workspace lock owner is unavailable.");
     }
     try {
-      await invokeCommand("release_workspace_lock", {
+      await invoke("release_workspace_lock", {
         editRoot: currentWorkspace.edit_root,
         owner: currentOwner,
         confirmed: true,
       });
     } catch (error) {
-      await invokeCommand("release_workspace_lock", {
-        editRoot: activation.workspace.edit_root,
-        owner: activation.lock_status.lock,
-        confirmed: true,
-      });
+      if (!isCurrent()) {
+        await releaseStaleLibraryDestination(activation, getState, invoke);
+        return;
+      }
+      await releaseStaleLibraryDestination(activation, getState, invoke);
+      if (!isCurrent()) return;
       throw error;
     }
   }
-  await applyWorkspaceActivation(activation);
+  if (!isCurrent()) {
+    await releaseStaleLibraryDestination(activation, getState, invoke);
+    return;
+  }
+  setState(workspaceActivationState(getState(), activation));
+  isCurrent = captureWorkspaceSession(getState(), getState);
+  await persist(getState());
+  if (!isCurrent()) {
+    await releaseStaleLibraryDestination(activation, getState, invoke);
+    return;
+  }
+  openLibrary();
 }
 
 async function pollLibrarySessionAuthorization() {
-  const current = appState.library_session_authorization;
+  await executeLibrarySessionAuthorizationPoll({
+    getState: () => appState,
+    setState: (state) => { appState = state; },
+    invoke: invokeCommand,
+    finishActivation: finishLibrarySessionActivation,
+  });
+  render(appState);
+}
+
+export async function executeLibrarySessionAuthorizationPoll({ getState, setState, invoke, finishActivation }) {
+  const initial = getState();
+  const current = initial.library_session_authorization;
   if (!shouldPollLibrarySessionAuthorization(current) || !current.edit_root) return;
+  const workspace = initial.workspace;
+  const isCurrent = captureWorkspaceSession(initial, getState);
   try {
-    const status = await invokeCommand("poll_library_session_authorization", {
-      editRoot: current.edit_root,
-      takeOverStale: current.lock_options?.takeOverStale ?? false,
-      overrideExisting: current.lock_options?.overrideExisting ?? false,
-    });
-    appState = applyLibrarySessionAuthorization(appState, status, current.lock_options);
+    const status = await pollWorkspaceSessionAuthorization(workspace, current, invoke);
+    if (!isCurrent()) {
+      await releaseStaleLibraryDestination(status.activation, getState, invoke);
+      return;
+    }
+    setState(applyLibrarySessionAuthorization(getState(), status, current.lock_options));
+    if (workspace && workspace.edit_root !== current.edit_root) {
+      setState({ ...getState(), session_error: "" });
+    }
     if (status.activation) {
-      await finishLibrarySessionActivation(status.activation);
+      await finishActivation(status.activation);
     }
   } catch (error) {
-    appState = applyLibrarySessionAuthorization(appState, {
-      ...current,
-      kind: "failed",
-      next_poll_delay_ms: null,
-      message: String(error),
-    }, current.lock_options);
+    if (!isCurrent()) return;
+    setState(applyLibrarySessionPollFailure(getState(), current, error));
   }
-  render(appState);
 }
 
 async function reissueLibrarySessionAuthorization() {
@@ -1213,6 +1280,11 @@ let approverPollTimer = null;
 
 function render(state) {
   const root = document.querySelector("#app");
+  const sessionError = document.querySelector("#workspace-session-error");
+  if (sessionError) {
+    sessionError.hidden = !state.session_error;
+    sessionError.textContent = state.session_error ?? "";
+  }
   root.classList.toggle("sidebar-collapsed", !state.preferences.sidebar_expanded && !state.sidebar_overlay);
   renderNavigation(state);
   renderGroups(state);
@@ -1331,6 +1403,43 @@ function openDestination(destination) {
   }
 }
 
+export class PublishIndexRefreshError extends Error {}
+
+export function applyLibrarySessionPollFailure(state, current, error) {
+  if (error instanceof PublishIndexRefreshError) {
+    return { ...state, session_error: error.message };
+  }
+  return applyLibrarySessionAuthorization(state, {
+    ...current,
+    kind: "failed",
+    next_poll_delay_ms: null,
+    message: String(error),
+  }, current.lock_options);
+}
+
+async function refreshPublishIndexBeforeLeaving(workspace, invoke) {
+  if (!workspace) return;
+  try {
+    await invoke("refresh_publish_index", { editRoot: workspace.edit_root });
+  } catch (error) {
+    throw new PublishIndexRefreshError(`Released document index refresh failed; the current library remains open. ${String(error)}`);
+  }
+}
+
+export async function pollWorkspaceSessionAuthorization(workspace, authorization, invoke) {
+  const sourceEditRoot = workspace?.edit_root;
+  const needsSourceRefresh = Boolean(sourceEditRoot)
+    && sourceEditRoot !== authorization.edit_root;
+  if (needsSourceRefresh) {
+    await refreshPublishIndexBeforeLeaving(workspace, invoke);
+  }
+  return invoke("poll_library_session_authorization", {
+    editRoot: authorization.edit_root,
+    takeOverStale: authorization.lock_options?.takeOverStale ?? false,
+    overrideExisting: authorization.lock_options?.overrideExisting ?? false,
+  });
+}
+
 export async function switchWorkspaceSession(
   currentWorkspace,
   currentLockStatus,
@@ -1339,6 +1448,7 @@ export async function switchWorkspaceSession(
   invoke,
 ) {
   if (currentWorkspace?.edit_root === workspace.edit_root) return null;
+  await refreshPublishIndexBeforeLeaving(currentWorkspace, invoke);
   const attempt = await invoke("activate_workspace_session", {
     editRoot: workspace.edit_root,
     takeOverStale: lockOptions.takeOverStale ?? false,
@@ -1416,6 +1526,11 @@ async function activateWorkspace(workspace, lockOptions = {}, openLibrary = true
     else render(appState);
     return;
   } catch (error) {
+    if (error instanceof PublishIndexRefreshError) {
+      appState = { ...appState, session_error: error.message };
+      render(appState);
+      throw error;
+    }
     const status = await invokeCommand("library_session_authorization_status", {
       editRoot: workspace.edit_root,
     });
@@ -1625,6 +1740,48 @@ async function loadSelectedDocument() {
   } catch (error) {
     appState = { ...appState, error: String(error) };
     render(appState);
+  }
+}
+
+export async function executePublishIndexAction(action, { getState, setState, invoke }) {
+  if (action !== "update" && action !== "open") return false;
+  const state = getState();
+  if (!state.workspace || state.releases.index_busy) return false;
+  const session = state.workspace_session;
+  const update = (changes, clearSessionError = false) => {
+    const current = getState();
+    if (current.workspace_session !== session) return;
+    setState({
+      ...current,
+      session_error: clearSessionError ? "" : current.session_error,
+      releases: { ...current.releases, ...changes },
+    });
+  };
+  update({ index_busy: true, index_notice: "", index_error: "" });
+  try {
+    const outcome = await invoke(action === "update" ? "refresh_publish_index" : "open_publish_index", {
+      editRoot: state.workspace.edit_root,
+    });
+    update({
+      index_busy: false,
+      publish_index_available: true,
+      index_notice: action === "open" ? "Released document index opened."
+        : outcome.status === "unchanged" ? "Released document index is already current."
+          : "Released document index updated.",
+    }, action === "update");
+    return true;
+  } catch (error) {
+    const message = String(error);
+    const reason = error instanceof Error ? error.message : message;
+    const indexGone = reason === "no owned publish index exists yet; refresh the publish index first"
+      || (reason.startsWith("publish index at ")
+        && reason.endsWith(" is not a regular DMS-owned file; move it aside before refreshing"));
+    update({
+      index_busy: false,
+      index_error: message,
+      ...(indexGone ? { publish_index_available: false } : {}),
+    });
+    return false;
   }
 }
 
@@ -2651,6 +2808,16 @@ async function handleClick(event) {
     return;
   }
 
+  const indexAction = event.target.closest("[data-publish-index-update]") ? "update"
+    : event.target.closest("[data-publish-index-open]") ? "open" : null;
+  if (indexAction) {
+    await executePublishIndexAction(indexAction, {
+      getState: () => appState,
+      setState: (state) => { appState = state; render(appState); },
+      invoke: invokeCommand,
+    });
+    return;
+  }
   if (event.target.closest("[data-release-verify-all]")) {
     void loadReleases("verify_all_releases");
     return;
@@ -3552,6 +3719,13 @@ let appState = createInitialState();
 
 export async function closeWorkspaceSession(state, invoke, destroy) {
   if (!state.workspace) return false;
+  try {
+    await refreshPublishIndexBeforeLeaving(state.workspace, invoke);
+    state.session_error = "";
+  } catch (error) {
+    state.session_error = error.message;
+    throw error;
+  }
   state.batch_execution = createBatchExecutionState();
   state.workspace_session = Symbol("closed workspace session");
   const owner = state.maintenance.lock_status?.lock;
@@ -3580,7 +3754,8 @@ async function registerWindowCloseHandler() {
     try {
       await closeWorkspaceSession(appState, invokeCommand, () => appWindow.destroy());
     } catch (error) {
-      console.warn("Could not remove workspace advisory lock during close", error);
+      console.warn("Could not close workspace", error);
+      render(appState);
     }
   });
 }

@@ -112,6 +112,18 @@ impl Workspace {
             document_count: index.rows.len(),
         })
     }
+
+    /// Resolve the publish-root index only when an owned index file exists.
+    /// Missing index yields `None` so callers can prompt a refresh first.
+    /// Foreign, symlinked, or non-regular targets reuse the owned-index
+    /// validator and surface `ForeignPublishIndex`.
+    pub fn existing_publish_index_path(&self) -> Result<Option<PathBuf>> {
+        let path = self.publish_root.join(PUBLISH_INDEX_FILENAME);
+        match read_owned_index(&path)? {
+            Some(_) => Ok(Some(path)),
+            None => Ok(None),
+        }
+    }
 }
 
 fn name_order(left: &PublishIndexRow, right: &PublishIndexRow) -> std::cmp::Ordering {

@@ -17,10 +17,10 @@ use dms_core::{
     MutationPrincipal, Note, NotificationClient, NotificationKind, NotificationMessage,
     NotificationSettings, NotificationTransport, OwnerReference, PdfExporter, PeriodicReview,
     PeriodicReviewMarker, PeriodicReviewResult, PermalinkTarget, PersonSnapshot, PolicyFolder,
-    ReleaseCandidate, ReleaseVerificationStatus, RestoreOutcome, RestoreRequest, ReviewDecision,
-    RoleUpdate, SmtpSettings, SourceState, TargetSelection, Version, WorkflowEvent,
-    WorkflowPolicyAssignment, WorkflowVerification, Workspace, WorkspaceLock, WorkspaceLockStatus,
-    METADATA_DIRECTORY,
+    PublishIndexOutcome, ReleaseCandidate, ReleaseVerificationStatus, RestoreOutcome,
+    RestoreRequest, ReviewDecision, RoleUpdate, SmtpSettings, SourceState, TargetSelection,
+    Version, WorkflowEvent, WorkflowPolicyAssignment, WorkflowVerification, Workspace,
+    WorkspaceLock, WorkspaceLockStatus, METADATA_DIRECTORY,
 };
 use lettre::message::Mailbox;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -461,6 +461,7 @@ pub struct ReleaseRow {
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct ReleaseMaintenance {
     pub rows: Vec<ReleaseRow>,
+    pub publish_index_available: bool,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -2416,6 +2417,35 @@ fn verify_all_releases(edit_root: String) -> Result<ReleaseMaintenance, String> 
 }
 
 #[tauri::command]
+fn refresh_publish_index(edit_root: String) -> Result<PublishIndexOutcome, String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    workspace
+        .refresh_publish_index()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn open_publish_index(edit_root: String) -> Result<(), String> {
+    let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
+    open_publish_index_with(&workspace, open_host_path)
+}
+
+fn open_publish_index_with(
+    workspace: &Workspace,
+    open: impl Fn(&Path) -> Result<(), String>,
+) -> Result<(), String> {
+    match workspace
+        .existing_publish_index_path()
+        .map_err(|error| error.to_string())?
+    {
+        Some(path) => open(&path),
+        None => {
+            Err("no owned publish index exists yet; refresh the publish index first".to_owned())
+        }
+    }
+}
+
+#[tauri::command]
 fn load_audit_reports(edit_root: String) -> Result<AuditReportSnapshot, String> {
     let workspace = Workspace::open(Path::new(&edit_root)).map_err(|error| error.to_string())?;
     audit_report_snapshot(&workspace)
@@ -4092,7 +4122,15 @@ fn release_maintenance(workspace: &Workspace) -> Result<ReleaseMaintenance, Stri
             .cmp(&left.released_at)
             .then_with(|| left.document_title.cmp(&right.document_title))
     });
-    Ok(ReleaseMaintenance { rows })
+    // Availability is advisory only: a foreign or unreadable index must not
+    // break the existing history projection.
+    let publish_index_available = workspace
+        .existing_publish_index_path()
+        .map_or(false, |path| path.is_some());
+    Ok(ReleaseMaintenance {
+        rows,
+        publish_index_available,
+    })
 }
 
 fn audit_report_snapshot(workspace: &Workspace) -> Result<AuditReportSnapshot, String> {
@@ -4356,6 +4394,8 @@ pub fn run() {
             open_release_pdf,
             verify_release,
             verify_all_releases,
+            refresh_publish_index,
+            open_publish_index,
             load_audit_reports,
             generate_audit_report,
             verify_audit_report,
@@ -6236,6 +6276,84 @@ mod tests {
     }
 
     #[test]
+    fn desktop_publish_index_commands_refresh_open_and_report_availability() {
+        use std::sync::Mutex;
+
+        let directory = tempfile::tempdir().unwrap();
+        let edit_root = directory.path().join("edit");
+        let publish_root = directory.path().join("publish");
+        fs::create_dir_all(&edit_root).unwrap();
+        fs::create_dir_all(&publish_root).unwrap();
+        Workspace::init(&edit_root, &publish_root).unwrap();
+        let root = edit_root.to_string_lossy().into_owned();
+
+        // Missing index: snapshot reports unavailable and host open refuses
+        // without spawning, telling the caller to refresh first.
+        let maintenance = load_releases(root.clone()).unwrap();
+        assert!(!maintenance.publish_index_available);
+        let workspace = Workspace::open(Path::new(&root)).unwrap();
+        let opened: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+        let refused = open_publish_index_with(&workspace, |_| {
+            opened.lock().unwrap().push(PathBuf::from("spawned"));
+            Ok(())
+        });
+        assert!(refused
+            .unwrap_err()
+            .contains("refresh the publish index first"));
+        assert!(opened.lock().unwrap().is_empty());
+
+        // Refresh writes the owned index; a repeat is a no-change outcome and
+        // preserves the file bytes.
+        let first = refresh_publish_index(root.clone()).unwrap();
+        assert_eq!(first.status, dms_core::PublishIndexStatus::Written);
+        let before = fs::read(&first.path).unwrap();
+        let second = refresh_publish_index(root.clone()).unwrap();
+        assert_eq!(second.status, dms_core::PublishIndexStatus::Unchanged);
+        assert_eq!(fs::read(&second.path).unwrap(), before);
+        assert!(load_releases(root.clone()).unwrap().publish_index_available);
+
+        // Existing owned index opens the exact publish-root index path.
+        let workspace = Workspace::open(Path::new(&root)).unwrap();
+        let opened: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+        open_publish_index_with(&workspace, |path| {
+            opened.lock().unwrap().push(path.to_path_buf());
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(
+            opened.lock().unwrap().as_slice(),
+            [publish_root.join("index.html")]
+        );
+
+        // Foreign content refuses host open yet leaves history projection intact.
+        fs::write(publish_root.join("index.html"), "<html>foreign</html>").unwrap();
+        let workspace = Workspace::open(Path::new(&root)).unwrap();
+        let opened: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+        let refused = open_publish_index_with(&workspace, |_| {
+            opened.lock().unwrap().push(PathBuf::from("spawned"));
+            Ok(())
+        });
+        assert!(refused.is_err());
+        assert!(opened.lock().unwrap().is_empty());
+        let maintenance = load_releases(root.clone()).unwrap();
+        assert!(maintenance.rows.is_empty());
+        assert!(!maintenance.publish_index_available);
+
+        // A symlinked index also refuses host open without breaking history.
+        fs::remove_file(publish_root.join("index.html")).unwrap();
+        let outside = directory.path().join("outside.html");
+        fs::write(&outside, "<html>outside</html>").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&outside, publish_root.join("index.html")).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_file(&outside, publish_root.join("index.html")).unwrap();
+        let workspace = Workspace::open(Path::new(&root)).unwrap();
+        let refused = open_publish_index_with(&workspace, |_| Ok(()));
+        assert!(refused.is_err());
+        assert!(load_releases(root).unwrap().rows.is_empty());
+    }
+
+    #[test]
     fn desktop_maintenance_commands_list_releases_and_create_a_manifest_backup() {
         let directory = tempfile::tempdir().unwrap();
         let edit_root = directory.path().join("edit");
@@ -6262,6 +6380,40 @@ mod tests {
         assert_eq!(outcome.entry_count, 2);
         assert_eq!(outcome.manifest_digest.len(), 64);
         assert!(archive.is_file());
+    }
+
+    #[test]
+    fn destination_rollback_ipc_preserves_a_replacement_after_owner_preflight() {
+        let directory = tempfile::tempdir().unwrap();
+        let edit_root = directory.path().join("edit");
+        let publish_root = directory.path().join("publish");
+        fs::create_dir_all(&edit_root).unwrap();
+        fs::create_dir_all(&publish_root).unwrap();
+        Workspace::init(&edit_root, &publish_root).unwrap();
+        let root = edit_root.to_string_lossy().into_owned();
+        let stale_owner = acquire_workspace_lock(root.clone(), false, false)
+            .unwrap()
+            .lock
+            .unwrap();
+        assert_eq!(
+            workspace_lock_status(root.clone()).unwrap().lock.as_ref(),
+            Some(&stale_owner)
+        );
+
+        let replacement = acquire_workspace_lock(root.clone(), false, true)
+            .unwrap()
+            .lock
+            .unwrap();
+        assert_ne!(replacement, stale_owner);
+        let before = fs::read(edit_root.join(".dms/lock")).unwrap();
+        assert!(release_workspace_lock(root.clone(), stale_owner, true).is_err());
+        assert_eq!(fs::read(edit_root.join(".dms/lock")).unwrap(), before);
+        assert_eq!(
+            workspace_lock_status(root.clone()).unwrap().lock,
+            Some(replacement.clone())
+        );
+        release_workspace_lock(root, replacement, true).unwrap();
+        assert!(!edit_root.join(".dms/lock").exists());
     }
 
     #[test]

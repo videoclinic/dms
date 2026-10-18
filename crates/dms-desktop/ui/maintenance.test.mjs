@@ -59,6 +59,28 @@ test("release maintenance filters titles, pages rows, and escapes evidence", () 
   assert.doesNotMatch(markup, /Employee <Handbook>/);
 });
 
+test("publish index controls supplement history and open only a known owned index", () => {
+  let state = applyReleaseSnapshot(createReleaseState(), { rows: [release()], publish_index_available: false });
+  let markup = releaseMaintenanceMarkup(state);
+  assert.match(markup, /Update released document index/);
+  assert.doesNotMatch(markup, /data-publish-index-open/);
+  state = applyReleaseSnapshot({ ...state, query: "employee", page_size: 10 }, { rows: state.rows, publish_index_available: true });
+  state = applyReleaseSnapshot(state, { rows: state.rows });
+  assert.equal(state.publish_index_available, true);
+  markup = releaseMaintenanceMarkup({ ...state, index_notice: "Already current <index>", index_error: "Cannot write <path>" });
+  assert.match(markup, /Open released document index/);
+  assert.match(markup, /role="status">Already current &lt;index&gt;/);
+  assert.match(markup, /role="alert">Cannot write &lt;path&gt;/);
+  for (const control of ["data-release-verify-all", "data-release-verify=", "data-release-open=", "release-filter-form", "data-release-page=", "data-release-page-size", "data-release-withdraw-form"]) {
+    assert.ok(markup.includes(control), control);
+  }
+  assert.match(markup, /value="employee"/);
+  assert.match(markup, /Page 1 of 1 · 1 releases/);
+  const busy = releaseMaintenanceMarkup({ ...state, index_busy: true });
+  assert.match(busy, /data-publish-index-update disabled/);
+  assert.match(busy, /data-publish-index-open disabled/);
+});
+
 test("release history labels legacy snapshot omissions without mutable fallbacks", () => {
   const markup = releaseMaintenanceMarkup(applyReleaseSnapshot(createReleaseState(), {
     rows: [release({

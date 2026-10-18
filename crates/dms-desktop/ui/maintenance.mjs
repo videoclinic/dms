@@ -15,6 +15,10 @@ export function createReleaseState() {
     page_size: 20,
     loading: false,
     error: "",
+    publish_index_available: false,
+    index_busy: false,
+    index_notice: "",
+    index_error: "",
   };
 }
 
@@ -22,6 +26,7 @@ export function applyReleaseSnapshot(state, snapshot) {
   return {
     ...state,
     rows: [...(snapshot?.rows ?? [])],
+    publish_index_available: snapshot?.publish_index_available ?? state.publish_index_available,
     loading: false,
     error: "",
   };
@@ -92,6 +97,9 @@ export function releaseMaintenanceMarkup(state) {
   return `<section class="card maintenance-card">
     <div class="section-heading"><div><span class="badge">Publish tree</span><h2>Release history and integrity</h2></div><button class="button" type="button" data-release-verify-all>Verify entire publish tree</button></div>
     <p>Verification reads the recorded PDF and compares its SHA-256 digest. It never repairs, replaces, or deletes release bytes.</p>
+    <div class="release-actions"><button class="button secondary" type="button" data-publish-index-update ${state.index_busy ? "disabled" : ""}>Update released document index</button>${state.publish_index_available ? `<button class="button secondary" type="button" data-publish-index-open ${state.index_busy ? "disabled" : ""}>Open released document index</button>` : ""}</div>
+    <p>The released document index lists current released PDFs only. History and integrity checks remain below.</p>
+    ${state.index_notice ? `<p class="status" role="status">${escapeHtml(state.index_notice)}</p>` : ""}${state.index_error ? `<p class="status" role="alert">${escapeHtml(state.index_error)}</p>` : ""}
     <form id="release-filter-form" class="form-row"><div class="field"><label for="release-title-filter">Filter by document title</label><input id="release-title-filter" name="query" value="${escapeHtml(state.query)}" autocomplete="off"></div><button class="button secondary" type="submit">Apply filter</button></form>
     <p class="status" role="alert">${escapeHtml(state.error)}</p>
     <div class="release-list">${body}</div>

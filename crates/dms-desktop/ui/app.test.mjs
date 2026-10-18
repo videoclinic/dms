@@ -16,7 +16,10 @@ import {
   currentDeepLinks,
   defaultPreferences,
   executeLibraryBatch,
+  executeLibrarySessionAuthorizationPoll,
+  executePublishIndexAction,
   finishFormSubmission,
+  finishLibrarySessionActivation,
   lifecycleFailureLibraryState,
   lifecycleSuccessLibraryState,
   selectionFeedbackLibraryState,
@@ -35,10 +38,12 @@ import {
   isAdvisoryLockRefusal,
   libraryLockOwnerFeedback,
   switchWorkspaceSession,
+  pollWorkspaceSessionAuthorization,
   toggleSavedView,
   workspaceSetupRequest,
   applyStartupAuthorization,
   applyLibrarySessionAuthorization,
+  applyLibrarySessionPollFailure,
   applyLibrarySessionIdentityRecovery,
   cancelStartupAuthorizationPoll,
   dismissLibrarySessionAuthorization,
@@ -54,6 +59,7 @@ import {
   startupAuthorizationPollDelayMs,
   workspaceFootMarkup,
   workspaceActivationState,
+  PublishIndexRefreshError,
 } from "./app.mjs";
 
 const workspaceId = "5ef3db10-8f6d-4ae4-9d68-ecb1eaac8235";
@@ -221,7 +227,10 @@ test("closing the workspace clears batch state before destroying the window, eve
   const session = state.workspace_session;
   state.maintenance.lock_status = { lock: { process_id: 1 } };
   let destroyed = false;
-  await assert.rejects(closeWorkspaceSession(state, async () => { throw new Error("release failed"); }, async () => {
+  await assert.rejects(closeWorkspaceSession(state, async (command) => {
+    if (command === "release_workspace_lock") throw new Error("release failed");
+    return { status: "unchanged" };
+  }, async () => {
     assert.deepEqual(state.batch_execution.entries, []);
     assert.notEqual(state.workspace_session, session);
     destroyed = true;
@@ -581,25 +590,31 @@ test("workspace setup maps each form to its explicit desktop command", () => {
   );
 });
 
-test("clean desktop close releases the active workspace lock before destroying the window", async () => {
-  const calls = [];
-  let destroyed = false;
-  const owner = { os_user: "operator", hostname: "host", process_id: 17, acquired_at: "now" };
-  const closed = await closeWorkspaceSession(
-    {
-      workspace: { edit_root: "/DMS/Edit" },
-      maintenance: { lock_status: { lock: owner } },
-    },
-    async (command, arguments_) => calls.push({ command, arguments_ }),
-    async () => { destroyed = true; },
-  );
+test("clean desktop close refreshes before releasing the active lock and destroying the window", async () => {
+  for (const status of ["written", "unchanged"]) {
+    const calls = [];
+    const owner = { os_user: "operator", hostname: "host", process_id: 17, acquired_at: "now" };
+    const closed = await closeWorkspaceSession(
+      {
+        workspace: { edit_root: "/DMS/Edit" },
+        maintenance: { lock_status: { lock: owner } },
+      },
+      async (command, arguments_) => {
+        calls.push({ command, arguments_ });
+        return { status };
+      },
+      async () => { calls.push({ command: "destroy" }); },
+    );
 
-  assert.equal(closed, true);
-  assert.deepEqual(calls, [{
-    command: "release_workspace_lock",
-    arguments_: { editRoot: "/DMS/Edit", owner, confirmed: true },
-  }]);
-  assert.equal(destroyed, true);
+    assert.equal(closed, true);
+    assert.deepEqual(calls, [{
+      command: "refresh_publish_index",
+      arguments_: { editRoot: "/DMS/Edit" },
+    }, {
+      command: "release_workspace_lock",
+      arguments_: { editRoot: "/DMS/Edit", owner, confirmed: true },
+    }, { command: "destroy" }]);
+  }
 });
 
 test("main window permits the forced close used after advisory-lock release", () => {
@@ -668,6 +683,7 @@ test("opening a workspace revalidates it before acquiring its lock and switches 
   assert.equal(result.kind, "activated");
   assert.equal(result.activation, activation);
   assert.deepEqual(calls, [
+    { command: "refresh_publish_index", arguments_: { editRoot: "/DMS/Old" } },
     {
       command: "activate_workspace_session",
       arguments_: {
@@ -702,6 +718,7 @@ test("a failed bound open does not acquire a destination lock", async () => {
     /enabled direct member/,
   );
   assert.deepEqual(calls, [
+    { command: "refresh_publish_index", arguments_: { editRoot: "/DMS/Old" } },
     {
       command: "activate_workspace_session",
       arguments_: { editRoot: "/DMS/New", takeOverStale: false, overrideExisting: false },
@@ -733,6 +750,9 @@ test("an authorization-required workspace open returns its sign-in state without
 
   assert.deepEqual(result, { kind: "authorization_required", authorization });
   assert.deepEqual(calls, [{
+    command: "refresh_publish_index",
+    arguments_: { editRoot: "/DMS/Old" },
+  }, {
     command: "activate_workspace_session",
     arguments_: { editRoot: "/DMS/New", takeOverStale: false, overrideExisting: false },
   }]);
@@ -772,7 +792,7 @@ test("a failed prior-lock release rolls back the destination lock", async () => 
             lock_status: { state: "current", lock: newOwner },
           };
         }
-        if (arguments_.editRoot === "/DMS/Old") {
+        if (command === "release_workspace_lock" && arguments_.editRoot === "/DMS/Old") {
           throw new Error("workspace lock owner changed before release");
         }
         return null;
@@ -781,6 +801,7 @@ test("a failed prior-lock release rolls back the destination lock", async () => 
     /owner changed/,
   );
   assert.deepEqual(calls, [
+    { command: "refresh_publish_index", arguments_: { editRoot: "/DMS/Old" } },
     {
       command: "activate_workspace_session",
       arguments_: { editRoot: "/DMS/New", takeOverStale: false, overrideExisting: false },
@@ -794,6 +815,659 @@ test("a failed prior-lock release rolls back the destination lock", async () => 
       arguments_: { editRoot: "/DMS/New", owner: newOwner, confirmed: true },
     },
   ]);
+});
+
+test("publish index actions target only the active workspace and retain release history state", async () => {
+  for (const [action, status, notice] of [
+    ["update", "written", "Released document index updated."],
+    ["update", "unchanged", "Released document index is already current."],
+    ["open", null, "Released document index opened."],
+  ]) {
+    let state = createInitialState();
+    state.workspace = { workspace_id: workspaceId, edit_root: "/DMS/Active" };
+    state.session_error = "Previous close refresh failed";
+    state.releases = { ...state.releases, query: "Policy", page: 2, page_size: 10, rows: [{ release_id: "retained" }] };
+    const initial = state;
+    const calls = [];
+    assert.equal(await executePublishIndexAction(action, {
+      getState: () => state,
+      setState: (next) => { state = next; },
+      invoke: async (command, arguments_) => {
+        calls.push({ command, arguments_ });
+        assert.equal(state.releases.index_busy, true);
+        return status ? { status } : null;
+      },
+    }), true);
+    assert.deepEqual(calls, [{ command: action === "update" ? "refresh_publish_index" : "open_publish_index", arguments_: { editRoot: "/DMS/Active" } }]);
+    assert.equal(state.releases.index_notice, notice);
+    assert.equal(state.session_error, action === "update" ? "" : initial.session_error);
+    assert.equal(state.releases.index_error, "");
+    assert.equal(state.releases.index_busy, false);
+    assert.equal(state.releases.publish_index_available, true);
+    assert.equal(state.releases.rows, initial.releases.rows);
+    for (const key of ["query", "page", "page_size"]) assert.equal(state.releases[key], initial.releases[key]);
+    assert.equal(state.workspace, initial.workspace);
+    assert.equal(state.activities, initial.activities);
+    assert.equal(state.maintenance, initial.maintenance);
+  }
+});
+
+test("publish index actions require an active workspace and suppress duplicate dispatch", async () => {
+  for (const variant of ["no-workspace", "busy", "unknown-action"]) {
+    const state = createInitialState();
+    if (variant !== "no-workspace") state.workspace = { edit_root: "/DMS/Active" };
+    state.releases.index_busy = variant === "busy";
+    assert.equal(await executePublishIndexAction(variant === "unknown-action" ? "delete" : "update", {
+      getState: () => state,
+      setState: () => assert.fail("no state change expected"),
+      invoke: () => assert.fail("no command expected"),
+    }), false);
+  }
+});
+
+test("publish index controls and close failure feedback are wired into the shell", () => {
+  const source = readFileSync(new URL("./app.mjs", import.meta.url), "utf8");
+  const shell = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  assert.match(source, /closest\("\[data-publish-index-update\]"\)/);
+  assert.match(source, /closest\("\[data-publish-index-open\]"\)/);
+  assert.match(source, /await executePublishIndexAction\(indexAction,/);
+  assert.match(source, /event\.preventDefault\(\);\s*try\s*\{\s*await closeWorkspaceSession/);
+  assert.match(shell, /id="workspace-session-error"[^>]*role="alert"/);
+  assert.match(source, /sessionError\.textContent = state\.session_error/);
+});
+
+test("publish index errors replace stale success notices without resetting history or session", async () => {
+  for (const action of ["update", "open"]) {
+    let state = createInitialState();
+    state.workspace = { edit_root: "/DMS/Active" };
+    state.releases = {
+      ...state.releases,
+      query: "Policy",
+      page: 3,
+      index_notice: "Previous success",
+      publish_index_available: true,
+    };
+    const initial = state;
+    const error = action === "open"
+      ? "no owned publish index exists yet; refresh the publish index first"
+      : "publish index at /Publish/index.html is not a regular DMS-owned file; move it aside before refreshing";
+    assert.equal(await executePublishIndexAction(action, {
+      getState: () => state,
+      setState: (next) => { state = next; },
+      invoke: async () => { throw new Error(error); },
+    }), false);
+    assert.equal(state.releases.index_notice, "");
+    assert.equal(state.releases.index_error, `Error: ${error}`);
+    assert.equal(state.releases.index_busy, false);
+    assert.equal(state.releases.publish_index_available, false);
+    assert.equal(state.releases.query, "Policy");
+    assert.equal(state.releases.page, 3);
+    assert.equal(state.activities, initial.activities);
+    assert.equal(state.workspace_session, initial.workspace_session);
+  }
+});
+
+test("publish index ownership failures clear availability for update and open", async () => {
+  for (const action of ["update", "open"]) {
+    for (const message of [
+      "no owned publish index exists yet; refresh the publish index first",
+      "publish index at /Publish/index.html is not a regular DMS-owned file; move it aside before refreshing",
+    ]) {
+      for (const error of [message, new Error(message)]) {
+        let state = createInitialState();
+        state.workspace = { edit_root: "/DMS/Active" };
+        state.releases.publish_index_available = true;
+        assert.equal(await executePublishIndexAction(action, {
+          getState: () => state,
+          setState: (next) => { state = next; },
+          invoke: async () => { throw error; },
+        }), false);
+        assert.equal(state.releases.publish_index_available, false);
+        assert.equal(state.releases.index_error, String(error));
+        assert.equal(state.releases.index_busy, false);
+      }
+    }
+  }
+});
+
+test("generic index write and host-open failures preserve previous availability", async () => {
+  for (const [action, message] of [
+    ["update", "I/O error at /Publish/index.html: Permission denied"],
+    ["open", "cannot open /Publish/index.html: Permission denied"],
+    ["update", "I/O error at /DMS-owned/index.html: Permission denied"],
+    ["open", "cannot open /DMS-owned/index.html: Permission denied"],
+  ]) {
+    for (const available of [true, false]) {
+      for (const error of [message, new Error(message)]) {
+        let state = createInitialState();
+        state.workspace = { edit_root: "/DMS/Active" };
+        state.releases = { ...state.releases, publish_index_available: available, index_notice: "Previous success" };
+        assert.equal(await executePublishIndexAction(action, {
+          getState: () => state,
+          setState: (next) => { state = next; },
+          invoke: async () => { throw error; },
+        }), false);
+        assert.equal(state.releases.publish_index_available, available, `${action}: ${message}`);
+        assert.equal(state.releases.index_error, String(error));
+        assert.equal(state.releases.index_notice, "");
+        assert.equal(state.releases.index_busy, false);
+      }
+    }
+  }
+});
+
+test("late publish index outcomes cannot update a replacement session", async () => {
+  let state = createInitialState();
+  state.workspace = { edit_root: "/DMS/Old" };
+  let settle;
+  const pending = executePublishIndexAction("update", {
+    getState: () => state,
+    setState: (next) => { state = next; },
+    invoke: () => new Promise((resolve) => { settle = resolve; }),
+  });
+  state = workspaceActivationState(state, { workspace: { edit_root: "/DMS/New" }, lock_status: {} });
+  const replacement = state;
+  settle({ status: "written" });
+  await pending;
+  assert.equal(state, replacement);
+});
+
+test("failed close refresh retains window, lock, activities, drafts, and batch session for retry", async () => {
+  const harness = batchHarness();
+  await executeLibraryBatch("add", harness);
+  const state = harness.getState();
+  state.maintenance.lock_status = { lock: { process_id: 17 } };
+  const before = { ...state };
+  const calls = [];
+  await assert.rejects(closeWorkspaceSession(state, async (command, arguments_) => {
+    calls.push({ command, arguments_ });
+    throw new Error("/Publish/index.html is not DMS-owned");
+  }, async () => { assert.fail("window must remain open"); }), /index\.html is not DMS-owned/);
+  assert.deepEqual(calls, [{ command: "refresh_publish_index", arguments_: { editRoot: "/private/Edit" } }]);
+  assert.deepEqual({ ...state, session_error: undefined }, { ...before, session_error: undefined });
+  assert.match(state.session_error, /current library remains open/);
+  assert.match(state.session_error, /\/Publish\/index\.html/);
+  const retryCalls = [];
+  await closeWorkspaceSession(state, async (command) => {
+    retryCalls.push(command);
+    if (command === "refresh_publish_index") {
+      assert.equal(state.batch_execution, before.batch_execution);
+      assert.equal(state.workspace_session, before.workspace_session);
+      return { status: "unchanged" };
+    }
+  }, async () => { retryCalls.push("destroy"); });
+  assert.deepEqual(retryCalls, ["refresh_publish_index", "release_workspace_lock", "destroy"]);
+  assert.equal(state.session_error, "");
+});
+
+test("source refresh failure prevents destination acquisition and session reset", async () => {
+  const harness = batchHarness();
+  await executeLibraryBatch("add", harness);
+  let state = harness.getState();
+  state.maintenance.lock_status = { lock: { process_id: 17 } };
+  const before = state;
+  const calls = [];
+  await assert.rejects(async () => {
+    const attempt = await switchWorkspaceSession(state.workspace, state.maintenance.lock_status,
+      { edit_root: "/DMS/New" }, {}, async (command, arguments_) => {
+        calls.push({ command, arguments_ });
+        throw new Error("cannot write /Publish/index.html");
+      });
+    state = workspaceActivationState(state, attempt.activation);
+  }, /cannot write \/Publish\/index\.html/);
+  assert.deepEqual(calls, [{ command: "refresh_publish_index", arguments_: { editRoot: "/private/Edit" } }]);
+  assert.equal(state, before);
+  assert.equal(state.batch_execution.entries.length, 1);
+});
+
+test("written and unchanged source refresh precede switch acquisition, release, and reset", async () => {
+  for (const status of ["written", "unchanged"]) {
+    const harness = batchHarness();
+    await executeLibraryBatch("add", harness);
+    let state = harness.getState();
+    state.maintenance.lock_status = { lock: { process_id: 17 } };
+    const before = state;
+    const calls = [];
+    const activation = { workspace: { edit_root: "/DMS/New" }, lock_status: { lock: { process_id: 18 } } };
+    const result = await switchWorkspaceSession(state.workspace, state.maintenance.lock_status, activation.workspace, {},
+      async (command, arguments_) => {
+        calls.push([command, arguments_.editRoot]);
+        assert.equal(state, before);
+        return command === "activate_workspace_session" ? activation : { status };
+      });
+    state = workspaceActivationState(state, result.activation);
+    calls.push(["reset", state.workspace.edit_root]);
+    assert.deepEqual(calls, [["refresh_publish_index", "/private/Edit"], ["activate_workspace_session", "/DMS/New"],
+      ["release_workspace_lock", "/private/Edit"], ["reset", "/DMS/New"]]);
+    assert.deepEqual(state.activities, []);
+    assert.deepEqual(state.batch_execution.entries, []);
+  }
+});
+
+test("blocked destination still retains the source session after a successful refresh", async () => {
+  const harness = batchHarness();
+  const state = harness.getState();
+  const calls = [];
+  await assert.rejects(switchWorkspaceSession(state.workspace, { lock: { process_id: 17 } },
+    { edit_root: "/DMS/Blocked" }, {}, async (command) => {
+      calls.push(command);
+      if (command === "activate_workspace_session") throw new Error("workspace advisory lock is held");
+      return { status: "unchanged" };
+    }), /advisory lock/);
+  assert.deepEqual(calls, ["refresh_publish_index", "activate_workspace_session"]);
+  assert.equal(harness.getState(), state);
+});
+
+test("delayed Entra activation refreshes the source before every poll that can acquire the destination", async () => {
+  for (const refreshStatus of ["written", "unchanged"]) {
+    const calls = [];
+    let polls = 0;
+    const pending = { kind: "pending", edit_root: "/DMS/New", next_poll_delay_ms: 5000 };
+    const activated = {
+      kind: "valid",
+      edit_root: "/DMS/New",
+      activation: { workspace: { edit_root: "/DMS/New" }, lock_status: { lock: { process_id: 18 } } },
+    };
+    const lockOptions = { takeOverStale: true, overrideExisting: false };
+    const invoke = async (command, arguments_) => {
+      calls.push({ command, arguments_ });
+      if (command === "refresh_publish_index") return { status: refreshStatus };
+      assert.equal(command, "poll_library_session_authorization");
+      polls += 1;
+      return polls === 1 ? pending : activated;
+    };
+    let state = createInitialState();
+    state.workspace = { edit_root: "/DMS/Old" };
+    const first = await pollWorkspaceSessionAuthorization(
+      state.workspace, { edit_root: "/DMS/New", lock_options: lockOptions }, invoke,
+    );
+    assert.deepEqual(first, pending);
+    state = applyLibrarySessionAuthorization(state, first, lockOptions);
+    const second = await pollWorkspaceSessionAuthorization(state.workspace, state.library_session_authorization, invoke);
+    assert.deepEqual(second, activated);
+    assert.deepEqual(calls, [
+      { command: "refresh_publish_index", arguments_: { editRoot: "/DMS/Old" } },
+      { command: "poll_library_session_authorization", arguments_: { editRoot: "/DMS/New", ...lockOptions } },
+      { command: "refresh_publish_index", arguments_: { editRoot: "/DMS/Old" } },
+      { command: "poll_library_session_authorization", arguments_: { editRoot: "/DMS/New", ...lockOptions } },
+    ]);
+  }
+});
+
+test("late library authorization activation preserves the replacement session and cleans up only its stale destination lock", async () => {
+  for (const change of ["workspace", "session", "workspace-only", "active-destination", "active-destination-owned"]) {
+    let state = createInitialState();
+    state.workspace = { workspace_id: workspaceId, edit_root: "/DMS/Old" };
+    state.library_session_authorization = { kind: "pending", edit_root: "/DMS/Stale", next_poll_delay_ms: 5000 };
+    const originalSession = state.workspace_session;
+    const staleOwner = { os_user: "operator", hostname: "host", process_id: 17, acquired_at: "stale" };
+    const replacementOwner = { ...staleOwner, acquired_at: change === "active-destination-owned" ? "stale" : "replacement" };
+    const calls = [];
+    let activations = 0;
+    let settle;
+    let pollStarted;
+    const started = new Promise((resolve) => { pollStarted = resolve; });
+    const pending = executeLibrarySessionAuthorizationPoll({
+      getState: () => state,
+      setState: (next) => { state = next; },
+      invoke: async (command, arguments_) => {
+        calls.push({ command, arguments_ });
+        if (command === "refresh_publish_index") return { status: "unchanged" };
+        if (command === "poll_library_session_authorization") {
+          return new Promise((resolve) => { settle = resolve; pollStarted(); });
+        }
+        if (command === "workspace_lock_status") return { lock: staleOwner };
+        assert.equal(command, "release_workspace_lock");
+        assert.notDeepEqual(arguments_.owner, state.maintenance.lock_status.lock, "replacement owner must not be released");
+        assert.deepEqual(arguments_, { editRoot: "/DMS/Stale", owner: staleOwner, confirmed: true });
+      },
+      finishActivation: async () => { activations += 1; },
+    });
+    await started;
+    const editRoot = change === "session" ? "/DMS/Old"
+      : change.startsWith("active-destination") ? "/DMS/Stale" : "/DMS/Replacement";
+    state = workspaceActivationState(state, {
+      workspace: { workspace_id: workspaceId, edit_root: editRoot },
+      lock_status: { state: "current", lock: replacementOwner },
+    });
+    if (change === "workspace-only") state.workspace_session = originalSession;
+    state = openActivity(state, {
+      workspace_id: workspaceId, destination: "Library", task: "Library", label: "Replacement Library", route_state: {},
+    });
+    state.session_error = "Replacement feedback";
+    const replacement = state;
+    settle({
+      kind: "valid", edit_root: "/DMS/Stale",
+      activation: { workspace: { edit_root: "/DMS/Stale" }, lock_status: { lock: staleOwner } },
+    });
+    await pending;
+    assert.equal(activations, 0, "stale activation must not finish against the replacement source");
+    assert.equal(state, replacement, change);
+    assert.equal(state.activities, replacement.activities);
+    assert.equal(state.workspace_session, replacement.workspace_session);
+    assert.equal(state.maintenance.lock_status.lock, replacementOwner);
+    assert.deepEqual(calls, [
+      { command: "refresh_publish_index", arguments_: { editRoot: "/DMS/Old" } },
+      { command: "poll_library_session_authorization", arguments_: { editRoot: "/DMS/Stale", takeOverStale: false, overrideExisting: false } },
+      ...(change === "active-destination-owned" ? [] : [
+        { command: "workspace_lock_status", arguments_: { editRoot: "/DMS/Stale" } },
+        { command: "release_workspace_lock", arguments_: { editRoot: "/DMS/Stale", owner: staleOwner, confirmed: true } },
+      ]),
+    ]);
+  }
+});
+
+for (const pause of ["source-release", "source-release-failure", "persist", "missing-owner-cleanup", "rollback-cleanup"]) {
+  test(`library activation finishing preserves a replacement during ${pause}`, async () => {
+    for (const replacementKind of ["different-root", "source-root-new-session", "same-root-new-owner", "same-root-same-owner"]) {
+      let state = createInitialState();
+      state.workspace = { workspace_id: workspaceId, edit_root: "/DMS/Old" };
+      const sourceOwner = { os_user: "operator", hostname: "host", process_id: 17, acquired_at: "source" };
+      const destinationOwner = { ...sourceOwner, acquired_at: "destination" };
+      state.maintenance.lock_status = { lock: pause === "missing-owner-cleanup" ? null : sourceOwner };
+      const activation = {
+        workspace: { workspace_id: "destination", edit_root: "/DMS/New" },
+        lock_status: { lock: destinationOwner },
+      };
+      const calls = [];
+      let settle;
+      let notifyStarted;
+      const started = new Promise((resolve) => { notifyStarted = resolve; });
+      const delay = () => new Promise((resolve, reject) => {
+        settle = () => pause === "source-release-failure" ? reject(new Error("source release failed")) : resolve();
+        notifyStarted();
+      });
+      const pending = finishLibrarySessionActivation(activation, {
+        getState: () => state,
+        setState: (next) => { state = next; },
+        invoke: async (command, arguments_) => {
+          calls.push({ command, arguments_ });
+          if (command === "workspace_lock_status") {
+            assert.deepEqual(arguments_, { editRoot: "/DMS/New" });
+            if (pause.endsWith("cleanup")) await delay();
+            return { lock: destinationOwner };
+          }
+          assert.equal(command, "release_workspace_lock");
+          if (arguments_.editRoot === "/DMS/Old") {
+            assert.equal(arguments_.owner, sourceOwner);
+            if (pause === "rollback-cleanup") throw new Error("source release failed");
+            if (pause.startsWith("source-release")) return delay();
+          } else {
+            assert.deepEqual(arguments_, { editRoot: "/DMS/New", owner: destinationOwner, confirmed: true });
+          }
+        },
+        persist: async () => {
+          assert.equal(pause, "persist", "stale activation must not apply or persist");
+          calls.push({ command: "persist" });
+          return delay();
+        },
+        openLibrary: () => { assert.fail("stale activation must not open Library on the replacement"); },
+      });
+      await started;
+      const replacementOwner = {
+        ...destinationOwner,
+        acquired_at: replacementKind === "same-root-same-owner" ? "destination" : "replacement",
+      };
+      state = workspaceActivationState(state, {
+        workspace: replacementKind === "source-root-new-session"
+          ? { workspace_id: workspaceId, edit_root: "/DMS/Old" }
+          : { workspace_id: "destination", edit_root: replacementKind === "different-root" ? "/DMS/Replacement" : "/DMS/New" },
+        lock_status: { lock: replacementOwner },
+      });
+      state = openActivity(state, {
+        workspace_id: state.workspace.workspace_id, destination: "Library", task: "Library", label: "Replacement Library", route_state: {},
+      });
+      state.session_error = "Replacement feedback";
+      const replacement = state;
+      settle();
+      await pending;
+      assert.equal(state, replacement);
+      assert.equal(state.activities, replacement.activities);
+      assert.equal(state.maintenance.lock_status.lock, replacementOwner);
+      assert.deepEqual(calls, [
+        ...(pause === "missing-owner-cleanup" ? [] : [{
+          command: "release_workspace_lock", arguments_: { editRoot: "/DMS/Old", owner: sourceOwner, confirmed: true },
+        }]),
+        ...(pause === "persist" ? [{ command: "persist" }] : []),
+        ...(pause.endsWith("cleanup") || replacementKind !== "same-root-same-owner" ? [{
+          command: "workspace_lock_status", arguments_: { editRoot: "/DMS/New" },
+        }] : []),
+        ...(replacementKind !== "same-root-same-owner" ? [{
+          command: "release_workspace_lock", arguments_: { editRoot: "/DMS/New", owner: destinationOwner, confirmed: true },
+        }] : []),
+      ], replacementKind);
+    }
+  });
+}
+
+for (const cleanup of ["missing-owner", "source-release-failure"]) {
+  test(`${cleanup} rollback preserves replacement locks across destination IPC`, async (t) => {
+    const warnings = [];
+    t.mock.method(console, "warn", (...args) => warnings.push(args));
+    for (const change of ["before-status", "during-release", "different-root-same-owner", "unlocked"]) {
+      let state = createInitialState();
+      state.workspace = { workspace_id: workspaceId, edit_root: "/DMS/Old" };
+      const sourceOwner = { os_user: "operator", hostname: "host", process_id: 17, acquired_at: "source" };
+      const staleOwner = { ...sourceOwner, acquired_at: "stale" };
+      const replacementOwner = { ...staleOwner, acquired_at: change === "different-root-same-owner" ? "stale" : "replacement" };
+      state.maintenance.lock_status = { lock: cleanup === "missing-owner" ? null : sourceOwner };
+      const activation = { workspace: { edit_root: "/DMS/New" }, lock_status: { lock: staleOwner } };
+      const locks = new Map([["/DMS/New", staleOwner]]);
+      let settle;
+      let notifyStarted;
+      const started = new Promise((resolve) => { notifyStarted = resolve; });
+      const pause = () => new Promise((resolve) => { settle = resolve; notifyStarted(); });
+      const calls = [];
+      const pending = finishLibrarySessionActivation(activation, {
+        getState: () => state,
+        setState: () => assert.fail("rollback cannot activate a workspace"),
+        invoke: async (command, arguments_) => {
+          calls.push({ command, arguments_ });
+          if (arguments_.editRoot === "/DMS/Old") throw new Error("source release failed");
+          if (command === "workspace_lock_status") {
+            if (change !== "during-release") await pause();
+            return { lock: locks.get(arguments_.editRoot) ?? null };
+          }
+          assert.equal(command, "release_workspace_lock");
+          assert.deepEqual(arguments_, { editRoot: "/DMS/New", owner: staleOwner, confirmed: true });
+          if (change === "during-release") await pause();
+          // Model the real IPC's owner check at execution, not at dispatch.
+          if (JSON.stringify(locks.get(arguments_.editRoot)) !== JSON.stringify(arguments_.owner)) {
+            throw new Error("workspace lock ownership changed");
+          }
+          locks.delete(arguments_.editRoot);
+        },
+        persist: () => assert.fail("rollback cannot persist"),
+        openLibrary: () => assert.fail("rollback cannot open Library"),
+      });
+      await started;
+      const replacementRoot = change === "different-root-same-owner" ? "/DMS/Replacement" : "/DMS/New";
+      locks.set(replacementRoot, replacementOwner);
+      if (change === "unlocked") locks.delete("/DMS/New");
+      state = workspaceActivationState(state, {
+        workspace: { workspace_id: "replacement", edit_root: replacementRoot },
+        lock_status: { lock: replacementOwner },
+      });
+      state = openActivity(state, {
+        workspace_id: "replacement", destination: "Library", task: "Library", label: "Replacement Library", route_state: {},
+      });
+      state.session_error = "Replacement feedback";
+      const replacement = state;
+      settle();
+      await pending;
+      assert.equal(state, replacement, change);
+      assert.equal(state.activities, replacement.activities);
+      assert.equal(state.maintenance.lock_status.lock, replacementOwner);
+      const released = change === "during-release" || change === "different-root-same-owner";
+      assert.deepEqual(calls, [
+        ...(cleanup === "missing-owner" ? [] : [{ command: "release_workspace_lock", arguments_: { editRoot: "/DMS/Old", owner: sourceOwner, confirmed: true } }]),
+        { command: "workspace_lock_status", arguments_: { editRoot: "/DMS/New" } },
+        ...(released ? [{ command: "release_workspace_lock", arguments_: { editRoot: "/DMS/New", owner: staleOwner, confirmed: true } }] : []),
+      ], change);
+      assert.equal(locks.get(replacementRoot), change === "unlocked" ? undefined : replacementOwner, change);
+      if (change === "different-root-same-owner") assert.equal(locks.has("/DMS/New"), false);
+    }
+    assert.equal(warnings.length, 1, "only the in-flight owner change rejects release");
+  });
+}
+
+test("current activation finishing releases the source, applies, persists, and opens Library", async () => {
+  let state = createInitialState();
+  state.workspace = { edit_root: "/DMS/Old" };
+  const sourceOwner = { process_id: 17 };
+  state.maintenance.lock_status = { lock: sourceOwner };
+  const activation = { workspace: { edit_root: "/DMS/New" }, lock_status: { lock: { process_id: 18 } } };
+  const calls = [];
+  await finishLibrarySessionActivation(activation, {
+    getState: () => state,
+    setState: (next) => { state = next; calls.push("apply"); },
+    invoke: async (command, arguments_) => {
+      assert.equal(command, "release_workspace_lock");
+      assert.deepEqual(arguments_, { editRoot: "/DMS/Old", owner: sourceOwner, confirmed: true });
+      calls.push("release");
+    },
+    persist: async (current) => { assert.equal(current, state); calls.push("persist"); },
+    openLibrary: () => { assert.equal(state.workspace, activation.workspace); calls.push("open"); },
+  });
+  assert.deepEqual(calls, ["release", "apply", "persist", "open"]);
+});
+
+test("current activation finishing rolls back only its destination when source release cannot complete", async () => {
+  for (const missingOwner of [true, false]) {
+    let state = createInitialState();
+    state.workspace = { edit_root: "/DMS/Old" };
+    const sourceOwner = { process_id: 17 };
+    state.maintenance.lock_status = { lock: missingOwner ? null : sourceOwner };
+    const initial = state;
+    const destinationOwner = { process_id: 18 };
+    const activation = { workspace: { edit_root: "/DMS/New" }, lock_status: { lock: destinationOwner } };
+    const calls = [];
+    await assert.rejects(finishLibrarySessionActivation(activation, {
+      getState: () => state,
+      setState: (next) => { state = next; },
+      invoke: async (command, arguments_) => {
+        calls.push({ command, arguments_ });
+        if (arguments_.editRoot === "/DMS/Old") throw new Error("source release failed");
+        if (command === "workspace_lock_status") return { lock: destinationOwner };
+      },
+      persist: async () => { assert.fail("failed activation must not persist"); },
+      openLibrary: () => { assert.fail("failed activation must not open Library"); },
+    }), missingOwner ? /lock owner is unavailable/ : /source release failed/);
+    assert.equal(state, initial);
+    assert.deepEqual(calls, [
+      ...(missingOwner ? [] : [{ command: "release_workspace_lock", arguments_: { editRoot: "/DMS/Old", owner: sourceOwner, confirmed: true } }]),
+      { command: "workspace_lock_status", arguments_: { editRoot: "/DMS/New" } },
+      { command: "release_workspace_lock", arguments_: { editRoot: "/DMS/New", owner: destinationOwner, confirmed: true } },
+    ]);
+  }
+});
+
+test("current library authorization activation still finishes after refreshing its source", async () => {
+  let state = createInitialState();
+  state.workspace = { edit_root: "/DMS/Old" };
+  state.library_session_authorization = { kind: "pending", edit_root: "/DMS/New", next_poll_delay_ms: 5000 };
+  state.session_error = "Previous refresh failure";
+  const activation = { workspace: { edit_root: "/DMS/New" }, lock_status: { lock: { process_id: 17 } } };
+  const calls = [];
+  await executeLibrarySessionAuthorizationPoll({
+    getState: () => state,
+    setState: (next) => { state = next; },
+    invoke: async (command) => {
+      calls.push(command);
+      return command === "refresh_publish_index" ? { status: "unchanged" }
+        : { kind: "valid", edit_root: "/DMS/New", activation };
+    },
+    finishActivation: async (result) => {
+      assert.equal(result, activation);
+      assert.equal(state.library_session_authorization.kind, "valid");
+      assert.equal(state.session_error, "");
+      calls.push("finish");
+      state = workspaceActivationState(state, result);
+    },
+  });
+  assert.deepEqual(calls, ["refresh_publish_index", "poll_library_session_authorization", "finish"]);
+  assert.equal(state.workspace, activation.workspace);
+});
+
+test("late library authorization pending and failure results leave replacement state untouched", async () => {
+  for (const outcome of ["pending", "poll-failure", "refresh-failure"]) {
+    let state = createInitialState();
+    state.workspace = { edit_root: "/DMS/Old" };
+    state.library_session_authorization = { kind: "pending", edit_root: "/DMS/Stale", next_poll_delay_ms: 5000 };
+    let settle;
+    let pollStarted;
+    const started = new Promise((resolve) => { pollStarted = resolve; });
+    const pending = executeLibrarySessionAuthorizationPoll({
+      getState: () => state,
+      setState: (next) => { state = next; },
+      invoke: async (command) => {
+        if (command === "refresh_publish_index" && outcome !== "refresh-failure") return { status: "unchanged" };
+        return new Promise((resolve, reject) => {
+          settle = () => outcome === "pending" ? resolve({ kind: "pending", edit_root: "/DMS/Stale" }) : reject(new Error("late failure"));
+          pollStarted();
+        });
+      },
+      finishActivation: async () => { assert.fail("no activation expected"); },
+    });
+    await started;
+    state = workspaceActivationState(state, { workspace: { edit_root: "/DMS/Replacement" }, lock_status: { lock: { process_id: 18 } } });
+    const replacement = state;
+    settle();
+    await pending;
+    assert.equal(state, replacement, outcome);
+  }
+});
+
+test("a failed source refresh on a later poll blocks the poll without acquiring or releasing a lock", async () => {
+  const calls = [];
+  let refreshes = 0;
+  let polls = 0;
+  const invoke = async (command, arguments_) => {
+    calls.push([command, arguments_.editRoot]);
+    if (command === "refresh_publish_index") {
+      refreshes += 1;
+      if (refreshes === 1) return { status: "unchanged" };
+      throw new Error("cannot write /Publish/index.html");
+    }
+    assert.equal(command, "poll_library_session_authorization");
+    polls += 1;
+    assert.equal(polls, 1, "a second poll would acquire the destination lock");
+    return { kind: "pending", edit_root: "/DMS/New" };
+  };
+  const first = await pollWorkspaceSessionAuthorization(
+    { edit_root: "/DMS/Old" }, { edit_root: "/DMS/New" }, invoke,
+  );
+  assert.equal(first.kind, "pending");
+  await assert.rejects(
+    pollWorkspaceSessionAuthorization({ edit_root: "/DMS/Old" }, first, invoke),
+    /current library remains open/,
+  );
+  assert.deepEqual(calls, [
+    ["refresh_publish_index", "/DMS/Old"],
+    ["poll_library_session_authorization", "/DMS/New"],
+    ["refresh_publish_index", "/DMS/Old"],
+  ]);
+  assert.equal(polls, 1);
+});
+
+test("delayed Entra activation retains its pending sign-in state when source refresh fails", () => {
+  let state = createInitialState();
+  state.library_session_authorization = {
+    kind: "pending",
+    edit_root: "/DMS/New",
+    next_poll_delay_ms: 5000,
+    lock_options: {},
+  };
+  const retained = applyLibrarySessionPollFailure(
+    state,
+    state.library_session_authorization,
+    new PublishIndexRefreshError("Released document index refresh failed; the current library remains open."),
+  );
+  assert.equal(retained.library_session_authorization, state.library_session_authorization);
+  assert.equal(retained.session_error, "Released document index refresh failed; the current library remains open.");
+  assert.equal(shouldPollLibrarySessionAuthorization(retained.library_session_authorization), true);
+  const failed = applyLibrarySessionPollFailure(state, state.library_session_authorization, new Error("Entra poll failed"));
+  assert.equal(failed.library_session_authorization.kind, "failed");
 });
 
 test("Open library switcher opens and dismisses without replacing the workspace", () => {
