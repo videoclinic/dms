@@ -50,7 +50,7 @@ conversion work, is:
 The other active records do not own language-selected reusable Word templates.
 
 - [CHG-0053 — Markdown batch conversion with retained DOCX](../archive/CHG-0053-markdown-batch-conversion-retained-docx.md) is the completed standalone-conversion receipt. It owns the delivered `dms convert markdown` command, table/images assembly fidelity, retained final DOCX and the shared `dms-export` adapter, all against the single configured workspace template. This change consumes that boundary and the shared adapter; it does not duplicate the command, the CLI flags, the manifest or the retained-DOCX lifecycle.
-- [CHG-0042 — Publish-root released-document index](CHG-0042-publish-root-released-document-index.md) lists already released PDFs and is unaffected.
+- [CHG-0042 — Publish-root released-document index](../archive/CHG-0042-publish-root-released-document-index.md) lists already released PDFs and is unaffected.
 - [CHG-0045 — Operator-defined library name](CHG-0045-operator-library-name.md) and [CHG-0050 — UUID MSRV ceiling](CHG-0050-uuid-msrv-ceiling.md) are independent and must not be duplicated.
 - [CHG-0004 — Markdown Word-template release](../../changes/archive/CHG-0004-markdown-word-template-release.md) is the archived single-template release receipt. Reuse its renderer via CHG-0053; do not reopen its release transaction.
 

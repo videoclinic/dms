@@ -28,7 +28,7 @@ The planning inspection found three active records and 49 archived records. None
 
 - [CHG-0041 — Library batch execution activity](../archive/CHG-0041-library-batch-execution-activity.md) is the likely remembered batch change. It is done and covers only homogeneous batch add/unregister and a session-only result activity. Its out-of-scope section explicitly excludes bulk release and other lifecycle operations. Do not reopen it or extend its UI for this request.
 - [CHG-0004 — Markdown Word-template release](../archive/CHG-0004-markdown-word-template-release.md) is done. Its selected decisions deliberately make DOCX temporary and place only approved versioned PDFs in the publish tree. Reuse its renderer and adapter, not its approval/release transaction for external conversion.
-- [CHG-0042 — Publish-root released-document index](../active/CHG-0042-publish-root-released-document-index.md) lists already released PDFs; it does not generate them. Converted artifacts must not enter that index.
+- [CHG-0042 — Publish-root released-document index](CHG-0042-publish-root-released-document-index.md) lists already released PDFs; it does not generate them. Converted artifacts must not enter that index.
 - [CHG-0045 — Operator-defined library name](../active/CHG-0045-operator-library-name.md) and [CHG-0050 — UUID MSRV ceiling](../active/CHG-0050-uuid-msrv-ceiling.md) are independent. Preserve their work; do not duplicate their phases here.
 
 CHG-0053 is the sole progress authority for this request. The findings below are baseline evidence, not completed implementation phases.
