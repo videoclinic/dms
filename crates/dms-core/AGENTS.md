@@ -19,6 +19,7 @@ persistence.
 | `src/lifecycle.rs` | Version candidates, Entra/notification/export ports, content conformance, review decisions, release commits, and hash-chained evidence |
 | `src/maintenance.rs` | Release checksum verification, workspace review defaults, periodic-review scheduling and transitions, and full-workspace ZIP backup with SHA-256 manifest |
 | `src/policies.rs` | Folder-policy tree, retained confidentiality type-ID migrations, Entra display binding, and workflow-role resolution |
+| `src/publish_index.rs`, `src/publish_index.css`, `src/publish_index.js` | Deterministic current-release catalog, inline browser controls, and ownership-safe publish-root index writes |
 | `src/source_history.rs` | Bounded first-import OOXML source-history capture and schema validation |
 | `src/frontmatter.rs` | Strict flat Markdown parsing, controlled-key rewrite from DMS, optional template-variable map, and expected/detected comparison |
 | `src/template.rs` | Reusable workspace Word-template identity, validation, CommonMark-to-OOXML assembly with local PNG/JPEG asset embedding, and frontmatter variable fill |
@@ -227,6 +228,19 @@ persistence.
 - `Workspace::verify_release` and `Workspace::verify_all_releases` re-read the
   recorded PDF and compare its SHA-256 digest; they never modify, repair, or
   delete release bytes.
+- `Workspace::publish_index` derives one current non-withdrawn release per
+  registered document from immutable records and recorded relative PDF paths,
+  never filesystem discovery. Missing current PDFs are omitted without falling
+  back to history; invalid/escaping targets fail. The standalone page has only
+  inline assets, escaped metadata and encoded relative links. It neither reads
+  source/PDF content nor performs integrity verification.
+- `Workspace::refresh_publish_index` writes only `<publish-root>/index.html`.
+  `.dms` remains authoritative: refresh never saves metadata, mutates releases,
+  changes PDFs, or acquires a lock. Callers coordinate workspace access. Equal
+  deterministic bytes return unchanged; differing output uses a flushed
+  temporary sibling and atomic replacement, preserving the prior index on
+  failure. Refuse foreign ownership prologues, symlinks and non-regular targets.
+  History, withdrawal, orphan handling and checksum verification stay separate.
 - `Workspace::start_periodic_review` binds the current release ID, version,
   PDF digest, confidentiality snapshot, and approver; a mismatched or missing
   PDF blocks the request.
@@ -319,6 +333,10 @@ persistence.
 ## Verification
 
 - `cargo test -p dms-core`
+- `cargo test -p dms-core publish_index` checks projection, escaped/encoded
+  rendering, ownership-safe writes and no-change behavior.
+- `node --test crates/dms-core/tests/publish_index.test.mjs` checks browser-control
+  logic through a synthetic DOM, not native browser layout.
 - `cargo test -p dms-core --test conversion_policy --test conversion --test lifecycle --test workspace --test policies --locked`
   checks policy persistence/migration, strict overrides, read-only configuration,
   effective-policy receipts, unchanged control metadata and the Release boundary.

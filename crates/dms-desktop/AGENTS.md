@@ -53,6 +53,9 @@ macOS.
   satisfies a later attempt. Refresh failure keeps the window, activities,
   session, and source lock intact and prevents destination acquisition; show
   the path-specific failure for retry. Same-library focus has no refresh/handoff.
+  Both written and unchanged core outcomes permit the existing close/handoff;
+  unchanged output never replaces the index. Keep refresh before activity
+  teardown and owner-matched lock release, not in a post-release cleanup hook.
   Delayed authorization results belong to their captured workspace session;
   after replacement, discard their status and activation, releasing only an
   acquired stale destination lock with its returned owner, never the active

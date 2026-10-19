@@ -1000,29 +1000,78 @@ const CAPS = [
   {
     id: "CAP-0016",
     file: "CAP-0016-publish-tree-maintenance",
-    title: "Publish tree maintenance",
+    title: "Released document index and maintenance",
     nav: "releases",
-    subtitle: "Filter releases by DMS-managed Title, set rows per page, open recorded PDFs, verify-all, reveal in host file manager, archive orphans.",
-    actions: ["Verify all releases", "Reveal publish folder", "Archive orphans"],
+    subtitle: "A portable current-release catalog beside controlled PDFs. DMS retains separate release history and integrity actions; full maintenance remains partially implemented.",
+    actions: [],
     body: `
       <section class="card">
-        <h3 class="card-title">Publish-tree</h3>
+        <h3 class="card-title">Releases · Released document index · success state</h3>
+        <p class="muted"><code>&lt;publish-root&gt;/index.html</code> · DMS-owned derived artifact · .dms remains authoritative</p>
+        <div class="row gap-2" style="flex-wrap:wrap">
+          <button class="btn">Update released document index</button>
+          <button class="btn outline">Open released document index</button>
+          ${badge("Already current · 3 documents", "ok")}
+        </div>
+        <p class="hint">Update reports written or already current. Open uses the host handler and appears only for an existing owned index.</p>
+      </section>
+      <section class="card">
+        <h3 class="card-title">Alternative state · Foreign-index failure</h3>
+        <p class="hint">This state replaces the success state above; no success badge or Open action is available.</p>
+        <button class="btn">Update released document index</button>
+        <div class="callout warn"><strong>Cannot replace /dms/publish/index.html:</strong> The foreign file is not a regular DMS-owned file. Move it aside before refreshing with Update released document index. Close or library switch is blocked; the current window, activities and lock remain intact.</div>
+      </section>
+      <section class="card">
+        <div class="row between"><h3 class="card-title">Current released documents · portable page reference</h3>${badge("One current PDF per document", "info")}</div>
+        <p class="muted">Static illustration of the opened index, not an embedded DMS browser or a runtime index. Inline CSS/JavaScript; no network assets. Synthetic release metadata only.</p>
+        <div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:1rem">
+          <nav aria-label="Recorded release folders" style="border-right:1px solid var(--border);padding-right:1rem">
+            <strong>Folders</strong>
+            <div style="margin-top:0.75rem"><button class="btn outline" aria-pressed="true">All folders</button></div>
+            <ul class="list" style="list-style:none;padding-left:0">
+              <li>▾ policies<ul style="list-style:none;padding-left:1.25rem"><li>HR</li><li>IT</li></ul></li>
+              <li>▾ procedures<ul style="list-style:none;padding-left:1.25rem"><li>Response</li></ul></li>
+            </ul>
+            <p class="hint">Recorded PDF parent paths only. A selected folder includes its subtree.</p>
+          </nav>
+          <div>
+            ${tableFilter({ label: "Search release metadata", ariaLabel: "Search current release metadata", placeholder: "e.g. DOC-014 or internal", summary: "3 documents" })}
+            <div class="row gap-2 mb" style="flex-wrap:wrap">
+              <label>Sort <select aria-label="Current document order" style="font:inherit;padding:0.4rem"><option selected>Last release date: newest first</option><option>Last release date: oldest first</option><option>Document name: ascending</option><option>Document name: descending</option></select></label>
+            </div>
+            <fieldset style="border:1px solid var(--border);border-radius:var(--radius);margin:0 0 1rem;padding:0.5rem 0.75rem">
+              <legend>Confidentiality type ID · on/off</legend>
+              <div class="row gap-2"><label><input type="checkbox" checked/> All</label><label><input type="checkbox" checked/> internal</label><label><input type="checkbox" checked/> restricted</label></div>
+            </fieldset>
+            ${table(["Title / number", "Version", "Last release (UTC) ↓", "Type ID", "Relative PDF path"], [
+              ["<a href=\"policies/HR/Handbook%20%231_V2.0_restricted.pdf\">People Handbook</a><br/><span class=\"muted\">DOC-014</span>", "V2.0", "2026-03-12 09:44", "restricted", "policies/HR/Handbook #1_V2.0_restricted.pdf"],
+              ["<a href=\"policies/IT/AUP_V2.0_internal.pdf\">Acceptable Use</a><br/><span class=\"muted\">DOC-007</span>", "V2.0", "2026-03-10 14:12", "internal", "policies/IT/AUP_V2.0_internal.pdf"],
+              ["<a href=\"procedures/Response/IRP_V3.1_restricted.pdf\">Incident Response</a><br/><span class=\"muted\">DOC-021</span>", "V3.1", "2026-02-28 11:20", "restricted", "procedures/Response/IRP_V3.1_restricted.pdf"],
+            ])}
+            <p class="hint">Document-name sorting uses the captured title. Open links encode path segments: <code>Handbook%20%231_V2.0_restricted.pdf</code>. No source files or PDF-content search.</p>
+            <p class="hint"><strong>Empty/filter state:</strong> No released documents match these controls. Turning every type off shows 0 documents; All restores the types.</p>
+          </div>
+        </div>
+      </section>
+      <section class="card">
+        <div class="row between"><h3 class="card-title">DMS only · Release history and integrity</h3><button class="btn outline">Verify entire publish tree</button></div>
+        <p class="muted">All recorded versions remain here, including history, withdrawn and orphaned releases. The portable catalog carries no integrity verdicts.</p>
         ${growingTable({
-          headers: ["Title", "Version", "Publish path", "Released", "SHA-256", "State", "Verify", "Action"],
+          headers: ["Title", "Version", "Publish path", "State", "Integrity", "Actions"],
           rows: [
-            ["HR Data Privacy Policy", "V2.0", "policies/HR/Handbook_V2.0_restricted.pdf", "2025-08-01 09:44", "9f2c…b1e0", badge("current", "ok"), badge("match", "ok"), "<button class=\"btn outline\">Open PDF</button>"],
-            ["Acceptable Use", "V2.0", "policies/IT/AUP_V2.0_internal.pdf", "2025-07-29 14:12", "3a91…77ee", badge("current", "ok"), badge("match", "ok"), "<button class=\"btn outline\">Open PDF</button>"],
-            ["Incident Response", "V3.1", "procedures/IRP_V3.1_restricted.pdf", "2025-06-30 11:20", "1199…aa01", badge("current", "ok"), badge("match", "ok"), "<button class=\"btn outline\">Open PDF</button>"],
-            ["Vendor Onboarding", "V1.0", "procedures/Onboarding_V1.0_internal.pdf", "2024-11-04 09:00", "—", badge("orphaned", "warn"), badge("missing file", "danger"), "<button class=\"btn outline\" disabled>Open PDF</button>"],
-            ["Backup Config", "V1.4", "policies/IT/Backup_V1.4_internal.pdf", "2025-05-12 16:45", "5b3a…ffe2", badge("withdrawn", "muted"), badge("match", "ok"), "<button class=\"btn outline\">Open PDF</button>"],
+            ["People Handbook", "V2.0", "policies/HR/Handbook #1_V2.0_restricted.pdf", badge("current", "ok"), badge("match", "ok"), "<button class=\"btn outline\">Open PDF</button> <button class=\"btn outline\">Verify</button>"],
+            ["People Handbook", "V1.0", "policies/HR/Handbook #1_V1.0_restricted.pdf", badge("historical", "muted"), badge("match", "ok"), "<button class=\"btn outline\">Open PDF</button> <button class=\"btn outline\">Verify</button>"],
+            ["Backup Config", "V1.4", "policies/IT/Backup_V1.4_internal.pdf", badge("withdrawn", "muted"), badge("mismatch", "danger"), "<button class=\"btn outline\">Open PDF</button> <button class=\"btn outline\">Verify</button>"],
+            ["Vendor Onboarding", "V1.0", "procedures/Onboarding_V1.0_internal.pdf", badge("orphaned", "warn"), badge("missing file", "danger"), "<button class=\"btn outline\" disabled style=\"opacity:0.45\">Open PDF</button>"],
           ],
           filterLabel: "Title filter",
           filterAriaLabel: "Filter releases by title",
-          filterPlaceholder: "e.g. Doc",
+          filterPlaceholder: "e.g. People",
           matchingLabel: "releases",
           pageAriaLabel: "Release rows per page",
         })}
-        <p class="hint">Release records are immutable. Correction = withdraw + edit draft (digest → draft) + new approval + new version.</p>
+        <p class="hint">Representative maintenance rows, not the catalog result count. Verification reads PDF bytes without repair. Orphan archival remains a separate, not-yet-implemented maintenance contract.</p>
+        <p class="hint">Clean close/switch refreshes the active source before lock release; identical output is not rewritten. No automatic watcher. Release records and PDFs are never changed by index refresh.</p>
       </section>`,
   },
   {

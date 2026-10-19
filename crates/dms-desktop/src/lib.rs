@@ -4126,7 +4126,7 @@ fn release_maintenance(workspace: &Workspace) -> Result<ReleaseMaintenance, Stri
     // break the existing history projection.
     let publish_index_available = workspace
         .existing_publish_index_path()
-        .map_or(false, |path| path.is_some());
+        .is_ok_and(|path| path.is_some());
     Ok(ReleaseMaintenance {
         rows,
         publish_index_available,

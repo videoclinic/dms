@@ -8,7 +8,29 @@
 | Supported OS | Windows, macOS (both required) |
 | Tests | Partial phases 1–9g and CHG-0004 Phase 3 evidence: [`dms-desktop` adapter tests](../../../crates/dms-desktop/src/lib.rs), [shell/setup/sidebar-state/permalink frontend tests](../../../crates/dms-desktop/ui/app.test.mjs), [Configuration route, template, and form tests](../../../crates/dms-desktop/ui/configuration.test.mjs), [Library document and lifecycle-action tests](../../../crates/dms-desktop/ui/library.test.mjs), [release-maintenance frontend tests](../../../crates/dms-desktop/ui/maintenance.test.mjs), [Windows/macOS startup and packaging smoke](../../../.github/workflows/desktop-platform-smoke.yml) |
 
-## Outcomes (contract — not yet true in runtime)
+**Primary surface:** human
+
+## Released-document index integration (implemented)
+
+- Releases exposes **Update released document index** and, for an existing
+  DMS-owned index, **Open released document index**. Update distinguishes written
+  from already current; Open revalidates ownership and uses the host handler,
+  never an arbitrary path or source draft. The catalog contract belongs to
+  [CAP-0016](CAP-0016-publish-tree-maintenance.md).
+- Before clean close or different-library activation, the shell refreshes the
+  active source index, including each delayed authorization poll that can acquire
+  the destination lock. Failure aborts close/switch with a visible error and
+  retains the current window, session-only activities, and source lock. Written
+  or unchanged output permits the existing owner-matched close flow or
+  acquire-destination → release-source handoff. Same-library focus has no
+  refresh/handoff; host opening and activity persistence rules are unchanged.
+- Evidence: [adapter refresh/open tests](../../../crates/dms-desktop/src/lib.rs),
+  [Releases controls](../../../crates/dms-desktop/ui/maintenance.test.mjs), and
+  [manual refresh, close/switch ordering and failure-retention tests](../../../crates/dms-desktop/ui/app.test.mjs).
+  These prove this integration, not the full cross-platform shell/packaging
+  contract; the capability's overall status remains `not implemented`.
+
+## Outcomes (full shell contract — not all implemented)
 
 When implemented, the following must hold:
 
